@@ -111,6 +111,7 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
             obs_height=obs_height,
             max_timesteps=max_steps,
             minetest_dir=minetest_dir,
+            mt_listen_timeout=300_000,  # 5 min per client; VoxeLibre loads slowly on HPC
         )
 
         # Define observation and action spaces
