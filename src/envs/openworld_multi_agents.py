@@ -8,6 +8,7 @@ from gymnasium import spaces
 from pettingzoo import ParallelEnv
 
 from craftium.multiagent_env import MarlCraftiumEnv
+import craftium.minetest
 
 _DISCRETE_ACTIONS = [
     "forward", "backward", "left", "right", "jump", "sneak",
@@ -21,10 +22,11 @@ def _discrete_to_dict(action: int) -> dict:
     """Convert a Discrete(17) integer to MarlCraftiumEnv dict format.
 
     Action 0 is NOP. Actions 1-16 map to _DISCRETE_ACTIONS.
+    PettingZoo action_space.sample() return an integer, but Craftium expects {action, mouse} format
     """
     action = int(action)
     if action == 0:
-        return {}  # NOP: all-zero keys, no mouse movement
+        return {}  # NOP: no mouse movement
 
     name = _DISCRETE_ACTIONS[action - 1]
     mouse = [0.0, 0.0]
@@ -85,13 +87,6 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         self.possible_agents = [f"agent_{i}" for i in range(num_agents)]
         self.agents = self.possible_agents.copy()
 
-        # Create underlying Craftium environment
-        # Using voxel-libre2 environment (OpenWorld equivalent)
-        # Point to the built Luanti files and environment directory.
-        # CRAFTIUM_LUANTI_DIR env var can override the default location,
-        # which is needed when running from a Windows filesystem (WSL /mnt/c)
-        # where the binary doesn't have execute permission.
-        import craftium.minetest
         craftium_root = os.path.dirname(os.path.abspath(craftium.minetest.__file__))
         minetest_dir = os.environ.get(
             "CRAFTIUM_LUANTI_DIR",

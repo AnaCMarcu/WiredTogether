@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from gymnasium import spaces
 
-from .openworld_parallel import OpenWorldMultiAgentEnv
+from .openworld_multi_agents import OpenWorldMultiAgentEnv
 
 
 class RoleBasedOpenWorld(OpenWorldMultiAgentEnv):
