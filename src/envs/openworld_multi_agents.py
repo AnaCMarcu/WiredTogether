@@ -12,31 +12,96 @@ from craftium.multiagent_env import MarlCraftiumEnv
 
 
 class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
-    """MarlCraftiumEnv with server-ready polling fix for HPC.
+    """MarlCraftiumEnv with two HPC fixes:
 
-    The upstream craftium uses a fixed ``time.sleep(5)`` after starting the
-    Minetest server, which is far too short for heavy game mods like VoxeLibre
-    (~45-120 s on a cluster node).  This subclass overrides ``reset()`` to poll
-    the server's stderr log for the "listening on" marker instead.
+    1. **Binary name**: upstream ``MTServerOnly`` / ``MTClientOnly`` use
+       ``./bin/minetest`` but newer Luanti builds renamed the binary to
+       ``./bin/luanti``.  We detect and patch the launch commands.
+    2. **Server polling**: upstream uses ``time.sleep(5)`` after starting the
+       server, which is too short for VoxeLibre (~45-120 s).  We poll the
+       server's stderr for ``"listening on"`` instead.
     """
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._fix_binary_names()
+
+    # ------------------------------------------------------------------ #
+    # Patch 1: binary name minetest -> luanti
+    # ------------------------------------------------------------------ #
+    def _fix_binary_names(self):
+        """Replace ``./bin/minetest`` with ``./bin/luanti`` when needed."""
+        srv_old = os.path.join(self.mt_server.run_dir, "bin", "minetest")
+        srv_new = os.path.join(self.mt_server.run_dir, "bin", "luanti")
+        if not os.path.exists(srv_old) and os.path.exists(srv_new):
+            self.mt_server.launch_cmd = [
+                s.replace("./bin/minetest", "./bin/luanti")
+                for s in self.mt_server.launch_cmd
+            ]
+            print("* Patched server binary: minetest -> luanti")
+
+        for i, client in enumerate(self.mt_clients):
+            cli_old = os.path.join(client.run_dir, "bin", "minetest")
+            cli_new = os.path.join(client.run_dir, "bin", "luanti")
+            if not os.path.exists(cli_old) and os.path.exists(cli_new):
+                client.launch_cmd = [
+                    s.replace("./bin/minetest", "./bin/luanti")
+                    for s in client.launch_cmd
+                ]
+                if i == 0:
+                    print("* Patched client binaries: minetest -> luanti")
+
+    # ------------------------------------------------------------------ #
+    # Patch 2: server-ready polling + diagnostics
+    # ------------------------------------------------------------------ #
     def reset(self, **kwargs):
         self.timesteps = 0
         observations = []
 
         if self.mt_server.proc is None:
+            # --- diagnostics ---
+            print(f"* Server launch cmd: {self.mt_server.launch_cmd}")
+            print(f"* Server run dir:    {self.mt_server.run_dir}")
+
             self.mt_server.start_process()
 
-            # --- patched: poll stderr instead of time.sleep(5) ---
+            # Check server process didn't die immediately
+            time.sleep(1)
+            ret = self.mt_server.proc.poll()
+            if ret is not None:
+                stderr_path = os.path.join(self.mt_server.run_dir, "stderr.txt")
+                stderr_content = ""
+                try:
+                    with open(stderr_path, "r", errors="ignore") as f:
+                        stderr_content = f.read()
+                except FileNotFoundError:
+                    pass
+                raise RuntimeError(
+                    f"MT server process exited immediately with code {ret}.\n"
+                    f"stderr:\n{stderr_content}"
+                )
+
+            # --- poll stderr for "listening on" ---
             print(
-                "* Waiting for MT server to initialize (patched polling). "
-                "This is only required in the first call to reset"
+                "* Waiting for MT server to initialize (polling stderr). "
+                "This is only required in the first call to reset."
             )
             deadline = time.time() + 120  # max 2 minutes
             server_ready = False
             stderr_path = os.path.join(self.mt_server.run_dir, "stderr.txt")
             while time.time() < deadline:
                 time.sleep(2)
+                ret = self.mt_server.proc.poll()
+                if ret is not None:
+                    try:
+                        with open(stderr_path, "r", errors="ignore") as f:
+                            stderr_content = f.read()
+                    except FileNotFoundError:
+                        stderr_content = "(no stderr.txt)"
+                    raise RuntimeError(
+                        f"MT server died during init (exit code {ret}).\n"
+                        f"stderr:\n{stderr_content}"
+                    )
                 try:
                     with open(stderr_path, "r", errors="ignore") as f:
                         if "listening on" in f.read():
@@ -45,16 +110,44 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
                 except (FileNotFoundError, OSError):
                     pass
             if not server_ready:
+                # Dump last lines of stderr so user can debug
+                try:
+                    with open(stderr_path, "r", errors="ignore") as f:
+                        tail = f.read()[-500:]
+                except FileNotFoundError:
+                    tail = "(file not found)"
                 print(
-                    "* WARNING: Could not confirm server is ready "
-                    "(timeout after 120 s), continuing anyway"
+                    f"* WARNING: server not confirmed ready after 120 s.\n"
+                    f"  stderr tail:\n{tail}"
                 )
             else:
                 print("* MT server is ready!")
-            # --- end patch ---
+
+            # Small extra delay for server to stabilize
+            time.sleep(3)
 
             for i in range(self.num_agents):
+                print(f"* Starting client {i}: {self.mt_clients[i].launch_cmd}")
                 self.mt_clients[i].start_process()
+
+                # Check client didn't die immediately
+                time.sleep(1)
+                ret = self.mt_clients[i].proc.poll()
+                if ret is not None:
+                    cli_stderr = os.path.join(
+                        self.mt_clients[i].run_dir, "stderr.txt"
+                    )
+                    content = ""
+                    try:
+                        with open(cli_stderr, "r", errors="ignore") as f:
+                            content = f.read()
+                    except FileNotFoundError:
+                        pass
+                    raise RuntimeError(
+                        f"MT client {i} exited immediately with code {ret}.\n"
+                        f"stderr:\n{content}"
+                    )
+
                 self.mt_channs[i].open_conn()
 
                 for _ in range(self.init_frames):
