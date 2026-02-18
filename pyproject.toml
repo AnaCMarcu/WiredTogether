@@ -21,6 +21,7 @@ loguru = "^0.7.2"
 wandb = "^0.16.0"
 tensorboard = "^2.15.0"
 tqdm = "^4.66.0"
+tyro = ">=0.7.0"
 python-dotenv = "^1.0.0"
 pydantic = "^2.5.0"
 imageio = {extras = ["ffmpeg"], version = "^2.33.0"}
