@@ -25,6 +25,7 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._fix_binary_names()
+        self._fix_headless_clients()
 
     # ------------------------------------------------------------------ #
     # Patch 1: binary name minetest -> luanti
@@ -50,6 +51,23 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
                 ]
                 if i == 0:
                     print("* Patched client binaries: minetest -> luanti")
+
+    # ------------------------------------------------------------------ #
+    # Patch 1b: force all clients headless (upstream bug)
+    # ------------------------------------------------------------------ #
+    def _fix_headless_clients(self):
+        """Ensure ALL clients use ``SDL_VIDEODRIVER=offscreen``.
+
+        Upstream sets ``headless = (i == 0) and (render_mode != "human")``
+        which leaves client 1+ non-headless — they crash on HPC nodes
+        that have no display.
+        """
+        for client in self.mt_clients:
+            if client.proc_env is None:
+                client.proc_env = {"SDL_VIDEODRIVER": "offscreen"}
+            elif "SDL_VIDEODRIVER" not in client.proc_env:
+                client.proc_env["SDL_VIDEODRIVER"] = "offscreen"
+        print(f"* Forced all {len(self.mt_clients)} clients to headless (offscreen SDL)")
 
     # ------------------------------------------------------------------ #
     # Patch 2: server-ready polling + diagnostics
