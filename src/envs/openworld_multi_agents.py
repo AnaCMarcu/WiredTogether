@@ -87,13 +87,21 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         self.agents = self.possible_agents.copy()
 
         from craftium import root_path as craftium_root
+
         minetest_dir = os.environ.get(
             "CRAFTIUM_LUANTI_DIR",
             os.path.join(craftium_root, "luanti")
         )
-        env_dir = os.environ.get(
-            "CRAFTIUM_ENV_DIR",
-            os.path.join(craftium_root, "craftium-envs", "voxel-libre2")
+
+        # Find voxel-libre2: prefer CRAFTIUM_ENV_DIR, then installed package,
+        # then fall back to the local repo's craftium submodule.
+        _this_file = os.path.abspath(__file__)
+        _project_root = os.path.dirname(os.path.dirname(os.path.dirname(_this_file)))
+        _pkg_env = os.path.join(craftium_root, "craftium-envs", "voxel-libre2")
+        _local_env = os.path.join(_project_root, "craftium", "craftium-envs", "voxel-libre2")
+        env_dir = (
+            os.environ.get("CRAFTIUM_ENV_DIR")
+            or (_pkg_env if os.path.isdir(_pkg_env) else _local_env)
         )
 
         self.env = MarlCraftiumEnv(
