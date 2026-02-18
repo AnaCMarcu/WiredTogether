@@ -8,7 +8,6 @@ from gymnasium import spaces
 from pettingzoo import ParallelEnv
 
 from craftium.multiagent_env import MarlCraftiumEnv
-import craftium.minetest
 
 _DISCRETE_ACTIONS = [
     "forward", "backward", "left", "right", "jump", "sneak",
@@ -87,12 +86,15 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         self.possible_agents = [f"agent_{i}" for i in range(num_agents)]
         self.agents = self.possible_agents.copy()
 
-        craftium_root = os.path.dirname(os.path.abspath(craftium.minetest.__file__))
+        from craftium import root_path as craftium_root
         minetest_dir = os.environ.get(
             "CRAFTIUM_LUANTI_DIR",
             os.path.join(craftium_root, "luanti")
         )
-        env_dir = os.path.join(craftium_root, "craftium-envs", "voxel-libre2")
+        env_dir = os.environ.get(
+            "CRAFTIUM_ENV_DIR",
+            os.path.join(craftium_root, "craftium-envs", "voxel-libre2")
+        )
 
         self.env = MarlCraftiumEnv(
             env_dir=env_dir,
