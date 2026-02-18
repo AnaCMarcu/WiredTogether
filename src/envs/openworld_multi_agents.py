@@ -1,6 +1,7 @@
 """PettingZoo ParallelEnv wrapper for Craftium's OpenWorld environment."""
 
 import os
+import time
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -8,6 +9,80 @@ from gymnasium import spaces
 from pettingzoo import ParallelEnv
 
 from craftium.multiagent_env import MarlCraftiumEnv
+
+
+class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
+    """MarlCraftiumEnv with server-ready polling fix for HPC.
+
+    The upstream craftium uses a fixed ``time.sleep(5)`` after starting the
+    Minetest server, which is far too short for heavy game mods like VoxeLibre
+    (~45-120 s on a cluster node).  This subclass overrides ``reset()`` to poll
+    the server's stderr log for the "listening on" marker instead.
+    """
+
+    def reset(self, **kwargs):
+        self.timesteps = 0
+        observations = []
+
+        if self.mt_server.proc is None:
+            self.mt_server.start_process()
+
+            # --- patched: poll stderr instead of time.sleep(5) ---
+            print(
+                "* Waiting for MT server to initialize (patched polling). "
+                "This is only required in the first call to reset"
+            )
+            deadline = time.time() + 120  # max 2 minutes
+            server_ready = False
+            stderr_path = os.path.join(self.mt_server.run_dir, "stderr.txt")
+            while time.time() < deadline:
+                time.sleep(2)
+                try:
+                    with open(stderr_path, "r", errors="ignore") as f:
+                        if "listening on" in f.read():
+                            server_ready = True
+                            break
+                except (FileNotFoundError, OSError):
+                    pass
+            if not server_ready:
+                print(
+                    "* WARNING: Could not confirm server is ready "
+                    "(timeout after 120 s), continuing anyway"
+                )
+            else:
+                print("* MT server is ready!")
+            # --- end patch ---
+
+            for i in range(self.num_agents):
+                self.mt_clients[i].start_process()
+                self.mt_channs[i].open_conn()
+
+                for _ in range(self.init_frames):
+                    _obs, *_ = self.mt_channs[i].receive()
+                    self.mt_channs[i].send([0] * 21, 0, 0)
+
+                observation, _voxobs, _pos, _vel, _pitch, _yaw, _dtime, reward, _term = (
+                    self.mt_channs[i].receive()
+                )
+                if not self.gray_scale_keepdim and not self.rgb_observations:
+                    observation = observation[:, :, 0]
+                observations.append(observation)
+                self.last_observations[i] = observation
+
+        else:  # soft reset
+            for i in range(self.num_agents):
+                self.mt_channs[i].send_soft_reset()
+                observation, _voxobs, _pos, _vel, _pitch, _yaw, _dtime, reward, _term = (
+                    self.mt_channs[i].receive()
+                )
+                if not self.gray_scale_keepdim and not self.rgb_observations:
+                    observation = observation[:, :, 0]
+                observations.append(observation)
+                self.last_observations[i] = observation
+
+        infos = self._get_info()
+        observations = np.vstack([np.expand_dims(obs, 0) for obs in observations])
+        return observations, infos
 
 _DISCRETE_ACTIONS = [
     "forward", "backward", "left", "right", "jump", "sneak",
@@ -104,7 +179,7 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
             or (_pkg_env if os.path.isdir(_pkg_env) else _local_env)
         )
 
-        self.env = MarlCraftiumEnv(
+        self.env = _PatchedMarlCraftiumEnv(
             env_dir=env_dir,
             num_agents=num_agents,
             obs_width=obs_width,
