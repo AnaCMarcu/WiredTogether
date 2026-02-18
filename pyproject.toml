@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Multi-agent reinforcement learning in Craftium"
 authors = ["Ana Cristiana Marcu"]
 readme = "README.md"
-packages = [{include = "WiredTogether"}]
+packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"

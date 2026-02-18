@@ -5,10 +5,10 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from gymnasium import spaces
 
-from src.envs.openworld_parallel import OpenWorldParallelEnv
+from .openworld_parallel import OpenWorldMultiAgentEnv
 
 
-class RoleBasedOpenWorld(OpenWorldParallelEnv):
+class RoleBasedOpenWorld(OpenWorldMultiAgentEnv):
     """Open-world multi-agent role-based environment.
 
     Changes from base OpenWorldParallelEnv:

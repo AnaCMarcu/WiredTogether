@@ -1,12 +1,48 @@
 """PettingZoo ParallelEnv wrapper for Craftium's OpenWorld environment."""
 
+import os
 from typing import Any, Dict, Optional
 
 import numpy as np
 from gymnasium import spaces
 from pettingzoo import ParallelEnv
 
-from craftium import MarlCraftiumEnv
+from craftium.multiagent_env import MarlCraftiumEnv
+
+_DISCRETE_ACTIONS = [
+    "forward", "backward", "left", "right", "jump", "sneak",
+    "dig", "place", "slot_1", "slot_2", "slot_3", "slot_4", "slot_5",
+    "mouse x+", "mouse x-", "mouse y+",
+]
+_MOUSE_MOV = 0.5
+
+
+def _discrete_to_dict(action: int) -> dict:
+    """Convert a Discrete(17) integer to MarlCraftiumEnv dict format.
+
+    Action 0 is NOP. Actions 1-16 map to _DISCRETE_ACTIONS.
+    """
+    action = int(action)
+    if action == 0:
+        return {}  # NOP: all-zero keys, no mouse movement
+
+    name = _DISCRETE_ACTIONS[action - 1]
+    mouse = [0.0, 0.0]
+
+    if name == "mouse x+":
+        mouse[0] = _MOUSE_MOV
+        return {"mouse": mouse}
+    elif name == "mouse x-":
+        mouse[0] = -_MOUSE_MOV
+        return {"mouse": mouse}
+    elif name == "mouse y+":
+        mouse[1] = _MOUSE_MOV
+        return {"mouse": mouse}
+    elif name == "mouse y-":
+        mouse[1] = -_MOUSE_MOV
+        return {"mouse": mouse}
+    else:
+        return {name: 1, "mouse": mouse}
 
 
 class OpenWorldMultiAgentEnv(ParallelEnv):
@@ -51,12 +87,25 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
 
         # Create underlying Craftium environment
         # Using voxel-libre2 environment (OpenWorld equivalent)
+        # Point to the built Luanti files and environment directory.
+        # CRAFTIUM_LUANTI_DIR env var can override the default location,
+        # which is needed when running from a Windows filesystem (WSL /mnt/c)
+        # where the binary doesn't have execute permission.
+        import craftium.minetest
+        craftium_root = os.path.dirname(os.path.abspath(craftium.minetest.__file__))
+        minetest_dir = os.environ.get(
+            "CRAFTIUM_LUANTI_DIR",
+            os.path.join(craftium_root, "luanti")
+        )
+        env_dir = os.path.join(craftium_root, "craftium-envs", "voxel-libre2")
+
         self.env = MarlCraftiumEnv(
-            env_dir="voxel-libre2",
+            env_dir=env_dir,
             num_agents=num_agents,
             obs_width=obs_width,
             obs_height=obs_height,
             max_timesteps=max_steps,
+            minetest_dir=minetest_dir,
         )
 
         # Define observation and action spaces
@@ -90,17 +139,17 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         if seed is not None:
             np.random.seed(seed)
 
-        obs_dict, info_dict = self.env.reset()
+        obs_array, _ = self.env.reset()
 
         # Reset agents and step counter
         self.agents = self.possible_agents.copy()
         self._step_count = 0
 
-        # Convert to PettingZoo format
-        observations = {
-            f"agent_{i}": obs for i, obs in enumerate(obs_dict.values())
-        }
-        infos = {f"agent_{i}": info for i, info in enumerate(info_dict.values())}
+        # Convert to PettingZoo format.
+        # obs_array is a numpy array of shape (num_agents, obs_width, obs_height, 3).
+        # info_dict is a plain dict (not per-agent), so we give each agent an empty dict.
+        observations = {f"agent_{i}": obs for i, obs in enumerate(obs_array)}
+        infos = {f"agent_{i}": {} for i in range(self._num_agents)}
 
         return observations, infos
 
@@ -127,26 +176,22 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         """
         self._step_count += 1
 
-        # Convert actions to list format expected by MarlCraftiumEnv
-        action_list = [actions[agent] for agent in self.agents]
+        # Convert Discrete(17) integers to dict format expected by MarlCraftiumEnv
+        action_list = [_discrete_to_dict(actions[agent]) for agent in self.agents]
 
         # Step the underlying environment
-        obs_dict, reward_dict, done_dict, truncated_dict, info_dict = self.env.step(
+        obs_dict, reward_dict, done_dict, truncated_dict, _ = self.env.step(
             action_list
         )
 
-        # Convert to PettingZoo format
-        observations = {
-            f"agent_{i}": obs for i, obs in enumerate(obs_dict.values())
-        }
-        rewards = {f"agent_{i}": rew for i, rew in enumerate(reward_dict.values())}
-        terminations = {
-            f"agent_{i}": done for i, done in enumerate(done_dict.values())
-        }
-        truncations = {
-            f"agent_{i}": trunc for i, trunc in enumerate(truncated_dict.values())
-        }
-        infos = {f"agent_{i}": info for i, info in enumerate(info_dict.values())}
+        # Convert to PettingZoo format.
+        # obs_dict, reward_dict, done_dict, truncated_dict are all numpy arrays.
+        # info_dict is a plain merged dict, not per-agent.
+        observations = {f"agent_{i}": obs for i, obs in enumerate(obs_dict)}
+        rewards = {f"agent_{i}": float(rew) for i, rew in enumerate(reward_dict)}
+        terminations = {f"agent_{i}": bool(done) for i, done in enumerate(done_dict)}
+        truncations = {f"agent_{i}": bool(trunc) for i, trunc in enumerate(truncated_dict)}
+        infos = {f"agent_{i}": {} for i in range(self._num_agents)}
 
         # Apply task-focused reward shaping if specified
         if self.task_focus:

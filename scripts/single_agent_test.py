@@ -40,4 +40,4 @@ def init_test():
     env.close()
 
 if __name__ == "__main__":
-    ppo_train()
+    init_test()
