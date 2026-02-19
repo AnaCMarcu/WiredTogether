@@ -1,6 +1,7 @@
 """PettingZoo ParallelEnv wrapper for Craftium's OpenWorld environment."""
 
 import os
+import socket as socket_mod
 import time
 from typing import Any, Dict, Optional
 
@@ -70,7 +71,33 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         print(f"* Forced all {len(self.mt_clients)} clients to headless (offscreen SDL)")
 
     # ------------------------------------------------------------------ #
-    # Patch 2: server-ready polling + diagnostics
+    # Patch 2: pre-listen on all channel sockets
+    # ------------------------------------------------------------------ #
+    def _pre_listen_channels(self):
+        """Call ``listen(1)`` on every MtChannel socket BEFORE starting clients.
+
+        ``mt_server.init_server()`` only does ``socket()`` + ``bind()`` — it
+        does **not** call ``listen()``.  The ``listen()`` call normally happens
+        inside ``server_listen()`` (triggered by ``open_conn()``), but by that
+        time the client process may already have tried to ``connect()`` and
+        received *Connection refused*.
+
+        Fix: use Python's ``socket.fromfd()`` to put each socket into the
+        LISTEN state early.  ``fromfd`` duplicates the fd; calling ``close()``
+        on the Python wrapper only closes the duplicate — the original
+        ``sockfd`` stays open for ``server_listen()`` to ``accept()`` on later.
+
+        Calling ``listen()`` twice (here + inside ``server_listen()``) is
+        harmless on Linux — the second call simply updates the backlog.
+        """
+        for i, ch in enumerate(self.mt_channs):
+            sock = socket_mod.fromfd(ch.sockfd, socket_mod.AF_INET, socket_mod.SOCK_STREAM)
+            sock.listen(1)
+            sock.close()  # closes the dup'd fd; original ch.sockfd stays open
+        print(f"* Pre-listened on {len(self.mt_channs)} channel sockets")
+
+    # ------------------------------------------------------------------ #
+    # Patch 3: server-ready polling + diagnostics
     # ------------------------------------------------------------------ #
     def reset(self, **kwargs):
         self.timesteps = 0
@@ -143,6 +170,10 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
 
             # Small extra delay for server to stabilize
             time.sleep(3)
+
+            # Put all channel sockets into LISTEN state before any client
+            # starts, so clients never see "Connection refused".
+            self._pre_listen_channels()
 
             for i in range(self.num_agents):
                 print(f"* Starting client {i}: {self.mt_clients[i].launch_cmd}")
