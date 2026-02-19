@@ -148,10 +148,14 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
                 print(f"* Starting client {i}: {self.mt_clients[i].launch_cmd}")
                 self.mt_clients[i].start_process()
 
-                # Check client didn't die immediately
-                time.sleep(1)
-                ret = self.mt_clients[i].proc.poll()
-                if ret is not None:
+                # Call open_conn() immediately — it must be listening
+                # BEFORE the client tries to connect to the Python TCP port.
+                # Any sleep between start_process() and open_conn() risks the
+                # client seeing "Connection refused".
+                try:
+                    self.mt_channs[i].open_conn()
+                except ConnectionError:
+                    ret = self.mt_clients[i].proc.poll()
                     cli_stderr = os.path.join(
                         self.mt_clients[i].run_dir, "stderr.txt"
                     )
@@ -162,11 +166,9 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
                     except FileNotFoundError:
                         pass
                     raise RuntimeError(
-                        f"MT client {i} exited immediately with code {ret}.\n"
+                        f"MT client {i} connection failed (exit code {ret}).\n"
                         f"stderr:\n{content}"
                     )
-
-                self.mt_channs[i].open_conn()
 
                 for _ in range(self.init_frames):
                     _obs, *_ = self.mt_channs[i].receive()
