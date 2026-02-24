@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 import cv2
+import imageio
 import numpy as np
 import torch
 import torch.nn as nn
@@ -49,6 +50,10 @@ class Args:
     """save the agent's model"""
     save_num: int = 5
     """number of evenly-spaced checkpoints to save"""
+    capture_video: bool = False
+    """record per-agent videos at regular intervals"""
+    capture_video_freq: int = 50
+    """record a video every N episodes"""
 
     # Environment
     num_agents: int = 2
@@ -127,6 +132,27 @@ def preprocess_obs(obs_dict, agents, obs_size, device):
         frame = frame.transpose(2, 0, 1)  # HWC -> CHW
         frames.append(frame)
     return torch.tensor(np.array(frames), dtype=torch.float32, device=device).unsqueeze(0)
+
+
+def save_agent_videos(frame_buffers, video_dir, global_step, fps=30):
+    """Save collected per-agent frames as mp4 videos.
+
+    Args:
+        frame_buffers: dict {agent_name: [np.array(H,W,3), ...]}
+        video_dir: output directory
+        global_step: for naming the file
+        fps: video frame rate
+    """
+    os.makedirs(video_dir, exist_ok=True)
+    for agent_name, frames in frame_buffers.items():
+        if not frames:
+            continue
+        path = os.path.join(video_dir, f"{agent_name}_step_{global_step}.mp4")
+        writer = imageio.get_writer(path, fps=fps)
+        for f in frames:
+            writer.append_data(f)
+        writer.close()
+        print(f"  Saved video: {path} ({len(frames)} frames)")
 
 
 class MAPPOAgent(nn.Module):
@@ -313,6 +339,17 @@ if __name__ == "__main__":
 
     ep_rets = np.zeros(num_agents)
     ep_len = 0
+    num_episodes = 0
+
+    # Video capture state
+    video_dir = f"videos/{run_name}"
+    recording = False
+    frame_buffers = {name: [] for name in agent_names}
+    if args.capture_video:
+        # Collect first frame of the initial episode
+        recording = True
+        for name in agent_names:
+            frame_buffers[name].append(obs_dict[name])
 
     try:
         for iteration in range(1, args.num_iterations + 1):
@@ -344,6 +381,11 @@ if __name__ == "__main__":
                     actions_dict
                 )
 
+                # Collect video frames (raw obs before preprocessing)
+                if args.capture_video and recording:
+                    for name in agent_names:
+                        frame_buffers[name].append(obs_dict[name])
+
                 # Store rewards and dones
                 for i, name in enumerate(agent_names):
                     rewards[step, i] = reward_dict.get(name, 0.0)
@@ -374,11 +416,24 @@ if __name__ == "__main__":
                     writer.add_scalar("charts/episodic_return_mean", mean_ret, global_step)
                     writer.add_scalar("charts/episodic_length", ep_len, global_step)
 
+                    # Save video if we were recording this episode
+                    if args.capture_video and recording:
+                        save_agent_videos(frame_buffers, video_dir, global_step)
+                    num_episodes += 1
+
                     # Reset
                     ep_rets = np.zeros(num_agents)
                     ep_len = 0
                     obs_dict, _ = env.reset()
                     next_done = torch.zeros(num_agents, device=device)
+
+                    # Decide whether to record next episode
+                    if args.capture_video:
+                        recording = num_episodes % args.capture_video_freq == 0
+                        frame_buffers = {name: [] for name in agent_names}
+                        if recording:
+                            for name in agent_names:
+                                frame_buffers[name].append(obs_dict[name])
                 else:
                     next_done = torch.tensor(
                         [float(term_dict.get(name, False) or trunc_dict.get(name, False))
