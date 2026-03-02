@@ -9,7 +9,7 @@ import numpy as np
 from gymnasium import spaces
 from pettingzoo import ParallelEnv
 
-from craftium.multiagent_env import MarlCraftiumEnv
+from craftium.multiagent_env import MarlCraftiumEnv, ACTION_ORDER
 
 
 class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
@@ -27,6 +27,9 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         super().__init__(**kwargs)
         self._fix_binary_names()
         self._fix_headless_clients()
+        # Per-agent position tracking for exploration reward
+        self._prev_pos = [None] * self.num_agents
+        self._positions = [None] * self.num_agents
 
     # ------------------------------------------------------------------ #
     # Patch 1: binary name minetest -> luanti
@@ -71,7 +74,48 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         print(f"* Forced all {len(self.mt_clients)} clients to headless (offscreen SDL)")
 
     # ------------------------------------------------------------------ #
-    # Patch 2: pre-listen on all channel sockets
+    # Patch 2: capture position data from step_agent
+    # ------------------------------------------------------------------ #
+    def step_agent(self, action):
+        """Override to capture position data for exploration reward."""
+        self.timesteps += 1
+
+        if self.current_agent_id == self.num_agents:
+            self.current_agent_id = 0
+        agent_id = self.current_agent_id
+        self.current_agent_id += 1
+
+        keys = [0] * 21
+        mouse_x, mouse_y = 0, 0
+        for k, v in action.items():
+            if k == "mouse":
+                x, y = v[0], -v[1]
+                mouse_x = int(x * (self.obs_width // 2))
+                mouse_y = int(y * (self.obs_height // 2))
+            else:
+                keys[ACTION_ORDER.index(k)] = v
+
+        self.mt_channs[agent_id].send(keys, mouse_x, mouse_y)
+
+        observation, _voxobs, pos, _vel, _pitch, _yaw, _dtime, reward, termination = (
+            self.mt_channs[agent_id].receive()
+        )
+        if not self.gray_scale_keepdim and not self.rgb_observations:
+            observation = observation[:, :, 0]
+
+        self.last_observations[agent_id] = observation
+
+        # Store position for exploration reward
+        self._prev_pos[agent_id] = self._positions[agent_id]
+        self._positions[agent_id] = pos
+
+        info = self._get_info()
+        truncated = self.max_timesteps is not None and self.timesteps >= self.max_timesteps
+
+        return observation, reward, termination, truncated, info
+
+    # ------------------------------------------------------------------ #
+    # Patch 3: pre-listen on all channel sockets
     # ------------------------------------------------------------------ #
     def _pre_listen_channels(self):
         """Call ``listen(1)`` on every MtChannel socket BEFORE starting clients.
@@ -131,7 +175,7 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
                 "* Waiting for MT server to initialize (polling stderr). "
                 "This is only required in the first call to reset."
             )
-            deadline = time.time() + 120  # max 2 minutes
+            deadline = time.time() + 300  # max 5 minutes (VoxeLibre can take 2-3 min on HPC)
             server_ready = False
             stderr_path = os.path.join(self.mt_server.run_dir, "stderr.txt")
             while time.time() < deadline:
@@ -162,7 +206,7 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
                 except FileNotFoundError:
                     tail = "(file not found)"
                 print(
-                    f"* WARNING: server not confirmed ready after 120 s.\n"
+                    f"* WARNING: server not confirmed ready after 300 s.\n"
                     f"  stderr tail:\n{tail}"
                 )
             else:
@@ -417,6 +461,18 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         terminations = {f"agent_{i}": bool(done) for i, done in enumerate(done_dict)}
         truncations = {f"agent_{i}": bool(trunc) for i, trunc in enumerate(truncated_dict)}
         infos = {f"agent_{i}": {} for i in range(self._num_agents)}
+
+        # Dense reward shaping: exploration bonus based on distance moved
+        for i in range(self._num_agents):
+            prev = self.env._prev_pos[i]
+            curr = self.env._positions[i]
+            if prev is not None and curr is not None:
+                # Euclidean distance in xz plane (ignore y to avoid jump-spam)
+                dx = curr[0] - prev[0]
+                dz = curr[2] - prev[2]
+                dist = np.sqrt(dx * dx + dz * dz)
+                # Scale: ~0.1 reward per node moved (small vs dig=1.0, stage=128+)
+                rewards[f"agent_{i}"] += 0.1 * dist
 
         # Apply task-focused reward shaping if specified
         if self.task_focus:
