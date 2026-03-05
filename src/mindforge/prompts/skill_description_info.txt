@@ -1,0 +1,7 @@
+Please generate a name and a description for the following action:
+
+Agent thoughts: {agent_thoughts}
+Agent action: {action}
+
+EX Response:
+{{"name": "Holding an egg", "description": "picking up an egg and holding it ready to interact with"}}

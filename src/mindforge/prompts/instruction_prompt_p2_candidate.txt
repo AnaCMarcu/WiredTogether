@@ -1,0 +1,14 @@
+Example response format:
+{{"candidate_actions": ["ToggleObject Stove_One", "PickupObject Plate", "OpenObject Microwave"]}}
+
+Task: {task}
+Last action: {last_action}
+Held item: {picked_object}
+Critique: {critique}
+Error: {error}
+Relevant skills: {skill_memory}
+Past episodes: {episode_summary}
+Task belief: {task_beliefs}
+Perception belief: {perception_beliefs}
+Interaction beliefs: {interaction_beliefs}
+Partner beliefs: {partner_beliefs}

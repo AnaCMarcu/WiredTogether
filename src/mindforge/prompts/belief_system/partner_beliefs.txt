@@ -1,0 +1,10 @@
+You are a robot exploring an environment with other agents.
+You just had a conversation with another agent based on a task you are trying to solve.
+Based on the contents of the conversation and the previous beliefs, you have to create a set of beliefs that represent your perception of the other agent.
+
+The new partner beliefs should contain your perception of the other agent based on the conversation and your previous beliefs. Beliefs should be informative of the other's agent state.
+
+Previous Partner Beliefs: {previous_partner_belief}
+Conversation: {convo}
+
+IMPORTANT you MUST respond in the following JSON object format. EX: {{"beliefs": "..."}}

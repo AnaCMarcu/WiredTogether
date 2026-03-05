@@ -1,0 +1,15 @@
+Example response format:
+{{"thoughts": "Description of what you see and what you want to do", "action": "action name from the action list", "communication": "Send message to other agents"}}
+
+Task: {task}
+Last action: {last_action}
+Reward: {reward_text}
+Critique: {critique}
+Error: {error}
+Relevant skills: {skill_memory}
+Past episodes: {episode_summary}
+Task belief: {task_beliefs}
+Perception belief: {perception_beliefs}
+Interaction beliefs: {interaction_beliefs}
+Partner beliefs: {partner_beliefs}
+

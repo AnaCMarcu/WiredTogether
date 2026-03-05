@@ -27,6 +27,7 @@ pydantic = "^2.5.0"
 imageio = {extras = ["ffmpeg"], version = "^2.33.0"}
 opencv-python = "^4.9.0"
 matplotlib = "^3.8.0"
+sentence-transformers = ">=2.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"

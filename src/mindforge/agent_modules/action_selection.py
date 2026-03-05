@@ -1,0 +1,135 @@
+from agent_modules.llm_call import llm_call
+from agent_modules.util import AgentResponse, CandidateResponse, create_model_client
+
+# load in prompts
+with open("prompts/system_prompt.txt", "r") as f:
+    system_prompt_txt = f.read()
+with open("prompts/environment_prompt.txt", "r") as f:
+    environment_prompt = f.read()
+with open("prompts/instruction_prompt_p2.txt", "r") as f:
+    instruction_prompt_p2 = f.read()
+with open("prompts/system_prompt_prediction.txt", "r") as f:
+    system_prompt_prediction_txt = f.read()
+with open("prompts/prediction_prompt.txt", "r") as f:
+    prediction_prompt = f.read()
+with open("prompts/system_prompt_candidate_interventions.txt", "r") as f:
+    system_prompt_candidate_interventions = f.read()
+with open("prompts/instruction_prompt_p2_candidate.txt", "r") as f:
+    instruction_prompt_p2_candidate = f.read()
+
+
+class ActionSelection:
+    def __init__(
+        self,
+        system_prompt=None,
+        system_prompt_prediction=None,
+        action_model_client=None,
+        candidate_model_client=None,
+    ):
+        self.system_prompt = (
+            system_prompt if system_prompt else eval(f"f'''{system_prompt_txt}'''")
+        )
+        self.system_prompt_prediction = (
+            system_prompt_prediction
+            if system_prompt_prediction
+            else eval(f"f'''{system_prompt_prediction_txt}'''")
+        )
+        self.action_model_client = (
+            action_model_client
+            if action_model_client
+            else create_model_client(resonse_format=AgentResponse)
+        )
+        self.candidate_model_client = (
+            candidate_model_client
+            if candidate_model_client
+            else create_model_client(resonse_format=CandidateResponse)
+        )
+
+    async def select_action(
+        self,
+        messages,
+        last_frame,
+        cancellation_token,
+        agent_name,
+        task,
+        last_action,
+        critique,
+        error,
+        skill_memory,
+        episode_summary,
+        picked_object,
+        beliefs,
+        pred_action=None,
+        pred_frame=None,
+    ):
+        if not pred_action or not pred_frame:
+            content = await llm_call(
+                self.action_model_client,
+                system_prompt=self.system_prompt,
+                user_prompt=instruction_prompt_p2 + messages[0].content[0],
+                frame=last_frame,
+                cancellation_token=cancellation_token,
+                log_prefix=f"Agent {agent_name} on_messages: ",
+                task=task,
+                last_action=last_action,
+                critique=critique,
+                error=error,
+                skill_memory=skill_memory,
+                episode_summary=episode_summary,
+                picked_object=picked_object,
+                **beliefs,
+            )
+            return content
+        else:
+            content = await llm_call(
+                self.action_model_client,
+                system_prompt=self.system_prompt_prediction,
+                user_prompt=instruction_prompt_p2 + messages[0].content[0],
+                frame=last_frame,
+                cancellation_token=cancellation_token,
+                log_prefix=f"Agent {agent_name} on_messages: ",
+                pred_prompt=prediction_prompt.format(pred_action=pred_action),
+                pred_frame=pred_frame,
+                task=task,
+                last_action=last_action,
+                critique=critique,
+                error=error,
+                skill_memory=skill_memory,
+                episode_summary=episode_summary,
+                picked_object=picked_object,
+                **beliefs,
+            )
+            return content
+
+    async def select_candidate_actions(
+        self,
+        messages,
+        last_frame,
+        cancellation_token,
+        agent_name,
+        task,
+        last_action,
+        critique,
+        error,
+        skill_memory,
+        episode_summary,
+        picked_object,
+        beliefs,
+    ):
+        content = await llm_call(
+            self.candidate_model_client,
+            system_prompt=eval(f"f'''{system_prompt_candidate_interventions}'''"),
+            user_prompt=instruction_prompt_p2_candidate + messages[0].content[0],
+            frame=last_frame,
+            cancellation_token=cancellation_token,
+            log_prefix=f"Agent {agent_name} on_messages: ",
+            task=task,
+            last_action=last_action,
+            critique=critique,
+            error=error,
+            skill_memory=skill_memory,
+            episode_summary=episode_summary,
+            picked_object=picked_object,
+            **beliefs,
+        )
+        return content

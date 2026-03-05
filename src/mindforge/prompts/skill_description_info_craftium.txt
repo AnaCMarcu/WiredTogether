@@ -1,0 +1,7 @@
+Please generate a name and a description for the following action:
+
+Agent thoughts: {agent_thoughts}
+Agent action: {action}
+
+EX Response:
+{{"name": "chopping a tree", "description": "Breaking a tree trunk block to collect wood for tools progression"}}

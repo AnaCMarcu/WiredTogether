@@ -1,0 +1,7 @@
+Write a description of the image provided, focusing on the prominent objects in the scene and especially anything that might be relevant to the task at hand.
+The description should be concise and informative, 3 scentences maximum. Highlighting key details that could assist in understanding the context of the image.
+Task: {task}.
+You should also provide a name for you description.
+USE STRICT JSON FORMATTING AS SHOWN IN EXAMPLE BELOW.
+EX RESPONSE FORMAT:
+{{"name": "...", "description": "...."}}

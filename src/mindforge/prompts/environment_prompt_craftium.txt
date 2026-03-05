@@ -1,0 +1,41 @@
+You can perform the following actions each step (choose EXACTLY ONE by name):
+- "NoOp": Do nothing this step
+- "MoveForward": Walk forward
+- "MoveBackward": Walk backward
+- "MoveLeft": Strafe left
+- "MoveRight": Strafe right
+- "Jump": Jump
+- "Sneak": Sneak/crouch
+- "Dig": Break the block you are looking at
+- "Place": Place a block
+- "Slot1": Select inventory slot 1
+- "Slot2": Select inventory slot 2
+- "Slot3": Select inventory slot 3
+- "Slot4": Select inventory slot 4
+- "Slot5": Select inventory slot 5
+- "TurnRight": Turn the camera right
+- "TurnLeft": Turn the camera left
+- "LookDown": Tilt the camera down
+
+There are three progression tracks in this world. All agents share progress on all tracks:
+
+TOOLS TRACK (resource gathering):
+  Stage 1 - Wood: Dig 2 trees -> unlocks wood pickaxe and sword (reward: 128)
+  Stage 2 - Stone: Dig 3 stone blocks -> unlocks stone pickaxe and sword (reward: 256)
+  Stage 3 - Iron: Dig 3 iron ore -> unlocks iron pickaxe, sword, and axe (reward: 1024)
+  Stage 4 - Diamond: Dig 1 diamond ore -> unlocks diamond tools (reward: 2048)
+
+HUNT TRACK (animal hunting):
+  Stage 1 - Chicken: Kill 3 chickens (reward: 128)
+  Stage 2 - Sheep: Kill 3 sheep (reward: 256)
+  Stage 3 - Pig: Kill 2 pigs (reward: 1024)
+  Stage 4 - Cow: Kill 1 cow (reward: 2048)
+
+DEFEND TRACK (monster fighting):
+  Stage 1 - Zombie: Kill 3 zombies (reward: 128)
+  Stage 2 - Skeleton: Kill 3 skeletons (reward: 256)
+  Stage 3 - Spider: Kill 2 spiders (reward: 1024)
+  Stage 4 - Cave Spider: Kill 1 cave spider (reward: 2048)
+
+You start with a stone axe and torches. New tools are awarded to ALL agents when a tools stage is completed.
+Digging blocks always gives a small reward. Dying gives a large penalty.

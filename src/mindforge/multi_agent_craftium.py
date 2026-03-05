@@ -1,0 +1,376 @@
+"""Main loop for running Mindforge agents in Craftium OpenWorld.
+
+Role-specialized agents (gatherer, hunter, defender) interact with
+the Craftium multi-agent environment, using LLM-based action selection,
+episodic memory, belief systems, and auto-curriculum.
+
+Supports any number of agents -- roles cycle (gatherer, hunter, defender,
+gatherer, hunter, ...) when NUM_AGENTS > 3.
+
+Usage:
+    cd src/mindforge
+    python multi_agent_craftium.py
+    python multi_agent_craftium.py --num-agents 6 --episodes 3 --max-steps 1000
+"""
+
+import argparse
+import asyncio
+import os
+import time
+import logging
+from datetime import datetime
+
+import numpy as np
+import PIL
+from autogen_agentchat.messages import TextMessage, MultiModalMessage
+from autogen_core import CancellationToken, Image
+from autogen_core import EVENT_LOGGER_NAME
+
+from custom_agent import CustomAgent
+from custom_environment_craftium import CraftiumEnvironmentInterface, VALID_ACTIONS
+from agent_modules.action_selection import ActionSelection
+from agent_modules.auto_curriculum import AutoCurriculum
+from agent_modules.belief_system import BeliefSystem
+from agent_modules.critic import Critic
+from agent_modules.skill_manager import SkillManager
+from agent_modules.episodic_memory_manager import EpisodicMemoryManager
+from agent_modules.metric import Metric
+
+ROLE_NAMES = ["gatherer", "hunter", "defender"]
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run Mindforge agents in Craftium OpenWorld")
+    parser.add_argument("--num-agents", type=int, default=3,
+                        help="Number of agents (roles cycle: gatherer, hunter, defender)")
+    parser.add_argument("--episodes", type=int, default=1,
+                        help="Number of episodes to run")
+    parser.add_argument("--max-steps", type=int, default=500,
+                        help="Maximum steps per episode")
+    parser.add_argument("--obs-width", type=int, default=320,
+                        help="Observation width in pixels")
+    parser.add_argument("--obs-height", type=int, default=180,
+                        help="Observation height in pixels")
+    parser.add_argument("--no-communication", action="store_true",
+                        help="Disable inter-agent communication")
+    parser.add_argument("--sleep-time", type=float, default=0.0,
+                        help="Seconds to sleep between LLM calls (rate-limit protection)")
+    parser.add_argument("--no-gif", action="store_true",
+                        help="Disable GIF saving")
+    return parser.parse_args()
+
+
+def load_prompts():
+    """Load all prompt files and return them as a dict."""
+    prompt_dir = os.path.join(os.path.dirname(__file__), "prompts")
+    belief_dir = os.path.join(prompt_dir, "belief_system_craftium")
+
+    def _read(path):
+        with open(path, "r") as f:
+            return f.read()
+
+    prompts = {
+        "environment": _read(os.path.join(prompt_dir, "environment_prompt_craftium.txt")),
+        "system_template": _read(os.path.join(prompt_dir, "system_prompt_craftium.txt")),
+        "instruction": _read(os.path.join(prompt_dir, "instruction_prompt_craftium.txt")),
+        "critic": _read(os.path.join(prompt_dir, "critic_prompt_craftium.txt")),
+        "curriculum_questions": _read(os.path.join(prompt_dir, "curriculum_questions_craftium.txt")),
+        "skill_description": _read(os.path.join(prompt_dir, "skill_description_prompt_craftium.txt")),
+        "skill_info": _read(os.path.join(prompt_dir, "skill_description_info_craftium.txt")),
+        "perception": _read(os.path.join(belief_dir, "perception_beliefs.txt")),
+        "partner": _read(os.path.join(belief_dir, "partner_beliefs.txt")),
+        "interaction": _read(os.path.join(belief_dir, "interaction_belief.txt")),
+        "context": _read(os.path.join(belief_dir, "update_context.txt")),
+    }
+
+    # Role prompts
+    prompts["roles"] = {}
+    for role in ROLE_NAMES:
+        prompts["roles"][role] = _read(os.path.join(prompt_dir, f"role_{role}.txt"))
+
+    return prompts
+
+
+def build_role_configs(num_agents, role_prompts):
+    """Build ROLE_CONFIGS for num_agents, cycling through roles."""
+    configs = []
+    for i in range(num_agents):
+        role = ROLE_NAMES[i % len(ROLE_NAMES)]
+        configs.append({
+            "name": role,
+            "agent_name": f"agent_{i}_{role}",
+            "curriculum_prompt": role_prompts[role].format(num_agents=num_agents),
+        })
+    return configs
+
+
+def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric):
+    """Initialize all Mindforge agents."""
+    agents = []
+    for i, role_cfg in enumerate(role_configs):
+        agent = CustomAgent(
+            name=role_cfg["agent_name"],
+            description=f"{role_cfg['name']} agent in Craftium open world",
+            action_selection=ActionSelection(system_prompt=system_prompt),
+            auto_curriculum=AutoCurriculum(
+                override_curriculum_prompt=role_cfg["curriculum_prompt"],
+                override_questions_prompt=prompts["curriculum_questions"],
+                agent_name=role_cfg["agent_name"],
+            ),
+            critic=Critic(override_critic_prompt=prompts["critic"]),
+            skill_manager=SkillManager(
+                override_skill_prompt=prompts["skill_description"],
+                override_skill_info_prompt=prompts["skill_info"],
+                agent_name=role_cfg["agent_name"],
+            ),
+            episode_manager=EpisodicMemoryManager(
+                agent_name=role_cfg["agent_name"],
+            ),
+            belief_system=BeliefSystem(
+                number_of_agents=num_agents,
+                override_perception_prompt=prompts["perception"],
+                override_partner_prompt=prompts["partner"],
+                override_interaction_prompt=prompts["interaction"],
+                override_context_prompt=prompts["context"],
+            ),
+            number_of_agents=num_agents,
+            metric=metric,
+            voyager=False,
+            causal_predictions=False,
+            surgical_action_selection=False,
+            causal_bdi=False,
+        )
+        agents.append(agent)
+        print(f"Initialized agent {i}: {role_cfg['agent_name']} ({role_cfg['name']})")
+    return agents
+
+
+# ===========================
+# Agent action loop
+# ===========================
+async def agent_do_action(
+    agent,
+    agent_id: int,
+    frame_image,
+    communications: list,
+    reward_text: str,
+    instruction_prompt,
+    environment,
+    error=None,
+    error_count=0,
+):
+    """Have one agent observe and choose an action.
+
+    Returns:
+        (content_dict, last_action_str, error_count)
+    """
+    formatted_communication = [
+        f"{msg.source}: {msg.content}"
+        for msg in communications
+        if msg.source != agent.name
+    ]
+
+    filled_instruction = instruction_prompt.format(
+        task=agent.auto_curriculum.current_task or "Explore the world",
+        last_action=agent.last_response["action"] if agent.last_response else "None",
+        reward_text=reward_text,
+        critique="None",
+        error=error,
+        skill_memory="None",
+        episode_summary="None",
+        task_beliefs="None",
+        perception_beliefs="None",
+        interaction_beliefs="None",
+        partner_beliefs="None",
+    )
+
+    comm_text = f"Communications from other agents: {formatted_communication}.\n"
+    full_instruction = filled_instruction + comm_text
+
+    multi_modal_message = MultiModalMessage(
+        content=[full_instruction, Image.from_pil(frame_image)],
+        source="user",
+    )
+
+    content, error_count = await agent.on_messages(
+        [multi_modal_message],
+        CancellationToken(),
+        communication=formatted_communication,
+        error=error,
+        error_count=error_count,
+        picked_object=environment.pickedup_object(agentId=agent_id),
+    )
+
+    last_action = "NoOp"
+    try:
+        _, last_action = environment.step(content["action"], agentId=agent_id)
+    except Exception as e:
+        logging.error(f"Error in environment step for agent {agent_id}: {e}")
+        if error_count < 5:
+            content, last_action, error_count = await agent_do_action(
+                agent, agent_id, frame_image, communications, reward_text,
+                instruction_prompt, environment,
+                error=str(e), error_count=error_count + 1,
+            )
+        else:
+            logging.error(f"Agent {agent_id} exceeded retry limit, using NoOp")
+            environment.step("NoOp", agentId=agent_id)
+            last_action = "NoOp"
+
+    return content, last_action, error_count
+
+
+# ===========================
+# Main episode loop
+# ===========================
+async def run(args):
+    num_agents = args.num_agents
+    num_episodes = args.episodes
+    max_steps = args.max_steps
+    obs_width = args.obs_width
+    obs_height = args.obs_height
+    communication = not args.no_communication
+    sleep_time = args.sleep_time
+    save_gif = not args.no_gif
+
+    # Logging
+    os.makedirs("logs", exist_ok=True)
+    os.makedirs("gifs", exist_ok=True)
+
+    event_logger = logging.getLogger(EVENT_LOGGER_NAME)
+    event_logger.disabled = True
+    logging.basicConfig(
+        level=logging.INFO,
+        filename=f"logs/craftium_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log",
+        filemode="a",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # Load prompts
+    prompts = load_prompts()
+    environment_prompt = prompts["environment"]
+    instruction_prompt = prompts["instruction"]
+
+    # Build system prompt with environment details baked in
+    system_prompt_template = prompts["system_template"]
+    system_prompt = eval(f"f'''{system_prompt_template}'''")
+
+    # Roles & agents
+    role_configs = build_role_configs(num_agents, prompts["roles"])
+
+    metric = Metric(
+        agent_type="Mindforge",
+        prediction_type="None",
+        number_of_agents=num_agents,
+        communication=communication,
+    )
+
+    environment = CraftiumEnvironmentInterface(
+        num_agents=num_agents,
+        obs_width=obs_width,
+        obs_height=obs_height,
+        max_steps=max_steps,
+    )
+
+    agents = build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric)
+
+    print(f"\nConfig: {num_agents} agents, {num_episodes} episodes, "
+          f"{max_steps} max steps, comm={'on' if communication else 'off'}")
+
+    for episode in range(num_episodes):
+        print(f"\n{'='*60}")
+        print(f"Episode {episode + 1}/{num_episodes}")
+        print(f"{'='*60}")
+
+        environment.reset()
+
+        communications = []
+        agents_error_count = [0] * num_agents
+        frames_list = []
+
+        for step in range(max_steps):
+            logging.info(f"Episode {episode+1}, Step {step+1}/{max_steps}")
+
+            if step % 50 == 0:
+                print(f"  Step {step+1}/{max_steps}")
+
+            if environment.all_done():
+                print(f"  All agents done at step {step+1}")
+                break
+
+            # Collect current frames for GIF
+            current_frames = []
+            for i in range(num_agents):
+                frame = environment.get_agent_frame(i)
+                current_frames.append(
+                    frame if frame is not None
+                    else np.zeros((obs_height, obs_width, 3), dtype=np.uint8)
+                )
+            frames_list.append(current_frames)
+
+            # Each agent takes a turn
+            for agent_id, agent in enumerate(agents):
+                agent_name = f"agent_{agent_id}"
+
+                if environment._terminations.get(agent_name, False):
+                    continue
+
+                error_count = agents_error_count[agent_id]
+                frame_image = environment.get_pil_image(agent_id)
+                reward_text = environment.get_reward_summary(agent_id)
+
+                content, last_action, error_count = await agent_do_action(
+                    agent, agent_id, frame_image, communications, reward_text,
+                    instruction_prompt, environment,
+                    error_count=error_count,
+                )
+                agents_error_count[agent_id] = error_count
+
+                if (
+                    content
+                    and content.get("communication")
+                    and content["communication"] not in ("", "None")
+                    and communication
+                ):
+                    message = TextMessage(
+                        content=content["communication"],
+                        source=agent.name,
+                    )
+                    communications.append(message)
+
+                if len(communications) > num_agents - 1:
+                    communications.pop(0)
+
+                time.sleep(sleep_time)
+
+            metric.store_timestep()
+
+        # Save GIFs for this episode
+        if save_gif and frames_list:
+            for i in range(num_agents):
+                agent_frames = [
+                    PIL.Image.fromarray(f[i]) for f in frames_list if f[i] is not None
+                ]
+                if agent_frames:
+                    gif_path = (
+                        f"gifs/{role_configs[i]['agent_name']}_ep{episode+1}"
+                        f"_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.gif"
+                    )
+                    agent_frames[0].save(
+                        gif_path,
+                        format="GIF",
+                        append_images=agent_frames[1:],
+                        save_all=True,
+                        duration=500,
+                        loop=0,
+                    )
+                    print(f"  Saved GIF: {gif_path}")
+
+    print(f"\nExperiment complete! Timesteps logged: {metric.saved_timesteps}")
+    metric.save_run_metrics()
+    environment.close()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    asyncio.run(run(args))

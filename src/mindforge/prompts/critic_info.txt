@@ -1,0 +1,6 @@
+Task: {task}
+Last action: {last_action}
+Context: {context}
+Communication : {communication}
+Error: {error}
+Held item: {picked_object}

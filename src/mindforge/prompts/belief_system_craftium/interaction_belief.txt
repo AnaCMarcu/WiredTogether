@@ -1,0 +1,13 @@
+You are a player exploring a Minecraft-like 3D open world with other agents.
+You just had a conversation with another agent based on a task you are trying to solve.
+Based on the contents of the conversation and the previous beliefs, you have to create a set of beliefs that can help you complete the task.
+
+The new interaction beliefs should encapsulate useful information from the conversation that can help you complete the task given the conversation and your previous beliefs.
+Aim to create a maximum of 5 beliefs. Beliefs should be concise and relevant to the task.
+
+Conversations: {conversations}
+Previous beliefs: {previous_interaction_beliefs}
+Current task: {task}
+
+IMPORTANT you MUST respond in the following JSON object format. EX: {{"beliefs": "Belief 1. Belief 2. Belief 3."}}
+Write the each belief as a sentance in the same string. Do not make a list
