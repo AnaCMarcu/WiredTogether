@@ -9,7 +9,7 @@ dependencies:
   - gymnasium=0.29.1
   - pettingzoo=1.24.3
   - opencv
-  - pytorch
+  # pytorch: use 'module load py-torch' on DelftBlue instead
   - tensorboard
   - wandb
   - pip:

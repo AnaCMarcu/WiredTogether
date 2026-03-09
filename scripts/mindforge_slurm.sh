@@ -26,6 +26,7 @@ LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
 module purge
 module load 2025
 module load miniconda3
+module load py-torch
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "$ENV_PREFIX"
