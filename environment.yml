@@ -26,3 +26,19 @@ dependencies:
       - mypy==1.19.1
       - pre-commit==3.8.0
       - pytest==7.4.4
+      # MindForge agent dependencies
+      - autogen-agentchat>=0.6.0
+      - autogen-core>=0.6.0
+      - autogen-ext[openai,chromadb]>=0.6.0
+      - openai>=1.0.0
+      - chromadb>=1.0.0
+      - flask>=3.0.0
+      - pydantic>=2.5.0
+      - sentence-transformers>=2.2.0
+      # Local model + RL layer
+      - transformers>=4.37.0
+      - peft>=0.10.0
+      - safetensors>=0.4.0
+      # LLM server (optional)
+      - fastapi>=0.100.0
+      - uvicorn>=0.20.0
