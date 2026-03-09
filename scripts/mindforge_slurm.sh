@@ -53,7 +53,7 @@ LLM_PID=$!
 
 echo "Waiting for LLM server to start..."
 READY=0
-for i in $(seq 1 120); do
+for i in $(seq 1 300); do
   if curl -sf "http://127.0.0.1:${LLM_PORT}/health" > /dev/null; then
     echo "LLM server is ready (took ${i}s)"
     READY=1
@@ -68,7 +68,7 @@ for i in $(seq 1 120); do
 done
 
 if [[ "$READY" -ne 1 ]]; then
-  echo "LLM server failed to start after 120s"
+  echo "LLM server failed to start after 300s"
   tail -100 "$LLM_LOG" || true
   exit 1
 fi
