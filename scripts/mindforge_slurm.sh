@@ -14,9 +14,14 @@ set -euo pipefail
 
 PROJECT_DIR=/scratch/acmarcu/WiredTogether
 ENV_PREFIX=/scratch/acmarcu/.conda/envs/WiredTogether
-MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
-LLM_PORT=8000
-LLM_LOG=/scratch/acmarcu/WiredTogether/slurm_logs/llm-server-${SLURM_JOB_ID}.log
+
+# --- LLM Configuration ---
+# Option A: Shared vLLM server (72B model, ask supervisor for hostname)
+VLLM_URL="http://gpu-node:8000/v1"          # TODO: replace gpu-node with actual hostname
+VLLM_MODEL="Qwen2.5-VL-72B-Instruct"
+
+# Option B: Local model fallback (2B, loaded in-process)
+LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
 
 module purge
 module load 2025
@@ -36,48 +41,16 @@ python -c "import sys; print('python:', sys.executable)"
 python -c "import torch; print('torch cuda:', torch.cuda.is_available())"
 nvidia-smi
 
-cleanup() {
-  if [[ -n "${LLM_PID:-}" ]] && kill -0 "$LLM_PID" 2>/dev/null; then
-    kill "$LLM_PID" 2>/dev/null || true
-  fi
-}
-trap cleanup EXIT
-
-echo "Starting LLM server with model: $MODEL_PATH"
-python scripts/llm_server.py \
-  --model-path "$MODEL_PATH" \
-  --host 0.0.0.0 \
-  --port "$LLM_PORT" \
-  > "$LLM_LOG" 2>&1 &
-LLM_PID=$!
-
-echo "Waiting for LLM server to start..."
-READY=0
-for i in $(seq 1 300); do
-  if curl -sf "http://127.0.0.1:${LLM_PORT}/health" > /dev/null; then
-    echo "LLM server is ready (took ${i}s)"
-    READY=1
-    break
-  fi
-  if ! kill -0 "$LLM_PID" 2>/dev/null; then
-    echo "LLM server died unexpectedly"
-    tail -100 "$LLM_LOG" || true
-    exit 1
-  fi
-  sleep 1
-done
-
-if [[ "$READY" -ne 1 ]]; then
-  echo "LLM server failed to start after 300s"
-  tail -100 "$LLM_LOG" || true
-  exit 1
+# Try vLLM server first, fall back to local model
+if curl -sf "${VLLM_URL%/v1}/health" > /dev/null 2>&1; then
+  echo "Using shared vLLM server: $VLLM_MODEL at $VLLM_URL"
+  export LLM_BASE_URL="$VLLM_URL"
+  export LLM_MODEL="$VLLM_MODEL"
+  export LLM_API_KEY="no-key-needed"
+else
+  echo "vLLM server not reachable, using local model: $LOCAL_MODEL_PATH"
+  export LLM_MODEL_PATH="$LOCAL_MODEL_PATH"
 fi
-
-curl -s "http://127.0.0.1:${LLM_PORT}/v1/models" || true
-
-export LLM_BASE_URL="http://127.0.0.1:${LLM_PORT}/v1"
-export LLM_MODEL="Qwen3.5-2B"
-export LLM_API_KEY="no-key-needed"
 
 cd src/mindforge
 python multi_agent_craftium.py --num-agents 1 --episodes 10 --max-steps 200

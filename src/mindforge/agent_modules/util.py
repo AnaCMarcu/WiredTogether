@@ -16,13 +16,17 @@ from pydantic import BaseModel
 import os
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
-# Configure via environment variables or fall back to defaults.
-# For local vLLM on DelftBlue:
-#   export LLM_BASE_URL=http://gpu-node:8000/v1
-#   export LLM_MODEL=Qwen2.5-VL-72B-Instruct
-# For OpenRouter (default):
-#   export LLM_BASE_URL=https://openrouter.ai/api/v1
-#   export LLM_MODEL=google/gemini-2.5-flash
+# Configure via environment variables:
+#
+# Option A — Local model (no server needed):
+#   export LLM_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
+#
+# Option B — HTTP server (SGLang, vLLM, llm_server.py, OpenRouter):
+#   export LLM_BASE_URL=http://localhost:8000/v1
+#   export LLM_MODEL=Qwen3.5-2B
+#   export LLM_API_KEY=no-key-needed
+#
+local_model_path = os.environ.get("LLM_MODEL_PATH", "")
 base_url = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
 model = os.environ.get("LLM_MODEL", "google/gemini-2.5-flash")
 
@@ -123,8 +127,16 @@ def visualize_frames(
 
 def create_model_client(
     resonse_format, key_path="api.key"
-) -> OpenAIChatCompletionClient:
-    # API key: env var > file > dummy (local vLLM doesn't need a real key)
+):
+    # Option A: local transformers model (no HTTP server)
+    if local_model_path:
+        from agent_modules.local_model_client import LocalModelClient
+        return LocalModelClient(
+            model_path=local_model_path,
+            response_format=resonse_format,
+        )
+
+    # Option B: OpenAI-compatible HTTP endpoint
     api_key = os.environ.get("LLM_API_KEY")
     if not api_key:
         try:
