@@ -1,0 +1,104 @@
+"""Fixed-size rollout buffer for MAPPO trajectories.
+
+Stores per-step transitions for one agent.  After ``update_interval`` steps
+the buffer is consumed by ``mappo.ppo_update`` and then cleared.
+"""
+
+from dataclasses import dataclass, field
+from typing import List, Optional
+
+import torch
+
+
+@dataclass
+class Transition:
+    """Single environment transition."""
+    prompt_text: str          # full formatted prompt (needed for recomputing logprobs)
+    action_idx: int           # index into RLConfig.actions
+    old_log_prob: float       # log π_old(a|s)
+    old_value: float          # V_old(s)
+    reward: float = 0.0
+    done: bool = False
+    # populated by GAE after the rollout segment
+    advantage: float = 0.0
+    returns: float = 0.0
+
+
+class RolloutBuffer:
+    """Collects transitions for one agent and computes GAE when flushed."""
+
+    def __init__(self, max_size: int = 2048):
+        self.max_size = max_size
+        self._buf: List[Transition] = []
+        self._pending: Optional[Transition] = None  # waiting for reward
+
+    # ── Collection API ──
+
+    def store_action(self, prompt_text: str, action_idx: int,
+                     log_prob: float, value: float) -> None:
+        """Called right after action selection.  Reward comes later."""
+        if self._pending is not None:
+            # previous transition never got a reward – store it with 0
+            self._buf.append(self._pending)
+        self._pending = Transition(
+            prompt_text=prompt_text,
+            action_idx=action_idx,
+            old_log_prob=log_prob,
+            old_value=value,
+        )
+
+    def store_reward(self, reward: float, done: bool = False) -> None:
+        """Called after the environment returns the reward for the last action."""
+        if self._pending is not None:
+            self._pending.reward = reward
+            self._pending.done = done
+            self._buf.append(self._pending)
+            self._pending = None
+
+    # ── Query ──
+
+    def __len__(self) -> int:
+        return len(self._buf)
+
+    @property
+    def ready(self) -> bool:
+        return len(self._buf) > 0
+
+    # ── GAE computation ──
+
+    def compute_gae(self, gamma: float, gae_lambda: float,
+                    last_value: float = 0.0) -> None:
+        """Compute Generalised Advantage Estimation in-place."""
+        gae = 0.0
+        for t in reversed(range(len(self._buf))):
+            tr = self._buf[t]
+            if t == len(self._buf) - 1:
+                next_value = last_value
+                next_non_terminal = 1.0 - float(tr.done)
+            else:
+                next_value = self._buf[t + 1].old_value
+                next_non_terminal = 1.0 - float(self._buf[t + 1].done)
+            delta = tr.reward + gamma * next_value * next_non_terminal - tr.old_value
+            gae = delta + gamma * gae_lambda * next_non_terminal * gae
+            tr.advantage = gae
+            tr.returns = gae + tr.old_value
+
+    # ── Batching for training ──
+
+    def sample_batches(self, mini_batch_size: int):
+        """Yield mini-batches of transitions (shuffled)."""
+        indices = torch.randperm(len(self._buf)).tolist()
+        for start in range(0, len(self._buf), mini_batch_size):
+            batch_idx = indices[start:start + mini_batch_size]
+            yield [self._buf[i] for i in batch_idx]
+
+    def get_all(self) -> List[Transition]:
+        return list(self._buf)
+
+    def clear(self) -> None:
+        self._buf.clear()
+        self._pending = None
+
+    def filter_by_keyword(self, keyword: str) -> List[Transition]:
+        """Return transitions whose prompt contains ``keyword`` (for token-opt filtering)."""
+        return [t for t in self._buf if keyword.lower() in t.prompt_text.lower()]

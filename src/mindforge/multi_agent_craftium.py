@@ -35,6 +35,7 @@ from agent_modules.critic import Critic
 from agent_modules.skill_manager import SkillManager
 from agent_modules.episodic_memory_manager import EpisodicMemoryManager
 from agent_modules.craftium_metric import CraftiumMetric
+from rl_layer import RLConfig, RLLayer
 
 ROLE_NAMES = ["gatherer", "hunter", "defender"]
 
@@ -57,6 +58,19 @@ def parse_args():
                         help="Seconds to sleep between LLM calls (rate-limit protection)")
     parser.add_argument("--no-gif", action="store_true",
                         help="Disable GIF saving")
+    # ── RL layer ──
+    parser.add_argument("--rl", action="store_true",
+                        help="Enable the modular RL layer (action-level MAPPO)")
+    parser.add_argument("--rl-model-path", type=str, default=None,
+                        help="Path to base model for RL (e.g. /scratch/.../Qwen3.5-2B)")
+    parser.add_argument("--rl-lora-rank", type=int, default=8,
+                        help="LoRA rank for RL adapter")
+    parser.add_argument("--rl-update-interval", type=int, default=64,
+                        help="Steps between MAPPO updates")
+    parser.add_argument("--rl-lr", type=float, default=3e-4,
+                        help="Learning rate for RL optimiser")
+    parser.add_argument("--rl-auto-token-opt", action="store_true",
+                        help="Let agents self-trigger token-level optimisation")
     return parser.parse_args()
 
 
@@ -104,10 +118,16 @@ def build_role_configs(num_agents, role_prompts):
     return configs
 
 
-def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric):
+def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
+                 rl_config=None):
     """Initialize all Mindforge agents."""
     agents = []
     for i, role_cfg in enumerate(role_configs):
+        # Build per-agent RL layer (no-op when rl_config.enabled is False)
+        rl_layer = None
+        if rl_config and rl_config.enabled:
+            rl_layer = RLLayer(config=rl_config, role=role_cfg["name"], agent_id=i)
+
         agent = CustomAgent(
             name=role_cfg["agent_name"],
             description=f"{role_cfg['name']} agent in Craftium open world",
@@ -139,9 +159,11 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
             causal_predictions=False,
             surgical_action_selection=False,
             causal_bdi=False,
+            rl_layer=rl_layer,
         )
         agents.append(agent)
-        print(f"Initialized agent {i}: {role_cfg['agent_name']} ({role_cfg['name']})")
+        rl_status = " [RL enabled]" if rl_layer else ""
+        print(f"Initialized agent {i}: {role_cfg['agent_name']} ({role_cfg['name']}){rl_status}")
     return agents
 
 
@@ -270,7 +292,21 @@ async def run(args):
         max_steps=max_steps,
     )
 
-    agents = build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric)
+    # ── RL layer config ──
+    rl_config = RLConfig(
+        enabled=args.rl,
+        model_path=args.rl_model_path,
+        lora_rank=args.rl_lora_rank,
+        update_interval=args.rl_update_interval,
+        lr=args.rl_lr,
+        auto_token_opt=args.rl_auto_token_opt,
+    )
+    if rl_config.enabled:
+        print(f"RL layer ENABLED: model={rl_config.model_path}, "
+              f"lora_rank={rl_config.lora_rank}, update_interval={rl_config.update_interval}")
+
+    agents = build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
+                         rl_config=rl_config)
 
     print(f"\nConfig: {num_agents} agents, {num_episodes} episodes, "
           f"{max_steps} max steps, comm={'on' if communication else 'off'}")
@@ -325,9 +361,31 @@ async def run(args):
                 )
                 agents_error_count[agent_id] = error_count
 
-                # Record reward for metrics
+                # Record reward for metrics + RL
                 step_reward = environment.get_step_reward(agent_id)
                 metric.record_reward(agent_id, step_reward)
+
+                # Feed reward to RL layer
+                if agent.rl_layer and agent.rl_layer.enabled:
+                    agent_done = environment._terminations.get(f"agent_{agent_id}", False)
+                    agent.rl_layer.store_reward(step_reward, done=agent_done)
+                    agent.rl_layer.record_context(
+                        action=content.get("action", "NoOp") if content else "NoOp",
+                        reward=step_reward,
+                        task=agent.auto_curriculum.current_task or "Explore",
+                    )
+
+                    # MAPPO update when enough steps collected
+                    if agent.rl_layer.should_update():
+                        update_info = agent.rl_layer.update()
+                        metric.record_rl_update(agent_id, update_info)
+
+                    # Agent-decided token-level optimisation
+                    token_info = await agent.rl_layer.maybe_token_optimize(
+                        cancellation_token=CancellationToken(),
+                    )
+                    if token_info:
+                        metric.record_rl_token_opt(agent_id, token_info)
 
                 # Handle communication
                 if (
@@ -374,6 +432,13 @@ async def run(args):
 
     print(f"\nExperiment complete! Timesteps logged: {metric.timestep}")
     metric.save_run_metrics()
+
+    # Save RL checkpoints
+    for agent in agents:
+        if agent.rl_layer and agent.rl_layer.enabled:
+            agent.rl_layer.save()
+            print(f"  Saved RL checkpoint for {agent.name}")
+
     environment.close()
 
 

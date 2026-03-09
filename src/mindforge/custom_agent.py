@@ -19,7 +19,7 @@ from agent_modules.belief_system import BeliefSystem
 from agent_modules.critic import Critic
 from agent_modules.episodic_memory_manager import EpisodicMemoryManager
 from agent_modules.llm_call import llm_call
-from agent_modules.metric import Metric
+from agent_modules.craftium_metric import CraftiumMetric as Metric
 from agent_modules.skill_manager import SkillManager
 from agent_modules.util import AgentResponse, Belief, Observation, autogenImg_to_Pil, create_model_client
 
@@ -58,8 +58,10 @@ class CustomAgent(BaseChatAgent):
         causal_predictions=False,
         surgical_action_selection=False,
         causal_bdi=False,
+        rl_layer=None,
     ) -> None:
         super().__init__(name, description)
+        self.rl_layer = rl_layer
 
         self.action_selection = (
             action_selection if action_selection else ActionSelection()
@@ -172,6 +174,10 @@ class CustomAgent(BaseChatAgent):
                     )
             else:
                 error_count += 1
+
+            # RL layer: track success for token-opt self-trigger
+            if self.rl_layer and self.rl_layer.enabled:
+                self.rl_layer.record_success(success)
 
             # save last episode for both success and failure
             self.episode_manager.add_episode(
@@ -344,20 +350,41 @@ class CustomAgent(BaseChatAgent):
                     last_action=last_action,
                 )
         else:
-            content = await self.action_selection.select_action(
-                messages,
-                last_frame,
-                cancellation_token,
-                agent_name=self.name,
-                task=task,
-                last_action=last_action,
-                critique=critique,
-                error=error,
-                skill_memory=skill_memory,
-                episode_summary=episode_summary,
-                picked_object=picked_object,
-                beliefs=beliefs,
-            )
+            # ── RL layer (action-level) ──
+            rl_content = None
+            if self.rl_layer and self.rl_layer.enabled:
+                # Build the same prompt the LLM would see
+                rl_prompt = (
+                    f"Task: {task}\n"
+                    f"Last action: {last_action}\n"
+                    f"Critique: {critique}\n"
+                    f"Error: {error}\n"
+                    f"Skills: {skill_memory}\n"
+                    f"Episodes: {episode_summary}\n"
+                    f"Task beliefs: {beliefs.get('task_beliefs', '')}\n"
+                    f"Perception: {beliefs.get('perception_beliefs', '')}\n"
+                    f"Interaction: {beliefs.get('interaction_beliefs', '')}\n"
+                    f"Partner: {beliefs.get('partner_beliefs', '')}\n"
+                )
+                rl_content = self.rl_layer.select_action(rl_prompt)
+
+            if rl_content is not None:
+                content = rl_content
+            else:
+                content = await self.action_selection.select_action(
+                    messages,
+                    last_frame,
+                    cancellation_token,
+                    agent_name=self.name,
+                    task=task,
+                    last_action=last_action,
+                    critique=critique,
+                    error=error,
+                    skill_memory=skill_memory,
+                    episode_summary=episode_summary,
+                    picked_object=picked_object,
+                    beliefs=beliefs,
+                )
 
         self.metric.log(f"Agent {self.name} response: {content}")
         print(f"Agent {self.name} response: {content}")

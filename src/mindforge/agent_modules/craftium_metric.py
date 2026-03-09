@@ -95,6 +95,10 @@ class CraftiumMetric:
         self.communication_log = []
         self.comm_counts_per_step = []
 
+        # RL layer tracking
+        self.rl_updates = []       # (timestep, agent_id, info_dict)
+        self.rl_token_opts = []    # (timestep, agent_id, decision, reason, info_dict)
+
         # Timestep-level data for plotting
         self.ts_data = {
             "timesteps": [],
@@ -125,6 +129,27 @@ class CraftiumMetric:
         """Record a communication event."""
         preview = message[:100] if message else ""
         self.communication_log.append((self.timestep, source_agent, preview))
+
+    def record_rl_update(self, agent_id: int, info: dict):
+        """Record an action-level MAPPO update event."""
+        self.rl_updates.append((self.timestep, agent_id, info))
+        self.log(f"[RL] Agent {agent_id} MAPPO update at step {self.timestep}: "
+                 f"policy_loss={info.get('policy_loss', '?'):.4f}, "
+                 f"value_loss={info.get('value_loss', '?'):.4f}, "
+                 f"entropy={info.get('entropy', '?'):.4f}")
+
+    def record_rl_token_opt(self, agent_id: int, info: dict):
+        """Record a token-level optimisation decision (train or skip)."""
+        decision = info.get("decision", "unknown")
+        reason = info.get("reason", "")
+        self.rl_token_opts.append((self.timestep, agent_id, decision, reason, info))
+        if decision == "train":
+            self.log(f"[RL] Agent {agent_id} TOKEN-OPT at step {self.timestep}: "
+                     f"reason='{reason}', skill='{info.get('skill_focus', '?')}', "
+                     f"token_policy_loss={info.get('token_policy_loss', '?')}")
+        else:
+            self.log(f"[RL] Agent {agent_id} token-opt SKIPPED at step {self.timestep}: "
+                     f"reason='{reason}'")
 
     def store_timestep(self, step_comm_count: int = 0):
         """Snapshot metrics at end of a timestep."""
@@ -263,6 +288,14 @@ class CraftiumMetric:
             "social_lift_data": self.social_lift_data(),
             "timestep_data": self.ts_data,
             "comm_counts_per_step": self.comm_counts_per_step,
+            "rl_updates": [
+                {"timestep": ts, "agent_id": aid, "info": info}
+                for ts, aid, info in self.rl_updates
+            ],
+            "rl_token_opts": [
+                {"timestep": ts, "agent_id": aid, "decision": d, "reason": r, "info": info}
+                for ts, aid, d, r, info in self.rl_token_opts
+            ],
         }
 
         file_path = os.path.join(self.target_folder, file_name)
@@ -270,6 +303,7 @@ class CraftiumMetric:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
         self._save_plots()
+        self._save_text_summary()
 
         # Save communication log separately
         comm_path = os.path.join(self.target_folder, "communication_log.json")
@@ -362,6 +396,84 @@ class CraftiumMetric:
             ax.set_title("Communication Frequency")
             fig.savefig(os.path.join(path, "communication_frequency.png"), dpi=150)
             plt.close(fig)
+
+    def _save_text_summary(self):
+        """Write a human-readable summary.txt with all key metrics."""
+        role_names = ["gatherer", "hunter", "defender"]
+        lines = []
+        lines.append("=" * 50)
+        lines.append("  Experiment Summary")
+        lines.append("=" * 50)
+        comm_str = "on" if self.communication else "off"
+        lines.append(f"Agents: {self.num_agents}  |  Steps: {self.timestep}  |  Communication: {comm_str}")
+        lines.append("")
+
+        # Final cumulative returns
+        lines.append("--- Cumulative Returns ---")
+        for i in range(self.num_agents):
+            role = role_names[i % len(role_names)]
+            lines.append(f"  Agent {i} ({role}): {self.cumulative_returns[i]:.2f}")
+        lines.append("")
+
+        # Milestones per agent
+        lines.append("--- Milestones Reached ---")
+        for i in range(self.num_agents):
+            role = role_names[i % len(role_names)]
+            agent_ms = []
+            for track in TRACKS:
+                for ts, tier_name in self.milestones[i][track]:
+                    agent_ms.append(f"{track}/{tier_name} (step {ts})")
+            if agent_ms:
+                lines.append(f"  Agent {i} ({role}): {', '.join(agent_ms)}")
+            else:
+                lines.append(f"  Agent {i} ({role}): none")
+        lines.append("")
+
+        # Steps to milestone (team-level)
+        lines.append("--- Steps to Milestone (first agent to reach) ---")
+        table = self.steps_to_milestone_table()
+        for track, tiers in table.items():
+            for tier_name, step in tiers.items():
+                step_str = str(step) if step is not None else "---"
+                lines.append(f"  {track:<10} {tier_name:<15} {step_str:>8}")
+        lines.append("")
+
+        # Specialization index
+        lines.append("--- Specialization Index ---")
+        for i in range(self.num_agents):
+            role = role_names[i % len(role_names)]
+            si = self.specialization_index(i)
+            parts = [f"{t}={si[t]:.2f}" for t in TRACKS]
+            lines.append(f"  Agent {i} ({role}): {', '.join(parts)}")
+        lines.append("")
+
+        # Communication stats
+        total_msgs = len(self.communication_log)
+        avg_per_step = total_msgs / max(self.timestep, 1)
+        lines.append("--- Communication ---")
+        lines.append(f"  Total messages: {total_msgs}")
+        lines.append(f"  Avg per step:   {avg_per_step:.2f}")
+        lines.append("")
+
+        # RL stats
+        if self.rl_updates or self.rl_token_opts:
+            lines.append("--- RL Layer ---")
+            lines.append(f"  MAPPO updates: {len(self.rl_updates)}")
+            if self.rl_updates:
+                last = self.rl_updates[-1][2]
+                lines.append(f"    Last update — policy_loss={last.get('policy_loss', '?'):.4f}, "
+                             f"value_loss={last.get('value_loss', '?'):.4f}, "
+                             f"entropy={last.get('entropy', '?'):.4f}")
+            train_count = sum(1 for _, _, d, _, _ in self.rl_token_opts if d == "train")
+            skip_count = sum(1 for _, _, d, _, _ in self.rl_token_opts if d != "train")
+            lines.append(f"  Token-opt decisions: {train_count} train, {skip_count} skip")
+            lines.append("")
+
+        lines.append("=" * 50)
+
+        summary_path = os.path.join(self.target_folder, "summary.txt")
+        with open(summary_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
 
     # ------------------------------------------------------------------
     # Helpers
