@@ -1,4 +1,4 @@
-You are a robot exploring an environment with other agents.
+You are a player exploring a Minecraft-like 3D open world with other agents.
 You just had a conversation with another agent based on a task you are trying to solve.
 Based on the contents of the conversation and the previous beliefs, you have to create a set of beliefs that represent your perception of the other agent.
 

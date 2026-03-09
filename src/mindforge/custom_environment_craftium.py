@@ -15,7 +15,7 @@ if _craftium_dir not in sys.path:
 from openworld_multi_agents import OpenWorldMultiAgentEnv
 
 # Load environment prompt
-with open(os.path.join(_this_dir, "prompts", "environment_prompt_craftium.txt"), "r") as f:
+with open(os.path.join(_this_dir, "prompts", "environment_prompt.txt"), "r") as f:
     environment_prompt = f.read()
 
 # Map from human-readable action names (used by the LLM) to Discrete(17) integers.
@@ -68,6 +68,7 @@ class CraftiumEnvironmentInterface:
         # Per-agent state
         self._observations = {}   # agent_name -> np.ndarray (H, W, 3)
         self._rewards = {}        # agent_name -> float (cumulative since last query)
+        self._step_rewards = {}   # agent_name -> float (raw reward from last step)
         self._terminations = {}   # agent_name -> bool
         self._truncations = {}    # agent_name -> bool
         self._infos = {}          # agent_name -> dict
@@ -124,7 +125,8 @@ class CraftiumEnvironmentInterface:
         self._truncations = truncations
         self._infos = infos
 
-        # Accumulate rewards (reset when queried via get_reward_summary)
+        # Store raw per-step rewards and accumulate for summary
+        self._step_rewards = dict(rewards)
         for agent_name, rew in rewards.items():
             self._rewards[agent_name] = self._rewards.get(agent_name, 0.0) + rew
 
@@ -187,6 +189,11 @@ class CraftiumEnvironmentInterface:
             if not self._terminations.get(agent_name, False) and not self._truncations.get(agent_name, False):
                 return False
         return True
+
+    def get_step_reward(self, agentId: int) -> float:
+        """Return the raw reward from the last env.step() for this agent."""
+        agent_name = f"agent_{agentId}"
+        return self._step_rewards.get(agent_name, 0.0)
 
     def pickedup_object(self, agentId: int = 0):
         """Return held item name (Craftium doesn't expose this, so always None)."""

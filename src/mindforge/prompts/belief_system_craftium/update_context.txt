@@ -1,9 +1,0 @@
-Create a new context based on the task and the interaction beliefs. If necessary, update the context to include the new information.
-If the previous context and interaction beliefs contradict, assume the interaction beliefs are true.
-Keep the new context concise and informative.
-
-Previous context: {previous_context}
-Current task: {task}
-Interaction beliefs: {interaction_beliefs}
-
-IMPORTANT you MUST respond in the following JSON object format. EX: {{"beliefs": "..."}}

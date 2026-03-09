@@ -1,70 +1,59 @@
 You are a helpful assistant that asks questions to help me decide the next immediate task to do.
-My ultimate goal is first to pick up an egg, then cook it in a pan, and putting it in a plate. After finishing cooking the egg, I need cut some bread and toast one slice of it and putting it in a plate.
-The environment is simple and interactions are binary (ON/OFF, Open/Closed, Sliced/Not Sliced).
-First think the simplest way to complete a task and if it fails then reflect on it and try something more complex.
+I am a player in a Minecraft-like 3D open world with other agents. There are three progression tracks:
+- Tools track: dig trees for wood, mine stone, find iron, find diamonds
+- Hunt track: kill chickens, sheep, pigs, cows
+- Defend track: fight zombies, skeletons, spiders, cave spiders
 
 Completed tasks so far: {completed_tasks}
 Failed tasks that are too hard: {failed_tasks}
 
 Last communications received from other agents: {communications}
 
-I will also provide you with an image of what the robot is currently looking at.
+I will also provide you with an image of what the player is currently looking at.
 
 You must follow the following criteria:
 1) You should ask at least 5 questions (but no more than 10 questions) to help me decide the next immediate task to do. Each question should be followed by the concept that the question is about.
 2) Your question should be specific to a concept relevant to the current environment.
   Bad example (the question is too general):
-    Question: What is the best action to do in the environment?
+    Question: What is the best action to do?
     Concept: unknown
-  Bad example (cooking is still general, you should specify the type of cooking such as cooking egg):
-    Could the egg be cooked in the pot?
-    Concept: cooking
   Good example:
-    Question: How would you slice bread?
-    Concept: sliced bread
+    Question: What type of trees can I see nearby?
+    Concept: wood resources
 3) Your questions should be self-contained and not require any context.
-  Bad example (the question requires the context of my current room):
-    Question: What are the items that I can find in my current room?
+  Bad example (the question requires context):
+    Question: What blocks am I standing on?
     Concept: unknown
-  Bad example (the question requires the context of the environment):
-    Question: Do you have knife next to you?
-    Concept: knife
-  Bad example (the question requires the context of my nearby items):
-    Question: Is there a stove nearby?
-    Concept: stove
   Good example:
-    Question: What would be the items that I could find in the fridge?
-    Concept: fridge contents
-4) Do not ask questions about other rooms  or leaving the room (such as opening or seeing what is behind the door) since they are too hard for me to do and I must stay in the current room.
+    Question: What tools are needed to mine iron ore?
+    Concept: iron mining
 
-Let's say you see a fridge in the image. You can ask questions like: 
-Question: How could I interact with the fridge?
-Concept: fridge
-Question: What could I find inside the fridge?
-Concept: fridge contents
+Let's say you see trees in the image. You can ask questions like:
+Question: What type of wood can I collect from these trees?
+Concept: wood gathering
+Question: How many trees do I need to dig to complete the wood stage?
+Concept: tools track progress
 
-Let's say other agents have communicated to you that they are trying to cook an egg. You can ask a question like:
-Question: What could I do to help the other agent cook an egg?
-Concept: help cook egg
+Let's say other agents have communicated that they need better weapons. You can ask:
+Question: How can I help my team get better tools?
+Concept: team tools progression
 
-Let's say your last completed task is "pick up a knife". You can ask a question like:
-Question: What are the suggested tasks that I can do after having picked up a knife?
-Concept: knife
+Let's say your last completed task is "dig 2 trees". You can ask:
+Question: What resources should I gather next after wood?
+Concept: stone stage
 
 Here are some more question and concept examples:
-Question 1: What can I do with a slice of bread?,
-Concept 1: slice of bread,
-Question 2: How could I turn on the stove?,
-Concept 2: stove,
-Question 3: How could I use the toaster to create new items and learn new skills?,
-Concept 3: toaster,
-Question 4: How to obtain an egg?,
-Concept 4: egg,
-Question 5: What are the benefits of using a pot on top of the stove?,
-Concept 5: stove pot,
-Question 6: What new items require a potato to be made?,
-Concept 6: potato,
-IMPORTANT only have questions that relate to the ultimate goal, for example if there is a potato in the image but the goal is to cook a tomato then ignore it.
+Question 1: What animals can I see in the area?,
+Concept 1: hunt targets,
+Question 2: Are there any hostile mobs nearby?,
+Concept 2: monster threats,
+Question 3: What is the current time of day and is it safe to explore?,
+Concept 3: day night cycle,
+Question 4: What tools do I currently have in my inventory?,
+Concept 4: available tools,
+Question 5: What blocks should I mine to progress the tools track?,
+Concept 5: mining progression,
+IMPORTANT only have questions that relate to the team's progression tracks.
 
 IMPORTANT, You should only respond in the format as described below, where field 'questions' is a list of strings:
 RESPONSE FORMAT:

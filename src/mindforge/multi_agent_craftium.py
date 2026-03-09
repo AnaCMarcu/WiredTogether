@@ -34,7 +34,7 @@ from agent_modules.belief_system import BeliefSystem
 from agent_modules.critic import Critic
 from agent_modules.skill_manager import SkillManager
 from agent_modules.episodic_memory_manager import EpisodicMemoryManager
-from agent_modules.metric import Metric
+from agent_modules.craftium_metric import CraftiumMetric
 
 ROLE_NAMES = ["gatherer", "hunter", "defender"]
 
@@ -63,20 +63,20 @@ def parse_args():
 def load_prompts():
     """Load all prompt files and return them as a dict."""
     prompt_dir = os.path.join(os.path.dirname(__file__), "prompts")
-    belief_dir = os.path.join(prompt_dir, "belief_system_craftium")
+    belief_dir = os.path.join(prompt_dir, "belief_system")
 
     def _read(path):
         with open(path, "r") as f:
             return f.read()
 
     prompts = {
-        "environment": _read(os.path.join(prompt_dir, "environment_prompt_craftium.txt")),
-        "system_template": _read(os.path.join(prompt_dir, "system_prompt_craftium.txt")),
-        "instruction": _read(os.path.join(prompt_dir, "instruction_prompt_craftium.txt")),
-        "critic": _read(os.path.join(prompt_dir, "critic_prompt_craftium.txt")),
-        "curriculum_questions": _read(os.path.join(prompt_dir, "curriculum_questions_craftium.txt")),
-        "skill_description": _read(os.path.join(prompt_dir, "skill_description_prompt_craftium.txt")),
-        "skill_info": _read(os.path.join(prompt_dir, "skill_description_info_craftium.txt")),
+        "environment": _read(os.path.join(prompt_dir, "environment_prompt.txt")),
+        "system_template": _read(os.path.join(prompt_dir, "system_prompt.txt")),
+        "instruction": _read(os.path.join(prompt_dir, "instruction_prompt_p2.txt")),
+        "critic": _read(os.path.join(prompt_dir, "critic_prompt.txt")),
+        "curriculum_questions": _read(os.path.join(prompt_dir, "curriculum_questions.txt")),
+        "skill_description": _read(os.path.join(prompt_dir, "skill_description_prompt.txt")),
+        "skill_info": _read(os.path.join(prompt_dir, "skill_description_info.txt")),
         "perception": _read(os.path.join(belief_dir, "perception_beliefs.txt")),
         "partner": _read(os.path.join(belief_dir, "partner_beliefs.txt")),
         "interaction": _read(os.path.join(belief_dir, "interaction_belief.txt")),
@@ -258,10 +258,8 @@ async def run(args):
     # Roles & agents
     role_configs = build_role_configs(num_agents, prompts["roles"])
 
-    metric = Metric(
-        agent_type="Mindforge",
-        prediction_type="None",
-        number_of_agents=num_agents,
+    metric = CraftiumMetric(
+        num_agents=num_agents,
         communication=communication,
     )
 
@@ -309,6 +307,7 @@ async def run(args):
             frames_list.append(current_frames)
 
             # Each agent takes a turn
+            step_comm_count = 0
             for agent_id, agent in enumerate(agents):
                 agent_name = f"agent_{agent_id}"
 
@@ -326,6 +325,11 @@ async def run(args):
                 )
                 agents_error_count[agent_id] = error_count
 
+                # Record reward for metrics
+                step_reward = environment.get_step_reward(agent_id)
+                metric.record_reward(agent_id, step_reward)
+
+                # Handle communication
                 if (
                     content
                     and content.get("communication")
@@ -337,13 +341,15 @@ async def run(args):
                         source=agent.name,
                     )
                     communications.append(message)
+                    metric.record_communication(agent.name, content["communication"])
+                    step_comm_count += 1
 
                 if len(communications) > num_agents - 1:
                     communications.pop(0)
 
                 time.sleep(sleep_time)
 
-            metric.store_timestep()
+            metric.store_timestep(step_comm_count=step_comm_count)
 
         # Save GIFs for this episode
         if save_gif and frames_list:
@@ -366,7 +372,7 @@ async def run(args):
                     )
                     print(f"  Saved GIF: {gif_path}")
 
-    print(f"\nExperiment complete! Timesteps logged: {metric.saved_timesteps}")
+    print(f"\nExperiment complete! Timesteps logged: {metric.timestep}")
     metric.save_run_metrics()
     environment.close()
 

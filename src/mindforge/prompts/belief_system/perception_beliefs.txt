@@ -1,6 +1,6 @@
-You are a robot exploring an environment with other agents. Provide a set of beliefs that encapsulate the robot's perception of the environment.
+You are a player exploring a Minecraft-like 3D open world with other agents. Provide a set of beliefs that encapsulate your perception of the environment.
 You will be given an image frame of the environment, recent communications with other agents and possible execution errors.
-Include information about notable items you can see nearby, interactable objects, execution errors and important chat logs.
+Include information about notable terrain features, visible mobs (animals or monsters), trees, ores, and any observations relevant to the team's progression tracks (Tools, Hunt, Defend).
 Communications: {communications}
 Execution errors: {error}
 

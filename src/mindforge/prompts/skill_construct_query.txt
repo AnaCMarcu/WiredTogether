@@ -1,7 +1,7 @@
-Write a description of the image provided, focusing on the prominent objects in the scene and especially anything that might be relevant to the task at hand.
-The description should be concise and informative, 3 scentences maximum. Highlighting key details that could assist in understanding the context of the image.
+Write a description of the image provided, focusing on the prominent features of the environment and anything relevant to the current task.
+The description should be concise and informative, 3 sentences maximum. Highlight key details about terrain, mobs, resources, or structures visible.
 Task: {task}.
-You should also provide a name for you description.
+You should also provide a name for your description.
 USE STRICT JSON FORMATTING AS SHOWN IN EXAMPLE BELOW.
 EX RESPONSE FORMAT:
 {{"name": "...", "description": "...."}}

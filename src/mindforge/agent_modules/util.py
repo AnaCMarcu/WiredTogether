@@ -13,12 +13,18 @@ import logging
 
 from pydantic import BaseModel
 
+import os
 from autogen_ext.models.openai import OpenAIChatCompletionClient
-""
-base_url = "https://openrouter.ai/api/v1" 
-# base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
-model = "google/gemini-2.5-flash" # "google/gemma-3-27b-it:free" # "nvidia/nemotron-nano-12b-v2-vl:free" # "google/gemma-3-27b-it:free" # "qwen/qwen-2.5-vl-7b-instruct:free" 
-# model = "gemini-2.5-flash-lite" # "google/gemini-2.0-flash-001",
+
+# Configure via environment variables or fall back to defaults.
+# For local vLLM on DelftBlue:
+#   export LLM_BASE_URL=http://gpu-node:8000/v1
+#   export LLM_MODEL=Qwen2.5-VL-72B-Instruct
+# For OpenRouter (default):
+#   export LLM_BASE_URL=https://openrouter.ai/api/v1
+#   export LLM_MODEL=google/gemini-2.5-flash
+base_url = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
+model = os.environ.get("LLM_MODEL", "google/gemini-2.5-flash")
 
 # LLM response format
 class AgentResponse(BaseModel):
@@ -118,15 +124,19 @@ def visualize_frames(
 def create_model_client(
     resonse_format, key_path="api.key"
 ) -> OpenAIChatCompletionClient:
-    with open(key_path) as f:
-        api_key = f.read().strip()
+    # API key: env var > file > dummy (local vLLM doesn't need a real key)
+    api_key = os.environ.get("LLM_API_KEY")
+    if not api_key:
+        try:
+            with open(key_path) as f:
+                api_key = f.read().strip()
+        except FileNotFoundError:
+            api_key = "no-key-needed"
     model_client = OpenAIChatCompletionClient(
-        # configure which model and API to use
-        # model="qwen/qwen2.5-vl-32b-instruct:free",
-        model= model,
+        model=model,
         base_url=base_url,
         api_key=api_key,
-        response_format=resonse_format,  # constrain response format
+        response_format=resonse_format,
         model_info={
             "vision": True,
             "function_calling": False,

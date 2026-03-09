@@ -4,4 +4,4 @@ Agent thoughts: {agent_thoughts}
 Agent action: {action}
 
 EX Response:
-{{"name": "Holding an egg", "description": "picking up an egg and holding it ready to interact with"}}
+{{"name": "chopping a tree", "description": "Breaking a tree trunk block to collect wood for tools progression"}}

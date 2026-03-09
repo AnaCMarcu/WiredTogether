@@ -1,9 +1,9 @@
 Example response format:
-{{"thoughts": "Description of what you see and what you want to do", "action": "action to execute in the environment", "communication": "Send message to other agents"}}
+{{"thoughts": "Description of what you see and what you want to do", "action": "action name from the action list", "communication": "Send message to other agents"}}
 
 Task: {task}
 Last action: {last_action}
-Held item: {picked_object}
+Reward: {reward_text}
 Critique: {critique}
 Error: {error}
 Relevant skills: {skill_memory}
