@@ -207,3 +207,6 @@ class LocalModelClient(ChatCompletionClient):
 
     def remaining_tokens(self, messages, **kwargs) -> int:
         return self._max_tokens
+
+    async def close(self) -> None:
+        pass
