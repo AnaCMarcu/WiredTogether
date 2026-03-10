@@ -26,7 +26,6 @@ LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
 module purge
 module load 2025
 module load miniconda3
-module load py-torch
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "$ENV_PREFIX"
@@ -54,6 +53,7 @@ else
 fi
 
 cd src/mindforge
+python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
 python multi_agent_craftium.py --num-agents 1 --episodes 10 --max-steps 200
 
 echo "Done"
