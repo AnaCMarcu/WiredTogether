@@ -16,8 +16,11 @@ Usage:
 import argparse
 import asyncio
 import os
+import sys
 import time
 import logging
+
+sys.setrecursionlimit(10000)
 from datetime import datetime
 
 import numpy as np
