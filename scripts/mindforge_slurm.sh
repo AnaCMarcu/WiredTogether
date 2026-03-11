@@ -51,43 +51,49 @@ python -c "import torch; print('torch cuda:', torch.cuda.is_available())"
 nvidia-smi
 
 # --- Start vLLM server in background ---
-echo "Starting vLLM server with $VLLM_MODEL_NAME on port $VLLM_PORT..."
-python -m vllm.entrypoints.openai.api_server \
-  --model "$VLLM_MODEL_PATH" \
-  --served-model-name "$VLLM_MODEL_NAME" \
-  --port "$VLLM_PORT" \
-  --dtype auto \
-  --max-model-len 4096 \
-  --gpu-memory-utilization 0.5 \
-  --trust-remote-code \
-  &
-VLLM_PID=$!
+# NOTE: Disabled — vLLM 0.6.3 doesn't support Qwen3.5. Upgrade to >=0.8 to re-enable.
+# echo "Starting vLLM server with $VLLM_MODEL_NAME on port $VLLM_PORT..."
+# python -m vllm.entrypoints.openai.api_server \
+#   --model "$VLLM_MODEL_PATH" \
+#   --served-model-name "$VLLM_MODEL_NAME" \
+#   --port "$VLLM_PORT" \
+#   --dtype auto \
+#   --max-model-len 4096 \
+#   --gpu-memory-utilization 0.5 \
+#   --trust-remote-code \
+#   &
+# VLLM_PID=$!
+#
+# # Wait for vLLM to be ready (up to 5 minutes)
+# echo "Waiting for vLLM server to be ready..."
+# for i in $(seq 1 60); do
+#   if curl -sf "http://localhost:${VLLM_PORT}/health" > /dev/null 2>&1; then
+#     echo "vLLM server ready after ~$((i*5))s"
+#     break
+#   fi
+#   if ! kill -0 $VLLM_PID 2>/dev/null; then
+#     echo "ERROR: vLLM server died. Falling back to local model."
+#     VLLM_PID=""
+#     break
+#   fi
+#   sleep 5
+# done
+#
+# # Configure LLM endpoint
+# if [ -n "${VLLM_PID:-}" ] && curl -sf "http://localhost:${VLLM_PORT}/health" > /dev/null 2>&1; then
+#   echo "Using vLLM server: $VLLM_MODEL_NAME at localhost:$VLLM_PORT"
+#   export LLM_BASE_URL="http://localhost:${VLLM_PORT}/v1"
+#   export LLM_MODEL="$VLLM_MODEL_NAME"
+#   export LLM_API_KEY="no-key-needed"
+# else
+#   echo "vLLM not available, using local model: $LOCAL_MODEL_PATH"
+#   export LLM_MODEL_PATH="$LOCAL_MODEL_PATH"
+# fi
 
-# Wait for vLLM to be ready (up to 5 minutes)
-echo "Waiting for vLLM server to be ready..."
-for i in $(seq 1 60); do
-  if curl -sf "http://localhost:${VLLM_PORT}/health" > /dev/null 2>&1; then
-    echo "vLLM server ready after ~$((i*5))s"
-    break
-  fi
-  if ! kill -0 $VLLM_PID 2>/dev/null; then
-    echo "ERROR: vLLM server died. Falling back to local model."
-    VLLM_PID=""
-    break
-  fi
-  sleep 5
-done
-
-# Configure LLM endpoint
-if [ -n "${VLLM_PID:-}" ] && curl -sf "http://localhost:${VLLM_PORT}/health" > /dev/null 2>&1; then
-  echo "Using vLLM server: $VLLM_MODEL_NAME at localhost:$VLLM_PORT"
-  export LLM_BASE_URL="http://localhost:${VLLM_PORT}/v1"
-  export LLM_MODEL="$VLLM_MODEL_NAME"
-  export LLM_API_KEY="no-key-needed"
-else
-  echo "vLLM not available, using local model: $LOCAL_MODEL_PATH"
-  export LLM_MODEL_PATH="$LOCAL_MODEL_PATH"
-fi
+# Use local model directly (no vLLM server)
+echo "Using local model: $LOCAL_MODEL_PATH"
+export LLM_MODEL_PATH="$LOCAL_MODEL_PATH"
+VLLM_PID=""
 
 cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
