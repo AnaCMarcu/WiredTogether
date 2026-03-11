@@ -143,7 +143,8 @@ class LocalModelClient(ChatCompletionClient):
                 })
 
         tokenized = _shared_tokenizer.apply_chat_template(
-            chat_messages, add_generation_prompt=True, return_tensors="pt"
+            chat_messages, add_generation_prompt=True, return_tensors="pt",
+            enable_thinking=False,  # Disable chain-of-thought for faster JSON output
         )
         # apply_chat_template may return a BatchEncoding or a plain tensor
         if hasattr(tokenized, "input_ids"):
@@ -166,6 +167,13 @@ class LocalModelClient(ChatCompletionClient):
 
         new_tokens = outputs[0][input_ids.shape[1]:]
         text = _shared_tokenizer.decode(new_tokens, skip_special_tokens=True)
+
+        # Qwen3.5 emits <think>...</think> reasoning before the answer — strip it
+        import re
+        text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+        # Handle untagged thinking blocks (e.g. "Thinking Process: ...")
+        if not text.startswith('{') and '{' in text:
+            text = text[text.rfind('{'):]
 
         prompt_tokens = input_ids.shape[1]
         completion_tokens = len(new_tokens)

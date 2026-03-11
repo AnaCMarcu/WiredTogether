@@ -109,13 +109,13 @@ def load_json(response: str) -> AgentResponse:
     except json.JSONDecodeError:
         pass
 
-    # Try to find a JSON object in the response
-    match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response)
-    if match:
+    # Try to find a JSON object — prefer the last one (thinking text may contain braces)
+    matches = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response)
+    for match in reversed(matches):
         try:
-            return json.loads(match.group())
+            return json.loads(match)
         except json.JSONDecodeError:
-            pass
+            continue
 
     logging.error(f"Failed to decode JSON response: {response[:200]}")
     return {}
