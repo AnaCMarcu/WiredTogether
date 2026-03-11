@@ -142,10 +142,22 @@ class LocalModelClient(ChatCompletionClient):
                     ),
                 })
 
-        tokenized = _shared_tokenizer.apply_chat_template(
-            chat_messages, add_generation_prompt=True, return_tensors="pt",
-            enable_thinking=False,  # Disable chain-of-thought for faster JSON output
+        enable_thinking = os.environ.get("LLM_ENABLE_THINKING", "0") == "1"
+        template_kwargs = dict(
+            add_generation_prompt=True, return_tensors="pt",
         )
+        # Qwen3.5 supports enable_thinking toggle
+        try:
+            template_kwargs["enable_thinking"] = enable_thinking
+            tokenized = _shared_tokenizer.apply_chat_template(
+                chat_messages, **template_kwargs
+            )
+        except TypeError:
+            # Older tokenizers don't support enable_thinking
+            del template_kwargs["enable_thinking"]
+            tokenized = _shared_tokenizer.apply_chat_template(
+                chat_messages, **template_kwargs
+            )
         # apply_chat_template may return a BatchEncoding or a plain tensor
         if hasattr(tokenized, "input_ids"):
             input_ids = tokenized.input_ids.to(_shared_model.device)
@@ -155,7 +167,7 @@ class LocalModelClient(ChatCompletionClient):
         with torch.no_grad():
             outputs = _shared_model.generate(
                 input_ids,
-                max_new_tokens=self._max_tokens,
+                max_new_tokens=self._max_tokens * 4 if enable_thinking else self._max_tokens,
                 temperature=max(self._temperature, 0.01),
                 top_p=self._top_p,
                 do_sample=self._temperature > 0.01,
