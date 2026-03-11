@@ -144,7 +144,7 @@ class AutoCurriculum:
             critique=critique,
             picked_object=picked_object,
         )
-        task = response["task"]
+        task = response.get("task", self.current_task or "Explore")
         self.current_task = task.strip()
         context = await self.get_task_context(
             frame, cancellation_token, communications=communications
@@ -214,7 +214,7 @@ class AutoCurriculum:
         questions = []
         concepts = []
         try:
-            question_lines = response["questions"]
+            question_lines = response.get("questions", [])
 
             for i in range(0, len(question_lines), 2):
                 q_line = question_lines[i]
@@ -253,7 +253,7 @@ class AutoCurriculum:
             question=question,
             relevant_past_context=relevant_past_context,
         )
-        answer = response["answer"]
+        answer = response.get("answer", "")
 
         return answer.strip()
 

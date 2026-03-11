@@ -18,9 +18,10 @@ async def llm_call(
     pred_frame=None,
     **kwargs,
 ):
-    # if failed more that 5 times, raise error
+    # if failed more than 5 times, return empty fallback instead of crashing
     if retry_count > 5:
-        raise ValueError(log_prefix, " Too many retries: ")
+        logging.error(f"{log_prefix} Too many retries (6), returning empty response")
+        return {}
 
     # Build prompt
     filled_user_prompt = user_prompt.format(**kwargs)
@@ -91,10 +92,9 @@ async def llm_call(
         if parse_check is not None:
             content = parse_check(content)
         return content
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, AssertionError, KeyError, Exception) as e:
         logging.error(
-            log_prefix,
-            f"Error decoding JSON: {e} \n Given string is: {response.content} \n",
+            f"{log_prefix} Error parsing response (attempt {retry_count + 1}): {type(e).__name__}: {e}"
         )
         return await llm_call(
             model_client=model_client,

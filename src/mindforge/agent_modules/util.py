@@ -92,19 +92,33 @@ class Feedback(BaseModel):
 #    {...}
 #    ```
 def load_json(response: str) -> AgentResponse:
-    if response.startswith("```json") and response.endswith("```"):
-        response = response[8:-3].strip()
+    import re
+    # Strip markdown code fences
+    response = response.strip()
+    if response.startswith("```json"):
+        response = response[7:]
+    if response.startswith("```"):
+        response = response[3:]
+    if response.endswith("```"):
+        response = response[:-3]
+    response = response.strip()
+
+    # Try direct parse first
+    try:
+        return json.loads(response)
+    except json.JSONDecodeError:
+        pass
+
+    # Try to find a JSON object in the response
+    match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response)
+    if match:
         try:
-            return json.loads(response)
+            return json.loads(match.group())
         except json.JSONDecodeError:
-            logging.error("Failed to decode JSON response: ```json`...```", response)
-            return {}
-    else:
-        try:
-            return json.loads(response)
-        except json.JSONDecodeError:
-            logging.error("Failed to decode JSON response: else", response)
-            return {}
+            pass
+
+    logging.error(f"Failed to decode JSON response: {response[:200]}")
+    return {}
 
 
 # print vision frame for each agent

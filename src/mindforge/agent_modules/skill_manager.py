@@ -133,7 +133,7 @@ class SkillManager:
             agent_thoughts=agent_thoughts,
             action=action,
         )
-        return response["name"], response["description"]
+        return response.get("name", "unknown"), response.get("description", "")
 
     async def get_skills(self, query: str):
         if self.vectordb._collection.count() == 0:
@@ -172,7 +172,7 @@ class SkillManager:
             task=task,
             frame=frame,
         )
-        return response["description"]
+        return response.get("description", "")
 
     async def clear_data(self):
         await self.vectordb.clear()

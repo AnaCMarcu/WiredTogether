@@ -58,7 +58,7 @@ class BeliefSystem:
             communications=communications,
             error=error,
         )
-        self.perception_beliefs = response["beliefs"]
+        self.perception_beliefs = response.get("beliefs", self.perception_beliefs)
         return self.perception_beliefs
 
     async def update_partner_beliefs(
@@ -83,7 +83,7 @@ class BeliefSystem:
                 convo=convo,
                 previous_partner_belief=previous_partner_belief,
             )
-            self.partner_beliefs[i] = response["beliefs"]
+            self.partner_beliefs[i] = response.get("beliefs", previous_partner_belief)
         return self.partner_beliefs
 
     async def update_interaction_beliefs(
@@ -103,7 +103,7 @@ class BeliefSystem:
             conversations=conversations,
             previous_interaction_beliefs=self.interaction_beliefs,
         )
-        self.interaction_beliefs = response["beliefs"]
+        self.interaction_beliefs = response.get("beliefs", self.interaction_beliefs)
         return self.interaction_beliefs
 
     async def update_task_beliefs(self, task, cancellation_token):
@@ -119,7 +119,7 @@ class BeliefSystem:
             previous_context=previous_context,
             interaction_beliefs=interaction_beliefs,
         )
-        self.task_beliefs = response["beliefs"]
+        self.task_beliefs = response.get("beliefs", self.task_beliefs)
         return self.task_beliefs
 
     def parse_check(self, content):

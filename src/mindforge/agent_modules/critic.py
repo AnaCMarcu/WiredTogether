@@ -60,7 +60,7 @@ class Critic:
             communication=communication,
             picked_object=picked_object,
         )
-        return response["success"], response["critique"]
+        return response.get("success", False), response.get("critique", "")
 
     def check_task_success_conversation(self):
         pass
