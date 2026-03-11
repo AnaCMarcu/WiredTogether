@@ -36,6 +36,10 @@ export DISPLAY=
 export LIBGL_ALWAYS_SOFTWARE=1
 export MESA_GL_VERSION_OVERRIDE=3.3
 
+# Force offline mode — compute nodes have no internet
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+
 # Ensure Craftium/Luanti can find libiconv
 export LD_LIBRARY_PATH="${ENV_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 
