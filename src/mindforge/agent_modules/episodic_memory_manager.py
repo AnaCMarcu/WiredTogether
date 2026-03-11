@@ -125,7 +125,7 @@ class EpisodicMemoryManager:
         logging.info(f"episodes found: {data}")
 
         # format episodes
-        formatted_episodes = data["documents"][0]
+        formatted_episodes = data["documents"][0] if data.get("documents") and data["documents"] else []
 
         return formatted_episodes
 

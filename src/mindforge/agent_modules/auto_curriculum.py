@@ -122,7 +122,7 @@ class AutoCurriculum:
             question_answers = ""
 
         def parse_check(content):
-            assert content["task"] is not None
+            assert "task" in content and content["task"] is not None
             return content
 
         response = await llm_call(
@@ -144,7 +144,7 @@ class AutoCurriculum:
             critique=critique,
             picked_object=picked_object,
         )
-        task = response.get("task", self.current_task or "Explore")
+        task = response.get("task", self.current_task or "Explore") or "Explore"
         self.current_task = task.strip()
         context = await self.get_task_context(
             frame, cancellation_token, communications=communications
@@ -216,7 +216,7 @@ class AutoCurriculum:
         try:
             question_lines = response.get("questions", [])
 
-            for i in range(0, len(question_lines), 2):
+            for i in range(0, len(question_lines) - 1, 2):
                 q_line = question_lines[i]
                 c_line = question_lines[i + 1]
 

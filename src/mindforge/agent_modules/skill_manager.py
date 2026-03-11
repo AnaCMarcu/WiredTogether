@@ -149,8 +149,10 @@ class SkillManager:
         logging.info(f"Skills found: {data}")
         # format skills
         skill_memory = []
-        for s in data["ids"][0]:
-            skill_memory.append(self.skills[s])
+        ids = data["ids"][0] if data.get("ids") and data["ids"] else []
+        for s in ids:
+            if s in self.skills:
+                skill_memory.append(self.skills[s])
 
         return skill_memory
 

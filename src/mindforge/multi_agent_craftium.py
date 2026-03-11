@@ -228,7 +228,8 @@ async def agent_do_action(
 
     last_action = "NoOp"
     try:
-        _, last_action = environment.step(content["action"], agentId=agent_id)
+        action = content.get("action", "NoOp") if content else "NoOp"
+        _, last_action = environment.step(action, agentId=agent_id)
     except Exception as e:
         logging.error(f"Error in environment step for agent {agent_id}: {e}")
         if error_count < 5:

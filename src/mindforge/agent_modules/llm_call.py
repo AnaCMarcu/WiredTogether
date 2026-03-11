@@ -24,7 +24,11 @@ async def llm_call(
         return {}
 
     # Build prompt
-    filled_user_prompt = user_prompt.format(**kwargs)
+    try:
+        filled_user_prompt = user_prompt.format(**kwargs)
+    except KeyError as e:
+        logging.error(f"{log_prefix} Missing prompt placeholder {e}, using raw prompt")
+        filled_user_prompt = user_prompt
     if frame is None:
         user_message = UserMessage(content=[filled_user_prompt], source="user")
     else:

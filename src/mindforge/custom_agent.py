@@ -265,6 +265,7 @@ class CustomAgent(BaseChatAgent):
                 "interaction_beliefs": interaction_beliefs,
                 "partner_beliefs": partner_beliefs,
                 "task_beliefs": task_beliefs,
+                "reward_text": "",
             }
             self.metric.log(f"Agent {self.name} beliefs: {beliefs}")
 
