@@ -17,8 +17,8 @@ ENV_PREFIX=/scratch/acmarcu/.conda/envs/WiredTogether
 
 # --- LLM Configuration ---
 VLLM_PORT=8000
-VLLM_MODEL_PATH=/scratch/acmarcu/models/Qwen2.5-3B-Instruct
-VLLM_MODEL_NAME="Qwen2.5-3B-Instruct"
+VLLM_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
+VLLM_MODEL_NAME="Qwen3.5-2B"
 
 # Fallback: load model in-process (no server)
 LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
