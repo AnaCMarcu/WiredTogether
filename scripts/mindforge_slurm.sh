@@ -33,6 +33,8 @@ conda activate "$ENV_PREFIX"
 export SDL_VIDEODRIVER=dummy
 export SDL_AUDIODRIVER=dummy
 export DISPLAY=
+export LIBGL_ALWAYS_SOFTWARE=1
+export MESA_GL_VERSION_OVERRIDE=3.3
 
 # Ensure Craftium/Luanti can find libiconv
 export LD_LIBRARY_PATH="${ENV_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
