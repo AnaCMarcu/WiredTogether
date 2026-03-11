@@ -142,9 +142,14 @@ class LocalModelClient(ChatCompletionClient):
                     ),
                 })
 
-        input_ids = _shared_tokenizer.apply_chat_template(
+        tokenized = _shared_tokenizer.apply_chat_template(
             chat_messages, add_generation_prompt=True, return_tensors="pt"
-        ).to(_shared_model.device)
+        )
+        # apply_chat_template may return a BatchEncoding or a plain tensor
+        if hasattr(tokenized, "input_ids"):
+            input_ids = tokenized.input_ids.to(_shared_model.device)
+        else:
+            input_ids = tokenized.to(_shared_model.device)
 
         with torch.no_grad():
             outputs = _shared_model.generate(
