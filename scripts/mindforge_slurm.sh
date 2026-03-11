@@ -55,6 +55,7 @@ python -m vllm.entrypoints.openai.api_server \
   --dtype auto \
   --max-model-len 4096 \
   --gpu-memory-utilization 0.5 \
+  --trust-remote-code \
   &
 VLLM_PID=$!
 
@@ -86,7 +87,7 @@ fi
 
 cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
-python multi_agent_craftium.py --num-agents 1 --episodes 10 --max-steps 200
+python multi_agent_craftium.py --num-agents 2 --episodes 10 --max-steps 200
 
 # Cleanup vLLM server
 if [ -n "${VLLM_PID:-}" ]; then
