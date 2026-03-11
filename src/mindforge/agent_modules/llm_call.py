@@ -2,7 +2,6 @@ import json
 from agent_modules.util import load_json
 import logging
 import time
-import sys
 from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
 
 
@@ -54,20 +53,15 @@ async def llm_call(
         )
     except Exception as e:
         error_str = str(e)
-        # Check for rate limit error (429 or RESOURCE_EXHAUSTED)
-        # if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "RateLimitError" in type(e).__name__:
-        #     print(f"\n[{log_prefix}] Rate limit hit!")
-        #     print(f"Error: {error_str[:300]}")
-        #     print(f"Waiting 70 seconds before retrying...")
-        #     sys.stdout.flush()
-        #     time.sleep(70)
+        logging.error(f"{log_prefix} Error calling LLM (attempt {retry_count + 1}): {error_str[:300]}")
+        time.sleep(1)
         return await llm_call(
             model_client=model_client,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             cancellation_token=cancellation_token,
             frame=frame,
-            retry_count=retry_count,  # Don't increment retry count for rate limits
+            retry_count=retry_count + 1,
             log_prefix=log_prefix,
             pred_prompt=pred_prompt,
             pred_frame=pred_frame,
