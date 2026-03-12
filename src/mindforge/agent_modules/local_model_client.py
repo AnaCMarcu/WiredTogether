@@ -62,37 +62,38 @@ def _load_shared_model(model_path: str, dtype: str = "bfloat16"):
         logger.info(f"Loading local model: {model_path}")
         torch_dtype = getattr(torch, dtype) if dtype != "auto" else "auto"
 
-        # ── Detect vision model from config before loading ──
+        # ── Detect vision model ──
+        # Check model_type in config AND whether preprocessor_config.json exists
+        # (unified VL models like Qwen3.5 may not have "vl" in their model_type
+        #  but still ship a preprocessor for image handling)
         from transformers import AutoConfig
         config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
         model_type = getattr(config, "model_type", "unknown").lower()
-        _shared_is_vision = any(
+        has_vision_keyword = any(
             kw in model_type for kw in ("vl", "vision", "visual", "multimodal")
         )
+        has_preprocessor = os.path.isfile(
+            os.path.join(model_path, "preprocessor_config.json")
+        )
+        has_vision_config = hasattr(config, "vision_config")
+        _shared_is_vision = has_vision_keyword or has_preprocessor or has_vision_config
 
         if _shared_is_vision:
-            # VL model: use AutoProcessor + a generation-capable model class.
-            # Qwen2VLForConditionalGeneration is the correct class for Qwen2.5-VL;
-            # fall back to AutoModelForCausalLM (which resolves via auto_map with
-            # trust_remote_code) for other VL models or older transformers versions.
-            from transformers import AutoProcessor
+            # VL model: use AutoProcessor (handles text + images) and
+            # AutoModelForCausalLM with trust_remote_code (resolves to the
+            # correct architecture class via the model's auto_map — works for
+            # Qwen2.5-VL, Qwen3.5, and other VL models).
+            from transformers import AutoProcessor, AutoModelForCausalLM
             _shared_tokenizer = AutoProcessor.from_pretrained(
                 model_path, trust_remote_code=True
             )
-            try:
-                from transformers import Qwen2VLForConditionalGeneration
-                _VLModelClass = Qwen2VLForConditionalGeneration
-            except ImportError:
-                from transformers import AutoModelForCausalLM
-                _VLModelClass = AutoModelForCausalLM
-                logger.info("Qwen2VLForConditionalGeneration not available, using AutoModelForCausalLM")
-            _shared_model = _VLModelClass.from_pretrained(
+            _shared_model = AutoModelForCausalLM.from_pretrained(
                 model_path,
                 torch_dtype=torch_dtype,
                 device_map="auto",
                 trust_remote_code=True,
             )
-            logger.info(f"Loaded VISION model: {model_path}")
+            logger.info(f"Loaded VISION model: {model_path} (type={model_type})")
         else:
             # Text-only model
             from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -109,7 +110,7 @@ def _load_shared_model(model_path: str, dtype: str = "bfloat16"):
                 "=" * 70 + "\n"
                 f"  LOCAL MODEL IS TEXT-ONLY ({model_type}).\n"
                 f"  All image inputs will be DROPPED. The agent will NOT see game frames.\n"
-                f"  For vision, use a VL model (Qwen2.5-VL, etc.).\n"
+                f"  For vision, use a VL model (Qwen3.5, Qwen2.5-VL, etc.).\n"
                 "=" * 70
             )
 
