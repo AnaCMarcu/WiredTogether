@@ -21,7 +21,7 @@ VLLM_MODEL_PATH=/scratch/acmarcu/models/Qwen2.5-VL-3B-Instruct
 VLLM_MODEL_NAME="Qwen2.5-VL-3B-Instruct"
 
 # Fallback: load model in-process (no server)
-LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-9B
+LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen2.5-VL-3B-Instruct
 
 module purge
 module load 2025

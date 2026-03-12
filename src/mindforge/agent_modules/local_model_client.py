@@ -3,19 +3,22 @@
 Loads a HuggingFace model once and serves it in-process — no HTTP server needed.
 Implements the autogen_core ChatCompletionClient protocol.
 
-IMPORTANT: Text-only models (Qwen3.5-9B etc.) cannot process images.
-When an image is attached to a message, it is DROPPED and replaced with a
-warning note. For vision, use a VL model via the HTTP API backend instead.
+Supports both text-only models (Qwen3.5 etc.) and vision-language models
+(Qwen2.5-VL etc.). Vision models are auto-detected and images are processed
+through the model's processor pipeline.
 """
 
+import base64
+import io
 import json
 import logging
 import os
-from dataclasses import dataclass
-from typing import Any, List, Mapping, Optional, Sequence, Union
+import re
+from typing import Any, List, Optional, Sequence
 
+import PIL.Image
 import torch
-from autogen_core import CancellationToken
+from autogen_core import CancellationToken, Image as AutogenImage
 from autogen_core.models import (
     ChatCompletionClient,
     CreateResult,
@@ -28,54 +31,77 @@ from autogen_core.models import (
 
 logger = logging.getLogger(__name__)
 
-# Singleton: model + tokenizer loaded once, shared across all client instances
+# Singleton: model + tokenizer/processor loaded once, shared across all client instances
 _shared_model = None
-_shared_tokenizer = None
+_shared_tokenizer = None  # AutoTokenizer (text-only) or AutoProcessor (VL)
 _shared_model_name = ""
+_shared_is_vision = False
 _warned_no_vision = False  # warn once, not every call
 
 
+def _autogen_image_to_pil(img) -> PIL.Image.Image:
+    """Convert an autogen_core Image to a PIL Image."""
+    b64 = AutogenImage.to_base64(img)
+    return PIL.Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+
+
 def _load_shared_model(model_path: str, dtype: str = "bfloat16"):
-    """Load model and tokenizer once into GPU memory."""
-    global _shared_model, _shared_tokenizer, _shared_model_name
+    """Load model and tokenizer/processor once into GPU memory."""
+    global _shared_model, _shared_tokenizer, _shared_model_name, _shared_is_vision
 
     if _shared_model is not None:
         return
 
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-
     logger.info(f"Loading local model: {model_path}")
     torch_dtype = getattr(torch, dtype) if dtype != "auto" else "auto"
 
-    _shared_tokenizer = AutoTokenizer.from_pretrained(
-        model_path, trust_remote_code=True
+    # ── Detect vision model from config before loading ──
+    from transformers import AutoConfig
+    config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
+    model_type = getattr(config, "model_type", "unknown").lower()
+    _shared_is_vision = any(
+        kw in model_type for kw in ("vl", "vision", "visual", "multimodal")
     )
-    _shared_model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        dtype=torch_dtype,
-        device_map="auto",
-        trust_remote_code=True,
-    )
-    _shared_model.eval()
-    _shared_model_name = model_path.rstrip("/").split("/")[-1]
 
-    # ── Check if model supports vision ──
-    model_type = getattr(_shared_model.config, "model_type", "unknown")
-    is_vision = any(
-        kw in model_type.lower()
-        for kw in ("vl", "vision", "visual", "multimodal")
-    )
-    if not is_vision:
+    if _shared_is_vision:
+        # VL model: use AutoProcessor (handles both text + images) and
+        # AutoModelForVision2Seq for the model
+        from transformers import AutoProcessor, AutoModelForVision2Seq
+        _shared_tokenizer = AutoProcessor.from_pretrained(
+            model_path, trust_remote_code=True
+        )
+        _shared_model = AutoModelForVision2Seq.from_pretrained(
+            model_path,
+            torch_dtype=torch_dtype,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+        logger.info(f"Loaded VISION model: {model_path}")
+    else:
+        # Text-only model
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        _shared_tokenizer = AutoTokenizer.from_pretrained(
+            model_path, trust_remote_code=True
+        )
+        _shared_model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch_dtype,
+            device_map="auto",
+            trust_remote_code=True,
+        )
         logger.warning(
             "=" * 70 + "\n"
-            f"  LOCAL MODEL '{_shared_model_name}' IS TEXT-ONLY.\n"
+            f"  LOCAL MODEL IS TEXT-ONLY ({model_type}).\n"
             f"  All image inputs will be DROPPED. The agent will NOT see game frames.\n"
-            f"  For vision, use a VL model (Qwen2.5-VL, etc.) via HTTP API.\n"
+            f"  For vision, use a VL model (Qwen2.5-VL, etc.).\n"
             "=" * 70
         )
 
+    _shared_model.eval()
+    _shared_model_name = model_path.rstrip("/").split("/")[-1]
+
     mem_gb = torch.cuda.max_memory_allocated() / 1e9
-    logger.info(f"Model loaded: {_shared_model_name}, GPU memory: {mem_gb:.2f} GB")
+    logger.info(f"Model loaded: {_shared_model_name}, vision={_shared_is_vision}, GPU memory: {mem_gb:.2f} GB")
 
 
 class LocalModelClient(ChatCompletionClient):
@@ -104,55 +130,71 @@ class LocalModelClient(ChatCompletionClient):
         if self._model_path:
             _load_shared_model(self._model_path, self._dtype)
 
-    def _messages_to_dicts(self, messages: Sequence[LLMMessage]) -> list[dict]:
+    def _messages_to_dicts(
+        self, messages: Sequence[LLMMessage]
+    ) -> tuple[list[dict], list[PIL.Image.Image]]:
         """Convert autogen messages to HF chat format.
 
-        For text-only models, images are replaced with a warning note so the
-        LLM knows it was supposed to see a frame but can't.
+        Returns (chat_messages, images_list).
+        For VL models, images are kept inline in the message content list and
+        also collected into images_list for the processor.
+        For text-only models, images are dropped with a warning note.
         """
         global _warned_no_vision
         result = []
+        images: list[PIL.Image.Image] = []
+
         for msg in messages:
             if isinstance(msg, SystemMessage):
                 result.append({"role": "system", "content": msg.content})
             elif isinstance(msg, UserMessage):
-                # UserMessage.content can be a list (text + images) or string
                 if isinstance(msg.content, str):
-                    text = msg.content
+                    result.append({"role": "user", "content": msg.content})
                 elif isinstance(msg.content, list):
-                    text_parts = []
-                    image_count = 0
-                    for part in msg.content:
-                        if isinstance(part, str):
-                            text_parts.append(part)
-                        else:
-                            # This is an image object — text-only model can't use it
-                            image_count += 1
-                    text = " ".join(text_parts)
-                    if image_count > 0:
-                        if not _warned_no_vision:
-                            logger.warning(
-                                "LocalModelClient: %d image(s) dropped from message — "
-                                "text-only model cannot process images. "
-                                "Agent perception beliefs will be unreliable.",
-                                image_count,
+                    if _shared_is_vision:
+                        # VL model: build multimodal content list
+                        content_parts = []
+                        for part in msg.content:
+                            if isinstance(part, str):
+                                content_parts.append({"type": "text", "text": part})
+                            else:
+                                # autogen Image object → PIL
+                                pil_img = _autogen_image_to_pil(part)
+                                images.append(pil_img)
+                                content_parts.append({"type": "image", "image": pil_img})
+                        result.append({"role": "user", "content": content_parts})
+                    else:
+                        # Text-only: drop images
+                        text_parts = []
+                        image_count = 0
+                        for part in msg.content:
+                            if isinstance(part, str):
+                                text_parts.append(part)
+                            else:
+                                image_count += 1
+                        text = " ".join(text_parts)
+                        if image_count > 0:
+                            if not _warned_no_vision:
+                                logger.warning(
+                                    "LocalModelClient: %d image(s) dropped — "
+                                    "text-only model cannot process images.",
+                                    image_count,
+                                )
+                                _warned_no_vision = True
+                            text += (
+                                "\n\n[NOTE: A game screenshot was attached but this model "
+                                "cannot process images. Base your response on the text "
+                                "context above (task, beliefs, skills, communications). "
+                                "Do NOT hallucinate visual details you cannot see.]"
                             )
-                            _warned_no_vision = True
-                        # ── FIX: tell the LLM it can't see the image ──
-                        text += (
-                            "\n\n[NOTE: A game screenshot was attached but this model "
-                            "cannot process images. Base your response on the text "
-                            "context above (task, beliefs, skills, communications). "
-                            "Do NOT hallucinate visual details you cannot see.]"
-                        )
+                        result.append({"role": "user", "content": text})
                 else:
-                    text = str(msg.content)
-                result.append({"role": "user", "content": text})
+                    result.append({"role": "user", "content": str(msg.content)})
             else:
-                # AssistantMessage or other
                 content = msg.content if isinstance(msg.content, str) else str(msg.content)
                 result.append({"role": "assistant", "content": content})
-        return result
+
+        return result, images
 
     async def create(
         self,
@@ -168,75 +210,101 @@ class LocalModelClient(ChatCompletionClient):
                 "Local model not loaded. Set LLM_MODEL_PATH env var or pass model_path."
             )
 
-        chat_messages = self._messages_to_dicts(messages)
+        chat_messages, images = self._messages_to_dicts(messages)
 
         # If structured output requested, add JSON instruction to system prompt
         if self._response_format is not None:
             schema_name = getattr(self._response_format, "__name__", "JSON")
-            # Check if there's already a system message
+            json_instruction = (
+                f"\n\nYou MUST respond with valid JSON matching the {schema_name} schema. "
+                f"Output ONLY the JSON object, no markdown or extra text."
+            )
             if chat_messages and chat_messages[0]["role"] == "system":
-                chat_messages[0]["content"] += (
-                    f"\n\nYou MUST respond with valid JSON matching the {schema_name} schema. "
-                    f"Output ONLY the JSON object, no markdown or extra text."
-                )
+                # System content may be a string or a list (VL format)
+                if isinstance(chat_messages[0]["content"], str):
+                    chat_messages[0]["content"] += json_instruction
+                else:
+                    chat_messages[0]["content"].append(
+                        {"type": "text", "text": json_instruction}
+                    )
             else:
                 chat_messages.insert(0, {
                     "role": "system",
-                    "content": (
-                        f"You MUST respond with valid JSON matching the {schema_name} schema. "
-                        f"Output ONLY the JSON object, no markdown or extra text."
-                    ),
+                    "content": json_instruction.strip(),
                 })
 
         enable_thinking = os.environ.get("LLM_ENABLE_THINKING", "0") == "1"
-        template_kwargs = dict(
-            add_generation_prompt=True, return_tensors="pt",
-        )
-        # Qwen3.5 supports enable_thinking toggle
-        try:
-            template_kwargs["enable_thinking"] = enable_thinking
-            tokenized = _shared_tokenizer.apply_chat_template(
-                chat_messages, **template_kwargs
+        max_new = self._max_tokens * 4 if enable_thinking else self._max_tokens
+
+        if _shared_is_vision and images:
+            # ── VL model path: use processor to handle text + images ──
+            text_prompt = _shared_tokenizer.apply_chat_template(
+                chat_messages, tokenize=False, add_generation_prompt=True
             )
-        except TypeError:
-            # Older tokenizers don't support enable_thinking
-            del template_kwargs["enable_thinking"]
-            tokenized = _shared_tokenizer.apply_chat_template(
-                chat_messages, **template_kwargs
-            )
-        # apply_chat_template may return a BatchEncoding or a plain tensor
-        if hasattr(tokenized, "input_ids"):
-            input_ids = tokenized.input_ids.to(_shared_model.device)
+            inputs = _shared_tokenizer(
+                text=[text_prompt],
+                images=images,
+                padding=True,
+                return_tensors="pt",
+            ).to(_shared_model.device)
+            input_len = inputs["input_ids"].shape[1]
+
+            with torch.no_grad():
+                outputs = _shared_model.generate(
+                    **inputs,
+                    max_new_tokens=max_new,
+                    temperature=max(self._temperature, 0.01),
+                    top_p=self._top_p,
+                    do_sample=self._temperature > 0.01,
+                )
+
+            new_tokens = outputs[0][input_len:]
+            text = _shared_tokenizer.decode(new_tokens, skip_special_tokens=True)
         else:
-            input_ids = tokenized.to(_shared_model.device)
-
-        with torch.no_grad():
-            outputs = _shared_model.generate(
-                input_ids,
-                max_new_tokens=self._max_tokens * 4 if enable_thinking else self._max_tokens,
-                temperature=max(self._temperature, 0.01),
-                top_p=self._top_p,
-                do_sample=self._temperature > 0.01,
-                pad_token_id=(
-                    _shared_tokenizer.pad_token_id
-                    or _shared_tokenizer.eos_token_id
-                ),
+            # ── Text-only path (or VL model with no images) ──
+            template_kwargs = dict(
+                add_generation_prompt=True, return_tensors="pt",
             )
+            try:
+                template_kwargs["enable_thinking"] = enable_thinking
+                tokenized = _shared_tokenizer.apply_chat_template(
+                    chat_messages, **template_kwargs
+                )
+            except TypeError:
+                del template_kwargs["enable_thinking"]
+                tokenized = _shared_tokenizer.apply_chat_template(
+                    chat_messages, **template_kwargs
+                )
+            if hasattr(tokenized, "input_ids"):
+                input_ids = tokenized.input_ids.to(_shared_model.device)
+            else:
+                input_ids = tokenized.to(_shared_model.device)
+            input_len = input_ids.shape[1]
 
-        new_tokens = outputs[0][input_ids.shape[1]:]
-        text = _shared_tokenizer.decode(new_tokens, skip_special_tokens=True)
+            with torch.no_grad():
+                outputs = _shared_model.generate(
+                    input_ids,
+                    max_new_tokens=max_new,
+                    temperature=max(self._temperature, 0.01),
+                    top_p=self._top_p,
+                    do_sample=self._temperature > 0.01,
+                    pad_token_id=(
+                        _shared_tokenizer.pad_token_id
+                        or _shared_tokenizer.eos_token_id
+                    ),
+                )
 
-        # Qwen3.5 emits <think>...</think> reasoning before the answer — strip it
-        import re
+            new_tokens = outputs[0][input_len:]
+            text = _shared_tokenizer.decode(new_tokens, skip_special_tokens=True)
+
+        # Strip thinking tags (Qwen3.5 etc.)
         text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-        # Handle untagged thinking blocks (e.g. "Thinking Process: ...")
         if not text.startswith('{') and '{' in text:
             text = text[text.rfind('{'):]
 
-        prompt_tokens = input_ids.shape[1]
         completion_tokens = len(new_tokens)
         self._total_usage = RequestUsage(
-            prompt_tokens=self._total_usage.prompt_tokens + prompt_tokens,
+            prompt_tokens=self._total_usage.prompt_tokens + input_len,
             completion_tokens=self._total_usage.completion_tokens + completion_tokens,
         )
 
@@ -244,7 +312,7 @@ class LocalModelClient(ChatCompletionClient):
             content=text,
             finish_reason="stop",
             usage=RequestUsage(
-                prompt_tokens=prompt_tokens,
+                prompt_tokens=input_len,
                 completion_tokens=completion_tokens,
             ),
             cached=False,
@@ -262,7 +330,7 @@ class LocalModelClient(ChatCompletionClient):
     @property
     def capabilities(self) -> ModelInfo:
         return ModelInfo(
-            vision=False,
+            vision=_shared_is_vision,
             function_calling=False,
             json_output=True,
             family="unknown",
