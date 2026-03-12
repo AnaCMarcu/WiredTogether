@@ -320,6 +320,28 @@ async def run(args):
 
         environment.reset()
 
+        # ── Warm-up: skip loading screen ──
+        # Send NoOp steps until media finishes loading (max 120 warm-up steps).
+        # This prevents agents from wasting real steps watching a progress bar.
+        warmup_limit = 120
+        for warmup_step in range(warmup_limit):
+            # Step all agents with NoOp
+            for i in range(num_agents):
+                agent_name = f"agent_{i}"
+                if not environment._terminations.get(agent_name, False):
+                    environment.step("NoOp", i)
+            # Check if any agent's frame looks like a real game frame
+            # (loading screen is mostly uniform; game world has more variance)
+            frame = environment.get_agent_frame(0)
+            if frame is not None:
+                # A loaded game world has high pixel variance; loading bar is flat
+                variance = np.var(frame.astype(np.float32))
+                if variance > 500:  # tuned: loading screen ~100-300, game world >1000
+                    print(f"  * Media loaded after {warmup_step + 1} warm-up steps")
+                    break
+        else:
+            print(f"  * Warning: media may not be fully loaded after {warmup_limit} warm-up steps")
+
         communications = []
         agents_error_count = [0] * num_agents
         frames_list = []

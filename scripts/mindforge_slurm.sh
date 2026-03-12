@@ -97,7 +97,7 @@ VLLM_PID=""
 
 cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
-python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 50
+python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 100
 
 # Cleanup vLLM server
 if [ -n "${VLLM_PID:-}" ]; then

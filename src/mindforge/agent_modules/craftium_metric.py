@@ -299,8 +299,20 @@ class CraftiumMetric:
         }
 
         file_path = os.path.join(self.target_folder, file_name)
+
+        class _NumpyEncoder(json.JSONEncoder):
+            def default(self, obj):
+                import numpy as _np
+                if isinstance(obj, (_np.floating,)):
+                    return float(obj)
+                if isinstance(obj, (_np.integer,)):
+                    return int(obj)
+                if isinstance(obj, _np.ndarray):
+                    return obj.tolist()
+                return super().default(obj)
+
         with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+            json.dump(data, f, indent=2, ensure_ascii=False, cls=_NumpyEncoder)
 
         self._save_plots()
         self._save_text_summary()
