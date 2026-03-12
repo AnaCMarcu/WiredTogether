@@ -75,17 +75,21 @@ class EpisodeResponse(BaseModel):
 class BeliefResponse(BaseModel):
     beliefs: str
 
-class Observation(BaseModel):
-    observation: str
+def safe_format(template: str, **kwargs) -> str:
+    """Format a template string, replacing missing keys with 'N/A' instead of crashing.
 
-class Belief(BaseModel):
-    belief: str
-
-class Action(BaseModel):
-    action: str
-
-class Feedback(BaseModel):
-    content: str
+    This is the safe replacement for eval(f\"f'''...'''\") patterns.
+    """
+    placeholders = set(re.findall(r'(?<!\{)\{(\w+)\}(?!\})', template))
+    for key in placeholders:
+        if key not in kwargs:
+            kwargs[key] = "N/A"
+            logging.warning(f"Prompt placeholder '{{{key}}}' not provided, using 'N/A'")
+    try:
+        return template.format(**kwargs)
+    except (KeyError, IndexError, ValueError) as e:
+        logging.error(f"Template formatting failed even after defaults: {e}")
+        return template
 
 
 def _fix_common_json_errors(text: str) -> str:

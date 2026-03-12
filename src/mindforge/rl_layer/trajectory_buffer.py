@@ -4,10 +4,13 @@ Stores per-step transitions for one agent.  After ``update_interval`` steps
 the buffer is consumed by ``mappo.ppo_update`` and then cleared.
 """
 
+import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -50,6 +53,11 @@ class RolloutBuffer:
     def store_reward(self, reward: float, done: bool = False) -> None:
         """Called after the environment returns the reward for the last action."""
         if self._pending is not None:
+            # Clamp invalid reward values to prevent NaN/inf corruption
+            if not isinstance(reward, (int, float)) or reward != reward:  # NaN check
+                logger.warning("Invalid reward %s, clamping to 0.0", reward)
+                reward = 0.0
+            reward = max(-1e6, min(1e6, reward))
             self._pending.reward = reward
             self._pending.done = done
             self._buf.append(self._pending)
@@ -87,6 +95,7 @@ class RolloutBuffer:
 
     def sample_batches(self, mini_batch_size: int):
         """Yield mini-batches of transitions (shuffled)."""
+        assert mini_batch_size > 0, "mini_batch_size must be positive"
         indices = torch.randperm(len(self._buf)).tolist()
         for start in range(0, len(self._buf), mini_batch_size):
             batch_idx = indices[start:start + mini_batch_size]

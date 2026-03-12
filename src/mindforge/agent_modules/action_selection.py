@@ -1,20 +1,23 @@
+import os
 from agent_modules.llm_call import llm_call
-from agent_modules.util import AgentResponse, CandidateResponse, create_model_client
+from agent_modules.util import AgentResponse, CandidateResponse, create_model_client, safe_format
+
+_PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
 # load in prompts
-with open("prompts/system_prompt.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "system_prompt.txt"), "r") as f:
     system_prompt_txt = f.read()
-with open("prompts/environment_prompt.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "environment_prompt.txt"), "r") as f:
     environment_prompt = f.read()
-with open("prompts/instruction_prompt_p2.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "instruction_prompt_p2.txt"), "r") as f:
     instruction_prompt_p2 = f.read()
-with open("prompts/system_prompt_prediction.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "system_prompt_prediction.txt"), "r") as f:
     system_prompt_prediction_txt = f.read()
-with open("prompts/prediction_prompt.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "prediction_prompt.txt"), "r") as f:
     prediction_prompt = f.read()
-with open("prompts/system_prompt_candidate_interventions.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "system_prompt_candidate_interventions.txt"), "r") as f:
     system_prompt_candidate_interventions = f.read()
-with open("prompts/instruction_prompt_p2_candidate.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "instruction_prompt_p2_candidate.txt"), "r") as f:
     instruction_prompt_p2_candidate = f.read()
 
 
@@ -27,12 +30,12 @@ class ActionSelection:
         candidate_model_client=None,
     ):
         self.system_prompt = (
-            system_prompt if system_prompt else eval(f"f'''{system_prompt_txt}'''")
+            system_prompt if system_prompt else safe_format(system_prompt_txt)
         )
         self.system_prompt_prediction = (
             system_prompt_prediction
             if system_prompt_prediction
-            else eval(f"f'''{system_prompt_prediction_txt}'''")
+            else safe_format(system_prompt_prediction_txt)
         )
         self.action_model_client = (
             action_model_client
@@ -118,7 +121,7 @@ class ActionSelection:
     ):
         content = await llm_call(
             self.candidate_model_client,
-            system_prompt=eval(f"f'''{system_prompt_candidate_interventions}'''"),
+            system_prompt=safe_format(system_prompt_candidate_interventions),
             user_prompt=instruction_prompt_p2_candidate + messages[0].content[0],
             frame=last_frame,
             cancellation_token=cancellation_token,

@@ -1,17 +1,19 @@
 import logging
+import os
 from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
-from flask import json
 
 from agent_modules.llm_call import llm_call
 from agent_modules.util import BeliefResponse, create_model_client
 
-with open("prompts/belief_system/perception_beliefs.txt", "r") as f:
+_BELIEF_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts", "belief_system")
+
+with open(os.path.join(_BELIEF_DIR, "perception_beliefs.txt"), "r") as f:
     perception_prompt = f.read()
-with open("prompts/belief_system/partner_beliefs.txt", "r") as f:
+with open(os.path.join(_BELIEF_DIR, "partner_beliefs.txt"), "r") as f:
     partner_prompt = f.read()
-with open("prompts/belief_system/interaction_belief.txt", "r") as f:
+with open(os.path.join(_BELIEF_DIR, "interaction_belief.txt"), "r") as f:
     interaction_prompt = f.read()
-with open("prompts/belief_system/update_context.txt", "r") as f:
+with open(os.path.join(_BELIEF_DIR, "update_context.txt"), "r") as f:
     context_prompt = f.read()
 
 
@@ -69,7 +71,7 @@ class BeliefSystem:
 
         # for each partner agent
         for i, previous_partner_belief in self.partner_beliefs.items():
-            if len(conversations) == 0:
+            if not conversations or i >= len(conversations):
                 continue
             convo = conversations[i]
             # create prompt

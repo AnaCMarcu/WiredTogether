@@ -18,7 +18,7 @@ from rl_layer.trajectory_buffer import Transition
 
 # ── Helpers ──
 
-def _normalize(x: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+def _normalize(x: torch.Tensor, eps: float = 1e-5) -> torch.Tensor:
     return (x - x.mean()) / (x.std() + eps)
 
 
@@ -63,7 +63,7 @@ def action_level_ppo_step(
     # Forward pass – get last hidden state
     outputs = model(**enc, output_hidden_states=True)
     # Use last token of each sequence (like causal LM pooling)
-    seq_lengths = enc.attention_mask.sum(dim=1) - 1  # (B,)
+    seq_lengths = (enc.attention_mask.sum(dim=1) - 1).to(device)  # (B,)
     last_hidden = outputs.hidden_states[-1]  # (B, L, H)
     batch_idx = torch.arange(last_hidden.size(0), device=device)
     pooled = last_hidden[batch_idx, seq_lengths]  # (B, H)
@@ -83,13 +83,13 @@ def action_level_ppo_step(
     surr2 = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * advantages
     policy_loss = -torch.min(surr1, surr2).mean()
 
-    # ── Clipped value loss ──
+    # ── Clipped value loss (element-wise max, then reduce) ──
     value_clipped = old_values + torch.clamp(
         new_values - old_values, -value_clip_eps, value_clip_eps
     )
-    v_loss1 = F.mse_loss(new_values, returns)
-    v_loss2 = F.mse_loss(value_clipped, returns)
-    value_loss = torch.max(v_loss1, v_loss2)
+    v_loss1 = F.mse_loss(new_values, returns, reduction="none")
+    v_loss2 = F.mse_loss(value_clipped, returns, reduction="none")
+    value_loss = torch.max(v_loss1, v_loss2).mean()
 
     # ── Total loss ──
     loss = policy_loss + value_coef * value_loss - entropy_coef * entropy

@@ -1,17 +1,19 @@
 import logging
+import os
+from pathlib import Path
 from agent_modules.llm_call import llm_call
-from agent_modules.util import EpisodeResponse, create_model_client
+from agent_modules.util import EpisodeResponse, create_model_client, safe_format
 from autogen_ext.memory.chromadb import (
     ChromaDBVectorMemory,
     PersistentChromaDBVectorMemoryConfig,
     ChromaDBVectorMemoryConfig,
     SentenceTransformerEmbeddingFunctionConfig,
 )
-import os
-from pathlib import Path
 from autogen_core.models import UserMessage, SystemMessage
 
-with open("prompts/episode_summary_prompt.txt", "r") as f:
+_PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
+
+with open(os.path.join(_PROMPT_DIR, "episode_summary_prompt.txt"), "r") as f:
     episode_summary_prompt = f.read()
 
 
@@ -56,7 +58,7 @@ class EpisodicMemoryManager:
         self.episode_prompt = (
             override_episode_prompt
             if override_episode_prompt
-            else eval(f"f'''{episode_summary_prompt}'''")
+            else safe_format(episode_summary_prompt)
         )
 
     # add new episode

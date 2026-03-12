@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import re
+import threading
 from typing import Any, List, Optional, Sequence
 
 import PIL.Image
@@ -37,6 +38,7 @@ _shared_tokenizer = None  # AutoTokenizer (text-only) or AutoProcessor (VL)
 _shared_model_name = ""
 _shared_is_vision = False
 _warned_no_vision = False  # warn once, not every call
+_load_lock = threading.Lock()
 
 
 def _autogen_image_to_pil(img) -> PIL.Image.Image:
@@ -52,56 +54,61 @@ def _load_shared_model(model_path: str, dtype: str = "bfloat16"):
     if _shared_model is not None:
         return
 
-    logger.info(f"Loading local model: {model_path}")
-    torch_dtype = getattr(torch, dtype) if dtype != "auto" else "auto"
+    with _load_lock:
+        # Double-check after acquiring lock
+        if _shared_model is not None:
+            return
 
-    # ── Detect vision model from config before loading ──
-    from transformers import AutoConfig
-    config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
-    model_type = getattr(config, "model_type", "unknown").lower()
-    _shared_is_vision = any(
-        kw in model_type for kw in ("vl", "vision", "visual", "multimodal")
-    )
+        logger.info(f"Loading local model: {model_path}")
+        torch_dtype = getattr(torch, dtype) if dtype != "auto" else "auto"
 
-    if _shared_is_vision:
-        # VL model: use AutoProcessor (handles both text + images) and
-        # AutoModelForVision2Seq for the model
-        from transformers import AutoProcessor, AutoModelForVision2Seq
-        _shared_tokenizer = AutoProcessor.from_pretrained(
-            model_path, trust_remote_code=True
-        )
-        _shared_model = AutoModelForVision2Seq.from_pretrained(
-            model_path,
-            torch_dtype=torch_dtype,
-            device_map="auto",
-            trust_remote_code=True,
-        )
-        logger.info(f"Loaded VISION model: {model_path}")
-    else:
-        # Text-only model
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        _shared_tokenizer = AutoTokenizer.from_pretrained(
-            model_path, trust_remote_code=True
-        )
-        _shared_model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            torch_dtype=torch_dtype,
-            device_map="auto",
-            trust_remote_code=True,
-        )
-        logger.warning(
-            "=" * 70 + "\n"
-            f"  LOCAL MODEL IS TEXT-ONLY ({model_type}).\n"
-            f"  All image inputs will be DROPPED. The agent will NOT see game frames.\n"
-            f"  For vision, use a VL model (Qwen2.5-VL, etc.).\n"
-            "=" * 70
+        # ── Detect vision model from config before loading ──
+        from transformers import AutoConfig
+        config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
+        model_type = getattr(config, "model_type", "unknown").lower()
+        _shared_is_vision = any(
+            kw in model_type for kw in ("vl", "vision", "visual", "multimodal")
         )
 
-    _shared_model.eval()
-    _shared_model_name = model_path.rstrip("/").split("/")[-1]
+        if _shared_is_vision:
+            # VL model: use AutoProcessor (handles both text + images) and
+            # AutoModelForVision2Seq for the model
+            from transformers import AutoProcessor, AutoModelForVision2Seq
+            _shared_tokenizer = AutoProcessor.from_pretrained(
+                model_path, trust_remote_code=True
+            )
+            _shared_model = AutoModelForVision2Seq.from_pretrained(
+                model_path,
+                torch_dtype=torch_dtype,
+                device_map="auto",
+                trust_remote_code=True,
+            )
+            logger.info(f"Loaded VISION model: {model_path}")
+        else:
+            # Text-only model
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            _shared_tokenizer = AutoTokenizer.from_pretrained(
+                model_path, trust_remote_code=True
+            )
+            _shared_model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                torch_dtype=torch_dtype,
+                device_map="auto",
+                trust_remote_code=True,
+            )
+            logger.warning(
+                "=" * 70 + "\n"
+                f"  LOCAL MODEL IS TEXT-ONLY ({model_type}).\n"
+                f"  All image inputs will be DROPPED. The agent will NOT see game frames.\n"
+                f"  For vision, use a VL model (Qwen2.5-VL, etc.).\n"
+                "=" * 70
+            )
 
-    mem_gb = torch.cuda.max_memory_allocated() / 1e9
-    logger.info(f"Model loaded: {_shared_model_name}, vision={_shared_is_vision}, GPU memory: {mem_gb:.2f} GB")
+        _shared_model.eval()
+        _shared_model_name = model_path.rstrip("/").split("/")[-1]
+
+        mem_gb = torch.cuda.max_memory_allocated() / 1e9
+        logger.info(f"Model loaded: {_shared_model_name}, vision={_shared_is_vision}, GPU memory: {mem_gb:.2f} GB")
 
 
 class LocalModelClient(ChatCompletionClient):

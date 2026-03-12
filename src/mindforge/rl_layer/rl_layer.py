@@ -253,7 +253,7 @@ class RLLayer:
             if not last_tr.done:
                 with torch.no_grad():
                     pooled = self._encode_prompt(last_tr.prompt_text)
-                    last_value = self.value_head(pooled).squeeze().item()
+                    last_value = self.value_head(pooled).squeeze(-1).item()
 
         self.buffer.compute_gae(
             self.config.gamma, self.config.gae_lambda, last_value

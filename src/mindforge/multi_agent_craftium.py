@@ -159,9 +159,6 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
             number_of_agents=num_agents,
             metric=metric,
             voyager=False,
-            causal_predictions=False,
-            surgical_action_selection=False,
-            causal_bdi=False,
             rl_layer=rl_layer,
         )
         agents.append(agent)
@@ -278,8 +275,9 @@ async def run(args):
     instruction_prompt = prompts["instruction"]
 
     # Build system prompt with environment details baked in
+    from agent_modules.util import safe_format
     system_prompt_template = prompts["system_template"]
-    system_prompt = eval(f"f'''{system_prompt_template}'''")
+    system_prompt = safe_format(system_prompt_template, environment_prompt=environment_prompt)
 
     # Roles & agents
     role_configs = build_role_configs(num_agents, prompts["roles"])

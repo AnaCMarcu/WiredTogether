@@ -1,12 +1,15 @@
 import json
 import logging
+import os
 from agent_modules.llm_call import llm_call
-from agent_modules.util import CriticResponse, create_model_client
+from agent_modules.util import CriticResponse, create_model_client, safe_format
 from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
 
-with open("prompts/critic_prompt.txt", "r") as f:
+_PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
+
+with open(os.path.join(_PROMPT_DIR, "critic_prompt.txt"), "r") as f:
     critic_prompt = f.read()
-with open("prompts/critic_info.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "critic_info.txt"), "r") as f:
     critic_info = f.read()
 
 
@@ -20,7 +23,7 @@ class Critic:
         self.critic_prompt = (
             override_critic_prompt
             if override_critic_prompt
-            else eval(f"f'''{critic_prompt}'''")
+            else safe_format(critic_prompt)
         )
 
     async def check_task_success(

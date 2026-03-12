@@ -1,7 +1,7 @@
 import json
 import logging
 from agent_modules.llm_call import llm_call
-from agent_modules.util import SkillResponse, create_model_client
+from agent_modules.util import SkillResponse, create_model_client, safe_format
 import os
 from pathlib import Path
 
@@ -19,11 +19,13 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_core.models import UserMessage, SystemMessage
 
 
-with open("prompts/skill_description_prompt.txt", "r") as f:
+_PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
+
+with open(os.path.join(_PROMPT_DIR, "skill_description_prompt.txt"), "r") as f:
     skill_description_prompt = f.read()
-with open("prompts/skill_description_info.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "skill_description_info.txt"), "r") as f:
     skill_description_info = f.read()
-with open("prompts/skill_construct_query.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "skill_construct_query.txt"), "r") as f:
     skill_construct_query = f.read()
 
 
@@ -72,7 +74,7 @@ class SkillManager:
         self.skill_prompt = (
             override_skill_prompt
             if override_skill_prompt
-            else eval(f"f'''{skill_description_prompt}'''")
+            else safe_format(skill_description_prompt)
         )
         self._skill_info_prompt = override_skill_info_prompt or skill_description_info
 

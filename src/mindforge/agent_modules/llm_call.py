@@ -1,28 +1,8 @@
 import json
 from agent_modules.util import load_json
-import re
 import logging
 import time
 from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
-
-def _safe_format(template: str, **kwargs) -> str:
-    """Format a template string, replacing missing keys with 'N/A' instead of crashing.
- 
-    This prevents the raw template (with literal {reward_text} etc.) from being
-    sent to the LLM when a placeholder is not provided.
-    """
-    # Find all {placeholder} patterns (not {{escaped}})
-    placeholders = set(re.findall(r'(?<!\{)\{(\w+)\}(?!\})', template))
-    # Fill any missing keys with a default
-    for key in placeholders:
-        if key not in kwargs:
-            kwargs[key] = "N/A"
-            logging.warning(f"Prompt placeholder '{{{key}}}' not provided, using 'N/A'")
-    try:
-        return template.format(**kwargs)
-    except (KeyError, IndexError, ValueError) as e:
-        logging.error(f"Template formatting failed even after defaults: {e}")
-        return template
 
 
 async def llm_call(
@@ -75,6 +55,8 @@ async def llm_call(
         response = await model_client.create(
             full_prompt, cancellation_token=cancellation_token
         )
+    except (KeyboardInterrupt, SystemExit):
+        raise
     except Exception as e:
         error_str = str(e)
         logging.error(f"{log_prefix} Error calling LLM (attempt {retry_count + 1}): {error_str[:300]}")
@@ -100,7 +82,7 @@ async def llm_call(
         if parse_check is not None:
             content = parse_check(content)
         return content
-    except (json.JSONDecodeError, AssertionError, KeyError, Exception) as e:
+    except (json.JSONDecodeError, AssertionError, KeyError, ValueError) as e:
         logging.error(
             f"{log_prefix} Error parsing response (attempt {retry_count + 1}): {type(e).__name__}: {e}"
         )

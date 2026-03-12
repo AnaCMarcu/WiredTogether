@@ -19,16 +19,19 @@ from agent_modules.util import (
     CurriculumQuestionResponse,
     CurruliculumResponse,
     create_model_client,
+    safe_format,
 )
 
+_PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
+
 # load in prompts
-with open("prompts/curriculum_prompt.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "curriculum_prompt.txt"), "r") as f:
     curriculum_prompt = f.read()
-with open("prompts/curriculum_info.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "curriculum_info.txt"), "r") as f:
     curriculum_info = f.read()
-with open("prompts/curriculum_questions.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "curriculum_questions.txt"), "r") as f:
     curriculum_questions = f.read()
-with open("prompts/curriculum_answer.txt", "r") as f:
+with open(os.path.join(_PROMPT_DIR, "curriculum_answer.txt"), "r") as f:
     curriculum_answer = f.read()
 
 
@@ -50,7 +53,7 @@ class AutoCurriculum:
         self.curriculum_prompt = (
             override_curriculum_prompt
             if override_curriculum_prompt
-            else eval(f"f'''{curriculum_prompt}'''")
+            else safe_format(curriculum_prompt)
         )
         self._questions_prompt = override_questions_prompt or curriculum_questions
         self.task_model_client = (
@@ -218,6 +221,8 @@ class AutoCurriculum:
 
             for i in range(0, len(question_lines) - 1, 2):
                 q_line = question_lines[i]
+                if i + 1 >= len(question_lines):
+                    break
                 c_line = question_lines[i + 1]
 
                 q_match = re.match(r"Question \d+: (.+)", q_line)
@@ -226,8 +231,8 @@ class AutoCurriculum:
                 if q_match and c_match:
                     questions.append(q_match.group(1))
                     concepts.append(c_match.group(1))
-        except Exception as e:
-            logging.error("Error in auto curriculum when parsing questions: ", e)
+        except (KeyError, IndexError, TypeError) as e:
+            logging.error("Error in auto curriculum when parsing questions: %s", e)
 
         return questions, concepts
 
