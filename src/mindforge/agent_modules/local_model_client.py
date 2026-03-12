@@ -79,21 +79,29 @@ def _load_shared_model(model_path: str, dtype: str = "bfloat16"):
         _shared_is_vision = has_vision_keyword or has_preprocessor or has_vision_config
 
         if _shared_is_vision:
-            # VL model: use AutoProcessor (handles text + images) and
-            # AutoModelForCausalLM with trust_remote_code (resolves to the
-            # correct architecture class via the model's auto_map — works for
-            # Qwen2.5-VL, Qwen3.5, and other VL models).
-            from transformers import AutoProcessor, AutoModelForCausalLM
+            # VL model: use AutoProcessor (handles text + images).
+            # For model class, try AutoModelForImageTextToText first (correct
+            # for models with pipeline_tag=image-text-to-text like Qwen3.5),
+            # then fall back to AutoModelForCausalLM.
+            from transformers import AutoProcessor
             _shared_tokenizer = AutoProcessor.from_pretrained(
                 model_path, trust_remote_code=True
             )
-            _shared_model = AutoModelForCausalLM.from_pretrained(
+            try:
+                from transformers import AutoModelForImageTextToText
+                _VLModelClass = AutoModelForImageTextToText
+                logger.info("Using AutoModelForImageTextToText for VL model")
+            except ImportError:
+                from transformers import AutoModelForCausalLM
+                _VLModelClass = AutoModelForCausalLM
+                logger.info("AutoModelForImageTextToText not available, using AutoModelForCausalLM")
+            _shared_model = _VLModelClass.from_pretrained(
                 model_path,
                 torch_dtype=torch_dtype,
                 device_map="auto",
                 trust_remote_code=True,
             )
-            logger.info(f"Loaded VISION model: {model_path} (type={model_type})")
+            logger.info(f"Loaded VISION model: {model_path} (type={model_type}, class={_VLModelClass.__name__})")
         else:
             # Text-only model
             from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -289,23 +297,34 @@ class LocalModelClient(ChatCompletionClient):
             text = _shared_tokenizer.decode(new_tokens, skip_special_tokens=True)
         else:
             # ── Text-only path (or VL model with no images) ──
+            # When using AutoProcessor (VL model) for text-only calls,
+            # apply_chat_template may return a string instead of tensors.
+            # Handle both cases: get text first, then tokenize if needed.
             template_kwargs = dict(
-                add_generation_prompt=True, return_tensors="pt",
+                add_generation_prompt=True,
             )
             try:
                 template_kwargs["enable_thinking"] = enable_thinking
-                tokenized = _shared_tokenizer.apply_chat_template(
-                    chat_messages, **template_kwargs
+                text_or_tokens = _shared_tokenizer.apply_chat_template(
+                    chat_messages, tokenize=False, **template_kwargs
                 )
             except TypeError:
                 del template_kwargs["enable_thinking"]
-                tokenized = _shared_tokenizer.apply_chat_template(
-                    chat_messages, **template_kwargs
+                text_or_tokens = _shared_tokenizer.apply_chat_template(
+                    chat_messages, tokenize=False, **template_kwargs
                 )
-            if hasattr(tokenized, "input_ids"):
+            # Now tokenize the text prompt
+            if _shared_is_vision:
+                # VL processor: use its __call__ with text only (no images)
+                tokenized = _shared_tokenizer(
+                    text=[text_or_tokens], return_tensors="pt", padding=True
+                )
                 input_ids = tokenized.input_ids.to(_shared_model.device)
             else:
-                input_ids = tokenized.to(_shared_model.device)
+                # Text-only tokenizer: tokenize directly
+                input_ids = _shared_tokenizer(
+                    text_or_tokens, return_tensors="pt"
+                ).input_ids.to(_shared_model.device)
             input_len = input_ids.shape[1]
 
             with torch.no_grad():
