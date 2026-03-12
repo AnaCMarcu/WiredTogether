@@ -255,9 +255,19 @@ class LocalModelClient(ChatCompletionClient):
 
         if _shared_is_vision and images:
             # ── VL model path: use processor to handle text + images ──
-            text_prompt = _shared_tokenizer.apply_chat_template(
-                chat_messages, tokenize=False, add_generation_prompt=True
+            template_kwargs = dict(
+                tokenize=False, add_generation_prompt=True,
             )
+            try:
+                template_kwargs["enable_thinking"] = enable_thinking
+                text_prompt = _shared_tokenizer.apply_chat_template(
+                    chat_messages, **template_kwargs
+                )
+            except TypeError:
+                del template_kwargs["enable_thinking"]
+                text_prompt = _shared_tokenizer.apply_chat_template(
+                    chat_messages, **template_kwargs
+                )
             inputs = _shared_tokenizer(
                 text=[text_prompt],
                 images=images,
@@ -314,10 +324,15 @@ class LocalModelClient(ChatCompletionClient):
             new_tokens = outputs[0][input_len:]
             text = _shared_tokenizer.decode(new_tokens, skip_special_tokens=True)
 
+        # Debug: show raw model output (remove after confirming it works)
+        logger.info(f"[LocalModel RAW output] ({len(new_tokens)} tokens): {text[:500]}")
+
         # Strip thinking tags (Qwen3.5 etc.)
         text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
         if not text.startswith('{') and '{' in text:
             text = text[text.rfind('{'):]
+
+        logger.info(f"[LocalModel PARSED output]: {text[:300]}")
 
         completion_tokens = len(new_tokens)
         self._total_usage = RequestUsage(
