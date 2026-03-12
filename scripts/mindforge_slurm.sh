@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=mindforge
 #SBATCH --partition=gpu-a100
-#SBATCH --time=06:00:00
+#SBATCH --time=08:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
@@ -17,11 +17,11 @@ ENV_PREFIX=/scratch/acmarcu/.conda/envs/WiredTogether
 
 # --- LLM Configuration ---
 VLLM_PORT=8000
-VLLM_MODEL_PATH=/scratch/acmarcu/models/Qwen2.5-VL-3B-Instruct
-VLLM_MODEL_NAME="Qwen2.5-VL-3B-Instruct"
+VLLM_MODEL_PATH=/scratch/acmarcu/models/Qwen2.5-VL-7B-Instruct
+VLLM_MODEL_NAME="Qwen2.5-VL-7B-Instruct"
 
 # Fallback: load model in-process (no server)
-LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen2.5-VL-3B-Instruct
+LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen2.5-VL-7B-Instruct
 
 module purge
 module load 2025
@@ -97,7 +97,7 @@ VLLM_PID=""
 
 cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
-python multi_agent_craftium.py --num-agents 2 --episodes 3 --max-steps 50
+python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 50
 
 # Cleanup vLLM server
 if [ -n "${VLLM_PID:-}" ]; then
