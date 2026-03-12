@@ -71,13 +71,22 @@ def _load_shared_model(model_path: str, dtype: str = "bfloat16"):
         )
 
         if _shared_is_vision:
-            # VL model: use AutoProcessor (handles both text + images) and
-            # AutoModelForVision2Seq for the model
-            from transformers import AutoProcessor, AutoModelForVision2Seq
+            # VL model: use AutoProcessor + a generation-capable model class.
+            # Qwen2VLForConditionalGeneration is the correct class for Qwen2.5-VL;
+            # fall back to AutoModelForCausalLM (which resolves via auto_map with
+            # trust_remote_code) for other VL models or older transformers versions.
+            from transformers import AutoProcessor
             _shared_tokenizer = AutoProcessor.from_pretrained(
                 model_path, trust_remote_code=True
             )
-            _shared_model = AutoModelForVision2Seq.from_pretrained(
+            try:
+                from transformers import Qwen2VLForConditionalGeneration
+                _VLModelClass = Qwen2VLForConditionalGeneration
+            except ImportError:
+                from transformers import AutoModelForCausalLM
+                _VLModelClass = AutoModelForCausalLM
+                logger.info("Qwen2VLForConditionalGeneration not available, using AutoModelForCausalLM")
+            _shared_model = _VLModelClass.from_pretrained(
                 model_path,
                 torch_dtype=torch_dtype,
                 device_map="auto",
