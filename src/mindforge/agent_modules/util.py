@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import List, Literal, Tuple
 
 import PIL
@@ -85,14 +86,49 @@ class Action(BaseModel):
 
 class Feedback(BaseModel):
     content: str
-# parse model response from json to dict
-# Accepted formats:
-# 1. {...}
-# 2. ```json
-#    {...}
-#    ```
-def load_json(response: str) -> AgentResponse:
-    import re
+
+
+def _fix_common_json_errors(text: str) -> str:
+    """Attempt to repair common JSON formatting mistakes from LLMs.
+
+    Handles:
+    - Missing commas between key-value pairs (e.g. `"a": 1\n"b": 2`)
+    - Trailing commas before closing braces/brackets
+    - Single quotes instead of double quotes (when unambiguous)
+    - Unescaped newlines inside string values
+    """
+    # 1. Fix missing commas between lines: }"line  or "value"\n"key"
+    #    Pattern: end of a value (", number, true/false/null, ], })
+    #    followed by whitespace+newline then start of a new key ("key":)
+    text = re.sub(
+        r'("(?:[^"\\]|\\.)*"|true|false|null|\d+\.?\d*|\]|\})'  # value end
+        r'(\s*\n\s*)'                                              # whitespace/newline
+        r'("(?:[^"\\]|\\.)*"\s*:)',                                # next key start
+        r'\1,\2\3',
+        text,
+    )
+
+    # 2. Fix trailing commas: ,} or ,]
+    text = re.sub(r',\s*([\}\]])', r'\1', text)
+
+    # 3. Fix single quotes → double quotes (only outside of already-double-quoted strings)
+    #    This is a best-effort heuristic — won't handle all edge cases
+    #    Only apply if the text has NO double quotes at all (pure single-quote JSON)
+    if '"' not in text and "'" in text:
+        text = text.replace("'", '"')
+
+    return text
+
+
+def load_json(response: str) -> dict:
+    """Parse model response from text to dict.
+
+    Accepted formats:
+    1. {...}
+    2. ```json\n{...}\n```
+    3. Thinking text followed by {...}
+    4. Slightly malformed JSON (missing commas, trailing commas)
+    """
     # Strip markdown code fences
     response = response.strip()
     if response.startswith("```json"):
@@ -103,21 +139,48 @@ def load_json(response: str) -> AgentResponse:
         response = response[:-3]
     response = response.strip()
 
-    # Try direct parse first
+    # Try direct parse first (fast path)
     try:
         return json.loads(response)
     except json.JSONDecodeError:
         pass
 
-    # Try to find a JSON object — prefer the last one (thinking text may contain braces)
+    # Try to find JSON objects — prefer the last complete one
+    # (thinking text at the start may contain braces)
     matches = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response)
     for match in reversed(matches):
         try:
             return json.loads(match)
         except json.JSONDecodeError:
-            continue
+            # Try fixing common errors before giving up on this match
+            try:
+                fixed = _fix_common_json_errors(match)
+                return json.loads(fixed)
+            except json.JSONDecodeError:
+                continue
 
-    logging.error(f"Failed to decode JSON response: {response[:200]}")
+    # Last resort: try fixing the entire response
+    try:
+        fixed = _fix_common_json_errors(response)
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
+
+    # Try extracting just the outermost { ... } spanning the whole text
+    first_brace = response.find('{')
+    last_brace = response.rfind('}')
+    if first_brace != -1 and last_brace > first_brace:
+        candidate = response[first_brace:last_brace + 1]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            try:
+                fixed = _fix_common_json_errors(candidate)
+                return json.loads(fixed)
+            except json.JSONDecodeError:
+                pass
+
+    logging.error(f"Failed to decode JSON response: {response[:300]}")
     return {}
 
 

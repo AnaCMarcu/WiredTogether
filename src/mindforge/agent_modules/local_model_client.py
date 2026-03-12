@@ -2,6 +2,10 @@
 
 Loads a HuggingFace model once and serves it in-process — no HTTP server needed.
 Implements the autogen_core ChatCompletionClient protocol.
+
+IMPORTANT: Text-only models (Qwen3.5-9B etc.) cannot process images.
+When an image is attached to a message, it is DROPPED and replaced with a
+warning note. For vision, use a VL model via the HTTP API backend instead.
 """
 
 import json
@@ -28,6 +32,7 @@ logger = logging.getLogger(__name__)
 _shared_model = None
 _shared_tokenizer = None
 _shared_model_name = ""
+_warned_no_vision = False  # warn once, not every call
 
 
 def _load_shared_model(model_path: str, dtype: str = "bfloat16"):
@@ -53,6 +58,21 @@ def _load_shared_model(model_path: str, dtype: str = "bfloat16"):
     )
     _shared_model.eval()
     _shared_model_name = model_path.rstrip("/").split("/")[-1]
+
+    # ── Check if model supports vision ──
+    model_type = getattr(_shared_model.config, "model_type", "unknown")
+    is_vision = any(
+        kw in model_type.lower()
+        for kw in ("vl", "vision", "visual", "multimodal")
+    )
+    if not is_vision:
+        logger.warning(
+            "=" * 70 + "\n"
+            f"  LOCAL MODEL '{_shared_model_name}' IS TEXT-ONLY.\n"
+            f"  All image inputs will be DROPPED. The agent will NOT see game frames.\n"
+            f"  For vision, use a VL model (Qwen2.5-VL, etc.) via HTTP API.\n"
+            "=" * 70
+        )
 
     mem_gb = torch.cuda.max_memory_allocated() / 1e9
     logger.info(f"Model loaded: {_shared_model_name}, GPU memory: {mem_gb:.2f} GB")
@@ -85,7 +105,12 @@ class LocalModelClient(ChatCompletionClient):
             _load_shared_model(self._model_path, self._dtype)
 
     def _messages_to_dicts(self, messages: Sequence[LLMMessage]) -> list[dict]:
-        """Convert autogen messages to HF chat format."""
+        """Convert autogen messages to HF chat format.
+
+        For text-only models, images are replaced with a warning note so the
+        LLM knows it was supposed to see a frame but can't.
+        """
+        global _warned_no_vision
         result = []
         for msg in messages:
             if isinstance(msg, SystemMessage):
@@ -95,10 +120,31 @@ class LocalModelClient(ChatCompletionClient):
                 if isinstance(msg.content, str):
                     text = msg.content
                 elif isinstance(msg.content, list):
-                    # Extract text parts, skip images for now
-                    text = " ".join(
-                        part for part in msg.content if isinstance(part, str)
-                    )
+                    text_parts = []
+                    image_count = 0
+                    for part in msg.content:
+                        if isinstance(part, str):
+                            text_parts.append(part)
+                        else:
+                            # This is an image object — text-only model can't use it
+                            image_count += 1
+                    text = " ".join(text_parts)
+                    if image_count > 0:
+                        if not _warned_no_vision:
+                            logger.warning(
+                                "LocalModelClient: %d image(s) dropped from message — "
+                                "text-only model cannot process images. "
+                                "Agent perception beliefs will be unreliable.",
+                                image_count,
+                            )
+                            _warned_no_vision = True
+                        # ── FIX: tell the LLM it can't see the image ──
+                        text += (
+                            "\n\n[NOTE: A game screenshot was attached but this model "
+                            "cannot process images. Base your response on the text "
+                            "context above (task, beliefs, skills, communications). "
+                            "Do NOT hallucinate visual details you cannot see.]"
+                        )
                 else:
                     text = str(msg.content)
                 result.append({"role": "user", "content": text})

@@ -111,6 +111,8 @@ class CustomAgent(BaseChatAgent):
             )
         else:
             self.causal_module = None
+        self._last_reward_text = "N/A"
+
     # Message types that this agent can produce
     @property
     def produced_message_types(self) -> Sequence[type[BaseChatMessage]]:
@@ -124,6 +126,7 @@ class CustomAgent(BaseChatAgent):
         error_count=0,
         communication=None,
         picked_object=None,
+        reward_text=None,
     ) -> Response:
 
         print("Error count: ", error_count)

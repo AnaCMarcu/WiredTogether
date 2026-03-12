@@ -1,8 +1,28 @@
 import json
 from agent_modules.util import load_json
+import re
 import logging
 import time
 from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
+
+def _safe_format(template: str, **kwargs) -> str:
+    """Format a template string, replacing missing keys with 'N/A' instead of crashing.
+ 
+    This prevents the raw template (with literal {reward_text} etc.) from being
+    sent to the LLM when a placeholder is not provided.
+    """
+    # Find all {placeholder} patterns (not {{escaped}})
+    placeholders = set(re.findall(r'(?<!\{)\{(\w+)\}(?!\})', template))
+    # Fill any missing keys with a default
+    for key in placeholders:
+        if key not in kwargs:
+            kwargs[key] = "N/A"
+            logging.warning(f"Prompt placeholder '{{{key}}}' not provided, using 'N/A'")
+    try:
+        return template.format(**kwargs)
+    except (KeyError, IndexError, ValueError) as e:
+        logging.error(f"Template formatting failed even after defaults: {e}")
+        return template
 
 
 async def llm_call(
@@ -52,7 +72,6 @@ async def llm_call(
 
     # call model
     try:
-        # print(f"full_prompt: {full_prompt}")
         response = await model_client.create(
             full_prompt, cancellation_token=cancellation_token
         )
@@ -72,21 +91,6 @@ async def llm_call(
             pred_frame=pred_frame,
             **kwargs,
             )
-        # # if failed, try again and increment retry counter
-        # logging.error(log_prefix, "Error Calling LLM: ", e)
-        # time.sleep(1)
-        # return await llm_call(
-        #     model_client=model_client,
-        #     system_prompt=system_prompt,
-        #     user_prompt=user_prompt,
-        #     cancellation_token=cancellation_token,
-        #     frame=frame,
-        #     retry_count=retry_count + 1,
-        #     log_prefix=log_prefix,
-        #     pred_prompt=pred_prompt,
-        #     pred_frame=pred_frame,
-        #     **kwargs,
-        # )
 
     logging.info(f"{log_prefix} Response: {response.content}")
 

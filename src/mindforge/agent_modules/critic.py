@@ -35,6 +35,7 @@ class Critic:
         retry_count=0,
         do_conversation=True,
         picked_object=None,
+        reward_text=None,
     ):
         # if do_conversation:
         #     return self.check_task_success_conversation(frame, cancellation_token, task, error, retry_count)
@@ -59,6 +60,7 @@ class Critic:
             context=context,
             communication=communication,
             picked_object=picked_object,
+            reward_text=reward_text or "N/A",
         )
         return response.get("success", False), response.get("critique", "")
 
