@@ -5,12 +5,12 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
-#SBATCH --mem-per-cpu=4G
+#SBATCH --mem-per-cpu=8G
 #SBATCH --account=education-eemcs-msc-dsait
 #SBATCH --output=/scratch/%u/WiredTogether/slurm_logs/%x-%j.out
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/%x-%j.err
 
-set -euo pipefail
+set -uo pipefail
 
 PROJECT_DIR=/scratch/acmarcu/WiredTogether
 ENV_PREFIX=/scratch/acmarcu/.conda/envs/WiredTogether
