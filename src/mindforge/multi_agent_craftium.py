@@ -61,6 +61,8 @@ def parse_args():
                         help="Seconds to sleep between LLM calls (rate-limit protection)")
     parser.add_argument("--no-gif", action="store_true",
                         help="Disable GIF saving")
+    parser.add_argument("--warmup-time", type=int, default=180,
+                        help="Seconds to wait for media loading before starting (default 180)")
     # ── RL layer ──
     parser.add_argument("--rl", action="store_true",
                         help="Enable the modular RL layer (action-level MAPPO)")
@@ -320,33 +322,21 @@ async def run(args):
 
         environment.reset()
 
-        # ── Warm-up: skip loading screen ──
-        # Send NoOp steps until media finishes loading (up to 5 minutes).
-        # VoxeLibre media download takes 45-120+ seconds on HPC nodes.
+        # ── Warm-up: wait for media to load ──
+        # VoxeLibre media download takes 2-5 minutes on HPC nodes.
+        # Send periodic NoOp steps to keep clients alive while waiting.
         import time as _time
-        warmup_timeout = 300  # seconds
+        warmup_secs = args.warmup_time
+        print(f"  * Waiting {warmup_secs}s for media to load...")
         warmup_start = _time.time()
-        warmup_step = 0
-        print("  * Waiting for media to load...")
-        while _time.time() - warmup_start < warmup_timeout:
-            warmup_step += 1
-            # Step all agents with NoOp
+        while _time.time() - warmup_start < warmup_secs:
             for i in range(num_agents):
                 agent_name = f"agent_{i}"
                 if not environment._terminations.get(agent_name, False):
                     environment.step("NoOp", i)
-            # Check if any agent's frame looks like a real game frame
-            frame = environment.get_agent_frame(0)
-            if frame is not None:
-                variance = np.var(frame.astype(np.float32))
-                if variance > 500:  # loading screen ~100-300, game world >1000
-                    elapsed = _time.time() - warmup_start
-                    print(f"  * Media loaded after {elapsed:.0f}s ({warmup_step} warm-up steps)")
-                    break
-            _time.sleep(1)  # wait 1s between checks so media can download
-        else:
-            elapsed = _time.time() - warmup_start
-            print(f"  * Warning: media may not be fully loaded after {elapsed:.0f}s")
+            _time.sleep(2)
+        elapsed = _time.time() - warmup_start
+        print(f"  * Warm-up done ({elapsed:.0f}s). Starting episode.")
 
         communications = []
         agents_error_count = [0] * num_agents
