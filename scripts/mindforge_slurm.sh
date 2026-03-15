@@ -10,7 +10,7 @@
 #SBATCH --output=/scratch/%u/WiredTogether/slurm_logs/%x-%j.out
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/%x-%j.err
 
-set -uo pipefail
+# set -uo pipefail  # disabled: unset vars in module/conda init cause instant exit
 
 PROJECT_DIR=/scratch/acmarcu/WiredTogether
 ENV_PREFIX=/scratch/acmarcu/.conda/envs/WiredTogether
