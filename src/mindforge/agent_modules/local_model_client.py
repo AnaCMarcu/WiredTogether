@@ -87,6 +87,13 @@ def _load_shared_model(model_path: str, dtype: str = "bfloat16"):
             _shared_tokenizer = AutoProcessor.from_pretrained(
                 model_path, trust_remote_code=True
             )
+            # Ensure pad_token_id is set — many VL processors (Qwen3-VL etc.)
+            # ship without one, which breaks generate() and padding.
+            _tok = getattr(_shared_tokenizer, "tokenizer", _shared_tokenizer)
+            if getattr(_tok, "pad_token_id", None) is None:
+                _tok.pad_token_id = _tok.eos_token_id
+                _tok.pad_token = _tok.eos_token
+                logger.info(f"Set pad_token_id={_tok.pad_token_id} (copied from eos_token_id)")
             try:
                 from transformers import AutoModelForImageTextToText
                 _VLModelClass = AutoModelForImageTextToText
@@ -284,6 +291,7 @@ class LocalModelClient(ChatCompletionClient):
             ).to(_shared_model.device)
             input_len = inputs["input_ids"].shape[1]
 
+            _tok = getattr(_shared_tokenizer, "tokenizer", _shared_tokenizer)
             with torch.no_grad():
                 outputs = _shared_model.generate(
                     **inputs,
@@ -291,6 +299,7 @@ class LocalModelClient(ChatCompletionClient):
                     temperature=max(self._temperature, 0.01),
                     top_p=self._top_p,
                     do_sample=self._temperature > 0.01,
+                    pad_token_id=_tok.pad_token_id or _tok.eos_token_id,
                 )
 
             new_tokens = outputs[0][input_len:]

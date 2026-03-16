@@ -6,7 +6,7 @@ You can perform the following actions each step (choose EXACTLY ONE by name):
 - "MoveRight": Strafe right
 - "Jump": Jump
 - "Sneak": Sneak/crouch
-- "Dig": Break the block you are looking at
+- "Dig": Break the block you are looking at, OR attack the mob/animal you are facing (this is how you kill mobs)
 - "Place": Place a block
 - "Slot1": Select inventory slot 1
 - "Slot2": Select inventory slot 2
@@ -24,6 +24,8 @@ TOOLS TRACK (resource gathering):
   Stage 2 - Stone: Dig 3 stone blocks -> unlocks stone pickaxe and sword (reward: 256)
   Stage 3 - Iron: Dig 3 iron ore -> unlocks iron pickaxe, sword, and axe (reward: 1024)
   Stage 4 - Diamond: Dig 1 diamond ore -> unlocks diamond tools (reward: 2048)
+
+IMPORTANT: To kill animals or monsters, face them and use the "Dig" action repeatedly. There is NO "Kill" action.
 
 HUNT TRACK (animal hunting):
   Stage 1 - Chicken: Kill 3 chickens (reward: 128)

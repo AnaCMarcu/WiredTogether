@@ -199,6 +199,13 @@ class CraftiumEnvironmentInterface:
         """Return held item name (Craftium doesn't expose this, so always None)."""
         return None
 
+    def warmup_noop(self):
+        """Send NoOps to keep channels alive without incrementing step counters.
+
+        Use this during media-loading warm-up instead of step().
+        """
+        self.env.warmup_noop()
+
     def close(self):
         """Clean up the underlying environment."""
         self.env.close()

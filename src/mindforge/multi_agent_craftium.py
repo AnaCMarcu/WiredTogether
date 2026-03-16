@@ -194,25 +194,13 @@ async def agent_do_action(
         if msg.source != agent.name
     ]
 
-    filled_instruction = instruction_prompt.format(
-        task=agent.auto_curriculum.current_task or "Explore the world",
-        last_action=agent.last_response["action"] if agent.last_response else "None",
-        reward_text=reward_text,
-        critique="None",
-        error=error,
-        skill_memory="None",
-        episode_summary="None",
-        task_beliefs="None",
-        perception_beliefs="None",
-        interaction_beliefs="None",
-        partner_beliefs="None",
-    )
-
+    # Don't pre-fill the instruction template here — action_selection.select_action()
+    # will fill it once with real cognitive data (beliefs, skills, episodes) via llm_call.
+    # Only pass communication context as the message content.
     comm_text = f"Communications from other agents: {formatted_communication}.\n"
-    full_instruction = filled_instruction + comm_text
 
     multi_modal_message = MultiModalMessage(
-        content=[full_instruction, Image.from_pil(frame_image)],
+        content=[comm_text, Image.from_pil(frame_image)],
         source="user",
     )
 
@@ -223,6 +211,7 @@ async def agent_do_action(
         error=error,
         error_count=error_count,
         picked_object=environment.pickedup_object(agentId=agent_id),
+        reward_text=reward_text,
     )
 
     last_action = "NoOp"
@@ -324,16 +313,15 @@ async def run(args):
 
         # ── Warm-up: wait for media to load ──
         # VoxeLibre media download takes 2-5 minutes on HPC nodes.
-        # Send periodic NoOp steps to keep clients alive while waiting.
+        # Use warmup_noop() to keep TCP channels alive WITHOUT incrementing
+        # the environment's step/timestep counters (which would exhaust the
+        # episode budget before real gameplay starts).
         import time as _time
         warmup_secs = args.warmup_time
         print(f"  * Waiting {warmup_secs}s for media to load...")
         warmup_start = _time.time()
         while _time.time() - warmup_start < warmup_secs:
-            for i in range(num_agents):
-                agent_name = f"agent_{i}"
-                if not environment._terminations.get(agent_name, False):
-                    environment.step("NoOp", i)
+            environment.warmup_noop()
             _time.sleep(2)
         elapsed = _time.time() - warmup_start
         print(f"  * Warm-up done ({elapsed:.0f}s). Starting episode.")

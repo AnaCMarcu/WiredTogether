@@ -74,6 +74,19 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         print(f"* Forced all {len(self.mt_clients)} clients to headless (offscreen SDL)")
 
     # ------------------------------------------------------------------ #
+    # Patch 2a: warm-up NoOp — keep clients alive without incrementing timesteps
+    # ------------------------------------------------------------------ #
+    def warmup_noop(self):
+        """Send a NoOp to every agent without incrementing the timestep counter.
+
+        Used during the media-loading warm-up phase to keep TCP channels alive.
+        """
+        keys = [0] * 21
+        for agent_id in range(self.num_agents):
+            self.mt_channs[agent_id].send(keys, 0, 0)
+            self.mt_channs[agent_id].receive()  # drain the reply
+
+    # ------------------------------------------------------------------ #
     # Patch 2: capture position data from step_agent
     # ------------------------------------------------------------------ #
     def step_agent(self, action):
@@ -484,6 +497,10 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         ]
 
         return observations, rewards, terminations, truncations, infos
+
+    def warmup_noop(self):
+        """Send NoOps to keep channels alive without incrementing step counters."""
+        self.env.warmup_noop()
 
     def _apply_task_focus(
         self, rewards: Dict[str, float], infos: Dict[str, Dict[str, Any]]

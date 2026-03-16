@@ -87,6 +87,13 @@ class SkillManager:
             action, cancellation_token, agent_thoughts
         )
 
+        # Skip saving when description generation failed
+        if skill_name == "unknown" or not skill_description:
+            logging.warning(
+                f"Skipping skill save: name='{skill_name}', description='{skill_description}'"
+            )
+            return skill_name, skill_description, False
+
         # does skill already exist?
         already_exists = False
         if skill_name in self.skills:
