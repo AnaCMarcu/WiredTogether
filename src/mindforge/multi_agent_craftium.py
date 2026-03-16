@@ -61,8 +61,9 @@ def parse_args():
                         help="Seconds to sleep between LLM calls (rate-limit protection)")
     parser.add_argument("--no-gif", action="store_true",
                         help="Disable GIF saving")
-    parser.add_argument("--warmup-time", type=int, default=180,
-                        help="Seconds to wait for media loading before starting (default 180)")
+    parser.add_argument("--warmup-time", type=int, default=60,
+                        help="Minimum seconds before checking if media loaded (default 60). "
+                             "Smart detection exits early once all clients show game world.")
     # ── RL layer ──
     parser.add_argument("--rl", action="store_true",
                         help="Enable the modular RL layer (action-level MAPPO)")
@@ -312,19 +313,54 @@ async def run(args):
         environment.reset()
 
         # ── Warm-up: wait for media to load ──
-        # VoxeLibre media download takes 2-5 minutes on HPC nodes.
+        # VoxeLibre media download can take 5-15 minutes on HPC nodes
+        # (first run only; subsequent runs use cached media).
         # Use warmup_noop() to keep TCP channels alive WITHOUT incrementing
-        # the environment's step/timestep counters (which would exhaust the
-        # episode budget before real gameplay starts).
+        # the environment's step/timestep counters.
+        # Detect completion by checking if ALL clients' screenshots have
+        # moved past the loading bar (high color std-dev = game world).
         import time as _time
         warmup_secs = args.warmup_time
-        print(f"  * Waiting {warmup_secs}s for media to load...")
+        max_warmup = 900  # hard cap: 15 min
+        print(f"  * Waiting for media to load (min {warmup_secs}s, max {max_warmup}s)...")
         warmup_start = _time.time()
-        while _time.time() - warmup_start < warmup_secs:
-            environment.warmup_noop()
+        all_loaded = False
+        last_log_time = 0.0
+        while _time.time() - warmup_start < max_warmup:
+            observations = environment.warmup_noop()
+            elapsed = _time.time() - warmup_start
+
+            # Compute per-client std-dev
+            stds = []
+            if observations:
+                for obs in observations:
+                    if obs is not None:
+                        stds.append(np.std(obs.astype(np.float32)))
+                    else:
+                        stds.append(0.0)
+
+            # Log progress every 30s
+            if elapsed - last_log_time >= 30.0 and stds:
+                std_str = ", ".join(f"agent_{i}={s:.1f}" for i, s in enumerate(stds))
+                print(f"    [{elapsed:.0f}s] std-dev: {std_str}  (>30 = loaded)")
+                last_log_time = elapsed
+
+            # After minimum warm-up time, check if loading screens are gone
+            if elapsed >= warmup_secs and stds:
+                # Loading screen is mostly uniform dark gray/black.
+                # Game world has varied colors -> higher std deviation.
+                loaded_count = sum(1 for s in stds if s > 30.0)
+                if loaded_count == num_agents:
+                    all_loaded = True
+                    break
             _time.sleep(2)
         elapsed = _time.time() - warmup_start
-        print(f"  * Warm-up done ({elapsed:.0f}s). Starting episode.")
+        if all_loaded:
+            std_str = ", ".join(f"agent_{i}={s:.1f}" for i, s in enumerate(stds))
+            print(f"  * All clients loaded ({elapsed:.0f}s). std-dev: {std_str}")
+        else:
+            std_str = ", ".join(f"agent_{i}={s:.1f}" for i, s in enumerate(stds)) if stds else "N/A"
+            print(f"  * Warm-up timeout ({elapsed:.0f}s). std-dev: {std_str}. Starting anyway.")
 
         communications = []
         agents_error_count = [0] * num_agents

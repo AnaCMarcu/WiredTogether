@@ -27,6 +27,7 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         super().__init__(**kwargs)
         self._fix_binary_names()
         self._fix_headless_clients()
+        self._fix_media_cache()
         # Per-agent position tracking for exploration reward
         self._prev_pos = [None] * self.num_agents
         self._positions = [None] * self.num_agents
@@ -74,17 +75,61 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         print(f"* Forced all {len(self.mt_clients)} clients to headless (offscreen SDL)")
 
     # ------------------------------------------------------------------ #
+    # Patch 1c: persistent media cache across resets
+    # ------------------------------------------------------------------ #
+    def _fix_media_cache(self):
+        """Symlink a persistent cache dir into each client's run_dir.
+
+        Craftium creates a fresh UUID-based run_dir for every client, and
+        in RUN_IN_PLACE mode the media cache lives at ``{run_dir}/cache/``.
+        This means every reset re-downloads all VoxeLibre media (5-60 min).
+
+        Fix: create a single persistent cache directory and symlink each
+        client's ``{run_dir}/cache`` to it.  The media files are keyed by
+        SHA-1, so sharing across clients is safe.
+        """
+        import shutil
+
+        persistent_cache = os.path.join(
+            os.path.expanduser("~"), ".craftium_media_cache"
+        )
+        os.makedirs(persistent_cache, exist_ok=True)
+
+        for i, client in enumerate(self.mt_clients):
+            client_cache = os.path.join(client.run_dir, "cache")
+            # Remove any existing cache dir/symlink that the fresh run_dir may have
+            if os.path.islink(client_cache):
+                os.unlink(client_cache)
+            elif os.path.isdir(client_cache):
+                shutil.rmtree(client_cache)
+            os.symlink(persistent_cache, client_cache)
+
+        # Also symlink for the server (it caches world data)
+        server_cache = os.path.join(self.mt_server.run_dir, "cache")
+        if os.path.islink(server_cache):
+            os.unlink(server_cache)
+        elif os.path.isdir(server_cache):
+            shutil.rmtree(server_cache)
+        os.symlink(persistent_cache, server_cache)
+
+        print(f"* Symlinked media cache -> {persistent_cache}")
+
+    # ------------------------------------------------------------------ #
     # Patch 2a: warm-up NoOp — keep clients alive without incrementing timesteps
     # ------------------------------------------------------------------ #
     def warmup_noop(self):
         """Send a NoOp to every agent without incrementing the timestep counter.
 
         Used during the media-loading warm-up phase to keep TCP channels alive.
+        Returns list of observations (one per agent) so caller can inspect them.
         """
         keys = [0] * 21
+        observations = []
         for agent_id in range(self.num_agents):
             self.mt_channs[agent_id].send(keys, 0, 0)
-            self.mt_channs[agent_id].receive()  # drain the reply
+            obs, *_ = self.mt_channs[agent_id].receive()
+            observations.append(obs)
+        return observations
 
     # ------------------------------------------------------------------ #
     # Patch 2: capture position data from step_agent
@@ -499,8 +544,11 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         return observations, rewards, terminations, truncations, infos
 
     def warmup_noop(self):
-        """Send NoOps to keep channels alive without incrementing step counters."""
-        self.env.warmup_noop()
+        """Send NoOps to keep channels alive without incrementing step counters.
+
+        Returns list of observations (one per agent).
+        """
+        return self.env.warmup_noop()
 
     def _apply_task_focus(
         self, rewards: Dict[str, float], infos: Dict[str, Dict[str, Any]]

@@ -203,8 +203,9 @@ class CraftiumEnvironmentInterface:
         """Send NoOps to keep channels alive without incrementing step counters.
 
         Use this during media-loading warm-up instead of step().
+        Returns list of observations (one per agent).
         """
-        self.env.warmup_noop()
+        return self.env.warmup_noop()
 
     def close(self):
         """Clean up the underlying environment."""
