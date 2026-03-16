@@ -55,13 +55,15 @@ class CraftiumEnvironmentInterface:
       - pickedup_object(agentId) -> str | None
     """
 
-    def __init__(self, num_agents=3, obs_width=320, obs_height=180, max_steps=10000):
+    def __init__(self, num_agents=3, obs_width=320, obs_height=180, max_steps=10000, seed=None):
         self.num_agents = num_agents
+        self.seed = seed
         self.env = OpenWorldMultiAgentEnv(
             num_agents=num_agents,
             obs_width=obs_width,
             obs_height=obs_height,
             max_steps=max_steps,
+            seed=seed,
         )
         self.environment_prompt = environment_prompt
 

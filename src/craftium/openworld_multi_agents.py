@@ -136,12 +136,15 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
     # ------------------------------------------------------------------ #
     def step_agent(self, action):
         """Override to capture position data for exploration reward."""
-        self.timesteps += 1
-
         if self.current_agent_id == self.num_agents:
             self.current_agent_id = 0
         agent_id = self.current_agent_id
         self.current_agent_id += 1
+
+        # Count one timestep per round, not per agent.
+        # Increment only when the last agent in the round is processed.
+        if agent_id == self.num_agents - 1:
+            self.timesteps += 1
 
         keys = [0] * 21
         mouse_x, mouse_y = 0, 0
@@ -392,6 +395,7 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         max_steps: int = 10000,
         task_focus: Optional[str] = None,
         render_mode: Optional[str] = None,
+        seed: Optional[int] = None,
     ):
         super().__init__()
 
@@ -430,9 +434,15 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
             num_agents=num_agents,
             obs_width=obs_width,
             obs_height=obs_height,
-            max_timesteps=max_steps,
+            # CraftiumEnvironmentInterface calls env.step() once per agent per
+            # round, and each env.step() triggers one step_agent round (which
+            # increments timesteps once after fix).  So timesteps = num_agents
+            # * main_loop_steps.  Scale max_timesteps to match the user's
+            # intended max_steps (main-loop rounds).
+            max_timesteps=max_steps * num_agents,
             minetest_dir=minetest_dir,
             mt_listen_timeout=300_000,  # 5 min per client; VoxeLibre loads slowly on HPC
+            seed=seed,  # fixed_map_seed for Minetest world generation
         )
 
         # Define observation and action spaces

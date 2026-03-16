@@ -16,6 +16,7 @@ Usage:
 import argparse
 import asyncio
 import os
+import random
 import sys
 import time
 import logging
@@ -64,6 +65,11 @@ def parse_args():
     parser.add_argument("--warmup-time", type=int, default=60,
                         help="Minimum seconds before checking if media loaded (default 60). "
                              "Smart detection exits early once all clients show game world.")
+    # ── Reproducibility ──
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Random seed for reproducibility. Seeds torch, numpy, random, "
+                             "and the Minetest world. LLM sampling remains stochastic — "
+                             "run multiple trials and report mean/std.")
     # ── RL layer ──
     parser.add_argument("--rl", action="store_true",
                         help="Enable the modular RL layer (action-level MAPPO)")
@@ -248,6 +254,21 @@ async def run(args):
     sleep_time = args.sleep_time
     save_gif = not args.no_gif
 
+    # ── Reproducibility: seed all RNG sources ──
+    # LLM sampling (temperature > 0) is inherently stochastic and not seeded —
+    # run multiple trials with the same seed to get statistical reproducibility.
+    seed = args.seed
+    if seed is not None:
+        import torch
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        print(f"Seeded RNG: seed={seed}")
+
     # Logging
     os.makedirs("logs", exist_ok=True)
     os.makedirs("gifs", exist_ok=True)
@@ -284,6 +305,7 @@ async def run(args):
         obs_width=obs_width,
         obs_height=obs_height,
         max_steps=max_steps,
+        seed=seed,
     )
 
     # ── RL layer config ──
@@ -303,7 +325,8 @@ async def run(args):
                          rl_config=rl_config)
 
     print(f"\nConfig: {num_agents} agents, {num_episodes} episodes, "
-          f"{max_steps} max steps, comm={'on' if communication else 'off'}")
+          f"{max_steps} max steps, comm={'on' if communication else 'off'}, "
+          f"seed={seed}")
 
     for episode in range(num_episodes):
         print(f"\n{'='*60}")
@@ -475,6 +498,10 @@ async def run(args):
                     print(f"  Saved GIF: {gif_path}")
 
     print(f"\nExperiment complete! Timesteps logged: {metric.timestep}")
+    # Attach run config for reproducibility before saving
+    metric.seed = seed
+    metric.max_steps = max_steps
+    metric.num_episodes = num_episodes
     metric.save_run_metrics()
 
     # Save RL checkpoints
