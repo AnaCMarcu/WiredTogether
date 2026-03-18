@@ -343,10 +343,7 @@ class LocalModelClient(ChatCompletionClient):
                     temperature=max(self._temperature, 0.01),
                     top_p=self._top_p,
                     do_sample=self._temperature > 0.01,
-                    pad_token_id=(
-                        _shared_tokenizer.pad_token_id
-                        or _shared_tokenizer.eos_token_id
-                    ),
+                    pad_token_id=_tok.pad_token_id or _tok.eos_token_id,
                 )
 
             new_tokens = outputs[0][input_len:]
