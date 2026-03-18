@@ -39,6 +39,10 @@ export MESA_GL_VERSION_OVERRIDE=3.3
 # Force offline mode — compute nodes have no internet
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
+# sentence-transformers: pre-download all-MiniLM-L6-v2 on login node:
+#   python -c "from sentence_transformers import SentenceTransformer; m = SentenceTransformer('all-MiniLM-L6-v2'); m.save('/scratch/acmarcu/models/all-MiniLM-L6-v2')"
+export SENTENCE_TRANSFORMERS_HOME=/scratch/acmarcu/models/st_cache
+export ST_MODEL_NAME=/scratch/acmarcu/models/all-MiniLM-L6-v2
 
 # Ensure Craftium/Luanti can find libiconv
 export LD_LIBRARY_PATH="${ENV_PREFIX}/lib:${LD_LIBRARY_PATH:-}"

@@ -31,6 +31,13 @@ local_model_path = os.environ.get("LLM_MODEL_PATH", "")
 base_url = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
 model = os.environ.get("LLM_MODEL", "google/gemini-2.5-flash")
 
+# Sentence-transformer model for ChromaDB embeddings.
+# On HPC (offline), set ST_MODEL_NAME to a local path:
+#   export ST_MODEL_NAME=/scratch/acmarcu/models/all-MiniLM-L6-v2
+# To pre-download on a login node:
+#   python -c "from sentence_transformers import SentenceTransformer; m = SentenceTransformer('all-MiniLM-L6-v2'); m.save('/scratch/acmarcu/models/all-MiniLM-L6-v2')"
+ST_MODEL_NAME = os.environ.get("ST_MODEL_NAME", "all-MiniLM-L6-v2")
+
 # LLM response format
 class AgentResponse(BaseModel):
     task: str

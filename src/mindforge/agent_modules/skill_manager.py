@@ -1,7 +1,7 @@
 import json
 import logging
 from agent_modules.llm_call import llm_call
-from agent_modules.util import SkillResponse, create_model_client, safe_format
+from agent_modules.util import SkillResponse, create_model_client, safe_format, ST_MODEL_NAME
 import os
 from pathlib import Path
 
@@ -67,7 +67,7 @@ class SkillManager:
                 ),
                 k=retrieval_top_k,  # Return top  k results
                 score_threshold=0.4,  # Minimum similarity score
-                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(model_name="all-MiniLM-L6-v2",
+                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(model_name=ST_MODEL_NAME,
                                                                                      device="cuda")
             ),
         )

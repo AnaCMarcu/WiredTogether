@@ -20,6 +20,7 @@ from agent_modules.util import (
     CurruliculumResponse,
     create_model_client,
     safe_format,
+    ST_MODEL_NAME,
 )
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
@@ -96,7 +97,7 @@ class AutoCurriculum:
                 ),
                 k=retrieval_top_k,  # Return top  k results
                 score_threshold=0.4,  # Minimum similarity score
-                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(model_name="all-MiniLM-L6-v2",
+                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(model_name=ST_MODEL_NAME,
                                                                                      device="cuda")
             ),
         )
