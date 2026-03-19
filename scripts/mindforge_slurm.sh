@@ -21,7 +21,7 @@ VLLM_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
 VLLM_MODEL_NAME="Qwen3.5-2B"
 
 # Fallback: load model in-process (no server)
-LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-9B
+LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
 
 module purge
 module load 2025
@@ -101,7 +101,9 @@ VLLM_PID=""
 
 cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
-python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 100 --warmup-time 300
+python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 500 \
+    --warmup-time 300 --rl --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
+    --rl-update-interval 32
 
 # Cleanup vLLM server
 if [ -n "${VLLM_PID:-}" ]; then
