@@ -336,6 +336,7 @@ class LocalModelClient(ChatCompletionClient):
                 ).input_ids.to(_shared_model.device)
             input_len = input_ids.shape[1]
 
+            _tok = getattr(_shared_tokenizer, "tokenizer", _shared_tokenizer)
             with torch.no_grad():
                 outputs = _shared_model.generate(
                     input_ids,

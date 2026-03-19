@@ -150,6 +150,10 @@ def load_json(response: str) -> dict:
         response = response[:-3]
     response = response.strip()
 
+    # Fix double-brace escaping leaked from prompt templates (e.g. {{ → {)
+    if response.startswith("{{") and response.endswith("}}"):
+        response = response[1:-1]
+
     # Try direct parse first (fast path)
     try:
         return json.loads(response)

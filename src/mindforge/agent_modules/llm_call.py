@@ -79,6 +79,8 @@ async def llm_call(
     # parse response
     try:
         content = load_json(response.content)
+        if not content:
+            raise ValueError("Empty JSON response")
         if parse_check is not None:
             content = parse_check(content)
         return content
