@@ -7,7 +7,7 @@ You can perform the following actions each step (choose EXACTLY ONE by name):
 - "Jump": Jump
 - "Sneak": Sneak/crouch
 - "Dig": Break the block you are looking at, OR attack the mob/animal you are facing (this is how you kill mobs)
-- "Place": Place a block
+- "Place": Place a block from your selected slot, or interact with the block you are looking at. WARNING: Using Place while facing a chest, crafting table, or furnace may briefly open a menu — avoid using Place on interactive blocks unless you intend to place a block
 - "Slot1": Select inventory slot 1
 - "Slot2": Select inventory slot 2
 - "Slot3": Select inventory slot 3
@@ -16,6 +16,7 @@ You can perform the following actions each step (choose EXACTLY ONE by name):
 - "TurnRight": Turn the camera right
 - "TurnLeft": Turn the camera left
 - "LookDown": Tilt the camera down
+- "LookUp": Tilt the camera up
 
 There are three progression tracks in this world. All agents share progress on all tracks:
 
@@ -40,4 +41,5 @@ DEFEND TRACK (monster fighting):
   Stage 4 - Cave Spider: Kill 1 cave spider (reward: 2048)
 
 You start with a stone axe and torches. New tools are awarded to ALL agents when a tools stage is completed.
+Your current items are visible in the hotbar slots (Slot1-Slot5) at the bottom of your view. Use Slot1-Slot5 to select which item to hold.
 Digging blocks always gives a small reward. Dying gives a large penalty.

@@ -41,6 +41,7 @@ ACTION_MAP = {
     "TurnRight": 14,
     "TurnLeft": 15,
     "LookDown": 16,
+    "LookUp": 17,
 }
 
 VALID_ACTIONS = list(ACTION_MAP.keys())
