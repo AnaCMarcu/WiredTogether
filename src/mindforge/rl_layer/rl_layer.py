@@ -103,7 +103,7 @@ class RLLayer:
         logger.info("RLLayer: loading base model from %s", config.model_path)
         self.model = AutoModelForCausalLM.from_pretrained(
             config.model_path,
-            torch_dtype=self._dtype,
+            dtype=self._dtype,
             trust_remote_code=True,
         ).to(self._device)
 
@@ -131,11 +131,11 @@ class RLLayer:
         self.model.print_trainable_parameters()
         self._adapter_name = adapter_name
 
-        # ── Heads ──
+        # ── Heads (must match model dtype to avoid Half/Float mismatch) ──
         hidden_size = self.model.config.hidden_size
         n_actions = len(config.actions)
-        self.action_head = ActionHead(hidden_size, n_actions).to(self._device)
-        self.value_head = ValueHead(hidden_size, config.value_hidden).to(self._device)
+        self.action_head = ActionHead(hidden_size, n_actions).to(device=self._device, dtype=self._dtype)
+        self.value_head = ValueHead(hidden_size, config.value_hidden).to(device=self._device, dtype=self._dtype)
 
         # ── Optimizer (LoRA params + heads) ──
         trainable = (

@@ -47,10 +47,11 @@ class RLConfig:
     token_opt_success_threshold: float = 0.3  # trigger when success < this
     token_opt_epochs: int = 2
 
-    # ── Action space (populated at runtime from environment_prompt.txt) ──
+    # ── Action space (must match ACTION_MAP in custom_environment_craftium.py) ──
     actions: tuple = (
         "NoOp", "MoveForward", "MoveBackward", "MoveLeft", "MoveRight",
         "Jump", "Sneak", "Dig", "Place",
         "Slot1", "Slot2", "Slot3", "Slot4", "Slot5",
-        "TurnRight", "TurnLeft", "LookDown",
+        "TurnRight", "TurnLeft", "LookDown", "LookUp",
+        "Inventory", "Drop", "Slot6", "Slot7", "Slot8",
     )

@@ -18,7 +18,7 @@ from openworld_multi_agents import OpenWorldMultiAgentEnv
 with open(os.path.join(_this_dir, "prompts", "environment_prompt.txt"), "r") as f:
     environment_prompt = f.read()
 
-# Map from human-readable action names (used by the LLM) to Discrete(17) integers.
+# Map from human-readable action names (used by the LLM) to Discrete(23) integers.
 # The integer mapping matches _DISCRETE_ACTIONS in openworld_multi_agents.py:
 #   0 = NOP
 #   1-16 = forward, backward, left, right, jump, sneak, dig, place,
@@ -42,6 +42,12 @@ ACTION_MAP = {
     "TurnLeft": 15,
     "LookDown": 16,
     "LookUp": 17,
+    # --- added actions ---
+    "Inventory": 18,   # toggle inventory/crafting menu open/close
+    "Drop": 19,         # drop the currently held item
+    "Slot6": 20,
+    "Slot7": 21,
+    "Slot8": 22,
 }
 
 VALID_ACTIONS = list(ACTION_MAP.keys())

@@ -1,6 +1,6 @@
 """MAPPO (Multi-Agent PPO) update logic.
 
-Action-level:  optimises log π(action | prompt) for 17 discrete Craftium
+Action-level:  optimises log π(action | prompt) for 23 discrete Craftium
 actions using a classification head on the LLM's last hidden state.
 
 Token-level:   optimises the full token-level log-likelihood of the generated

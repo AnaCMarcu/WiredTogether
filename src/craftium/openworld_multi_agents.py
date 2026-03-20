@@ -337,14 +337,18 @@ _DISCRETE_ACTIONS = [
     "forward", "backward", "left", "right", "jump", "sneak",
     "dig", "place", "slot_1", "slot_2", "slot_3", "slot_4", "slot_5",
     "mouse x+", "mouse x-", "mouse y+", "mouse y-",
+    # --- added actions (indices 17-21) ---
+    "inventory",                          # toggle inventory/crafting menu
+    "drop",                               # drop held item
+    "slot_6", "slot_7", "slot_8",         # extra hotbar slots
 ]
 _MOUSE_MOV = 0.5
 
 
 def _discrete_to_dict(action: int) -> dict:
-    """Convert a Discrete(18) integer to MarlCraftiumEnv dict format.
+    """Convert a Discrete(23) integer to MarlCraftiumEnv dict format.
 
-    Action 0 is NOP. Actions 1-16 map to _DISCRETE_ACTIONS.
+    Action 0 is NOP. Actions 1-22 map to _DISCRETE_ACTIONS.
     PettingZoo action_space.sample() return an integer, but Craftium expects {action, mouse} format
     """
     action = int(action)
@@ -449,8 +453,8 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         self._observation_space = spaces.Box(
             low=0, high=255, shape=(obs_height, obs_width, 3), dtype=np.uint8
         )
-        # Craftium uses 17 discrete actions (DiscreteActionWrapper)
-        self._action_space = spaces.Discrete(18)
+        # Craftium discrete actions: 0=NOP + 22 named actions
+        self._action_space = spaces.Discrete(23)
 
         self._step_count = 0
 
@@ -513,7 +517,7 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         """
         self._step_count += 1
 
-        # Convert Discrete(18) integers to dict format expected by MarlCraftiumEnv
+        # Convert Discrete(23) integers to dict format expected by MarlCraftiumEnv
         action_list = [_discrete_to_dict(actions[agent]) for agent in self.agents]
 
         # Step the underlying environment

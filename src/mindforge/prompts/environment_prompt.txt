@@ -7,12 +7,17 @@ You can perform the following actions each step (choose EXACTLY ONE by name):
 - "Jump": Jump
 - "Sneak": Sneak/crouch
 - "Dig": Break the block you are looking at, OR attack the mob/animal you are facing (this is how you kill mobs)
-- "Place": Place a block from your selected slot, or interact with the block you are looking at. WARNING: Using Place while facing a chest, crafting table, or furnace may briefly open a menu — avoid using Place on interactive blocks unless you intend to place a block
-- "Slot1": Select inventory slot 1
-- "Slot2": Select inventory slot 2
-- "Slot3": Select inventory slot 3
-- "Slot4": Select inventory slot 4
-- "Slot5": Select inventory slot 5
+- "Place": Place a block from your selected slot, or interact with the block you are looking at. WARNING: Using Place while facing a chest, crafting table, or furnace will open a menu — use "Inventory" to close it
+- "Inventory": Toggle the inventory/crafting menu. Use this to CLOSE any open menu (crafting table, chest, furnace). If no menu is open, this opens your inventory
+- "Drop": Drop the item you are currently holding
+- "Slot1": Select hotbar slot 1
+- "Slot2": Select hotbar slot 2
+- "Slot3": Select hotbar slot 3
+- "Slot4": Select hotbar slot 4
+- "Slot5": Select hotbar slot 5
+- "Slot6": Select hotbar slot 6
+- "Slot7": Select hotbar slot 7
+- "Slot8": Select hotbar slot 8
 - "TurnRight": Turn the camera right
 - "TurnLeft": Turn the camera left
 - "LookDown": Tilt the camera down
@@ -41,5 +46,5 @@ DEFEND TRACK (monster fighting):
   Stage 4 - Cave Spider: Kill 1 cave spider (reward: 2048)
 
 You start with a stone axe and torches. New tools are awarded to ALL agents when a tools stage is completed.
-Your current items are visible in the hotbar slots (Slot1-Slot5) at the bottom of your view. Use Slot1-Slot5 to select which item to hold.
+Your current items are visible in the hotbar slots (Slot1-Slot8) at the bottom of your view. Use Slot1-Slot8 to select which item to hold.
 Digging blocks always gives a small reward. Dying gives a large penalty.
