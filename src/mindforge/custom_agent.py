@@ -85,8 +85,8 @@ class CustomAgent(BaseChatAgent):
             await self.auto_curriculum.clear_data()
 
         last_frame = messages[0].content[1]
-        last_action = self.last_response["action"] if self.last_response else None
-        last_thoughts = self.last_response["thoughts"] if self.last_response else None
+        last_action = self.last_response.get("action") if self.last_response else None
+        last_thoughts = self.last_response.get("thoughts") if self.last_response else None
 
         task = self.auto_curriculum.current_task
 

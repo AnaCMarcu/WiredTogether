@@ -260,26 +260,30 @@ class RLLayer:
         )
 
         all_info = {}
+        scaler = torch.amp.GradScaler("cuda", enabled=self._device.type == "cuda")
         for epoch in range(self.config.ppo_epochs):
             for batch in self.buffer.sample_batches(self.config.mini_batch_size):
-                loss, info = action_level_ppo_step(
-                    model=self.model,
-                    action_head=self.action_head,
-                    value_head=self.value_head,
-                    tokenizer=self.tokenizer,
-                    batch=batch,
-                    clip_eps=self.config.clip_eps,
-                    value_clip_eps=self.config.value_clip_eps,
-                    entropy_coef=self.config.entropy_coef,
-                    value_coef=self.config.value_coef,
-                    device=self._device,
-                )
+                with torch.amp.autocast(self._device.type, dtype=self._dtype):
+                    loss, info = action_level_ppo_step(
+                        model=self.model,
+                        action_head=self.action_head,
+                        value_head=self.value_head,
+                        tokenizer=self.tokenizer,
+                        batch=batch,
+                        clip_eps=self.config.clip_eps,
+                        value_clip_eps=self.config.value_clip_eps,
+                        entropy_coef=self.config.entropy_coef,
+                        value_coef=self.config.value_coef,
+                        device=self._device,
+                    )
                 self.optimizer.zero_grad()
-                loss.backward()
+                scaler.scale(loss).backward()
+                scaler.unscale_(self.optimizer)
                 nn.utils.clip_grad_norm_(
                     self.model.parameters(), self.config.max_grad_norm
                 )
-                self.optimizer.step()
+                scaler.step(self.optimizer)
+                scaler.update()
                 all_info = info  # keep last batch info
 
         self._update_count += 1
@@ -416,22 +420,26 @@ class RLLayer:
 
         self.model.train()
         all_info = {"decision": "train", "reason": reason, "skill_focus": skill_focus}
+        scaler = torch.amp.GradScaler("cuda", enabled=self._device.type == "cuda")
         for epoch in range(self.config.token_opt_epochs):
             for start in range(0, len(transitions), self.config.mini_batch_size):
                 batch = transitions[start:start + self.config.mini_batch_size]
-                loss, info = token_level_ppo_step(
-                    model=self.model,
-                    tokenizer=self.tokenizer,
-                    batch=batch,
-                    clip_eps=self.config.clip_eps,
-                    device=self._device,
-                )
+                with torch.amp.autocast(self._device.type, dtype=self._dtype):
+                    loss, info = token_level_ppo_step(
+                        model=self.model,
+                        tokenizer=self.tokenizer,
+                        batch=batch,
+                        clip_eps=self.config.clip_eps,
+                        device=self._device,
+                    )
                 self.optimizer.zero_grad()
-                loss.backward()
+                scaler.scale(loss).backward()
+                scaler.unscale_(self.optimizer)
                 nn.utils.clip_grad_norm_(
                     self.model.parameters(), self.config.max_grad_norm
                 )
-                self.optimizer.step()
+                scaler.step(self.optimizer)
+                scaler.update()
                 all_info.update(info)
 
         self._last_token_opt_step = self.step_count
