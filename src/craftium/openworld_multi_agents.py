@@ -518,7 +518,12 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         self._step_count += 1
 
         # Convert Discrete(23) integers to dict format expected by MarlCraftiumEnv
-        action_list = [_discrete_to_dict(actions[agent]) for agent in self.agents]
+        # Always send actions for ALL agents (NoOp for terminated ones) —
+        # MarlCraftiumEnv expects exactly num_agents actions every step.
+        action_list = [
+            _discrete_to_dict(actions.get(agent, 0))
+            for agent in self.possible_agents
+        ]
 
         # Step the underlying environment
         obs_dict, reward_dict, done_dict, truncated_dict, _ = self.env.step(

@@ -111,9 +111,12 @@ class CraftiumEnvironmentInterface:
             ValueError: If action_str is not in ACTION_MAP
         """
         if action_str not in ACTION_MAP:
-            raise ValueError(
-                f"Invalid action: '{action_str}'. Valid actions: {VALID_ACTIONS}"
+            import logging
+            logging.warning(
+                f"Invalid action: '{action_str}', clamping to NoOp. "
+                f"Valid actions: {VALID_ACTIONS}"
             )
+            action_str = "NoOp"
 
         # Build action dict: acting agent gets the requested action, others NoOp
         actions = {}
