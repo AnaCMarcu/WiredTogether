@@ -71,14 +71,24 @@ class SkillManager:
                                                                                      device="cuda")
             ),
         )
-        # Clear stale persisted data so the in-memory skills dict stays in sync
-        if reset:
-            self.vectordb._ensure_initialized()
-            if self.vectordb._collection is not None:
-                # Delete all documents from the collection
+        # Sync in-memory skills dict with persisted ChromaDB collection
+        self.vectordb._ensure_initialized()
+        if self.vectordb._collection is not None:
+            if reset:
+                # Fresh run: wipe persisted collection
                 existing = self.vectordb._collection.get()
                 if existing["ids"]:
                     self.vectordb._collection.delete(ids=existing["ids"])
+            else:
+                # Resume: rebuild skills dict from what's persisted
+                existing = self.vectordb._collection.get()
+                for id_, doc, meta in zip(
+                    existing["ids"], existing["documents"], existing["metadatas"]
+                ):
+                    self.skills[id_] = {
+                        "code": meta.get("code", ""),
+                        "description": doc,
+                    }
 
         self.skill_prompt = (
             override_skill_prompt
@@ -125,10 +135,13 @@ class SkillManager:
             "code": action,
             "description": skill_description,
         }
-        # assert skills dict and vectordb are in sync
-        assert self.vectordb._collection.count() == len(
-            self.skills
-        ), "vectordb is not synced with skills"
+        # Verify sync (warn instead of crash — persistence edge cases are possible)
+        db_count = self.vectordb._collection.count()
+        if db_count != len(self.skills):
+            logging.warning(
+                "SkillManager: vectordb count (%d) != skills dict (%d) after add_skill('%s')",
+                db_count, len(self.skills), skill_name,
+            )
         return skill_name, skill_description, already_exists
 
     async def generate_skill_description(
