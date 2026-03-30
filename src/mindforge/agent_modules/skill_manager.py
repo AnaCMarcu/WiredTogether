@@ -71,6 +71,15 @@ class SkillManager:
                                                                                      device="cuda")
             ),
         )
+        # Clear stale persisted data so the in-memory skills dict stays in sync
+        if reset:
+            self.vectordb._ensure_initialized()
+            if self.vectordb._collection is not None:
+                # Delete all documents from the collection
+                existing = self.vectordb._collection.get()
+                if existing["ids"]:
+                    self.vectordb._collection.delete(ids=existing["ids"])
+
         self.skill_prompt = (
             override_skill_prompt
             if override_skill_prompt
