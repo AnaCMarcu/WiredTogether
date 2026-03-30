@@ -30,6 +30,7 @@ module load miniconda3
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "$ENV_PREFIX"
 export LLM_ENABLE_THINKING=0
+export SCRATCH=/scratch/acmarcu
 export SDL_VIDEODRIVER=dummy
 export SDL_AUDIODRIVER=dummy
 export DISPLAY=

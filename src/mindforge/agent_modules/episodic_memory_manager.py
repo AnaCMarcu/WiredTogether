@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 from pathlib import Path
 from agent_modules.llm_call import llm_call
 from agent_modules.util import EpisodeResponse, create_model_client, safe_format, ST_MODEL_NAME
@@ -44,12 +45,17 @@ class EpisodicMemoryManager:
         #         ),
         #     ),
         # )
+        from agent_modules.skill_manager import _chromadb_base_dir
+        db_path = os.path.join(_chromadb_base_dir(), f"episodes_vectodb_{agent_name}")
+
+        # Wipe stale/corrupted SQLite files from previous runs
+        if os.path.exists(db_path):
+            shutil.rmtree(db_path, ignore_errors=True)
+
         self.vectordb = ChromaDBVectorMemory(
             config=PersistentChromaDBVectorMemoryConfig(
                 collection_name="episode_vectordb_nvidia",
-                persistence_path=os.path.join(
-                    str(Path.home()), f"chromadb_autogen/episodes_vectodb_{agent_name}"
-                ),
+                persistence_path=db_path,
                 k=retrieval_top_k,  # Return top  k results
                 score_threshold=0.4,  # Minimum similarity score
                 embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(model_name=ST_MODEL_NAME, device="cuda")

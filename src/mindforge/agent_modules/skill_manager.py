@@ -1,9 +1,23 @@
 import json
 import logging
+import shutil
 from agent_modules.llm_call import llm_call
 from agent_modules.util import SkillResponse, create_model_client, safe_format, ST_MODEL_NAME
 import os
 from pathlib import Path
+
+
+def _chromadb_base_dir() -> str:
+    """Return a fast-local directory for ChromaDB persistence.
+
+    On HPC, $HOME is NFS and causes SQLite I/O errors.
+    Prefer $SCRATCH or a sibling directory of the project.
+    """
+    scratch = os.environ.get("SCRATCH")
+    if scratch:
+        return os.path.join(scratch, "chromadb_autogen")
+    # Fallback: use a directory next to the project
+    return os.path.join(str(Path.home()), "chromadb_autogen")
 
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.ui import Console
@@ -59,36 +73,37 @@ class SkillManager:
         #         ),
         #     ),
         # )
+        db_path = os.path.join(_chromadb_base_dir(), f"skills_vectodb_{agent_name}")
+
+        # On reset, delete the directory entirely to avoid corrupted SQLite files
+        if reset and os.path.exists(db_path):
+            shutil.rmtree(db_path, ignore_errors=True)
+
         self.vectordb = ChromaDBVectorMemory(
             config=PersistentChromaDBVectorMemoryConfig(
                 collection_name="skill_vectordb_nvidia",
-                persistence_path=os.path.join(
-                    str(Path.home()), f"chromadb_autogen/skills_vectodb_{agent_name}"
-                ),
+                persistence_path=db_path,
                 k=retrieval_top_k,  # Return top  k results
                 score_threshold=0.4,  # Minimum similarity score
                 embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(model_name=ST_MODEL_NAME,
                                                                                      device="cuda")
             ),
         )
-        # Sync in-memory skills dict with persisted ChromaDB collection
-        self.vectordb._ensure_initialized()
-        if self.vectordb._collection is not None:
-            if reset:
-                # Fresh run: wipe persisted collection
-                existing = self.vectordb._collection.get()
-                if existing["ids"]:
-                    self.vectordb._collection.delete(ids=existing["ids"])
-            else:
-                # Resume: rebuild skills dict from what's persisted
-                existing = self.vectordb._collection.get()
-                for id_, doc, meta in zip(
-                    existing["ids"], existing["documents"], existing["metadatas"]
-                ):
-                    self.skills[id_] = {
-                        "code": meta.get("code", ""),
-                        "description": doc,
-                    }
+        if not reset:
+            # Resume: rebuild skills dict from what's persisted
+            try:
+                self.vectordb._ensure_initialized()
+                if self.vectordb._collection is not None:
+                    existing = self.vectordb._collection.get()
+                    for id_, doc, meta in zip(
+                        existing["ids"], existing["documents"], existing["metadatas"]
+                    ):
+                        self.skills[id_] = {
+                            "code": meta.get("code", ""),
+                            "description": doc,
+                        }
+            except Exception as e:
+                logging.warning("SkillManager: failed to load persisted skills: %s", e)
 
         self.skill_prompt = (
             override_skill_prompt

@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import shutil
 from autogen_core import CancellationToken
 from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
 from autogen_agentchat.messages import TextMessage
@@ -88,13 +89,17 @@ class AutoCurriculum:
         #         ),
         #     ),
         # )
+        from agent_modules.skill_manager import _chromadb_base_dir
+        db_path = os.path.join(_chromadb_base_dir(), f"autocurriculum_vectodb_{agent_name}")
+
+        # Wipe stale/corrupted SQLite files from previous runs
+        if os.path.exists(db_path):
+            shutil.rmtree(db_path, ignore_errors=True)
+
         self.vectordb = ChromaDBVectorMemory(
             config=PersistentChromaDBVectorMemoryConfig(
                 collection_name="autocurriculum_vectordb_nvidia",
-                persistence_path=os.path.join(
-                    str(Path.home()),
-                    f"chromadb_autogen/autocurriculum_vectodb_{agent_name}",
-                ),
+                persistence_path=db_path,
                 k=retrieval_top_k,  # Return top  k results
                 score_threshold=0.4,  # Minimum similarity score
                 embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(model_name=ST_MODEL_NAME,
