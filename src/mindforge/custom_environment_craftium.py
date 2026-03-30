@@ -208,8 +208,14 @@ class CraftiumEnvironmentInterface:
         return self._step_rewards.get(agent_name, 0.0)
 
     def pickedup_object(self, agentId: int = 0):
-        """Return held item name (Craftium doesn't expose this, so always None)."""
-        return None
+        """Return a formatted inventory string read from a file written by the Lua mod.
+
+        The server-side Lua mod writes per-player inventory files to the world
+        directory every globalstep.  Format:
+            wield_idx|item1_name count|item2_name count|...|item9_name count
+        Empty slots are empty strings between pipes.
+        """
+        return self._read_inventory_file(agentId)
 
     def warmup_noop(self):
         """Send NoOps to keep channels alive without incrementing step counters.
@@ -218,6 +224,70 @@ class CraftiumEnvironmentInterface:
         Returns list of observations (one per agent).
         """
         return self.env.warmup_noop()
+
+    # ------------------------------------------------------------------
+    # Inventory file reading
+    # ------------------------------------------------------------------
+    def _get_world_path(self):
+        """Return the absolute path to the Minetest world directory."""
+        if not hasattr(self, "_world_path"):
+            srv_run_dir = self.env.env.mt_server.run_dir
+            self._world_path = os.path.join(
+                os.path.abspath(srv_run_dir), "worlds", "world"
+            )
+        return self._world_path
+
+    @staticmethod
+    def _pretty_item_name(raw_name: str) -> str:
+        """Turn 'mcl_tools:pick_iron' into 'iron pickaxe', etc."""
+        # Strip namespace prefix (e.g. "mcl_tools:", "mcl_torches:")
+        if ":" in raw_name:
+            raw_name = raw_name.split(":", 1)[1]
+        # Swap order for tool names: pick_iron -> iron pick, sword_stone -> stone sword
+        parts = raw_name.split("_")
+        if len(parts) == 2 and parts[0] in ("pick", "sword", "axe", "shovel", "hoe"):
+            tool_names = {"pick": "pickaxe"}
+            tool = tool_names.get(parts[0], parts[0])
+            return f"{parts[1]} {tool}"
+        return raw_name.replace("_", " ")
+
+    def _read_inventory_file(self, agentId: int):
+        """Read and format the inventory file for the given agent."""
+        world_path = self._get_world_path()
+        inv_file = os.path.join(world_path, f"inv_agent{agentId}.txt")
+        try:
+            with open(inv_file, "r") as f:
+                raw = f.read().strip()
+        except (FileNotFoundError, OSError):
+            return None
+
+        if not raw:
+            return None
+
+        parts = raw.split("|")
+        if len(parts) < 2:
+            return None
+
+        try:
+            wield_idx = int(parts[0])
+        except ValueError:
+            return None
+
+        slots = parts[1:]  # up to 9 slot entries
+        lines = []
+        for i, slot_str in enumerate(slots):
+            slot_num = i + 1
+            if not slot_str:
+                lines.append(f"  [{slot_num}] empty")
+            else:
+                # "mcl_tools:pick_iron 1" -> name="mcl_tools:pick_iron", count="1"
+                tokens = slot_str.rsplit(" ", 1)
+                name = self._pretty_item_name(tokens[0])
+                count = tokens[1] if len(tokens) > 1 else "1"
+                marker = " <-- wielding" if slot_num == wield_idx else ""
+                lines.append(f"  [{slot_num}] {name} x{count}{marker}")
+
+        return "Hotbar:\n" + "\n".join(lines)
 
     def close(self):
         """Clean up the underlying environment."""
