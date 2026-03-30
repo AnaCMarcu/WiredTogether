@@ -17,11 +17,11 @@ ENV_PREFIX=/scratch/acmarcu/.conda/envs/WiredTogether
 
 # --- LLM Configuration ---
 VLLM_PORT=8000
-VLLM_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
-VLLM_MODEL_NAME="Qwen3.5-2B"
+VLLM_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-9B
+VLLM_MODEL_NAME="Qwen3.5-9B"
 
 # Fallback: load model in-process (no server)
-LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
+LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-9B
 
 module purge
 module load 2025
@@ -30,6 +30,7 @@ module load miniconda3
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "$ENV_PREFIX"
 export LLM_ENABLE_THINKING=0
+export SCRATCH=/scratch/acmarcu
 export SDL_VIDEODRIVER=dummy
 export SDL_AUDIODRIVER=dummy
 export DISPLAY=
