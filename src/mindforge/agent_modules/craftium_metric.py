@@ -99,6 +99,9 @@ class CraftiumMetric:
         self.rl_updates = []       # (timestep, agent_id, info_dict)
         self.rl_token_opts = []    # (timestep, agent_id, decision, reason, info_dict)
 
+        # Hebbian social graph snapshots
+        self._graph_snapshots = []  # list of {"step": int, ...metrics}
+
         # Timestep-level data for plotting
         self.ts_data = {
             "timesteps": [],
@@ -150,6 +153,10 @@ class CraftiumMetric:
         else:
             self.log(f"[RL] Agent {agent_id} token-opt SKIPPED at step {self.timestep}: "
                      f"reason='{reason}'")
+
+    def record_graph_snapshot(self, step: int, graph_dict: dict):
+        """Record a Hebbian social graph metrics snapshot."""
+        self._graph_snapshots.append({"step": step, **graph_dict})
 
     def store_timestep(self, step_comm_count: int = 0):
         """Snapshot metrics at end of a timestep."""
@@ -299,6 +306,7 @@ class CraftiumMetric:
                 {"timestep": ts, "agent_id": aid, "decision": d, "reason": r, "info": info}
                 for ts, aid, d, r, info in self.rl_token_opts
             ],
+            "graph_snapshots": self._graph_snapshots,
         }
 
         file_path = os.path.join(self.target_folder, file_name)
@@ -412,6 +420,59 @@ class CraftiumMetric:
             fig.savefig(os.path.join(path, "communication_frequency.png"), dpi=150)
             plt.close(fig)
 
+        # 6. Hebbian bond evolution
+        if self._graph_snapshots:
+            fig, ax = plt.subplots(figsize=(10, 5))
+            snap_steps = [s["step"] for s in self._graph_snapshots]
+            snap_mean = [s.get("mean_bond_strength", 0) for s in self._graph_snapshots]
+            ax.plot(snap_steps, snap_mean, label="Mean bond strength", linewidth=2)
+
+            # Per top-pair lines (from the last snapshot's top_3_pairs)
+            last_top = self._graph_snapshots[-1].get("top_3_pairs", [])
+            for pair_info in last_top:
+                i_idx, j_idx = pair_info["i"], pair_info["j"]
+                pair_label = f"Agent {i_idx} -> {j_idx}"
+                pair_vals = []
+                for s in self._graph_snapshots:
+                    # Find this pair in each snapshot's top_3
+                    found = False
+                    for tp in s.get("top_3_pairs", []):
+                        if tp["i"] == i_idx and tp["j"] == j_idx:
+                            pair_vals.append(tp["w"])
+                            found = True
+                            break
+                    if not found:
+                        pair_vals.append(0.0)
+                ax.plot(snap_steps, pair_vals, label=pair_label, alpha=0.6)
+
+            ax.set_xlabel("Timestep")
+            ax.set_ylabel("Bond Strength")
+            ax.set_title("Hebbian Social Graph - Bond Evolution")
+            ax.legend()
+            fig.savefig(os.path.join(path, "graph_bond_evolution.png"), dpi=150)
+            plt.close(fig)
+
+        # 7. LTD heatmap (final snapshot)
+        if self._graph_snapshots and self._graph_snapshots[-1].get("ltd_heatmap"):
+            ltd_data = np.array(self._graph_snapshots[-1]["ltd_heatmap"])
+            fig, ax = plt.subplots(figsize=(6, 5))
+            im = ax.imshow(ltd_data, cmap="Reds", vmin=0)
+            ax.set_xlabel("Agent j")
+            ax.set_ylabel("Agent i")
+            ax.set_title("Failure Co-occurrence Fij (final)")
+            role_labels = ["gatherer", "hunter", "defender"]
+            tick_labels = [
+                f"{i} ({role_labels[i % len(role_labels)]})"
+                for i in range(ltd_data.shape[0])
+            ]
+            ax.set_xticks(range(ltd_data.shape[0]))
+            ax.set_xticklabels(tick_labels, fontsize=8)
+            ax.set_yticks(range(ltd_data.shape[0]))
+            ax.set_yticklabels(tick_labels, fontsize=8)
+            fig.colorbar(im)
+            fig.savefig(os.path.join(path, "graph_ltd_heatmap.png"), dpi=150)
+            plt.close(fig)
+
     def _save_text_summary(self):
         """Write a human-readable summary.txt with all key metrics."""
         role_names = ["gatherer", "hunter", "defender"]
@@ -482,6 +543,20 @@ class CraftiumMetric:
             train_count = sum(1 for _, _, d, _, _ in self.rl_token_opts if d == "train")
             skip_count = sum(1 for _, _, d, _, _ in self.rl_token_opts if d != "train")
             lines.append(f"  Token-opt decisions: {train_count} train, {skip_count} skip")
+            lines.append("")
+
+        # Hebbian stats
+        if self._graph_snapshots:
+            lines.append("--- Hebbian Social Plasticity ---")
+            last = self._graph_snapshots[-1]
+            lines.append(f"  Final mean bond:  {last.get('mean_bond_strength', 0):.4f}")
+            lines.append(f"  Final sparsity:   {last.get('sparsity', 0):.2f}")
+            lines.append(f"  Graph snapshots:  {len(self._graph_snapshots)}")
+            top = last.get("top_3_pairs", [])
+            if top:
+                lines.append("  Top bonds:")
+                for p in top[:3]:
+                    lines.append(f"    Agent {p['i']} -> Agent {p['j']}: {p['w']:.4f}")
             lines.append("")
 
         lines.append("=" * 50)

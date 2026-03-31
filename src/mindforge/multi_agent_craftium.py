@@ -39,7 +39,9 @@ from agent_modules.critic import Critic
 from agent_modules.skill_manager import SkillManager
 from agent_modules.episodic_memory_manager import EpisodicMemoryManager
 from agent_modules.craftium_metric import CraftiumMetric
-from rl_layer import RLConfig, RLLayer
+import json as _json
+
+from rl_layer import RLConfig, RLLayer, HebbianConfig, HebbianSocialGraph
 
 ROLE_NAMES = ["gatherer", "hunter", "defender"]
 
@@ -83,6 +85,25 @@ def parse_args():
                         help="Learning rate for RL optimiser")
     parser.add_argument("--rl-auto-token-opt", action="store_true",
                         help="Let agents self-trigger token-level optimisation")
+    # ── Hebbian social plasticity ──
+    parser.add_argument("--hebbian", action="store_true",
+                        help="Enable Hebbian social plasticity graph")
+    parser.add_argument("--hebbian-radius", type=float, default=5.0,
+                        help="Interaction radius d (Minetest world units)")
+    parser.add_argument("--hebbian-ltp", type=float, default=0.01,
+                        help="η_+ LTP learning rate")
+    parser.add_argument("--hebbian-ltd", type=float, default=0.005,
+                        help="η_- LTD learning rate")
+    parser.add_argument("--hebbian-decay", type=float, default=0.005,
+                        help="λ passive decay rate")
+    parser.add_argument("--hebbian-beta", type=float, default=1.0,
+                        help="β modulation sensitivity")
+    parser.add_argument("--hebbian-rho", type=float, default=0.3,
+                        help="ρ social replay blend factor")
+    parser.add_argument("--hebbian-gamma", type=float, default=0.2,
+                        help="γ reward diffusion strength")
+    parser.add_argument("--hebbian-no-comm-bond", action="store_true",
+                        help="Set δ_comm=0 (spatial-only, for RQ4 ablation)")
     return parser.parse_args()
 
 
@@ -324,6 +345,26 @@ async def run(args):
     agents = build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
                          rl_config=rl_config)
 
+    # ── Hebbian social plasticity ──
+    hebbian_config = HebbianConfig(
+        enabled=args.hebbian,
+        num_agents=num_agents,
+        interaction_radius=args.hebbian_radius,
+        ltp_lr=args.hebbian_ltp,
+        ltd_lr=args.hebbian_ltd,
+        decay=args.hebbian_decay,
+        modulation_beta=args.hebbian_beta,
+        social_replay_rho=args.hebbian_rho,
+        reward_diffusion_gamma=args.hebbian_gamma,
+        communication_coactivity_bonus=0.0 if args.hebbian_no_comm_bond else 0.5,
+    )
+    agent_roles = [ROLE_NAMES.index(rc["name"]) for rc in role_configs]
+    hebbian_graph = HebbianSocialGraph(hebbian_config, agent_roles=agent_roles)
+    if hebbian_config.enabled:
+        print(f"Hebbian social plasticity ENABLED: ltp={hebbian_config.ltp_lr}, "
+              f"ltd={hebbian_config.ltd_lr}, radius={hebbian_config.interaction_radius}, "
+              f"γ={hebbian_config.reward_diffusion_gamma}")
+
     print(f"\nConfig: {num_agents} agents, {num_episodes} episodes, "
           f"{max_steps} max steps, comm={'on' if communication else 'off'}, "
           f"seed={seed}")
@@ -409,8 +450,12 @@ async def run(args):
                 )
             frames_list.append(current_frames)
 
-            # Each agent takes a turn
+            # ── Phase 1: All agents act (collect data for Hebbian) ──
             step_comm_count = 0
+            step_rewards_raw = [0.0] * num_agents
+            step_contents = [None] * num_agents
+            comm_events = []
+
             for agent_id, agent in enumerate(agents):
                 agent_name = f"agent_{agent_id}"
 
@@ -427,18 +472,74 @@ async def run(args):
                     error_count=error_count,
                 )
                 agents_error_count[agent_id] = error_count
+                step_rewards_raw[agent_id] = environment.get_step_reward(agent_id)
+                step_contents[agent_id] = content
 
-                # Record reward for metrics + RL
-                step_reward = environment.get_step_reward(agent_id)
-                metric.record_reward(agent_id, step_reward)
+                # Handle communication (collect comm_events for Hebbian)
+                if (
+                    content
+                    and content.get("communication")
+                    and content["communication"] not in ("", "None")
+                    and communication
+                ):
+                    message = TextMessage(
+                        content=content["communication"],
+                        source=agent.name,
+                    )
+                    communications.append(message)
+                    metric.record_communication(agent.name, content["communication"])
+                    step_comm_count += 1
+
+                    # Extract sender index for Hebbian comm_events
+                    try:
+                        sender_idx = int(agent.name.split("_")[1])
+                        for recv_idx in range(num_agents):
+                            if recv_idx != sender_idx:
+                                comm_events.append((sender_idx, recv_idx))
+                    except (IndexError, ValueError):
+                        pass
+
+                if len(communications) > num_agents - 1:
+                    communications.pop(0)
+
+                time.sleep(sleep_time)
+
+            # ── Phase 2: Hebbian update + reward diffusion ──
+            positions = []
+            for i in range(num_agents):
+                try:
+                    pos = environment.env.env._positions[i]
+                except (AttributeError, IndexError):
+                    pos = None
+                positions.append(pos)
+
+            hebbian_graph.update(
+                positions=positions,
+                step_rewards=step_rewards_raw,
+                advantages=None,
+                comm_events=comm_events if communication else None,
+            )
+            diffused_rewards = hebbian_graph.diffuse_rewards(
+                step_rewards_raw, hebbian_graph._last_coactivity
+            )
+
+            # ── Phase 3: Record (diffused) rewards for metrics + RL ──
+            for agent_id, agent in enumerate(agents):
+                agent_name = f"agent_{agent_id}"
+                if environment._terminations.get(agent_name, False):
+                    continue
+
+                reward = diffused_rewards[agent_id]
+                metric.record_reward(agent_id, reward)
 
                 # Feed reward to RL layer
                 if agent.rl_layer and agent.rl_layer.enabled:
-                    agent_done = environment._terminations.get(f"agent_{agent_id}", False)
-                    agent.rl_layer.store_reward(step_reward, done=agent_done)
+                    agent_done = environment._terminations.get(agent_name, False)
+                    agent.rl_layer.store_reward(reward, done=agent_done)
+                    content = step_contents[agent_id]
                     agent.rl_layer.record_context(
                         action=content.get("action", "NoOp") if content else "NoOp",
-                        reward=step_reward,
+                        reward=reward,
                         task=agent.auto_curriculum.current_task or "Explore",
                     )
 
@@ -454,25 +555,11 @@ async def run(args):
                     if token_info:
                         metric.record_rl_token_opt(agent_id, token_info)
 
-                # Handle communication
-                if (
-                    content
-                    and content.get("communication")
-                    and content["communication"] not in ("", "None")
-                    and communication
-                ):
-                    message = TextMessage(
-                        content=content["communication"],
-                        source=agent.name,
-                    )
-                    communications.append(message)
-                    metric.record_communication(agent.name, content["communication"])
-                    step_comm_count += 1
-
-                if len(communications) > num_agents - 1:
-                    communications.pop(0)
-
-                time.sleep(sleep_time)
+            # ── Phase 4: Graph metrics snapshot ──
+            if hebbian_config.enabled and step % hebbian_config.log_graph_every == 0:
+                graph_metrics = hebbian_graph.get_graph_metrics()
+                metric.record_graph_snapshot(step, graph_metrics)
+                metric.log(f"[Hebbian step {step}] {graph_metrics}")
 
             metric.store_timestep(step_comm_count=step_comm_count)
 
@@ -509,6 +596,17 @@ async def run(args):
         if agent.rl_layer and agent.rl_layer.enabled:
             agent.rl_layer.save()
             print(f"  Saved RL checkpoint for {agent.name}")
+
+    # Save Hebbian graph state
+    if hebbian_config.enabled:
+        graph_path = os.path.join(metric.target_folder, "hebbian_graph_final.json")
+        with open(graph_path, "w") as f:
+            _json.dump(hebbian_graph.to_dict(), f, indent=2)
+        print(f"  Saved final Hebbian graph: {graph_path}")
+
+        # Force one final snapshot and re-save metrics to include it
+        metric.record_graph_snapshot(metric.timestep, hebbian_graph.get_graph_metrics())
+        metric.save_run_metrics()
 
     environment.close()
 
