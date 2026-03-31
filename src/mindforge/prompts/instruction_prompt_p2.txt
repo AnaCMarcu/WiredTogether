@@ -6,6 +6,7 @@ Last action: {last_action}
 Reward: {reward_text}
 Critique: {critique}
 Error: {error}
+Inventory: {picked_object}
 Relevant skills: {skill_memory}
 Past episodes: {episode_summary}
 Task belief: {task_beliefs}

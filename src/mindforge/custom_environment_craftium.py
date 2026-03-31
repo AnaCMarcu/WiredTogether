@@ -43,7 +43,7 @@ ACTION_MAP = {
     "LookDown": 16,
     "LookUp": 17,
     # --- added actions ---
-    "Inventory": 18,   # toggle inventory/crafting menu open/close
+    "Inventory": 0,    # mapped to NoOp — inventory info is now in the text prompt
     "Drop": 19,         # drop the currently held item
     "Slot6": 20,
     "Slot7": 21,
