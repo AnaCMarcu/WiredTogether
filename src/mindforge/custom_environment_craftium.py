@@ -62,6 +62,10 @@ class CraftiumEnvironmentInterface:
       - pickedup_object(agentId) -> str | None
     """
 
+    # Actions considered "idle" — repeating these wastes steps
+    _IDLE_ACTIONS = frozenset({"NoOp", "Inventory"})
+    _MAX_CONSECUTIVE_IDLE = 3
+
     def __init__(self, num_agents=3, obs_width=320, obs_height=180, max_steps=10000, seed=None):
         self.num_agents = num_agents
         self.seed = seed
@@ -82,6 +86,7 @@ class CraftiumEnvironmentInterface:
         self._truncations = {}    # agent_name -> bool
         self._infos = {}          # agent_name -> dict
         self._last_actions = {}   # agent_name -> str
+        self._consecutive_idle = {}  # agent_name -> int
 
     # ------------------------------------------------------------------
     # Core interface
@@ -95,6 +100,7 @@ class CraftiumEnvironmentInterface:
         self._terminations = {a: False for a in self.env.possible_agents}
         self._truncations = {a: False for a in self.env.possible_agents}
         self._last_actions = {a: "NoOp" for a in self.env.possible_agents}
+        self._consecutive_idle = {a: 0 for a in self.env.possible_agents}
         return self._observations
 
     def step(self, action_str: str, agentId: int):
@@ -117,6 +123,23 @@ class CraftiumEnvironmentInterface:
                 f"Valid actions: {VALID_ACTIONS}"
             )
             action_str = "NoOp"
+
+        # Guard: break idle loops (NoOp/Inventory spam)
+        agent_name = f"agent_{agentId}"
+        if action_str in self._IDLE_ACTIONS:
+            self._consecutive_idle[agent_name] = (
+                self._consecutive_idle.get(agent_name, 0) + 1
+            )
+            if self._consecutive_idle[agent_name] >= self._MAX_CONSECUTIVE_IDLE:
+                import logging
+                logging.warning(
+                    f"Agent {agentId} idle for {self._consecutive_idle[agent_name]} "
+                    f"steps, forcing MoveForward"
+                )
+                action_str = "MoveForward"
+                self._consecutive_idle[agent_name] = 0
+        else:
+            self._consecutive_idle[agent_name] = 0
 
         # Build action dict: acting agent gets the requested action, others NoOp
         actions = {}
