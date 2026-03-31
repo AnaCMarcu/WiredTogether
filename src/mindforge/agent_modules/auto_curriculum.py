@@ -5,6 +5,28 @@ import shutil
 from autogen_core import CancellationToken
 from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
 from autogen_agentchat.messages import TextMessage
+
+# Keywords that indicate a task maps to a real game action.
+# Tasks without any of these are replaced with a role-biased default.
+_ACHIEVABLE_KEYWORDS = frozenset({
+    "dig", "mine", "break", "chop", "punch",        # resource gathering
+    "kill", "attack", "fight", "hit", "hunt",        # combat
+    "find", "move", "walk", "go", "run", "approach", # navigation
+    "place", "build", "craft",                       # construction
+    "collect", "gather", "get", "pick",              # generic gathering
+})
+
+_ROLE_DEFAULT_TASKS = {
+    "gatherer": "Dig a nearby tree to get wood",
+    "hunter":   "Find and kill a chicken",
+    "defender": "Find and fight a zombie",
+}
+
+
+def _is_achievable_task(task: str) -> bool:
+    """Check if a task describes something the agent can actually do."""
+    task_lower = task.lower()
+    return any(kw in task_lower for kw in _ACHIEVABLE_KEYWORDS)
 from autogen_ext.memory.chromadb import (
     ChromaDBVectorMemory,
     PersistentChromaDBVectorMemoryConfig,
@@ -75,6 +97,9 @@ class AutoCurriculum:
         )
         self.completed_tasks = []
         self.failed_tasks = []
+        # Extract role from agent_name (e.g. "agent_0_gatherer" → "gatherer")
+        parts = agent_name.rsplit("_", 1)
+        self._role = parts[-1] if len(parts) > 1 and parts[-1] in _ROLE_DEFAULT_TASKS else "gatherer"
         # self.vectordb = ChromaDBVectorMemory(
         #     config=PersistentChromaDBVectorMemoryConfig(
         #         collection_name="autocurriculum_vectordb_nvidia",
@@ -154,7 +179,15 @@ class AutoCurriculum:
             picked_object=picked_object,
         )
         task = response.get("task", self.current_task or "Explore") or "Explore"
-        self.current_task = task.strip()
+        task = task.strip()
+        if not _is_achievable_task(task):
+            fallback = _ROLE_DEFAULT_TASKS.get(self._role, "Dig a nearby tree to get wood")
+            logging.warning(
+                "Non-actionable task '%s' for %s, replacing with '%s'",
+                task, self._role, fallback,
+            )
+            task = fallback
+        self.current_task = task
         context = await self.get_task_context(
             frame, cancellation_token, communications=communications
         )
