@@ -61,6 +61,7 @@ class CustomAgent(BaseChatAgent):
         self.voyager = voyager
         self._last_reward_text = "N/A"
 
+
     # Message types that this agent can produce
     @property
     def produced_message_types(self) -> Sequence[type[BaseChatMessage]]:
