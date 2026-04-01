@@ -85,6 +85,10 @@ def parse_args():
                         help="Learning rate for RL optimiser")
     parser.add_argument("--rl-auto-token-opt", action="store_true",
                         help="Let agents self-trigger token-level optimisation")
+    parser.add_argument("--rl-mode", type=str, default="action",
+                        choices=["action", "token"],
+                        help="RL mode: 'action' = MAPPO action head, "
+                             "'token' = token-opt only (LLM picks actions)")
     # ── Hebbian social plasticity ──
     parser.add_argument("--hebbian", action="store_true",
                         help="Enable Hebbian social plasticity graph")
@@ -104,6 +108,9 @@ def parse_args():
                         help="γ reward diffusion strength")
     parser.add_argument("--hebbian-no-comm-bond", action="store_true",
                         help="Set δ_comm=0 (spatial-only, for RQ4 ablation)")
+    # ── Experiment tracking ──
+    parser.add_argument("--experiment-id", type=str, default=None,
+                        help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
     return parser.parse_args()
 
 
@@ -332,6 +339,7 @@ async def run(args):
     # ── RL layer config ──
     rl_config = RLConfig(
         enabled=args.rl,
+        mode=args.rl_mode,
         model_path=args.rl_model_path,
         lora_rank=args.rl_lora_rank,
         update_interval=args.rl_update_interval,
@@ -587,6 +595,8 @@ async def run(args):
     metric.seed = seed
     metric.max_steps = max_steps
     metric.num_episodes = num_episodes
+    metric.experiment_id = args.experiment_id
+    metric.cli_args = vars(args)
     metric.save_run_metrics()
 
     # Save RL checkpoints

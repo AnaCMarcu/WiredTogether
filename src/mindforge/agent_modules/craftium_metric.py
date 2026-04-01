@@ -102,6 +102,10 @@ class CraftiumMetric:
         # Hebbian social graph snapshots
         self._graph_snapshots = []  # list of {"step": int, ...metrics}
 
+        # Co-completion events for structural-behavioral alignment (H7/RQ2)
+        self._co_completion_events = []  # {"step", "agent_i", "agent_j", "track"}
+        self._last_milestone_step = {}   # agent_id -> last milestone timestep
+
         # Timestep-level data for plotting
         self.ts_data = {
             "timesteps": [],
@@ -223,6 +227,20 @@ class CraftiumMetric:
                             f"{track}/{tier_name} at step {self.timestep} "
                             f"(reward={reward:.1f})"
                         )
+
+                        # Co-completion detection (H7/RQ2):
+                        # If another agent hit a milestone within 5 steps,
+                        # record the pair as co-completing.
+                        CO_WINDOW = 5
+                        for other_id, other_step in self._last_milestone_step.items():
+                            if other_id != agent_id and (self.timestep - other_step) <= CO_WINDOW:
+                                self._co_completion_events.append({
+                                    "step": self.timestep,
+                                    "agent_i": agent_id,
+                                    "agent_j": other_id,
+                                    "track": track,
+                                })
+                        self._last_milestone_step[agent_id] = self.timestep
                         return
 
         # Not a milestone — classify as "other"
@@ -272,8 +290,26 @@ class CraftiumMetric:
     # Save
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _get_git_info():
+        """Best-effort git commit hash and branch for reproducibility."""
+        import subprocess
+        info = {}
+        for key, cmd in [
+            ("git_commit", ["git", "rev-parse", "HEAD"]),
+            ("git_branch", ["git", "rev-parse", "--abbrev-ref", "HEAD"]),
+        ]:
+            try:
+                info[key] = subprocess.check_output(
+                    cmd, stderr=subprocess.DEVNULL, timeout=5
+                ).decode().strip()
+            except Exception:
+                info[key] = None
+        return info
+
     def save_run_metrics(self, file_name="data.json"):
         """Save all metrics to JSON and generate plots."""
+        git_info = self._get_git_info()
         data = {
             "config": {
                 "num_agents": self.num_agents,
@@ -282,6 +318,11 @@ class CraftiumMetric:
                 "seed": getattr(self, "seed", None),
                 "max_steps_per_episode": getattr(self, "max_steps", None),
                 "num_episodes": getattr(self, "num_episodes", None),
+                "experiment_id": getattr(self, "experiment_id", None),
+                "timestamp": datetime.now().isoformat(),
+                "git_commit": git_info.get("git_commit"),
+                "git_branch": git_info.get("git_branch"),
+                "cli_args": getattr(self, "cli_args", None),
             },
             "cumulative_returns": list(self.cumulative_returns),
             "steps_to_milestone": self.steps_to_milestone_table(),
@@ -307,6 +348,7 @@ class CraftiumMetric:
                 for ts, aid, d, r, info in self.rl_token_opts
             ],
             "graph_snapshots": self._graph_snapshots,
+            "co_completion_events": self._co_completion_events,
         }
 
         file_path = os.path.join(self.target_folder, file_name)
@@ -478,10 +520,15 @@ class CraftiumMetric:
         role_names = ["gatherer", "hunter", "defender"]
         lines = []
         lines.append("=" * 50)
-        lines.append("  Experiment Summary")
+        exp_id = getattr(self, "experiment_id", None)
+        title = f"  Experiment Summary — {exp_id}" if exp_id else "  Experiment Summary"
+        lines.append(title)
         lines.append("=" * 50)
         comm_str = "on" if self.communication else "off"
         lines.append(f"Agents: {self.num_agents}  |  Steps: {self.timestep}  |  Communication: {comm_str}")
+        seed_str = getattr(self, "seed", None)
+        if seed_str is not None:
+            lines.append(f"Seed: {seed_str}")
         lines.append("")
 
         # Final cumulative returns

@@ -170,7 +170,9 @@ class RLLayer:
     def select_action(self, prompt_text: str) -> Optional[Dict]:
         """Run the LoRA-adapted model and return an action dict.
 
-        Returns ``None`` if RL is disabled (caller falls back to vanilla LLM).
+        Returns ``None`` if RL is disabled or mode is "token" (caller falls
+        back to vanilla LLM).  In "token" mode the RL layer is still active
+        for token-level optimisation but does not override action selection.
 
         Returns
         -------
@@ -178,6 +180,8 @@ class RLLayer:
         """
         if not self.config.enabled:
             return None
+        if self.config.mode == "token":
+            return None  # token-opt only — let LLM choose actions
 
         self.model.eval()
         with torch.no_grad():
