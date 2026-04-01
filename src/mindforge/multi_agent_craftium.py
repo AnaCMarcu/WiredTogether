@@ -519,9 +519,7 @@ async def run(args):
                 advantages=None,
                 comm_events=comm_events if communication else None,
             )
-            diffused_rewards = hebbian_graph.diffuse_rewards(
-                step_rewards_raw, hebbian_graph._last_coactivity
-            )
+            diffused_rewards = hebbian_graph.diffuse_rewards(step_rewards_raw)
 
             # ── Phase 3: Record (diffused) rewards for metrics + RL ──
             for agent_id, agent in enumerate(agents):

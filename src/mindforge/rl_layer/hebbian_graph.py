@@ -59,6 +59,9 @@ class HebbianSocialGraph:
         self._agent_roles = agent_roles
         self._step_count = 0
 
+        # Always initialise — avoids AttributeError when disabled
+        self._last_coactivity: Optional[np.ndarray] = None
+
         if not config.enabled:
             return
 
@@ -76,9 +79,6 @@ class HebbianSocialGraph:
 
         # Running max of |ri(t)| for engagement normalisation
         self._max_reward_seen: float = 0.0
-
-        # Cached co-activity matrix from last update (for diffuse_rewards)
-        self._last_coactivity: Optional[np.ndarray] = None
 
     # ──────────────────────────────────────────────
     # 2.2  Co-activity signal (refined Eq. 2)
