@@ -610,5 +610,8 @@ async def run(args):
 
 
 if __name__ == "__main__":
+    # Force unbuffered stdout so prints appear immediately in SLURM logs
+    import functools
+    print = functools.partial(print, flush=True)
     args = parse_args()
     asyncio.run(run(args))
