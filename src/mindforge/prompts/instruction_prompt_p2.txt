@@ -13,4 +13,5 @@ Task belief: {task_beliefs}
 Perception belief: {perception_beliefs}
 Interaction beliefs: {interaction_beliefs}
 Partner beliefs: {partner_beliefs}
+Social bonds: {social_bonds}
 

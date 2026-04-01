@@ -217,6 +217,7 @@ async def agent_do_action(
     environment,
     error=None,
     error_count=0,
+    social_bonds=None,
 ):
     """Have one agent observe and choose an action.
 
@@ -247,6 +248,7 @@ async def agent_do_action(
         error_count=error_count,
         picked_object=environment.pickedup_object(agentId=agent_id),
         reward_text=reward_text,
+        social_bonds=social_bonds,
     )
 
     last_action = "NoOp"
@@ -260,6 +262,7 @@ async def agent_do_action(
                 agent, agent_id, frame_image, communications, reward_text,
                 instruction_prompt, environment,
                 error=str(e), error_count=error_count + 1,
+                social_bonds=social_bonds,
             )
         else:
             logging.error(f"Agent {agent_id} exceeded retry limit, using NoOp")
@@ -464,6 +467,19 @@ async def run(args):
             step_contents = [None] * num_agents
             comm_events = []
 
+            # Build per-agent social bond summaries for the LLM prompt
+            _bond_strings = {}
+            if hebbian_config.enabled:
+                for i in range(num_agents):
+                    parts = []
+                    for j in range(num_agents):
+                        if j == i:
+                            continue
+                        raw_w = hebbian_graph.get_weight(i, j)
+                        role_j = ROLE_NAMES[j % len(ROLE_NAMES)]
+                        parts.append(f"agent_{j} ({role_j}): {raw_w:.2f}")
+                    _bond_strings[i] = "Social bonds: " + ", ".join(parts)
+
             for agent_id, agent in enumerate(agents):
                 agent_name = f"agent_{agent_id}"
 
@@ -478,6 +494,7 @@ async def run(args):
                     agent, agent_id, frame_image, communications, reward_text,
                     instruction_prompt, environment,
                     error_count=error_count,
+                    social_bonds=_bond_strings.get(agent_id),
                 )
                 agents_error_count[agent_id] = error_count
                 step_rewards_raw[agent_id] = environment.get_step_reward(agent_id)
