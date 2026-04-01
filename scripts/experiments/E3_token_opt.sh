@@ -20,6 +20,7 @@ source "$(dirname "$0")/_common.sh"
 # The action head still runs but token-opt is the variable under test.
 
 export LLM_MODEL_PATH="$MODEL_2B"
+cd src/mindforge
 
 python multi_agent_craftium.py \
     --num-agents 3 \

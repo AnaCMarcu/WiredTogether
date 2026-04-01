@@ -20,6 +20,7 @@ source "$(dirname "$0")/_common.sh"
 # Model: Qwen3.5-2B  |  RQ: RQ4
 
 export LLM_MODEL_PATH="$MODEL_2B"
+cd src/mindforge
 
 python multi_agent_craftium.py \
     --num-agents 3 \

@@ -26,6 +26,7 @@ LTP=${LTP_VALS[$IDX]}
 DECAY=${DECAY_VALS[$IDX]}
 
 echo "Sweep config $IDX: ltp=$LTP, decay=$DECAY"
+cd src/mindforge
 
 python multi_agent_craftium.py \
     --num-agents 3 \
