@@ -11,7 +11,7 @@
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/E12-%A_%a.err
 # Submit: sbatch --array=0-2 E12_hebbian_nocomm.sh
 
-source "$(dirname "$0")/_common.sh"
+source "/scratch/acmarcu/WiredTogether/scripts/experiments/_common.sh"
 
 # H12: Hebbian with NO communication (RQ4)
 # Compared against: E1a (no comm, no Hebbian)
@@ -20,7 +20,6 @@ source "$(dirname "$0")/_common.sh"
 # Model: Qwen3.5-2B  |  RQ: RQ4
 
 export LLM_MODEL_PATH="$MODEL_2B"
-cd src/mindforge
 
 python multi_agent_craftium.py \
     --num-agents 3 \

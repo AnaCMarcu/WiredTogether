@@ -11,14 +11,13 @@
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/E5-%A_%a.err
 # Submit: sbatch --array=0-2 E5_hebbian.sh
 
-source "$(dirname "$0")/_common.sh"
+source "/scratch/acmarcu/WiredTogether/scripts/experiments/_common.sh"
 
 # H5: Hebbian social plasticity (core thesis contribution)
 # Compared against: E4 (ceiling baseline)
 # Model: Qwen3.5-2B  |  RQ: RQ1
 
 export LLM_MODEL_PATH="$MODEL_2B"
-cd src/mindforge
 
 python multi_agent_craftium.py \
     --num-agents 3 \

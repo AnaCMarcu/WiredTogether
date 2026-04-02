@@ -11,14 +11,13 @@
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/E10c-%A_%a.err
 # Submit: sbatch --array=0-2 E10c_6agents_hebbian.sh
 
-source "$(dirname "$0")/_common.sh"
+source "/scratch/acmarcu/WiredTogether/scripts/experiments/_common.sh"
 
 # H10: Scaling — 6 agents WITH Hebbian
 # Compared against: E10d (6 agents, no Hebbian)
 # Model: Qwen3.5-2B  |  RQ: RQ1+RQ2
 
 export LLM_MODEL_PATH="$MODEL_2B"
-cd src/mindforge
 
 python multi_agent_craftium.py \
     --num-agents 6 \

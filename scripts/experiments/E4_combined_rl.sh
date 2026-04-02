@@ -11,14 +11,13 @@
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/E4-%A_%a.err
 # Submit: sbatch --array=0-2 E4_combined_rl.sh
 
-source "$(dirname "$0")/_common.sh"
+source "/scratch/acmarcu/WiredTogether/scripts/experiments/_common.sh"
 
 # H4: Combined RL (action-level MAPPO + token-level optimization)
 # Compared against: E2, E3
 # Model: Qwen3.5-2B  |  RQ: Baseline
 
 export LLM_MODEL_PATH="$MODEL_2B"
-cd src/mindforge
 
 python multi_agent_craftium.py \
     --num-agents 3 \

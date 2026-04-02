@@ -12,7 +12,7 @@
 # Submit: sbatch --array=0-8 E5_sweep.sh
 # 9 configs: η ∈ {0.01, 0.05, 0.1} × λ ∈ {0.001, 0.005, 0.01}
 
-source "$(dirname "$0")/_common.sh"
+source "/scratch/acmarcu/WiredTogether/scripts/experiments/_common.sh"
 
 # H5 hyperparameter sweep (β fixed at 1.0 for now)
 export LLM_MODEL_PATH="$MODEL_2B"
@@ -26,7 +26,6 @@ LTP=${LTP_VALS[$IDX]}
 DECAY=${DECAY_VALS[$IDX]}
 
 echo "Sweep config $IDX: ltp=$LTP, decay=$DECAY"
-cd src/mindforge
 
 python multi_agent_craftium.py \
     --num-agents 3 \

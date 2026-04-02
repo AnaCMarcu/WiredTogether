@@ -11,7 +11,7 @@
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/E3-%A_%a.err
 # Submit: sbatch --array=0-2 E3_token_opt.sh
 
-source "$(dirname "$0")/_common.sh"
+source "/scratch/acmarcu/WiredTogether/scripts/experiments/_common.sh"
 
 # H3: Token-level optimization only (no action head)
 # Compared against: E1b baseline
@@ -20,7 +20,6 @@ source "$(dirname "$0")/_common.sh"
 # The action head still runs but token-opt is the variable under test.
 
 export LLM_MODEL_PATH="$MODEL_2B"
-cd src/mindforge
 
 python multi_agent_craftium.py \
     --num-agents 3 \

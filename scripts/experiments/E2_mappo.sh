@@ -11,14 +11,13 @@
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/E2-%A_%a.err
 # Submit: sbatch --array=0-2 E2_mappo.sh
 
-source "$(dirname "$0")/_common.sh"
+source "/scratch/acmarcu/WiredTogether/scripts/experiments/_common.sh"
 
 # H2: Action-level RL (MAPPO)
 # Compared against: E1b baseline
 # Model: Qwen3.5-2B  |  RQ: Baseline
 
 export LLM_MODEL_PATH="$MODEL_2B"
-cd src/mindforge
 
 python multi_agent_craftium.py \
     --num-agents 3 \

@@ -66,6 +66,14 @@ class CraftiumEnvironmentInterface:
     _IDLE_ACTIONS = frozenset({"NoOp", "Inventory"})
     _MAX_CONSECUTIVE_IDLE = 3
 
+    # Actions that need to be held for multiple env ticks to take effect.
+    # Minetest requires sustained key-press to break blocks / kill mobs.
+    # Values tuned for VoxeLibre: wood ~15 ticks bare-hand, stone ~30,
+    # chickens ~5 hits. 20 ticks is a good middle ground.
+    _SUSTAINED_TICKS = {
+        "Dig": 20,
+    }
+
     def __init__(self, num_agents=3, obs_width=320, obs_height=180, max_steps=10000, seed=None):
         self.num_agents = num_agents
         self.seed = seed
@@ -144,25 +152,48 @@ class CraftiumEnvironmentInterface:
         # Build action dict: acting agent gets the requested action, others NoOp
         actions = {}
         for i in range(self.num_agents):
-            agent_name = f"agent_{i}"
-            if agent_name not in self.env.agents:
+            ag = f"agent_{i}"
+            if ag not in self.env.agents:
                 continue  # skip terminated agents
             if i == agentId:
-                actions[agent_name] = ACTION_MAP[action_str]
+                actions[ag] = ACTION_MAP[action_str]
             else:
-                actions[agent_name] = ACTION_MAP["NoOp"]
+                actions[ag] = ACTION_MAP["NoOp"]
 
-        # Step the PettingZoo env
-        observations, rewards, terminations, truncations, infos = self.env.step(actions)
+        # Auto-equip: before Dig, switch to the best available tool.
+        # Reads the inventory file and sends one slot-switch tick if needed.
+        if action_str == "Dig":
+            best_slot = self._find_best_tool(agentId)
+            if best_slot is not None:
+                equip_actions = {}
+                slot_action_id = ACTION_MAP.get(f"Slot{best_slot}")
+                for ag_name in actions:
+                    i = int(ag_name.split("_")[1])
+                    equip_actions[ag_name] = slot_action_id if i == agentId else ACTION_MAP["NoOp"]
+                self.env.step(equip_actions)  # one tick to switch slot
+
+        # Sustained actions (Dig): repeat for multiple env ticks so blocks
+        # actually break and mobs actually take damage.
+        repeat = self._SUSTAINED_TICKS.get(action_str, 1)
+        total_rewards = {ag: 0.0 for ag in actions}
+
+        for tick in range(repeat):
+            observations, rewards, terminations, truncations, infos = self.env.step(actions)
+            for ag in rewards:
+                total_rewards[ag] += rewards[ag]
+            # Stop early if acting agent died or episode ended
+            acting_ag = f"agent_{agentId}"
+            if terminations.get(acting_ag, False) or truncations.get(acting_ag, False):
+                break
 
         self._observations = observations
         self._terminations = terminations
         self._truncations = truncations
         self._infos = infos
 
-        # Store raw per-step rewards and accumulate for summary
-        self._step_rewards = dict(rewards)
-        for agent_name, rew in rewards.items():
+        # Store raw per-step rewards (summed across sustained ticks) and accumulate
+        self._step_rewards = dict(total_rewards)
+        for agent_name, rew in total_rewards.items():
             self._rewards[agent_name] = self._rewards.get(agent_name, 0.0) + rew
 
         agent_name = f"agent_{agentId}"
@@ -311,6 +342,56 @@ class CraftiumEnvironmentInterface:
                 lines.append(f"  [{slot_num}] {name} x{count}{marker}")
 
         return "Hotbar:\n" + "\n".join(lines)
+
+    # Tool tier ranking — higher = better. Covers pickaxes, swords, and axes.
+    _TOOL_TIER = {
+        "diamond": 5, "iron": 4, "stone": 3, "wood": 2, "gold": 1,
+    }
+    _TOOL_TYPES = {"pick", "sword", "axe", "shovel", "hoe"}
+
+    def _find_best_tool(self, agentId: int):
+        """Read inventory and return the slot number (1-8) of the best tool, or None."""
+        world_path = self._get_world_path()
+        inv_file = os.path.join(world_path, f"inv_agent{agentId}.txt")
+        try:
+            with open(inv_file, "r") as f:
+                raw = f.read().strip()
+        except (FileNotFoundError, OSError):
+            return None
+
+        if not raw:
+            return None
+
+        parts = raw.split("|")
+        if len(parts) < 2:
+            return None
+
+        try:
+            wield_idx = int(parts[0])
+        except ValueError:
+            return None
+
+        slots = parts[1:]
+        best_slot = None
+        best_tier = -1
+
+        for i, slot_str in enumerate(slots):
+            if not slot_str:
+                continue
+            item_name = slot_str.rsplit(" ", 1)[0]  # "mcl_tools:pick_iron 1" -> "mcl_tools:pick_iron"
+            if ":" in item_name:
+                item_name = item_name.split(":", 1)[1]  # "pick_iron"
+            item_parts = item_name.split("_")
+            if len(item_parts) >= 2 and item_parts[0] in self._TOOL_TYPES:
+                tier = self._TOOL_TIER.get(item_parts[1], 0)
+                if tier > best_tier:
+                    best_tier = tier
+                    best_slot = i + 1  # 1-indexed
+
+        # Only switch if we found a tool and it's not already wielded
+        if best_slot is not None and best_slot != wield_idx:
+            return best_slot
+        return None
 
     def close(self):
         """Clean up the underlying environment."""
