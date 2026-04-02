@@ -50,7 +50,7 @@ ACTION_MAP = {
     "Slot8": 22,
 }
 
-VALID_ACTIONS = list(ACTION_MAP.keys())
+VALID_ACTIONS = [k for k in ACTION_MAP if k != "Inventory"]
 
 
 class CraftiumEnvironmentInterface:
@@ -71,7 +71,7 @@ class CraftiumEnvironmentInterface:
     # Values tuned for VoxeLibre: wood ~15 ticks bare-hand, stone ~30,
     # chickens ~5 hits. 20 ticks is a good middle ground.
     _SUSTAINED_TICKS = {
-        "Dig": 20,
+        "Dig": 5,
     }
 
     def __init__(self, num_agents=3, obs_width=320, obs_height=180, max_steps=10000, seed=None):
@@ -270,6 +270,16 @@ class CraftiumEnvironmentInterface:
         Empty slots are empty strings between pipes.
         """
         return self._read_inventory_file(agentId)
+
+    def get_position_text(self, agentId: int) -> str:
+        """Return a formatted position string for the given agent, or 'Unknown'."""
+        try:
+            pos = self.env.env._positions[agentId]
+            if pos is not None:
+                return f"x={pos[0]:.1f}, y={pos[1]:.1f}, z={pos[2]:.1f}"
+        except (AttributeError, IndexError, TypeError):
+            pass
+        return "Unknown"
 
     def warmup_noop(self):
         """Send NoOps to keep channels alive without incrementing step counters.

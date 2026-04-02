@@ -4,6 +4,7 @@ Example response format:
 Task: {task}
 Last action: {last_action}
 Reward: {reward_text}
+Position: {position_text}
 Critique: {critique}
 Error: {error}
 Inventory: {picked_object}

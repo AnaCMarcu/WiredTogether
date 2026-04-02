@@ -77,6 +77,7 @@ class CustomAgent(BaseChatAgent):
         picked_object=None,
         reward_text=None,
         social_bonds=None,
+        position_text=None,
     ):
 
         print("Error count: ", error_count)
@@ -198,6 +199,7 @@ class CustomAgent(BaseChatAgent):
             "task_beliefs": "",
             "reward_text": reward_text or "N/A",
             "social_bonds": social_bonds or "N/A",
+            "position_text": position_text or "Unknown",
         }
 
         if not self.voyager:
@@ -220,6 +222,7 @@ class CustomAgent(BaseChatAgent):
                 "task_beliefs": task_beliefs,
                 "reward_text": reward_text or "N/A",
                 "social_bonds": social_bonds or "N/A",
+                "position_text": position_text or "Unknown",
             }
             self.metric.log(f"Agent {self.name} beliefs: {beliefs}")
 
