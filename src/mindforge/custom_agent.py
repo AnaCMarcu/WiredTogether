@@ -78,6 +78,7 @@ class CustomAgent(BaseChatAgent):
         reward_text=None,
         social_bonds=None,
         position_text=None,
+        player_status_text=None,
     ):
 
         print("Error count: ", error_count)
@@ -110,6 +111,9 @@ class CustomAgent(BaseChatAgent):
                 communication,
                 error,
                 picked_object=picked_object,
+                reward_text=reward_text,
+                position_text=position_text,
+                player_status_text=player_status_text,
             )
             self.metric.log(
                 f"Agent {self.name}: Task '{task}' success: {success}, critique: {critique}"
@@ -166,6 +170,8 @@ class CustomAgent(BaseChatAgent):
                 critique=critique,
                 picked_object=picked_object,
                 cancellation_token=cancellation_token,
+                position_text=position_text,
+                player_status_text=player_status_text,
             )
             self.metric.log(f"Agent {self.name}: New task: {task}")
             self.belief_system.task_beliefs = context
@@ -200,6 +206,7 @@ class CustomAgent(BaseChatAgent):
             "reward_text": reward_text or "N/A",
             "social_bonds": social_bonds or "N/A",
             "position_text": position_text or "Unknown",
+            "player_status_text": player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
         }
 
         if not self.voyager:
@@ -223,6 +230,7 @@ class CustomAgent(BaseChatAgent):
                 "reward_text": reward_text or "N/A",
                 "social_bonds": social_bonds or "N/A",
                 "position_text": position_text or "Unknown",
+            "player_status_text": player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
             }
             self.metric.log(f"Agent {self.name} beliefs: {beliefs}")
 

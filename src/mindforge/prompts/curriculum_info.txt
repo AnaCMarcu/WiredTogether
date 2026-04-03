@@ -1,5 +1,11 @@
 {question_answers}
 
+Position: {position_text}
+Status: {player_status_text}
+Inventory: {picked_object}
+Nearby blocks: Infer from image
+Nearby entities: Infer from image
+
 Completed tasks so far: {completed_tasks}
 Failed tasks that are too hard: {failed_tasks}
 Last task: {last_task}
@@ -7,7 +13,6 @@ Last action: {last_action}
 Previous thoughts: {last_thoughts}
 Last task was a success: {success}
 Critique: {critique}
-Held item: {picked_object}
 
 Last communications received from other agents: {communications}
 

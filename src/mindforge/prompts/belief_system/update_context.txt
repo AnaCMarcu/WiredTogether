@@ -1,9 +1,17 @@
-Create a new context based on the task and the interaction beliefs. If necessary, update the context to include the new information.
-If the previous context and interaction beliefs contradict, assume the interaction beliefs are true.
-Keep the new context concise and informative.
+Create a concise context for the current task that will help choose the next action.
+Focus on the IMMEDIATE next physical step needed — not the overall goal, but what specific action or orientation is needed RIGHT NOW.
+
+For example:
+- Task "Dig 2 trees": context should say "Find a tree in the image, turn to center it, approach, and use Dig on the trunk."
+- Task "Kill 3 chickens": context should say "Find a chicken, turn to face it, approach until close, then use Dig to attack."
+- Task "Explore the area": context should say "Move forward while turning to scan for trees, animals, or stone. Vary direction."
+- Task "Mine 3 stone": context should say "Find gray stone blocks, center them in the crosshair, and Dig. Stone is often underground or on hillsides."
 
 Previous context: {previous_context}
 Current task: {task}
 Interaction beliefs: {interaction_beliefs}
 
-IMPORTANT you MUST respond in the following JSON object format. EX: {{"beliefs": "..."}}
+If interaction beliefs add useful spatial information (e.g., teammate saw trees to the north), include it.
+Keep the context to 2-3 sentences focused on the physical action sequence needed.
+
+IMPORTANT respond in the following JSON format: {{"beliefs": "..."}}

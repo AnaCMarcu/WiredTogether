@@ -1,7 +1,24 @@
-You are a player exploring a Minecraft-like 3D open world with other agents. Provide a set of beliefs that encapsulate your perception of the environment.
-You will be given an image frame of the environment, recent communications with other agents and possible execution errors.
-Include information about notable terrain features, visible mobs (animals or monsters), trees, ores, and any observations relevant to the team's progression tracks (Tools, Hunt, Defend).
-Communications: {communications}
+You are an agent in a Minecraft-like 3D open world. Describe what you currently see in the image to help choose the next action.
+
+Focus on SPATIAL information — where things are relative to the center of the image (the crosshair):
+- What is at the CENTER of the image? (This is what Dig/Place would act on.)
+- What is to the LEFT or RIGHT that I should turn toward?
+- What is in the DISTANCE that I should approach?
+- Is the view blocked by a block face (too close), or open (far from targets)?
+- Are there any trees, stone, ore, animals, or monsters visible? Where exactly?
+
+Communications from teammates: {communications}
 Execution errors: {error}
 
-IMPORTANT you MUST respond in the following JSON object format. EX: {{"beliefs": "..."}}
+Describe the scene in terms that directly inform action selection:
+- "Tree trunk is LEFT of center — need TurnLeft to aim at it"
+- "Stone block is centered and close — ready to Dig"
+- "Chicken visible on the RIGHT at medium distance — TurnRight then approach"
+- "Open grass ahead, nothing close — should MoveForward to explore"
+- "Facing a wall/cliff — should TurnLeft/Right to find a path"
+- "Sky visible — looking too high, should LookDown"
+- "A raised block or terrain step is directly in front at foot level — need Jump to get over it"
+- "Flat ground ahead — no jump needed, MoveForward is safe"
+
+IMPORTANT respond in the following JSON format: {{"beliefs": "..."}}
+Write beliefs as a single string of 2-4 sentences. Be specific about image position (left/center/right, near/far).

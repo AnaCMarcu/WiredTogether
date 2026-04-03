@@ -39,6 +39,8 @@ class Critic:
         do_conversation=True,
         picked_object=None,
         reward_text=None,
+        position_text=None,
+        player_status_text=None,
     ):
         # if do_conversation:
         #     return self.check_task_success_conversation(frame, cancellation_token, task, error, retry_count)
@@ -64,6 +66,8 @@ class Critic:
             communication=communication,
             picked_object=picked_object,
             reward_text=reward_text or "N/A",
+            position_text=position_text or "Unknown",
+            player_status_text=player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
         )
         return response.get("success", False), response.get("critique", "")
 

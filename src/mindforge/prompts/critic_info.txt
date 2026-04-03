@@ -1,6 +1,10 @@
 Task: {task}
 Last action: {last_action}
-Context: {context}
-Communication : {communication}
-Error: {error}
 Reward: {reward_text}
+Position: {position_text}
+Status: {player_status_text}
+Inventory: {picked_object}
+Nearby blocks: Infer from image
+Context: {context}
+Communication: {communication}
+Error: {error}

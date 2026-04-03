@@ -143,6 +143,8 @@ class AutoCurriculum:
         communications=None,
         do_question_answers=True,
         picked_object=None,
+        position_text=None,
+        player_status_text=None,
     ):
         # gather information for the curriculum prompt
         # used in eval, do not remove !!!
@@ -177,6 +179,8 @@ class AutoCurriculum:
             success=success,
             critique=critique,
             picked_object=picked_object,
+            position_text=position_text or "Unknown",
+            player_status_text=player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
         )
         task = response.get("task", self.current_task or "Explore") or "Explore"
         task = task.strip()

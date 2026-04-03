@@ -1,10 +1,26 @@
-Example response format:
-{{"thoughts": "Description of what you see and what you want to do", "action": "action name from the action list", "communication": "Send message to other agents"}}
+RESPONSE FORMAT (always use this exact JSON structure):
+{{"thoughts": "<spatial reasoning: what I see in the image, where the target is relative to center, why I chose this action>", "action": "<one action name from the list>", "communication": "<message to teammates or empty string>"}}
+
+GOOD THOUGHTS EXAMPLES:
+- "I see a tree trunk slightly to the left. I need to TurnLeft to center it before I can dig it."
+- "The stone block is centered in my crosshair and close. I will Dig to break it."
+- "I see a chicken to the right at medium distance. I will TurnRight to face it."
+- "The image shows open grass with nothing close. I will MoveForward to explore."
+- "I just turned and the tree is now centered but far. I will MoveForward to get closer."
+- "The zombie is centered. I will Dig to attack it."
+- "There is a one-block step / small hill directly in front of me and MoveForward has not moved me. I will Jump to get over it."
+- "My position has not changed for several steps despite moving forward. I am stuck on terrain. I will Jump."
+
+BAD THOUGHTS (avoid these):
+- "I will dig a tree." (no spatial reasoning — where is the tree? Is it centered?)
+- "I should explore." (too vague — which direction? what do you see?)
+- "NoOp" (almost never correct — always prefer a directional action)
 
 Task: {task}
 Last action: {last_action}
 Reward: {reward_text}
 Position: {position_text}
+Status: {player_status_text}
 Critique: {critique}
 Error: {error}
 Inventory: {picked_object}
@@ -16,3 +32,5 @@ Interaction beliefs: {interaction_beliefs}
 Partner beliefs: {partner_beliefs}
 Social bonds: {social_bonds}
 
+Look at the image carefully. Identify what is at the center, what is to the left/right, and how far away targets are.
+Then choose the single best action following the BASIC ACTION LOOP from your system instructions.

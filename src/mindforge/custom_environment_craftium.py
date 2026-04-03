@@ -271,6 +271,43 @@ class CraftiumEnvironmentInterface:
         """
         return self._read_inventory_file(agentId)
 
+    @staticmethod
+    def _tod_to_clock(tod: float) -> str:
+        """Convert Minetest time-of-day float (0.0-1.0) to a readable clock string."""
+        hours_f = tod * 24.0
+        h = int(hours_f) % 24
+        m = int((hours_f - int(hours_f)) * 60)
+        period = "AM" if h < 12 else "PM"
+        h12 = h % 12 or 12
+        phase = "day" if 6 <= h < 20 else "night"
+        return f"{h12}:{m:02d} {period} ({phase})"
+
+    def get_player_status_text(self, agentId: int) -> str:
+        """Return a single string with health, hunger, and time for the given agent."""
+        world_path = self._get_world_path()
+        agent_name = f"agent{agentId}"
+
+        def _read(path, fallback):
+            try:
+                with open(path, "r") as f:
+                    return f.read().strip()
+            except (FileNotFoundError, OSError):
+                return fallback
+
+        health = _read(os.path.join(world_path, f"health_{agent_name}.txt"), "?/20")
+        hunger = _read(os.path.join(world_path, f"hunger_{agent_name}.txt"), "?/20")
+
+        tod_raw = _read(os.path.join(world_path, "timeofday.txt"), None)
+        if tod_raw is not None:
+            try:
+                time_str = self._tod_to_clock(float(tod_raw))
+            except ValueError:
+                time_str = "Unknown"
+        else:
+            time_str = "Unknown"
+
+        return f"Health: {health} | Hunger: {hunger} | Time: {time_str}"
+
     def get_position_text(self, agentId: int) -> str:
         """Return a formatted position string for the given agent, or 'Unknown'."""
         try:

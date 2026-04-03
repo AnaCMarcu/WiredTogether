@@ -219,6 +219,7 @@ async def agent_do_action(
     error_count=0,
     social_bonds=None,
     position_text=None,
+    player_status_text=None,
 ):
     """Have one agent observe and choose an action.
 
@@ -251,6 +252,7 @@ async def agent_do_action(
         reward_text=reward_text,
         social_bonds=social_bonds,
         position_text=position_text,
+        player_status_text=player_status_text,
     )
 
     last_action = "NoOp"
@@ -266,6 +268,7 @@ async def agent_do_action(
                 error=str(e), error_count=error_count + 1,
                 social_bonds=social_bonds,
                 position_text=position_text,
+                player_status_text=player_status_text,
             )
         else:
             logging.error(f"Agent {agent_id} exceeded retry limit, using NoOp")
@@ -499,6 +502,7 @@ async def run(args):
                     error_count=error_count,
                     social_bonds=_bond_strings.get(agent_id),
                     position_text=environment.get_position_text(agent_id),
+                    player_status_text=environment.get_player_status_text(agent_id),
                 )
                 agents_error_count[agent_id] = error_count
                 step_rewards_raw[agent_id] = environment.get_step_reward(agent_id)
