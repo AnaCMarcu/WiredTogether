@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Sequence
 
@@ -179,60 +180,58 @@ class CustomAgent(BaseChatAgent):
         task = self.auto_curriculum.current_task
         task_beliefs = self.belief_system.task_beliefs
 
-        # Fetch relevant skills
-        # construct query for skill manager
-        query = await self.skill_manager.construct_query(
-            task, frame=last_frame, cancellation_token=cancellation_token
-        )
-        # fetch skills
-        skill_memory = await self.skill_manager.get_skills(query)
-
-        if not self.voyager:
-            # fetch episodes
-            episodes = self.episode_manager.retrieve_episodes(query)
-            # construct episode summary
-            episode_summary = await self.episode_manager.generate_episode_summary(
-                episodes, cancellation_token
+        # ── Parallel belief + memory fetches ──
+        async def _fetch_query_and_summary():
+            _query = await self.skill_manager.construct_query(
+                task, frame=last_frame, cancellation_token=cancellation_token
             )
-        else:
-            episode_summary = "Not available"
+            _skill_memory = await self.skill_manager.get_skills(_query)
+            if not self.voyager:
+                _episodes = self.episode_manager.retrieve_episodes(_query)
+                _episode_summary = await self.episode_manager.generate_episode_summary(
+                    _episodes, cancellation_token
+                )
+            else:
+                _episode_summary = "Not available"
+            return _query, _skill_memory, _episode_summary
 
-        # generate beliefs
+        async def _fetch_beliefs():
+            if self.voyager:
+                return {
+                    "perception_beliefs": "",
+                    "interaction_beliefs": "",
+                    "partner_beliefs": "",
+                    "task_beliefs": task_beliefs,
+                }
+            perception, partner, interaction, task_b = await asyncio.gather(
+                self.belief_system.create_perception_beliefs(
+                    last_frame, communication, error, cancellation_token
+                ),
+                self.belief_system.update_partner_beliefs(communication, cancellation_token),
+                self.belief_system.update_interaction_beliefs(task, communication, cancellation_token),
+                self.belief_system.update_task_beliefs(task, cancellation_token),
+            )
+            return {
+                "perception_beliefs": perception,
+                "partner_beliefs": partner,
+                "interaction_beliefs": interaction,
+                "task_beliefs": task_b,
+            }
+
+        (_, skill_memory, episode_summary), belief_parts = await asyncio.gather(
+            _fetch_query_and_summary(),
+            _fetch_beliefs(),
+        )
+
         beliefs = {
-            "perception_beliefs": "",
-            "interaction_beliefs": "",
-            "partner_beliefs": "",
-            "task_beliefs": "",
+            **belief_parts,
             "reward_text": reward_text or "N/A",
             "social_bonds": social_bonds or "N/A",
             "position_text": position_text or "Unknown",
             "player_status_text": player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
         }
-
-        if not self.voyager:
-            perception_beliefs = await self.belief_system.create_perception_beliefs(
-                last_frame, communication, error, cancellation_token
-            )
-            partner_beliefs = await self.belief_system.update_partner_beliefs(
-                communication, cancellation_token
-            )
-            interaction_beliefs = await self.belief_system.update_interaction_beliefs(
-                task, communication, cancellation_token
-            )
-            task_beliefs = await self.belief_system.update_task_beliefs(
-                task, cancellation_token
-            )
-            beliefs = {
-                "perception_beliefs": perception_beliefs,
-                "interaction_beliefs": interaction_beliefs,
-                "partner_beliefs": partner_beliefs,
-                "task_beliefs": task_beliefs,
-                "reward_text": reward_text or "N/A",
-                "social_bonds": social_bonds or "N/A",
-                "position_text": position_text or "Unknown",
-            "player_status_text": player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
-            }
-            self.metric.log(f"Agent {self.name} beliefs: {beliefs}")
+        self.belief_system.task_beliefs = belief_parts["task_beliefs"]
+        self.metric.log(f"Agent {self.name} beliefs: {beliefs}")
 
         # ── RL layer (action-level) ──
         rl_content = None
@@ -241,6 +240,9 @@ class CustomAgent(BaseChatAgent):
             rl_prompt = (
                 f"Task: {task}\n"
                 f"Last action: {last_action}\n"
+                f"Reward: {reward_text or 'N/A'}\n"
+                f"Position: {position_text or 'Unknown'}\n"
+                f"Status: {player_status_text or 'Health: ?/20 | Hunger: ?/20 | Time: Unknown'}\n"
                 f"Critique: {critique}\n"
                 f"Error: {error}\n"
                 f"Skills: {skill_memory}\n"

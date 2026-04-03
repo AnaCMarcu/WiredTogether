@@ -53,5 +53,5 @@ class RLConfig:
         "Jump", "Sneak", "Dig", "Place",
         "Slot1", "Slot2", "Slot3", "Slot4", "Slot5",
         "TurnRight", "TurnLeft", "LookDown", "LookUp",
-        "Inventory", "Drop", "Slot6", "Slot7", "Slot8",
+        "Drop", "Slot6", "Slot7", "Slot8",
     )
