@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=mindforge
+#SBATCH --job-name=test
 #SBATCH --partition=gpu-a100
 #SBATCH --time=03:00:00
 #SBATCH --ntasks=1
@@ -106,7 +106,8 @@ python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK
 #     --warmup-time 300 --rl --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
 #     --rl-update-interval 32
 
-python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 100
+# python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 100
+python test_scripted_agent.py --num-agents 1 --max-steps 500 --warmup-time 120 --verbose
 
 # Cleanup vLLM server
 if [ -n "${VLLM_PID:-}" ]; then
