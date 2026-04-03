@@ -10,13 +10,20 @@ from pathlib import Path
 def _chromadb_base_dir() -> str:
     """Return a fast-local directory for ChromaDB persistence.
 
-    On HPC, $HOME is NFS and causes SQLite I/O errors.
-    Prefer $SCRATCH or a sibling directory of the project.
+    SQLite (used by ChromaDB) requires POSIX file locks that Lustre/GPFS
+    (DelftBlue /scratch) does not reliably support → SQLITE_IOERR (code 5898).
+    Use /tmp on the compute node (local SSD) when running under SLURM.
+    Each job gets an isolated subdirectory via $SLURM_JOB_ID.
     """
+    job_id = os.environ.get("SLURM_JOB_ID")
+    if job_id:
+        base = f"/tmp/mindforge_{job_id}"
+        os.makedirs(base, exist_ok=True)
+        return os.path.join(base, "chromadb_autogen")
+    # Non-HPC: prefer $SCRATCH, fall back to home
     scratch = os.environ.get("SCRATCH")
     if scratch:
         return os.path.join(scratch, "chromadb_autogen")
-    # Fallback: use a directory next to the project
     return os.path.join(str(Path.home()), "chromadb_autogen")
 
 from autogen_agentchat.agents import AssistantAgent
