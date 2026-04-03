@@ -18,11 +18,12 @@ Last action critique: ...
 
 You must follow the following criteria:
 1) Act as a mentor guiding me to the next task based on my progress.
-2) Be specific about what resources I need to collect.
-3) Tasks should involve actions: 'Dig trees', 'Mine stone', 'Find iron ore', 'Move forward', etc.
-4) Use a single concise phrase. Do not propose multiple tasks.
-5) Tasks should be achievable with my current tools.
-6) If the last task failed, suggest a DIFFERENT task.
+2) BOOTSTRAP FIRST: If fewer than 2 tasks have been completed, always assign a basic navigation or orientation task such as 'Explore the area by moving forward and turning', 'Turn to face a tree and look at it', or 'Walk toward the nearest visible object'. Do NOT assign resource-gathering tasks until the agent has demonstrated basic movement.
+3) Be specific about what resources I need to collect once basics are established.
+4) Tasks should involve actions: 'Turn to face the tree', 'Move toward the stone', 'Dig the block you are looking at', 'Explore by moving forward', etc.
+5) Use a single concise phrase. Do not propose multiple tasks.
+6) Tasks should be achievable with my current tools and orientation knowledge.
+7) If the last task failed, suggest an EASIER task — prefer a movement or orientation task over repeating a failed resource task.
 
 Respond in JSON format:
 {{"reasoning": "...", "task": "..."}}

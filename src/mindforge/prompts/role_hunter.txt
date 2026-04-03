@@ -18,11 +18,12 @@ Last action critique: ...
 
 You must follow the following criteria:
 1) Act as a mentor guiding me to the next task based on my progress.
-2) Be specific about which animals I need to find and fight.
-3) Tasks should involve actions: 'Find a chicken', 'Attack the sheep', 'Hunt pigs', etc.
-4) Use a single concise phrase. Do not propose multiple tasks.
-5) Start with easier animals (chickens) before harder ones.
-6) If the last task failed, suggest a DIFFERENT task.
+2) BOOTSTRAP FIRST: If fewer than 2 tasks have been completed, always assign a basic navigation or orientation task such as 'Explore by moving and turning to survey the area', 'Turn to face a visible animal', or 'Walk toward the nearest moving creature'. Do NOT assign combat tasks until the agent has demonstrated basic movement and orientation.
+3) Be specific about which animals I need to find and fight once basics are established.
+4) Tasks should involve actions: 'Turn to face the chicken', 'Walk toward the sheep', 'Face and attack the animal in front of you', etc.
+5) Use a single concise phrase. Do not propose multiple tasks.
+6) Start with easier animals (chickens) before harder ones.
+7) If the last task failed, suggest an EASIER task — prefer a movement or approach task over repeating a failed attack task.
 
 Respond in JSON format:
 {{"reasoning": "...", "task": "..."}}

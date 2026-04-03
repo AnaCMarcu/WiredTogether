@@ -64,7 +64,7 @@ class CraftiumEnvironmentInterface:
 
     # Actions considered "idle" — repeating these wastes steps
     _IDLE_ACTIONS = frozenset({"NoOp", "Inventory"})
-    _MAX_CONSECUTIVE_IDLE = 3
+    _MAX_CONSECUTIVE_IDLE = 1
 
     # Actions that need to be held for multiple env ticks to take effect.
     # Minetest requires sustained key-press to break blocks / kill mobs.

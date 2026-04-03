@@ -53,7 +53,14 @@ Question 4: What tools do I currently have in my inventory?,
 Concept 4: available tools,
 Question 5: What blocks should I mine to progress the tools track?,
 Concept 5: mining progression,
-IMPORTANT only have questions that relate to the team's progression tracks.
+IMPORTANT: Always include at least 2 questions about basic navigation and orientation before asking about progression tracks. Examples:
+Question: What direction am I currently facing and what is directly in front of me?
+Concept: orientation
+Question: How far away is the nearest visible target and what direction should I turn to face it?
+Concept: navigation toward target
+Question: Am I currently looking at something I can interact with (a block, animal, or monster in my crosshair)?
+Concept: targeting
+Only then ask questions that relate to the team's progression tracks.
 
 IMPORTANT, You should only respond in the format as described below, where field 'questions' is a list of strings:
 RESPONSE FORMAT:

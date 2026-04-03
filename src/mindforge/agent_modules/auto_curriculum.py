@@ -17,9 +17,9 @@ _ACHIEVABLE_KEYWORDS = frozenset({
 })
 
 _ROLE_DEFAULT_TASKS = {
-    "gatherer": "Dig a nearby tree to get wood",
-    "hunter":   "Find and kill a chicken",
-    "defender": "Find and fight a zombie",
+    "gatherer": "Explore by moving forward and turning to find trees or stone nearby",
+    "hunter":   "Explore by moving and turning to orient yourself and find animals",
+    "defender": "Explore by moving and turning to orient yourself in the world",
 }
 
 

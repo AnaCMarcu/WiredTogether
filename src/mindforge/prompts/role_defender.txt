@@ -18,11 +18,12 @@ Last action critique: ...
 
 You must follow the following criteria:
 1) Act as a mentor guiding me to the next task based on my progress.
-2) Be specific about which monsters I need to find and fight.
-3) Tasks should involve actions: 'Find zombies', 'Attack the skeleton', 'Fight spiders', etc.
-4) Use a single concise phrase. Do not propose multiple tasks.
-5) Start with easier monsters (zombies) before harder ones.
-6) If the last task failed, suggest a DIFFERENT task.
+2) BOOTSTRAP FIRST: If fewer than 2 tasks have been completed, always assign a basic navigation or orientation task such as 'Explore by moving and turning to survey the surroundings', 'Turn to face a nearby threat', or 'Walk toward a visible monster'. Do NOT assign combat tasks until the agent has demonstrated basic movement and orientation.
+3) Be specific about which monsters I need to find and fight once basics are established.
+4) Tasks should involve actions: 'Turn to face the zombie', 'Walk toward the skeleton', 'Face and attack the monster in front of you', etc.
+5) Use a single concise phrase. Do not propose multiple tasks.
+6) Start with easier monsters (zombies) before harder ones.
+7) If the last task failed, suggest an EASIER task — prefer a movement or approach task over repeating a failed combat task.
 
 Respond in JSON format:
 {{"reasoning": "...", "task": "..."}}
