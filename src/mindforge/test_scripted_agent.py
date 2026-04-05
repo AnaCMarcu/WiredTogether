@@ -265,8 +265,8 @@ def run_test(num_agents: int, num_episodes: int, max_steps: int,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scripted agent environment test")
-    parser.add_argument("--num-agents", type=int, default=1,
-                        help="Number of agents (start with 1 to keep it simple)")
+    parser.add_argument("--num-agents", type=int, default=2,
+                        help="Number of agents (minimum 2, required by MarlCraftiumEnv)")
     parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--max-steps", type=int, default=200,
                         help="Steps per episode. Use 500+ to have a chance at reward 128")
