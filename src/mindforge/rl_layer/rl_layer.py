@@ -264,7 +264,10 @@ class RLLayer:
         )
 
         all_info = {}
-        scaler = torch.amp.GradScaler("cuda", enabled=self._device.type == "cuda")
+        # GradScaler requires FP32 model weights; since the model is loaded
+        # directly in FP16/BF16, gradients are already in that dtype and the
+        # scaler would raise "Attempting to unscale FP16 gradients." Disable it.
+        scaler = torch.amp.GradScaler("cuda", enabled=False)
         for epoch in range(self.config.ppo_epochs):
             for batch in self.buffer.sample_batches(self.config.mini_batch_size):
                 with torch.amp.autocast(self._device.type, dtype=self._dtype):
@@ -424,7 +427,7 @@ class RLLayer:
 
         self.model.train()
         all_info = {"decision": "train", "reason": reason, "skill_focus": skill_focus}
-        scaler = torch.amp.GradScaler("cuda", enabled=self._device.type == "cuda")
+        scaler = torch.amp.GradScaler("cuda", enabled=False)
         for epoch in range(self.config.token_opt_epochs):
             for start in range(0, len(transitions), self.config.mini_batch_size):
                 batch = transitions[start:start + self.config.mini_batch_size]

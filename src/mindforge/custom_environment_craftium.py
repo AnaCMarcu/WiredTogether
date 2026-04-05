@@ -180,7 +180,8 @@ class CraftiumEnvironmentInterface:
         for tick in range(repeat):
             observations, rewards, terminations, truncations, infos = self.env.step(actions)
             for ag in rewards:
-                total_rewards[ag] += rewards[ag]
+                if ag in total_rewards:
+                    total_rewards[ag] += rewards[ag]
             # Stop early if acting agent died or episode ended
             acting_ag = f"agent_{agentId}"
             if terminations.get(acting_ag, False) or truncations.get(acting_ag, False):
