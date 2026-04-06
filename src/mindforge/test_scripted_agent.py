@@ -316,19 +316,23 @@ def run_test(num_agents: int, num_episodes: int, max_steps: int,
 
 
 def run_dig_test(num_agents: int, warmup_time: int):
-    """Focused dig test: LookDown then Dig repeatedly for 60 steps.
+    """Focused dig test: Dig at eye level (no LookDown) then collect drops.
 
-    This guarantees the crosshair is always on a ground block, so if Dig
-    is broken the reward will be flat zero and inventory won't change.
+    Strategy:
+      - Agents spawn with random yaw facing the environment.
+      - Eye-level dig hits TREE TRUNKS, which the stone axe can break quickly.
+      - LookDown was removed: axe on dirt/grass (wrong tool) takes 50+ ticks
+        to break — far more than our sustained-tick budget.
+      - After each dig burst, MoveForward collects the dropped items.
 
     What to look for:
-      - PASS: reward spikes on individual Dig steps (not flat), inventory fills
-      - FAIL: reward stays 0.0 every step → Dig not registering hits
-      - PARTIAL: reward spikes but inventory empty → blocks breaking, items not picked up
+      - PASS: reward spikes on individual Dig steps, inventory fills with wood/items
+      - FAIL: reward stays 0.0 → Dig not registering (check connection / server log)
+      - PARTIAL: reward spikes but inventory empty → blocks break, need more MoveForward
     """
     print(f"\n{'='*60}")
-    print(f"  DIG TEST — LookDown + Dig x60 per agent")
-    print(f"  This tests whether Dig hits blocks and generates rewards.")
+    print(f"  DIG TEST — eye-level Dig x60 + MoveForward to collect per agent")
+    print(f"  Agents face random directions at spawn; some will face trees.")
     print(f"{'='*60}\n")
 
     env = CraftiumEnvironmentInterface(num_agents=num_agents, obs_width=320, obs_height=180, max_steps=200)
@@ -365,12 +369,10 @@ def run_dig_test(num_agents: int, warmup_time: int):
     elapsed = time.time() - warmup_start
     print(f"  Warmup done ({elapsed:.0f}s, {'loaded' if all_loaded else 'timeout'})")
 
-    print(f"\n  [PHASE 1] LookDown x5 — aim at ground")
-    for _ in range(5):
-        for agent_id in range(num_agents):
-            env.step("LookDown", agentId=agent_id)
-
-    print(f"  [PHASE 2] Dig x60 — break ground blocks")
+    # No LookDown: stone axe on dirt/grass (wrong tool) takes 50+ physics ticks
+    # to break. Eye-level (horizontal) aims at tree trunks — correct tool match.
+    print(f"\n  [PHASE 1] Dig x60 at eye level — aim at whatever is directly ahead")
+    print(f"  (agents spawned with random yaw; some will face trees)")
     step_rewards = {i: [] for i in range(num_agents)}
     inv_before = {i: env.pickedup_object(i) for i in range(num_agents)}
 
@@ -383,6 +385,13 @@ def run_dig_test(num_agents: int, warmup_time: int):
             step_rewards[agent_id].append(r)
             if r > 0.001:
                 print(f"    step {step:3d} agent_{agent_id}: reward={r:.4f}  ← block hit")
+
+    # Walk forward to collect dropped items (items drop on the ground where the
+    # block was; Minetest requires stepping on them to pick them up).
+    print(f"\n  [PHASE 2] MoveForward x10 — collect dropped items")
+    for _ in range(10):
+        for agent_id in range(num_agents):
+            env.step("MoveForward", agentId=agent_id)
 
     inv_after = {i: env.pickedup_object(i) for i in range(num_agents)}
 
