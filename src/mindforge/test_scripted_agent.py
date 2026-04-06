@@ -36,76 +36,78 @@ from custom_environment_craftium import CraftiumEnvironmentInterface, ACTION_MAP
 # ──────────────────────────────────────────────
 
 class ScriptedPolicy:
-    """Dead-simple rule-based policy.
+    """Rule-based policy designed to maximise movement and block-breaking.
 
-    Strategy:
-      - Rotate right for a few steps to scan for trees (center pixel heuristic)
-      - Move forward to close distance
-      - Dig repeatedly when facing something (any block gives small reward)
-      - Occasionally jump to get unstuck
-      - Repeat
+    Strategy (repeating cycle):
+      1. Walk forward for many steps (actually changes X/Z position)
+      2. Look down and dig ground-level blocks (guaranteed to face a block)
+      3. Look up to reset camera pitch
+      4. Turn to a new direction to avoid getting stuck on one wall
+      5. Repeat
 
-    No vision model. No LLM. This is purely to test that the env works.
+    If no reward for a long stretch, execute a full escape sequence:
+    jump + turn 180 + walk forward.
+
+    No vision model. No LLM.
     """
+
+    # Cycle definition: list of (duration, action)
+    _CYCLE = [
+        (20, "MoveForward"),   # walk forward — changes position
+        (3,  "LookDown"),      # aim at ground
+        (15, "Dig"),           # dig ground blocks (always hits something)
+        (3,  "LookUp"),        # reset pitch
+        (5,  "TurnRight"),     # change heading
+        (20, "MoveForward"),   # walk in new direction
+        (3,  "LookDown"),
+        (15, "Dig"),
+        (3,  "LookUp"),
+        (5,  "TurnRight"),
+        (10, "MoveForward"),
+        (3,  "Jump"),          # clear obstacles
+        (10, "MoveForward"),
+        (5,  "TurnRight"),
+    ]
+    _CYCLE_LEN = sum(d for d, _ in _CYCLE)
 
     def __init__(self):
         self._step = 0
-        self._dig_streak = 0
         self._no_reward_streak = 0
+        self._escape_remaining = 0
 
     def act(self, obs: np.ndarray, last_reward: float) -> str:
-        """Return an action name string given the current observation frame."""
         t = self._step
         self._step += 1
 
-        # Track reward streaks
-        if last_reward > 0.01:
+        if last_reward > 0.001:
             self._no_reward_streak = 0
-            self._dig_streak += 1
         else:
             self._no_reward_streak += 1
-            self._dig_streak = 0
 
-        # If we've been digging and getting rewards, keep digging
-        if self._dig_streak > 0 and self._dig_streak < 30:
-            return "Dig"
-
-        # If stuck (no reward for a long time), try to get unstuck
-        if self._no_reward_streak > 20:
-            self._no_reward_streak = 0
-            # Cycle through unstuck moves
-            unstuck = t % 40
-            if unstuck < 5:
+        # Escape sequence: stuck for too long → jump + turn + sprint
+        if self._escape_remaining > 0:
+            self._escape_remaining -= 1
+            seq_pos = self._escape_remaining
+            if seq_pos >= 25:
                 return "Jump"
-            elif unstuck < 10:
-                return "MoveForward"
-            elif unstuck < 15:
+            elif seq_pos >= 15:
                 return "TurnRight"
-            elif unstuck < 20:
-                return "TurnRight"
-            elif unstuck < 25:
-                return "MoveForward"
             else:
-                return "Dig"
+                return "MoveForward"
 
-        # Default scanning pattern: turn + move + dig
-        phase = t % 60
-        if phase < 10:
-            return "TurnRight"      # scan right
-        elif phase < 15:
-            return "MoveForward"    # close distance
-        elif phase < 25:
-            return "Dig"            # try to hit block
-        elif phase < 30:
-            return "TurnLeft"       # scan left
-        elif phase < 35:
-            return "MoveForward"
-        elif phase < 45:
-            return "Dig"
-        elif phase < 50:
-            return "TurnRight"
-        else:
-            return "MoveForward"
+        if self._no_reward_streak > 40:
+            self._no_reward_streak = 0
+            self._escape_remaining = 35
+            return "Jump"
+
+        # Normal cycle
+        pos = t % self._CYCLE_LEN
+        acc = 0
+        for duration, action in self._CYCLE:
+            acc += duration
+            if pos < acc:
+                return action
+        return "MoveForward"
 
 
 # ──────────────────────────────────────────────
@@ -141,6 +143,7 @@ def run_test(num_agents: int, num_episodes: int, max_steps: int,
         max_warmup = 900
         all_loaded = False
         last_log = 0.0
+        consecutive_loaded = 0  # require sustained signal, not a single fluke
         while time.time() - warmup_start < max_warmup:
             observations = env.warmup_noop()
             elapsed = time.time() - warmup_start
@@ -152,17 +155,62 @@ def run_test(num_agents: int, num_episodes: int, max_steps: int,
 
             if elapsed - last_log >= 15.0 and stds:
                 std_str = ", ".join(f"a{i}={s:.1f}" for i, s in enumerate(stds))
-                print(f"    [{elapsed:.0f}s] std: {std_str}  (>30 = loaded)")
+                print(f"    [{elapsed:.0f}s] std: {std_str}  (>25 = loaded)")
                 last_log = elapsed
 
-            if elapsed >= warmup_time and stds and all(s > 30.0 for s in stds):
-                all_loaded = True
-                break
+            # Lower threshold to 25 (was 30) and require 3 consecutive checks
+            if elapsed >= warmup_time and stds and all(s > 25.0 for s in stds):
+                consecutive_loaded += 1
+                if consecutive_loaded >= 3:
+                    all_loaded = True
+                    break
+            else:
+                consecutive_loaded = 0
             time.sleep(2)
 
         elapsed = time.time() - warmup_start
         status = "loaded" if all_loaded else "timeout"
         print(f"  Warm-up done ({elapsed:.0f}s, {status})")
+
+        # ── Inventory sanity check ──
+        # Verify the Lua mod wrote inventory files and that init_tools were given.
+        # Expected: slot 1 = stone axe, slot 2 = torches (from init_tools in Lua mod).
+        print(f"\n  [INVENTORY CHECK]")
+        inv_ok = True
+        world_path = env._get_world_path()
+        for i in range(num_agents):
+            inv_file = os.path.join(world_path, f"inv_agent{i}.txt")
+            # Read raw file
+            try:
+                with open(inv_file, "r") as f:
+                    raw = f.read().strip()
+                print(f"    agent_{i} raw inventory file: '{raw}'")
+                if not raw or all(s == "" for s in raw.split("|")[1:]):
+                    print(f"    agent_{i} WARNING: inventory is empty — init_tools not applied?")
+                    inv_ok = False
+                else:
+                    # Check for expected tools
+                    has_axe   = "axe_stone" in raw
+                    has_torch = "torch" in raw
+                    status_str = []
+                    if has_axe:   status_str.append("stone axe OK")
+                    else:         status_str.append("stone axe MISSING")
+                    if has_torch: status_str.append("torches OK")
+                    else:         status_str.append("torches MISSING")
+                    print(f"    agent_{i}: {', '.join(status_str)}")
+                    if not has_axe or not has_torch:
+                        inv_ok = False
+            except FileNotFoundError:
+                print(f"    agent_{i} ERROR: inventory file not found at {inv_file}")
+                print(f"      -> Lua globalstep may not have run yet, or world path is wrong")
+                inv_ok = False
+
+        if inv_ok:
+            print(f"  [INVENTORY CHECK] PASS — all agents have expected tools")
+        else:
+            print(f"  [INVENTORY CHECK] FAIL — check Lua mod on_joinplayer and world path")
+            print(f"    World path used: {world_path}")
+        print()
 
         # ── Per-agent policies and state ──
         policies = [ScriptedPolicy() for _ in range(num_agents)]
@@ -225,7 +273,7 @@ def run_test(num_agents: int, num_episodes: int, max_steps: int,
     print(f"  FINAL RESULTS ({num_episodes} episodes)")
     print(f"{'='*60}")
     for ep_idx, ep_rewards in enumerate(all_episode_rewards):
-        print(f"  Episode {ep_idx+1}: {[f'{r:.1f}' for r in ep_rewards]}")
+        print(f"  Episode {ep_idx+1}: {[f'{r:.3f}' for r in ep_rewards]}")
 
     if milestone_hits:
         print(f"\n  Milestones reached:")
@@ -240,7 +288,7 @@ def run_test(num_agents: int, num_episodes: int, max_steps: int,
     print(f"  DIAGNOSIS")
     print(f"{'='*60}")
     total_reward = sum(sum(ep) for ep in all_episode_rewards)
-    if total_reward < 0.1:
+    if total_reward < 0.001:
         print("  PROBLEM: Zero total reward. Likely causes:")
         print("    1. Agents are not moving (check warmup / connection)")
         print("    2. Dig is not hitting blocks (orientation issue)")
