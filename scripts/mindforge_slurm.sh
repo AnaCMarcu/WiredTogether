@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=mindforge
+#SBATCH --job-name=fixes_reduce_llm
 #SBATCH --partition=gpu-a100
-#SBATCH --time=02:00:00
+#SBATCH --time=08:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1

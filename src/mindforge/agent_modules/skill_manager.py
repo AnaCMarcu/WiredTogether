@@ -123,12 +123,14 @@ class SkillManager:
         self, action: str, cancellation_token, agent_thoughts: str = None
     ):
 
-        # generate skill description and name
-        skill_name, skill_description = await self.generate_skill_description(
-            action, cancellation_token, agent_thoughts
+        # Fix 5: for discrete actions, template the skill entry — no LLM call needed.
+        # generate_skill_description() was designed for code-writing; here the "skill"
+        # is a single action word, so a template is sufficient and cheaper.
+        skill_name = action.lower().replace(" ", "_") if action else "unknown"
+        skill_description = (
+            f"Action: {action}. Context: {agent_thoughts or 'No additional context.'}"
         )
 
-        # Skip saving when description generation failed
         if skill_name == "unknown" or not skill_description:
             logging.warning(
                 f"Skipping skill save: name='{skill_name}', description='{skill_description}'"

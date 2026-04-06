@@ -69,6 +69,8 @@ class CustomAgent(BaseChatAgent):
         self.metric = metric
         self.voyager = voyager
         self._last_reward_text = "N/A"
+        self._episode_summary_cache = "There are no past episodes."
+        self._episode_summary_dirty = False
 
 
     # Message types that this agent can produce
@@ -168,6 +170,7 @@ class CustomAgent(BaseChatAgent):
                 critique=critique,
                 success=success,
             )
+            self._episode_summary_dirty = True
         # Generate new task if there is no current task
         # or if the agent has failed more than 5 times in a row (then append last task to failed tasks)
         # or if task was succeded ( then append last task to completed tasks)
@@ -195,6 +198,7 @@ class CustomAgent(BaseChatAgent):
                 cancellation_token=cancellation_token,
                 position_text=position_text,
                 player_status_text=player_status_text,
+                do_question_answers=False,
             )
             self.metric.log(f"Agent {self.name}: New task: {task}")
             self.belief_system.task_beliefs = context
@@ -204,18 +208,22 @@ class CustomAgent(BaseChatAgent):
 
         # ── Parallel belief + memory fetches ──
         async def _fetch_query_and_summary():
-            _query = await self.skill_manager.construct_query(
-                task, frame=last_frame, cancellation_token=cancellation_token
-            )
-            _skill_memory = await self.skill_manager.get_skills(_query)
+            # Fix 1: use task directly as query — no LLM call needed for discrete actions
+            _skill_memory = await self.skill_manager.get_skills(task)
             if not self.voyager:
-                _episodes = self.episode_manager.retrieve_episodes(_query)
-                _episode_summary = await self.episode_manager.generate_episode_summary(
-                    _episodes, cancellation_token
-                )
+                # Fix 2: only regenerate episode summary when new episodes were added
+                if self._episode_summary_dirty:
+                    _episodes = self.episode_manager.retrieve_episodes(task)
+                    _episode_summary = await self.episode_manager.generate_episode_summary(
+                        _episodes, cancellation_token
+                    )
+                    self._episode_summary_cache = _episode_summary
+                    self._episode_summary_dirty = False
+                else:
+                    _episode_summary = self._episode_summary_cache
             else:
                 _episode_summary = "Not available"
-            return _query, _skill_memory, _episode_summary
+            return _skill_memory, _episode_summary
 
         async def _fetch_beliefs():
             if self.voyager:
@@ -233,24 +241,25 @@ class CustomAgent(BaseChatAgent):
                     "interaction_beliefs": self.belief_system.interaction_beliefs,
                     "task_beliefs": self.belief_system.task_beliefs,
                 })
-            perception, partner, interaction, task_b = await asyncio.gather(
+            # Fix 4: task_beliefs come from curriculum (set at task assignment) — no need to
+            # re-ask the LLM every belief_interval steps since the task doesn't change mid-task.
+            perception, partner, interaction = await asyncio.gather(
                 self.belief_system.create_perception_beliefs(
                     last_frame, communication, error, cancellation_token
                 ),
                 self.belief_system.update_partner_beliefs(communication, cancellation_token),
                 self.belief_system.update_interaction_beliefs(task, communication, cancellation_token),
-                self.belief_system.update_task_beliefs(task, cancellation_token),
             )
             result = {
                 "perception_beliefs": perception,
                 "partner_beliefs": partner,
                 "interaction_beliefs": interaction,
-                "task_beliefs": task_b,
+                "task_beliefs": self.belief_system.task_beliefs,
             }
             self._cached_beliefs = result
             return result
 
-        (_, skill_memory, episode_summary), belief_parts = await asyncio.gather(
+        (skill_memory, episode_summary), belief_parts = await asyncio.gather(
             _fetch_query_and_summary(),
             _fetch_beliefs(),
         )
