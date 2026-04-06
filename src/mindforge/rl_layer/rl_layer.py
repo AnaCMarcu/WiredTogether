@@ -492,4 +492,4 @@ class RLLayer:
         outputs = self.model(**enc, output_hidden_states=True)
         last_hidden = outputs.hidden_states[-1]  # (1, L, H)
         seq_len = enc.attention_mask.sum(dim=1) - 1  # (1,)
-        return last_hidden[:, seq_len.item(), :]  # (1, H)
+        return last_hidden[:, seq_len.item(), :].float()  # (1, H) — upcast to fp32 to prevent NaN from fp16 overflow

@@ -66,7 +66,7 @@ def action_level_ppo_step(
     seq_lengths = (enc.attention_mask.sum(dim=1) - 1).to(device)  # (B,)
     last_hidden = outputs.hidden_states[-1]  # (B, L, H)
     batch_idx = torch.arange(last_hidden.size(0), device=device)
-    pooled = last_hidden[batch_idx, seq_lengths]  # (B, H)
+    pooled = last_hidden[batch_idx, seq_lengths].float()  # (B, H) — upcast to fp32 to prevent NaN from fp16 overflow
 
     # Action head → policy distribution over discrete actions
     action_logits = action_head(pooled)  # (B, n_actions)
