@@ -311,8 +311,91 @@ def run_test(num_agents: int, num_episodes: int, max_steps: int,
     print("\nDone.")
 
 
+def run_dig_test(num_agents: int, warmup_time: int):
+    """Focused dig test: LookDown then Dig repeatedly for 60 steps.
+
+    This guarantees the crosshair is always on a ground block, so if Dig
+    is broken the reward will be flat zero and inventory won't change.
+
+    What to look for:
+      - PASS: reward spikes on individual Dig steps (not flat), inventory fills
+      - FAIL: reward stays 0.0 every step → Dig not registering hits
+      - PARTIAL: reward spikes but inventory empty → blocks breaking, items not picked up
+    """
+    print(f"\n{'='*60}")
+    print(f"  DIG TEST — LookDown + Dig x60 per agent")
+    print(f"  This tests whether Dig hits blocks and generates rewards.")
+    print(f"{'='*60}\n")
+
+    env = CraftiumEnvironmentInterface(num_agents=num_agents, obs_width=320, obs_height=180, max_steps=200)
+    env.reset()
+
+    # warmup
+    import time as _time
+    print(f"  Waiting for warmup ({warmup_time}s)...")
+    _time.sleep(warmup_time)
+    # drain a few noops
+    for _ in range(10):
+        env.warmup_noop()
+
+    print(f"\n  [PHASE 1] LookDown x5 — aim at ground")
+    for _ in range(5):
+        for agent_id in range(num_agents):
+            env.step("LookDown", agentId=agent_id)
+
+    print(f"  [PHASE 2] Dig x60 — break ground blocks")
+    step_rewards = {i: [] for i in range(num_agents)}
+    inv_before = {i: env.pickedup_object(i) for i in range(num_agents)}
+
+    for step in range(60):
+        for agent_id in range(num_agents):
+            if env._terminations.get(f"agent_{agent_id}", False):
+                continue
+            env.step("Dig", agentId=agent_id)
+            r = env.get_step_reward(agent_id)
+            step_rewards[agent_id].append(r)
+            if r > 0.001:
+                print(f"    step {step:3d} agent_{agent_id}: reward={r:.4f}  ← block hit")
+
+    inv_after = {i: env.pickedup_object(i) for i in range(num_agents)}
+
+    print(f"\n  [RESULTS]")
+    for i in range(num_agents):
+        rewards = step_rewards[i]
+        nonzero = [r for r in rewards if r > 0.001]
+        total = sum(rewards)
+        print(f"  agent_{i}:")
+        print(f"    total reward over 60 Dig steps: {total:.4f}")
+        print(f"    steps with nonzero reward: {len(nonzero)}/{len(rewards)}")
+        print(f"    reward per hit: {(total/len(nonzero)):.4f}" if nonzero else "    reward per hit: N/A (no hits)")
+        print(f"    inventory before: {inv_before[i]}")
+        print(f"    inventory after:  {inv_after[i]}")
+
+        if total < 0.001:
+            print(f"    FAIL: Dig produced no reward — crosshair may be misaimed or Dig action not registering")
+        elif not nonzero:
+            print(f"    FAIL: Total reward nonzero but no per-step spikes — reward may be passive/continuous")
+        elif inv_before[i] == inv_after[i]:
+            print(f"    PARTIAL: Reward OK but inventory unchanged — blocks breaking but items not being picked up")
+        else:
+            print(f"    PASS: Dig works, reward spikes on hits, inventory changed")
+
+    # The tail_server_log() calls inside env.step("Dig") already printed matching lines
+    # in real-time. Do a final sweep to catch anything buffered after the last step.
+    print(f"\n  [SERVER LOG — final sweep]")
+    remaining = env.tail_server_log()
+    if not remaining:
+        print(f"  (no new lines — all events were printed in real-time above)")
+        print(f"  Note: dirt/grass digs don't emit [TOOLS]; only tree/stone/iron/diamond do.")
+
+    env.close()
+    print("\nDig test done.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scripted agent environment test")
+    parser.add_argument("--mode", choices=["normal", "dig"], default="normal",
+                        help="normal = full scripted policy test; dig = focused dig verification test")
     parser.add_argument("--num-agents", type=int, default=2,
                         help="Number of agents (minimum 2, required by MarlCraftiumEnv)")
     parser.add_argument("--episodes", type=int, default=1)
@@ -324,10 +407,16 @@ if __name__ == "__main__":
                         help="Print every non-zero reward, not just large ones")
     args = parser.parse_args()
 
-    run_test(
-        num_agents=args.num_agents,
-        num_episodes=args.episodes,
-        max_steps=args.max_steps,
-        warmup_time=args.warmup_time,
-        verbose=args.verbose,
-    )
+    if args.mode == "dig":
+        run_dig_test(
+            num_agents=args.num_agents,
+            warmup_time=args.warmup_time,
+        )
+    else:
+        run_test(
+            num_agents=args.num_agents,
+            num_episodes=args.episodes,
+            max_steps=args.max_steps,
+            warmup_time=args.warmup_time,
+            verbose=args.verbose,
+        )

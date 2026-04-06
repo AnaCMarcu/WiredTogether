@@ -118,6 +118,10 @@ class CraftiumEnvironmentInterface:
         self._stuck_move_steps = {}  # agent_name -> int, consecutive non-idle steps without xz change
         self._escape_queue = {}      # agent_name -> list of (action, ticks) remaining
 
+        # Server log tailer — surfaces [TOOLS]/[INVENTORY]/[TRACK STATUS] lines from Lua
+        self._server_log_offset = 0   # byte offset into stderr.txt, tracks what we've already read
+        self._server_log_path = None  # resolved lazily after first reset()
+
     # ------------------------------------------------------------------
     # Core interface
     # ------------------------------------------------------------------
@@ -134,6 +138,7 @@ class CraftiumEnvironmentInterface:
         self._last_xz = {}
         self._stuck_move_steps = {}
         self._escape_queue = {}
+        self.reset_log_offset()
         return self._observations
 
     def step(self, action_str: str, agentId: int):
@@ -283,6 +288,10 @@ class CraftiumEnvironmentInterface:
         self._terminations = terminations
         self._truncations = truncations
         self._infos = infos
+
+        # Surface any new Lua log lines after a Dig (block breaks, track progress, etc.)
+        if action_str == "Dig":
+            self.tail_server_log()
 
         # Store raw per-step rewards (summed across sustained ticks) and accumulate
         self._step_rewards = dict(total_rewards)
@@ -532,6 +541,72 @@ class CraftiumEnvironmentInterface:
         if best_slot is not None and best_slot != wield_idx:
             return best_slot
         return None
+
+    # ------------------------------------------------------------------
+    # Server log tailer
+    # ------------------------------------------------------------------
+
+    # Lines from the Lua server log that are worth surfacing in Python output.
+    _LOG_TAGS = ("[TOOLS]", "[INVENTORY]", "[TRACK STATUS]", "[DIG]", "[HUNT]", "[DEFEND]")
+
+    def _get_server_log_path(self):
+        """Resolve and cache the path to the server's stderr.txt."""
+        if self._server_log_path is None:
+            try:
+                srv_run_dir = self.env.env.mt_server.run_dir
+                self._server_log_path = os.path.join(os.path.abspath(srv_run_dir), "stderr.txt")
+            except AttributeError:
+                pass
+        return self._server_log_path
+
+    def tail_server_log(self, tags=None, print_lines=True):
+        """Read any new lines from the server's stderr.txt since the last call.
+
+        Only lines that start with one of the watched tags are returned.
+        Calls after reset() automatically re-anchor to the current EOF so old
+        log lines from previous runs don't flood the output.
+
+        Args:
+            tags: tuple of tag strings to filter on (default: _LOG_TAGS)
+            print_lines: if True, print matching lines to stdout
+
+        Returns:
+            list[str] of matching new lines (without trailing newline)
+        """
+        path = self._get_server_log_path()
+        if path is None or not os.path.exists(path):
+            return []
+
+        tags = tags or self._LOG_TAGS
+        matched = []
+        try:
+            with open(path, "r", errors="replace") as f:
+                f.seek(self._server_log_offset)
+                for line in f:
+                    stripped = line.rstrip()
+                    if any(stripped.startswith(t) for t in tags):
+                        matched.append(stripped)
+                        if print_lines:
+                            print(f"  [SRV] {stripped}")
+                self._server_log_offset = f.tell()
+        except OSError:
+            pass
+        return matched
+
+    def reset_log_offset(self):
+        """Anchor the log tailer to the current EOF (call after env.reset()).
+
+        This prevents lines from a previous episode from appearing in the
+        current one.
+        """
+        path = self._get_server_log_path()
+        if path is None:
+            self._server_log_offset = 0
+            return
+        try:
+            self._server_log_offset = os.path.getsize(path)
+        except OSError:
+            self._server_log_offset = 0
 
     def close(self):
         """Clean up the underlying environment."""
