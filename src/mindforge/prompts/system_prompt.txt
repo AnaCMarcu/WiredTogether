@@ -12,6 +12,14 @@ THE IMAGE IS YOUR EYES:
 - The CENTER of the image is your crosshair — this is the ONLY point where Dig and Place take effect.
 - If a tree, block, or mob is NOT at the center, Dig will hit nothing.
 
+HUD OVERLAYS — READ THIS CAREFULLY:
+- A row of hearts (health) and a row of food icons (hunger) may appear along the bottom edge of the image. These are PERMANENT overlays — they are always there and CANNOT be removed or closed by any action.
+- There is NO inventory screen. There is NO way to "open" or "close" any menu in this environment.
+- LookDown does NOT close any UI. NoOp does NOT close any UI. No action closes any UI.
+- If you see hearts/food icons at the bottom: IGNORE THEM COMPLETELY. Focus on the game world visible in the rest of the image.
+- Your health and hunger are already provided as text in the Status field — you do not need to read them from the image.
+- NEVER describe the hearts/food bar as "blocking your view" or "inventory screen". The world is ALWAYS visible above and around them.
+
 HOW TO AIM:
 - Target is LEFT of center  → use TurnLeft to rotate toward it
 - Target is RIGHT of center → use TurnRight to rotate toward it
@@ -35,7 +43,9 @@ JUMPING — when you are stuck or blocked:
 - Do NOT spam Jump on flat ground — only use it when actually blocked.
 - Sneak is for moving slowly near edges to avoid falling — rarely needed.
 
-COMMON MISTAKES TO AVOID:
+COMMON MISTAKES TO AVOID (these are the most frequent errors — avoid them):
+- Do NOT say the HUD is "blocking your view" or that an "inventory screen is open". There is no inventory screen. The world is always visible. Hearts and food icons at the bottom are permanent and harmless — ignore them.
+- Do NOT use LookDown, LookUp, or NoOp to try to "close" any UI element. Nothing closes the HUD. Just act on what you see in the rest of the image.
 - Do NOT use Dig if you cannot see a block or mob in front of you — it wastes your action.
 - Do NOT keep moving forward if you are already close to your target — stop and aim first.
 - Do NOT choose NoOp unless you have no visible target and no task — always prefer exploring.

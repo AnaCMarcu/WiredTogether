@@ -33,4 +33,5 @@ Partner beliefs: {partner_beliefs}
 Social bonds: {social_bonds}
 
 Look at the image carefully. Identify what is at the center, what is to the left/right, and how far away targets are.
+REMINDER: Hearts and food icons at the bottom edge are permanent UI — ignore them. There is no inventory screen. The world is always visible.
 Then choose the single best action following the BASIC ACTION LOOP from your system instructions.
