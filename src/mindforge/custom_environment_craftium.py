@@ -68,16 +68,17 @@ class CraftiumEnvironmentInterface:
 
     # Actions that need to be held for multiple env ticks to take effect.
     # Minetest requires sustained key-press to break blocks / kill mobs.
-    # Values tuned for VoxeLibre: wood ~15 ticks bare-hand, stone ~30,
-    # chickens ~5 hits. 20 ticks is a good middle ground.
+    # With frameskip=3, each env.step() = 3 physics ticks, so multiply accordingly.
+    # VoxeLibre bare-hand: wood ~15 physics ticks, stone ~30.
+    # At frameskip=3: 3 env steps = 9 ticks (enough for wood), 6 steps = 18 ticks.
     _SUSTAINED_TICKS = {
-        "Dig": 5,
+        "Dig": 3,
     }
 
     # Position-stuck detection: if x/z haven't moved more than this threshold
     # after this many consecutive movement actions, the agent is physically stuck
     # (e.g. trapped in a self-dug pit or pressed against terrain).
-    _STUCK_THRESHOLD_XZ = 0.5   # blocks — less than this = stuck
+    _STUCK_THRESHOLD_XZ = 1.0   # blocks — less than this = stuck (higher with frameskip=3)
     _STUCK_MAX_STEPS = 8        # consecutive movement steps before escape
     # Escape sequence to execute when stuck: (action, repeat_ticks)
     _ESCAPE_SEQUENCE = [
@@ -88,7 +89,7 @@ class CraftiumEnvironmentInterface:
         ("MoveForward", 8),
     ]
 
-    def __init__(self, num_agents=3, obs_width=320, obs_height=180, max_steps=10000, seed=None):
+    def __init__(self, num_agents=3, obs_width=480, obs_height=480, max_steps=10000, seed=None, frameskip=3, pmul=20):
         self.num_agents = num_agents
         self.seed = seed
         self.env = OpenWorldMultiAgentEnv(
@@ -97,6 +98,8 @@ class CraftiumEnvironmentInterface:
             obs_height=obs_height,
             max_steps=max_steps,
             seed=seed,
+            frameskip=frameskip,
+            pmul=pmul,
         )
         self.environment_prompt = environment_prompt
 
@@ -252,6 +255,15 @@ class CraftiumEnvironmentInterface:
                     equip_actions[ag_name] = slot_action_id if i == agentId else ACTION_MAP["NoOp"]
                 self.env.step(equip_actions)  # one tick to switch slot
 
+        # Jump+forward pairing: a bare Jump rarely clears obstacles since the
+        # agent doesn't move horizontally while airborne.  Send MoveForward on
+        # the tick immediately after Jump so the agent actually vaults over terrain.
+        if action_str == "Jump":
+            fwd_actions = {ag: (ACTION_MAP["MoveForward"] if ag == f"agent_{agentId}" else ACTION_MAP["NoOp"])
+                           for ag in actions}
+            self.env.step(actions)      # jump tick
+            actions = fwd_actions       # forward tick (becomes the "main" step below)
+
         # Sustained actions (Dig): repeat for multiple env ticks so blocks
         # actually break and mobs actually take damage.
         repeat = self._SUSTAINED_TICKS.get(action_str, 1)
@@ -295,7 +307,7 @@ class CraftiumEnvironmentInterface:
         frame = self.get_agent_frame(agentId)
         if frame is None:
             # Return a blank image if no observation available
-            return PIL.Image.new("RGB", (320, 180), (0, 0, 0))
+            return PIL.Image.new("RGB", (self.env.obs_width, self.env.obs_height), (0, 0, 0))
         return PIL.Image.fromarray(frame)
 
     def get_reward_summary(self, agentId: int) -> str:

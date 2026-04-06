@@ -394,12 +394,14 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
     def __init__(
         self,
         num_agents: int = 2,
-        obs_width: int = 320,
-        obs_height: int = 180,
+        obs_width: int = 480,
+        obs_height: int = 480,
         max_steps: int = 10000,
         task_focus: Optional[str] = None,
         render_mode: Optional[str] = None,
         seed: Optional[int] = None,
+        frameskip: int = 3,
+        pmul: int = 20,
     ):
         super().__init__()
 
@@ -410,6 +412,8 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         self.max_steps = max_steps
         self.task_focus = task_focus
         self.render_mode = render_mode
+        self.frameskip = frameskip
+        self.pmul = pmul
 
         # Define agent names BEFORE creating env (needed for num_agents property)
         self.possible_agents = [f"agent_{i}" for i in range(num_agents)]
@@ -447,6 +451,8 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
             minetest_dir=minetest_dir,
             mt_listen_timeout=300_000,  # 5 min per client; VoxeLibre loads slowly on HPC
             seed=seed,  # fixed_map_seed for Minetest world generation
+            frameskip=frameskip,
+            pmul=pmul,
         )
 
         # Define observation and action spaces
