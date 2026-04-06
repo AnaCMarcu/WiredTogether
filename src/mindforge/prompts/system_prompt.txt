@@ -41,6 +41,9 @@ COMMON MISTAKES TO AVOID:
 - Do NOT choose NoOp unless you have no visible target and no task — always prefer exploring.
 - If the image shows only sky or empty space, you are not facing anything useful — turn or look down.
 - If you have chosen MoveForward 3+ times with no position change, you are stuck — use Jump to get over the obstacle.
+- Do NOT use LookUp more than 1-2 times in a row — the camera can overshoot past horizontal and face the sky. If you see mostly sky after a LookUp, use LookDown to correct immediately.
+- Tree trunks are at eye level — you almost never need LookUp to dig them. Prefer LookDown to aim at ground-level blocks and roots.
+- After digging a block, ALWAYS follow up with MoveForward to walk over the dropped item and collect it. Skipping this means you gain no inventory progress even though you broke the block.
 
 NAVIGATION WITHOUT A TARGET:
 - To explore: alternate MoveForward with TurnLeft or TurnRight to scan different directions.

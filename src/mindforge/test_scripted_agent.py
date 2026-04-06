@@ -52,21 +52,25 @@ class ScriptedPolicy:
     """
 
     # Cycle definition: list of (duration, action)
+    # Design rules:
+    #   - NO LookUp: after LookDown the camera overshoots when looking back up,
+    #     leaving the crosshair aimed at sky → Dig hits nothing → escape fires.
+    #   - MoveForward AFTER Dig: dropped items lie on the ground where the block
+    #     was; walking over them auto-collects them (Minetest pickup radius ~1 block).
+    #   - LookDown before each Dig block: re-aims camera regardless of current pitch.
     _CYCLE = [
-        (20, "MoveForward"),   # walk forward — changes position
         (3,  "LookDown"),      # aim at ground
-        (15, "Dig"),           # dig ground blocks (always hits something)
-        (3,  "LookUp"),        # reset pitch
-        (5,  "TurnRight"),     # change heading
-        (20, "MoveForward"),   # walk in new direction
-        (3,  "LookDown"),
-        (15, "Dig"),
-        (3,  "LookUp"),
-        (5,  "TurnRight"),
-        (10, "MoveForward"),
+        (12, "Dig"),           # break ground blocks
+        (6,  "MoveForward"),   # walk over drops → auto-collect items
+        (3,  "TurnRight"),     # new heading
+        (3,  "LookDown"),      # re-aim
+        (12, "Dig"),
+        (6,  "MoveForward"),   # collect
+        (3,  "TurnRight"),
+        (15, "MoveForward"),   # explore — find new terrain / trees
         (3,  "Jump"),          # clear obstacles
         (10, "MoveForward"),
-        (5,  "TurnRight"),
+        (3,  "TurnRight"),
     ]
     _CYCLE_LEN = sum(d for d, _ in _CYCLE)
 
@@ -330,13 +334,36 @@ def run_dig_test(num_agents: int, warmup_time: int):
     env = CraftiumEnvironmentInterface(num_agents=num_agents, obs_width=320, obs_height=180, max_steps=200)
     env.reset()
 
-    # warmup
-    import time as _time
-    print(f"  Waiting for warmup ({warmup_time}s)...")
-    _time.sleep(warmup_time)
-    # drain a few noops
-    for _ in range(10):
-        env.warmup_noop()
+    # Proper polling warmup — must keep reading the socket or the TCP buffer fills up
+    # and the connection breaks after ~30s. Same logic as run_test().
+    print(f"  Waiting for warmup ({warmup_time}s min, polling socket)...")
+    warmup_start = time.time()
+    all_loaded = False
+    last_log = 0.0
+    consecutive_loaded = 0
+    while time.time() - warmup_start < 900:
+        observations = env.warmup_noop()
+        elapsed = time.time() - warmup_start
+
+        stds = [float(np.std(obs.astype(np.float32))) if obs is not None else 0.0
+                for obs in (observations or [])]
+
+        if elapsed - last_log >= 15.0 and stds:
+            std_str = ", ".join(f"a{i}={s:.1f}" for i, s in enumerate(stds))
+            print(f"    [{elapsed:.0f}s] std: {std_str}  (>25 = loaded)")
+            last_log = elapsed
+
+        if elapsed >= warmup_time and stds and all(s > 25.0 for s in stds):
+            consecutive_loaded += 1
+            if consecutive_loaded >= 3:
+                all_loaded = True
+                break
+        else:
+            consecutive_loaded = 0
+        time.sleep(2)
+
+    elapsed = time.time() - warmup_start
+    print(f"  Warmup done ({elapsed:.0f}s, {'loaded' if all_loaded else 'timeout'})")
 
     print(f"\n  [PHASE 1] LookDown x5 — aim at ground")
     for _ in range(5):

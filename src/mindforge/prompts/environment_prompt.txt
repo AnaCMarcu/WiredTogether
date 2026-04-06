@@ -47,3 +47,10 @@ DEFEND TRACK (monster fighting):
 You start with a stone axe and torches. New tools are awarded to ALL agents when a tools stage is completed.
 Your current inventory is shown in the "Inventory" field above. Use Slot1-Slot8 to select which item to hold.
 Digging blocks always gives a small reward. Dying gives a large penalty.
+
+ITEM COLLECTION — this is required to progress:
+  When you dig a block, the item drops on the ground at that location.
+  To pick it up you MUST walk over it: use MoveForward toward where the block was.
+  Items are NOT collected automatically by digging — you must step on them.
+  After every Dig sequence, always follow up with MoveForward to collect the drops.
+  Example sequence: LookDown → Dig (×several) → MoveForward (×2-3) → now collected.

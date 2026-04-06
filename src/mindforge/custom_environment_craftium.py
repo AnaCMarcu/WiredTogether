@@ -64,6 +64,14 @@ class CraftiumEnvironmentInterface:
 
     # Actions considered "idle" — repeating these wastes steps
     _IDLE_ACTIONS = frozenset({"NoOp", "Inventory"})
+
+    # Camera pitch cap: agent may look at most this many LookDown steps below
+    # horizontal, or this many LookUp steps above it.  Beyond these limits the
+    # action is redirected to keep the crosshair in a useful range.
+    # Each LookDown/LookUp step moves ~10-15° at _MOUSE_MOV=0.5.
+    # Cap of 4 ≈ 40-60° down (enough to aim at ground), 2 up (enough to see trees).
+    _PITCH_MAX_DOWN = 4   # positive pitch limit (looking down)
+    _PITCH_MAX_UP   = 2   # negative pitch limit (looking up)
     _MAX_CONSECUTIVE_IDLE = 1
 
     # Actions that need to be held for multiple env ticks to take effect.
@@ -118,6 +126,11 @@ class CraftiumEnvironmentInterface:
         self._stuck_move_steps = {}  # agent_name -> int, consecutive non-idle steps without xz change
         self._escape_queue = {}      # agent_name -> list of (action, ticks) remaining
 
+        # Camera pitch tracker (net LookDown steps minus LookUp steps).
+        # Positive = looking down, negative = looking up.
+        # Capped at [-_PITCH_CAP, +_PITCH_CAP] to prevent staring at sky/ground.
+        self._pitch = {}  # agent_name -> int
+
         # Server log tailer — surfaces [TOOLS]/[INVENTORY]/[TRACK STATUS] lines from Lua
         self._server_log_offset = 0   # byte offset into stderr.txt, tracks what we've already read
         self._server_log_path = None  # resolved lazily after first reset()
@@ -138,6 +151,7 @@ class CraftiumEnvironmentInterface:
         self._last_xz = {}
         self._stuck_move_steps = {}
         self._escape_queue = {}
+        self._pitch = {}
         self.reset_log_offset()
         return self._observations
 
@@ -236,6 +250,22 @@ class CraftiumEnvironmentInterface:
             else:
                 # Non-movement action — reset stuck counter (position change not expected)
                 self._stuck_move_steps[agent_name] = 0
+
+        # Camera pitch cap: prevent runaway LookUp (staring at sky) / LookDown (ground only).
+        pitch = self._pitch.get(agent_name, 0)
+        if action_str == "LookDown":
+            if pitch >= self._PITCH_MAX_DOWN:
+                _logging.debug(f"Agent {agentId} pitch cap hit (down={pitch}), redirecting LookDown → NoOp")
+                action_str = "NoOp"
+            else:
+                self._pitch[agent_name] = pitch + 1
+        elif action_str == "LookUp":
+            if pitch <= -self._PITCH_MAX_UP:
+                _logging.warning(f"Agent {agentId} pitch cap hit (up={-pitch}), redirecting LookUp → LookDown")
+                action_str = "LookDown"
+                self._pitch[agent_name] = pitch + 1
+            else:
+                self._pitch[agent_name] = pitch - 1
 
         # Build action dict: acting agent gets the requested action, others NoOp
         actions = {}
