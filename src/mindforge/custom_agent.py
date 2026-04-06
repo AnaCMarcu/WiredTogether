@@ -278,6 +278,11 @@ class CustomAgent(BaseChatAgent):
         rl_content = None
         if self.rl_layer and self.rl_layer.enabled:
             # Build the same prompt the LLM would see
+            comm_text = ""
+            if communication:
+                comm_text = "\n".join(
+                    f"  {c}" for c in communication if c
+                )
             rl_prompt = (
                 f"Task: {task}\n"
                 f"Last action: {last_action}\n"
@@ -286,6 +291,7 @@ class CustomAgent(BaseChatAgent):
                 f"Status: {player_status_text or 'Health: ?/20 | Hunger: ?/20 | Time: Unknown'}\n"
                 f"Critique: {critique}\n"
                 f"Error: {error}\n"
+                f"Communications:\n{comm_text or '  (none)'}\n"
                 f"Skills: {skill_memory}\n"
                 f"Episodes: {episode_summary}\n"
                 f"Task beliefs: {beliefs.get('task_beliefs', '')}\n"
@@ -293,6 +299,9 @@ class CustomAgent(BaseChatAgent):
                 f"Interaction: {beliefs.get('interaction_beliefs', '')}\n"
                 f"Partner: {beliefs.get('partner_beliefs', '')}\n"
             )
+            import logging as _log
+            _log.debug("Agent %s RL prompt:\n%s", self.name, rl_prompt)
+            self.metric.log(f"Agent {self.name} RL prompt: {rl_prompt[:500]}")
             rl_content = self.rl_layer.select_action(rl_prompt)
 
         if rl_content is not None:
