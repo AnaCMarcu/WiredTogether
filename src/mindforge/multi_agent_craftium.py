@@ -407,6 +407,7 @@ async def run(args):
         warmup_start = _time.time()
         all_loaded = False
         last_log_time = 0.0
+        consecutive_loaded = 0  # require sustained signal across multiple checks
         while _time.time() - warmup_start < max_warmup:
             observations = environment.warmup_noop()
             elapsed = _time.time() - warmup_start
@@ -423,17 +424,20 @@ async def run(args):
             # Log progress every 30s
             if elapsed - last_log_time >= 30.0 and stds:
                 std_str = ", ".join(f"agent_{i}={s:.1f}" for i, s in enumerate(stds))
-                print(f"    [{elapsed:.0f}s] std-dev: {std_str}  (>30 = loaded)")
+                print(f"    [{elapsed:.0f}s] std-dev: {std_str}  (>25 = loaded)")
                 last_log_time = elapsed
 
-            # After minimum warm-up time, check if loading screens are gone
+            # After minimum warm-up time, check if loading screens are gone.
+            # Use threshold 25 (not 30) and require 3 consecutive checks to
+            # avoid false-positives from VoxeLibre's second loading phase.
             if elapsed >= warmup_secs and stds:
-                # Loading screen is mostly uniform dark gray/black.
-                # Game world has varied colors -> higher std deviation.
-                loaded_count = sum(1 for s in stds if s > 30.0)
-                if loaded_count == num_agents:
-                    all_loaded = True
-                    break
+                if all(s > 25.0 for s in stds):
+                    consecutive_loaded += 1
+                    if consecutive_loaded >= 3:
+                        all_loaded = True
+                        break
+                else:
+                    consecutive_loaded = 0
             _time.sleep(2)
         elapsed = _time.time() - warmup_start
         if all_loaded:

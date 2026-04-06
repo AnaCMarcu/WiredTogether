@@ -74,6 +74,20 @@ class CraftiumEnvironmentInterface:
         "Dig": 5,
     }
 
+    # Position-stuck detection: if x/z haven't moved more than this threshold
+    # after this many consecutive movement actions, the agent is physically stuck
+    # (e.g. trapped in a self-dug pit or pressed against terrain).
+    _STUCK_THRESHOLD_XZ = 0.5   # blocks — less than this = stuck
+    _STUCK_MAX_STEPS = 8        # consecutive movement steps before escape
+    # Escape sequence to execute when stuck: (action, repeat_ticks)
+    _ESCAPE_SEQUENCE = [
+        ("Jump", 3),
+        ("MoveBackward", 5),
+        ("TurnRight", 4),
+        ("Jump", 3),
+        ("MoveForward", 8),
+    ]
+
     def __init__(self, num_agents=3, obs_width=320, obs_height=180, max_steps=10000, seed=None):
         self.num_agents = num_agents
         self.seed = seed
@@ -96,6 +110,11 @@ class CraftiumEnvironmentInterface:
         self._last_actions = {}   # agent_name -> str
         self._consecutive_idle = {}  # agent_name -> int
 
+        # Position-stuck tracking
+        self._last_xz = {}           # agent_name -> (x, z) at last movement action
+        self._stuck_move_steps = {}  # agent_name -> int, consecutive non-idle steps without xz change
+        self._escape_queue = {}      # agent_name -> list of (action, ticks) remaining
+
     # ------------------------------------------------------------------
     # Core interface
     # ------------------------------------------------------------------
@@ -109,6 +128,9 @@ class CraftiumEnvironmentInterface:
         self._truncations = {a: False for a in self.env.possible_agents}
         self._last_actions = {a: "NoOp" for a in self.env.possible_agents}
         self._consecutive_idle = {a: 0 for a in self.env.possible_agents}
+        self._last_xz = {}
+        self._stuck_move_steps = {}
+        self._escape_queue = {}
         return self._observations
 
     def step(self, action_str: str, agentId: int):
@@ -132,6 +154,8 @@ class CraftiumEnvironmentInterface:
             )
             action_str = "NoOp"
 
+        import logging as _logging
+
         # Guard: break idle loops (NoOp/Inventory spam)
         agent_name = f"agent_{agentId}"
         if action_str in self._IDLE_ACTIONS:
@@ -139,8 +163,7 @@ class CraftiumEnvironmentInterface:
                 self._consecutive_idle.get(agent_name, 0) + 1
             )
             if self._consecutive_idle[agent_name] >= self._MAX_CONSECUTIVE_IDLE:
-                import logging
-                logging.warning(
+                _logging.warning(
                     f"Agent {agentId} idle for {self._consecutive_idle[agent_name]} "
                     f"steps, forcing MoveForward"
                 )
@@ -148,6 +171,63 @@ class CraftiumEnvironmentInterface:
                 self._consecutive_idle[agent_name] = 0
         else:
             self._consecutive_idle[agent_name] = 0
+
+        # Guard: position-stuck detection.
+        # If an escape sequence is queued, consume from it first.
+        if self._escape_queue.get(agent_name):
+            esc_action, esc_ticks = self._escape_queue[agent_name][0]
+            esc_ticks -= 1
+            if esc_ticks <= 0:
+                self._escape_queue[agent_name].pop(0)
+            else:
+                self._escape_queue[agent_name][0] = (esc_action, esc_ticks)
+            action_str = esc_action
+        else:
+            # Track whether x/z position changed on movement actions
+            _movement_actions = frozenset({
+                "MoveForward", "MoveBackward", "MoveLeft", "MoveRight", "Jump"
+            })
+            if action_str in _movement_actions:
+                try:
+                    pos = self.env.env._positions[agentId]
+                    cur_xz = (pos[0], pos[2]) if pos is not None else None
+                except (AttributeError, IndexError, TypeError):
+                    cur_xz = None
+
+                if cur_xz is not None:
+                    last_xz = self._last_xz.get(agent_name)
+                    if last_xz is not None:
+                        dx = abs(cur_xz[0] - last_xz[0])
+                        dz = abs(cur_xz[1] - last_xz[1])
+                        if dx < self._STUCK_THRESHOLD_XZ and dz < self._STUCK_THRESHOLD_XZ:
+                            self._stuck_move_steps[agent_name] = (
+                                self._stuck_move_steps.get(agent_name, 0) + 1
+                            )
+                        else:
+                            self._stuck_move_steps[agent_name] = 0
+                            self._last_xz[agent_name] = cur_xz
+                    else:
+                        self._last_xz[agent_name] = cur_xz
+                        self._stuck_move_steps[agent_name] = 0
+
+                    if self._stuck_move_steps.get(agent_name, 0) >= self._STUCK_MAX_STEPS:
+                        _logging.warning(
+                            f"Agent {agentId} physically stuck at xz={cur_xz} for "
+                            f"{self._stuck_move_steps[agent_name]} steps — injecting escape sequence"
+                        )
+                        self._stuck_move_steps[agent_name] = 0
+                        self._last_xz[agent_name] = None
+                        self._escape_queue[agent_name] = [
+                            list(step) for step in self._ESCAPE_SEQUENCE
+                        ]
+                        esc_action, esc_ticks = self._escape_queue[agent_name][0]
+                        self._escape_queue[agent_name][0] = [esc_action, esc_ticks - 1]
+                        if self._escape_queue[agent_name][0][1] <= 0:
+                            self._escape_queue[agent_name].pop(0)
+                        action_str = esc_action
+            else:
+                # Non-movement action — reset stuck counter (position change not expected)
+                self._stuck_move_steps[agent_name] = 0
 
         # Build action dict: acting agent gets the requested action, others NoOp
         actions = {}
