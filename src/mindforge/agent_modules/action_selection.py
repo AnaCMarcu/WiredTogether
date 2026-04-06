@@ -30,12 +30,12 @@ class ActionSelection:
         candidate_model_client=None,
     ):
         self.system_prompt = (
-            system_prompt if system_prompt else safe_format(system_prompt_txt)
+            system_prompt if system_prompt else safe_format(system_prompt_txt, environment_prompt=environment_prompt)
         )
         self.system_prompt_prediction = (
             system_prompt_prediction
             if system_prompt_prediction
-            else safe_format(system_prompt_prediction_txt)
+            else safe_format(system_prompt_prediction_txt, environment_prompt=environment_prompt)
         )
         self.action_model_client = (
             action_model_client
@@ -121,7 +121,7 @@ class ActionSelection:
     ):
         content = await llm_call(
             self.candidate_model_client,
-            system_prompt=safe_format(system_prompt_candidate_interventions),
+            system_prompt=safe_format(system_prompt_candidate_interventions, environment_prompt=environment_prompt),
             user_prompt=instruction_prompt_p2_candidate + messages[0].content[0],
             frame=last_frame,
             cancellation_token=cancellation_token,

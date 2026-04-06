@@ -131,11 +131,13 @@ class RLLayer:
         self.model.print_trainable_parameters()
         self._adapter_name = adapter_name
 
-        # ── Heads (must match model dtype to avoid Half/Float mismatch) ──
+        # ── Heads — always float32 ──
+        # pooled hidden states are upcast to float32 (in _encode_prompt and mappo.py)
+        # to prevent NaN from fp16 overflow, so heads must also be float32.
         hidden_size = self.model.config.hidden_size
         n_actions = len(config.actions)
-        self.action_head = ActionHead(hidden_size, n_actions).to(device=self._device, dtype=self._dtype)
-        self.value_head = ValueHead(hidden_size, config.value_hidden).to(device=self._device, dtype=self._dtype)
+        self.action_head = ActionHead(hidden_size, n_actions).to(device=self._device, dtype=torch.float32)
+        self.value_head = ValueHead(hidden_size, config.value_hidden).to(device=self._device, dtype=torch.float32)
 
         # ── Optimizer (LoRA params + heads) ──
         trainable = (
