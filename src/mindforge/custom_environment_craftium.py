@@ -266,9 +266,9 @@ class CraftiumEnvironmentInterface:
                 self._pitch[agent_name] = pitch + 1
         elif action_str == "LookUp":
             if pitch <= -self._PITCH_MAX_UP:
-                _logging.warning(f"Agent {agentId} pitch cap hit (up={-pitch}), redirecting LookUp → LookDown")
-                action_str = "LookDown"
-                self._pitch[agent_name] = pitch + 1
+                _logging.debug(f"Agent {agentId} pitch cap hit (up={-pitch}), redirecting LookUp → NoOp")
+                action_str = "NoOp"
+                # pitch stays at its current capped value — no increment
             else:
                 self._pitch[agent_name] = pitch - 1
 

@@ -16,6 +16,22 @@ _ACHIEVABLE_KEYWORDS = frozenset({
     "collect", "gather", "get", "pick",              # generic gathering
 })
 
+# Words that indicate a task is stuck on a map fixture or UI artifact.
+# Any task containing one of these is replaced with the role default even if
+# it also contains an achievable keyword (e.g. "move away from the golden block").
+_TASK_BLOCKLIST = frozenset({
+    "golden",   # spawn platform block — agents fixate on it
+    "spawn",    # any reference to the spawn point itself
+    "platform", # explicit platform references
+    "hud",      # UI confusion
+    "interface",
+    "inventory screen",
+    "leave the golden",
+    "clear the golden",
+    "collect the golden",
+    "break the golden",
+})
+
 _ROLE_DEFAULT_TASKS = {
     "gatherer": "Explore by moving forward and turning to find trees or stone nearby",
     "hunter":   "Explore by moving and turning to orient yourself and find animals",
@@ -24,8 +40,16 @@ _ROLE_DEFAULT_TASKS = {
 
 
 def _is_achievable_task(task: str) -> bool:
-    """Check if a task describes something the agent can actually do."""
+    """Check if a task describes something the agent can actually do.
+
+    Returns False if the task references a map fixture or UI element that agents
+    cannot meaningfully interact with (blocklist), even if it contains an action
+    keyword — e.g. "move away from the golden block" passes the keyword check but
+    describes a non-game-progress loop.
+    """
     task_lower = task.lower()
+    if any(kw in task_lower for kw in _TASK_BLOCKLIST):
+        return False
     return any(kw in task_lower for kw in _ACHIEVABLE_KEYWORDS)
 from autogen_ext.memory.chromadb import (
     ChromaDBVectorMemory,
