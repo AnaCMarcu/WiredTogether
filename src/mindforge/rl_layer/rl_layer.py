@@ -393,7 +393,7 @@ class RLLayer:
 
         try:
             response = await llm_call(
-                model_client=create_model_client(resonse_format=LearningBeliefResponse),
+                model_client=create_model_client(response_format=LearningBeliefResponse),
                 user_prompt=prompt,
                 cancellation_token=cancellation_token,
                 log_prefix=f"RLLayer agent {self.agent_id} learning-belief",

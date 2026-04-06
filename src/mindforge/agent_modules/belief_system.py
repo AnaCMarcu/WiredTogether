@@ -30,7 +30,7 @@ class BeliefSystem:
         self.belief_model_client = (
             belief_model_client
             if belief_model_client
-            else create_model_client(resonse_format=BeliefResponse)
+            else create_model_client(response_format=BeliefResponse)
         )
         self._perception_prompt = override_perception_prompt or perception_prompt
         self._partner_prompt = override_partner_prompt or partner_prompt

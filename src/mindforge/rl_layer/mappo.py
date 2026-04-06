@@ -146,7 +146,8 @@ def token_level_ppo_step(
         reduction="none",
     ).reshape(logits.size(0), logits.size(1))  # (B, L-1)
 
-    seq_log_probs = (per_token_log_probs * mask).sum(dim=1)  # (B,)
+    seq_lengths = mask.sum(dim=1).clamp(min=1).float()  # (B,) avoid div-by-zero
+    seq_log_probs = (per_token_log_probs * mask).sum(dim=1) / seq_lengths  # (B,) normalized
 
     # PPO ratio (sequence-level)
     ratio = (seq_log_probs - old_log_probs_seq).exp()

@@ -58,4 +58,4 @@ YOUR COGNITIVE MODULES (updated each step):
 - Interaction beliefs: useful information from teammate messages
 
 RESPONSE FORMAT — always respond with EXACTLY this JSON, no extra text:
-{{"thoughts": "<spatial reasoning: what I see, where the target is, why I chose this action>", "action": "<one action name>", "communication": "<message to teammates or empty string>"}}
+{{"thoughts": "<spatial reasoning: what I see, where the target is, why I chose this action>", "action": "<one action name>", "communication": "<short message to teammates — ALWAYS fill this in, never leave empty. Share what you see, where you are going, or what you found. Examples: 'I found a tree to the north, heading there', 'I see a zombie, staying away', 'I am stuck, need help', 'Digging stone to the east'>"}}

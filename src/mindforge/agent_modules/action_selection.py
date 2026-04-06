@@ -40,12 +40,12 @@ class ActionSelection:
         self.action_model_client = (
             action_model_client
             if action_model_client
-            else create_model_client(resonse_format=AgentResponse)
+            else create_model_client(response_format=AgentResponse)
         )
         self.candidate_model_client = (
             candidate_model_client
             if candidate_model_client
-            else create_model_client(resonse_format=CandidateResponse)
+            else create_model_client(response_format=CandidateResponse)
         )
 
     async def select_action(

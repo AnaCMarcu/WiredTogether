@@ -251,6 +251,11 @@ class CraftiumEnvironmentInterface:
                 # Non-movement action — reset stuck counter (position change not expected)
                 self._stuck_move_steps[agent_name] = 0
 
+        # Reset pitch on respawn: if the agent died last step, the server respawns
+        # them looking horizontally, so the stored pitch offset is stale.
+        if self._terminations.get(agent_name, False):
+            self._pitch[agent_name] = 0
+
         # Camera pitch cap: prevent runaway LookUp (staring at sky) / LookDown (ground only).
         pitch = self._pitch.get(agent_name, 0)
         if action_str == "LookDown":
@@ -319,9 +324,8 @@ class CraftiumEnvironmentInterface:
         self._truncations = truncations
         self._infos = infos
 
-        # Surface any new Lua log lines after a Dig (block breaks, track progress, etc.)
-        if action_str == "Dig":
-            self.tail_server_log()
+        # Surface any new Lua log lines (block breaks, kills, stage completions, etc.)
+        self.tail_server_log()
 
         # Store raw per-step rewards (summed across sustained ticks) and accumulate
         self._step_rewards = dict(total_rewards)

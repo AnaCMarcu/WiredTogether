@@ -18,7 +18,7 @@ class Critic:
         self.critic_model_client = (
             critic_model_client
             if critic_model_client
-            else create_model_client(resonse_format=CriticResponse)
+            else create_model_client(response_format=CriticResponse)
         )
         self.critic_prompt = (
             override_critic_prompt

@@ -584,11 +584,14 @@ async def run(args):
                         metric.record_rl_update(agent_id, update_info)
 
                     # Agent-decided token-level optimisation
-                    token_info = await agent.rl_layer.maybe_token_optimize(
-                        cancellation_token=CancellationToken(),
-                    )
-                    if token_info:
-                        metric.record_rl_token_opt(agent_id, token_info)
+                    try:
+                        token_info = await agent.rl_layer.maybe_token_optimize(
+                            cancellation_token=CancellationToken(),
+                        )
+                        if token_info:
+                            metric.record_rl_token_opt(agent_id, token_info)
+                    except Exception as _tok_exc:
+                        logging.warning(f"Agent {agent_id} token_optimize failed: {_tok_exc}")
 
             # ── Phase 4: Graph metrics snapshot ──
             if hebbian_config.enabled and step % hebbian_config.log_graph_every == 0:

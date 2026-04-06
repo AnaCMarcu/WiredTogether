@@ -63,7 +63,7 @@ class SkillManager:
         self.skill_model_client = (
             skill_model_client
             if skill_model_client
-            else create_model_client(resonse_format=SkillResponse)
+            else create_model_client(response_format=SkillResponse)
         )
         self.skills = {}
         # self.vectordb = ChromaDBVectorMemory(

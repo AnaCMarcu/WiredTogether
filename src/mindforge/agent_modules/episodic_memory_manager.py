@@ -29,7 +29,7 @@ class EpisodicMemoryManager:
         self.episode_model_client = (
             episode_model_client
             if episode_model_client
-            else create_model_client(resonse_format=EpisodeResponse)
+            else create_model_client(response_format=EpisodeResponse)
         )
         # self.vectordb = ChromaDBVectorMemory(
         #     config=PersistentChromaDBVectorMemoryConfig(

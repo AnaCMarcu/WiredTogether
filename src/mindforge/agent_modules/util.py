@@ -40,7 +40,6 @@ ST_MODEL_NAME = os.environ.get("ST_MODEL_NAME", "all-MiniLM-L6-v2")
 
 # LLM response format
 class AgentResponse(BaseModel):
-    task: str
     thoughts: str
     action: str
     communication: str
@@ -218,14 +217,14 @@ def visualize_frames(
 
 
 def create_model_client(
-    resonse_format, key_path="api.key"
+    response_format, key_path="api.key"
 ):
     # Option A: local transformers model (no HTTP server)
     if local_model_path:
         from agent_modules.local_model_client import LocalModelClient
         return LocalModelClient(
             model_path=local_model_path,
-            response_format=resonse_format,
+            response_format=response_format,
         )
 
     # Option B: OpenAI-compatible HTTP endpoint
@@ -240,7 +239,7 @@ def create_model_client(
         model=model,
         base_url=base_url,
         api_key=api_key,
-        response_format=resonse_format,
+        response_format=response_format,
         model_info={
             "vision": True,
             "function_calling": False,

@@ -83,17 +83,17 @@ class AutoCurriculum:
         self.task_model_client = (
             task_model_client
             if task_model_client
-            else create_model_client(resonse_format=CurruliculumResponse)
+            else create_model_client(response_format=CurruliculumResponse)
         )
         self.question_model_client = (
             question_model_client
             if question_model_client
-            else create_model_client(resonse_format=CurriculumQuestionResponse)
+            else create_model_client(response_format=CurriculumQuestionResponse)
         )
         self.answer_model_client = (
             answer_model_client
             if answer_model_client
-            else create_model_client(resonse_format=CurriculumAnswerResponse)
+            else create_model_client(response_format=CurriculumAnswerResponse)
         )
         self.completed_tasks = []
         self.failed_tasks = []
