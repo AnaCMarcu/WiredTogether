@@ -33,9 +33,17 @@ class CustomAgent(BaseChatAgent):
         metric: Metric = None,
         voyager=False,
         rl_layer=None,
+        belief_interval: int = 1,
+        critic_interval: int = 1,
     ) -> None:
         super().__init__(name, description)
         self.rl_layer = rl_layer
+        # How often to run the expensive belief/critic LLM calls.
+        # belief_interval=5 means beliefs are refreshed every 5 steps (cached in between).
+        # critic_interval=20 means task-success is checked every 20 steps.
+        self.belief_interval = belief_interval
+        self.critic_interval = critic_interval
+        self._call_count = 0  # incremented each on_messages call
 
         self.action_selection = (
             action_selection if action_selection else ActionSelection()
@@ -82,6 +90,10 @@ class CustomAgent(BaseChatAgent):
         player_status_text=None,
     ):
 
+        self._call_count += 1
+        run_beliefs = (self._call_count % self.belief_interval == 0)
+        run_critic  = (self._call_count % self.critic_interval == 0)
+
         print("Error count: ", error_count)
         # if first round, clear skill manager data
         if self.auto_curriculum.current_task is None:
@@ -99,26 +111,36 @@ class CustomAgent(BaseChatAgent):
             f"Agent {self.name}: Error count: {error_count}, error: {error}, held object: {picked_object}"
         )
 
-        # Run critic if not first round
+        # Run critic if not first round and this is a scheduled critic step.
+        # Between critic steps, reuse the cached result to avoid a wasted LLM call.
         success = None
         critique = None
         if self.auto_curriculum.current_task is not None:
-            success, critique = await self.critic.check_task_success(
-                last_frame,
-                last_action,
-                cancellation_token,
-                self.auto_curriculum.current_task,
-                self.belief_system.task_beliefs,
-                communication,
-                error,
-                picked_object=picked_object,
-                reward_text=reward_text,
-                position_text=position_text,
-                player_status_text=player_status_text,
-            )
-            self.metric.log(
-                f"Agent {self.name}: Task '{task}' success: {success}, critique: {critique}"
-            )
+            if run_critic:
+                success, critique = await self.critic.check_task_success(
+                    last_frame,
+                    last_action,
+                    cancellation_token,
+                    self.auto_curriculum.current_task,
+                    self.belief_system.task_beliefs,
+                    communication,
+                    error,
+                    picked_object=picked_object,
+                    reward_text=reward_text,
+                    position_text=position_text,
+                    player_status_text=player_status_text,
+                )
+                # Cache the result for skipped steps
+                self._cached_success = success
+                self._cached_critique = critique
+                self.metric.log(
+                    f"Agent {self.name}: Task '{task}' success: {success}, critique: {critique}"
+                )
+            else:
+                # Reuse cached critic result from the last evaluation
+                success = getattr(self, "_cached_success", None)
+                critique = getattr(self, "_cached_critique", None)
+
             if success:
                 skill_name, skill_description, already_exists = (
                     await self.skill_manager.add_skill(
@@ -130,7 +152,7 @@ class CustomAgent(BaseChatAgent):
                         f"Did {last_action}  for task {task}",
                         main=True if self.name == "agent_0" else False,
                     )
-            else:
+            elif success is not None:
                 error_count += 1
 
             # RL layer: track success for token-opt self-trigger
@@ -203,6 +225,14 @@ class CustomAgent(BaseChatAgent):
                     "partner_beliefs": "",
                     "task_beliefs": task_beliefs,
                 }
+            if not run_beliefs:
+                # Reuse cached beliefs from the last refresh step
+                return getattr(self, "_cached_beliefs", {
+                    "perception_beliefs": self.belief_system.perception_beliefs,
+                    "partner_beliefs": self.belief_system.partner_beliefs,
+                    "interaction_beliefs": self.belief_system.interaction_beliefs,
+                    "task_beliefs": self.belief_system.task_beliefs,
+                })
             perception, partner, interaction, task_b = await asyncio.gather(
                 self.belief_system.create_perception_beliefs(
                     last_frame, communication, error, cancellation_token
@@ -211,12 +241,14 @@ class CustomAgent(BaseChatAgent):
                 self.belief_system.update_interaction_beliefs(task, communication, cancellation_token),
                 self.belief_system.update_task_beliefs(task, cancellation_token),
             )
-            return {
+            result = {
                 "perception_beliefs": perception,
                 "partner_beliefs": partner,
                 "interaction_beliefs": interaction,
                 "task_beliefs": task_b,
             }
+            self._cached_beliefs = result
+            return result
 
         (_, skill_memory, episode_summary), belief_parts = await asyncio.gather(
             _fetch_query_and_summary(),

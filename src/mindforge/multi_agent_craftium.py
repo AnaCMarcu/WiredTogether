@@ -62,6 +62,12 @@ def parse_args():
                         help="Disable inter-agent communication")
     parser.add_argument("--sleep-time", type=float, default=0.0,
                         help="Seconds to sleep between LLM calls (rate-limit protection)")
+    parser.add_argument("--belief-interval", type=int, default=5,
+                        help="Refresh beliefs every N steps (default 5). Between refreshes "
+                             "cached beliefs are reused, saving 4 LLM calls per skipped step.")
+    parser.add_argument("--critic-interval", type=int, default=20,
+                        help="Run critic every N steps (default 20). Between evaluations "
+                             "cached success/critique are reused, saving 1 LLM call per skipped step.")
     parser.add_argument("--no-gif", action="store_true",
                         help="Disable GIF saving")
     parser.add_argument("--warmup-time", type=int, default=60,
@@ -106,6 +112,8 @@ def parse_args():
                         help="ρ social replay blend factor")
     parser.add_argument("--hebbian-gamma", type=float, default=0.2,
                         help="γ reward diffusion strength")
+    parser.add_argument("--hebbian-init-weight", type=float, default=0.1,
+                        help="Initial bond weight W_0 (default 0.1 = warm start)")
     parser.add_argument("--hebbian-no-comm-bond", action="store_true",
                         help="Set δ_comm=0 (spatial-only, for RQ4 ablation)")
     # ── Experiment tracking ──
@@ -159,7 +167,7 @@ def build_role_configs(num_agents, role_prompts):
 
 
 def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
-                 rl_config=None):
+                 rl_config=None, belief_interval=5, critic_interval=20):
     """Initialize all Mindforge agents."""
     agents = []
     for i, role_cfg in enumerate(role_configs):
@@ -197,6 +205,8 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
             metric=metric,
             voyager=False,
             rl_layer=rl_layer,
+            belief_interval=belief_interval,
+            critic_interval=critic_interval,
         )
         agents.append(agent)
         rl_status = " [RL enabled]" if rl_layer else ""
@@ -360,7 +370,9 @@ async def run(args):
               f"lora_rank={rl_config.lora_rank}, update_interval={rl_config.update_interval}")
 
     agents = build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
-                         rl_config=rl_config)
+                         rl_config=rl_config,
+                         belief_interval=args.belief_interval,
+                         critic_interval=args.critic_interval)
 
     # ── Hebbian social plasticity ──
     hebbian_config = HebbianConfig(
@@ -374,6 +386,7 @@ async def run(args):
         social_replay_rho=args.hebbian_rho,
         reward_diffusion_gamma=args.hebbian_gamma,
         communication_coactivity_bonus=0.0 if args.hebbian_no_comm_bond else 0.5,
+        init_weight=args.hebbian_init_weight,
     )
     agent_roles = [ROLE_NAMES.index(rc["name"]) for rc in role_configs]
     hebbian_graph = HebbianSocialGraph(hebbian_config, agent_roles=agent_roles)

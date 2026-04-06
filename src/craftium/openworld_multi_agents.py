@@ -342,7 +342,7 @@ _DISCRETE_ACTIONS = [
     "drop",                               # drop held item
     "slot_6", "slot_7", "slot_8",         # extra hotbar slots
 ]
-_MOUSE_MOV = 0.5
+_MOUSE_MOV = 1.0  # doubled from 0.5: ~20-30° per step, halves steps needed for orientation
 
 
 def _discrete_to_dict(action: int) -> dict:

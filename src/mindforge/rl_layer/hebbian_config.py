@@ -52,7 +52,7 @@ class HebbianConfig:
     reward_diffusion_gamma: float = 0.2  # γ
 
     # ── Initialisation ──
-    init_weight: float = 0.0  # initial bond strength (0 = cold start)
+    init_weight: float = 0.1  # initial bond strength (0.1 = warm start: reward diffusion flows from step 1)
 
     # ── Logging ──
     log_graph_every: int = 50  # steps between graph metric snapshots

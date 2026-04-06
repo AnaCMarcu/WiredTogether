@@ -106,7 +106,9 @@ python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK
 #     --warmup-time 300 --rl --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
 #     --rl-update-interval 32
 
-python multi_agent_craftium.py --num-agents 3 --episodes 2 --max-steps 200
+python multi_agent_craftium.py --num-agents 3 --episodes 2 --max-steps 2000 \
+    --belief-interval 5 --critic-interval 20 \
+    --warmup-time 300
 # python test_scripted_agent.py --num-agents 1 --max-steps 500 --warmup-time 120 --verbose
 
 # Cleanup vLLM server
