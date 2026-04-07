@@ -99,6 +99,13 @@ class RLLayer:
         )
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+        # Left-padding is standard for decoder-only (causal) models in batched
+        # inference.  It keeps real tokens right-aligned so causal attention
+        # naturally ignores the left-side padding without needing a separate mask
+        # check.  Combined with explicit pad_token_id on the model config this
+        # suppresses the "attention_mask cannot be inferred" warning that fires
+        # when pad_token_id == eos_token_id.
+        self.tokenizer.padding_side = "left"
 
         logger.info("RLLayer: loading base model from %s", config.model_path)
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -286,7 +293,7 @@ class RLLayer:
         # directly in FP16/BF16, gradients are already in that dtype and the
         # scaler would raise "Attempting to unscale FP16 gradients." Disable it.
         scaler = torch.amp.GradScaler("cuda", enabled=False)
-        for epoch in range(self.config.ppo_epochs):
+        for _ in range(self.config.ppo_epochs):
             for batch in self.buffer.sample_batches(self.config.mini_batch_size):
                 with torch.amp.autocast(self._device.type, dtype=self._dtype):
                     loss, info = action_level_ppo_step(
@@ -447,7 +454,7 @@ class RLLayer:
         self.model.train()
         all_info = {"decision": "train", "reason": reason, "skill_focus": skill_focus}
         scaler = torch.amp.GradScaler("cuda", enabled=False)
-        for epoch in range(self.config.token_opt_epochs):
+        for _ in range(self.config.token_opt_epochs):
             for start in range(0, len(transitions), self.config.mini_batch_size):
                 batch = transitions[start:start + self.config.mini_batch_size]
                 with torch.amp.autocast(self._device.type, dtype=self._dtype):
