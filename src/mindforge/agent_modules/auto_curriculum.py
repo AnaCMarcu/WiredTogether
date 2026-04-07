@@ -214,6 +214,10 @@ class AutoCurriculum:
                 "Non-actionable task '%s' for %s, replacing with '%s'",
                 task, self._role, fallback,
             )
+            # Feed the blocked task back as a failed task so the curriculum LLM
+            # learns not to generate it again (without this, it repeats the same
+            # invalid tasks because it never sees them as rejected).
+            self.failed_tasks.append(f"{task} [INVALID: not achievable in this environment]")
             task = fallback
         self.current_task = task
         context = await self.get_task_context(
