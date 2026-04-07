@@ -154,23 +154,31 @@ class CustomAgent(BaseChatAgent):
                         f"Did {last_action}  for task {task}",
                         main=True if self.name == "agent_0" else False,
                     )
-            elif success is not None:
+            elif success is not None and run_critic:
+                # Only count a failure when the critic actually ran this step.
+                # Cached success=False from a previous step should not keep
+                # incrementing error_count — that caused tasks to be abandoned
+                # after ~half a critic cycle regardless of actual progress.
                 error_count += 1
 
             # RL layer: track success for token-opt self-trigger
             if self.rl_layer and self.rl_layer.enabled:
                 self.rl_layer.record_success(success)
 
-            # save last episode for both success and failure
-            self.episode_manager.add_episode(
-                task=task,
-                task_beliefs=self.belief_system.task_beliefs,
-                last_action=last_action,
-                last_thoughts=last_thoughts,
-                critique=critique,
-                success=success,
-            )
-            self._episode_summary_dirty = True
+            # Only add an episode when the critic ran — it provides the meaningful
+            # critique/success signal.  Adding on every step fills the DB with
+            # identical entries (same cached critique) and keeps the dirty flag
+            # perpetually True, defeating the episode summary cache entirely.
+            if run_critic:
+                self.episode_manager.add_episode(
+                    task=task,
+                    task_beliefs=self.belief_system.task_beliefs,
+                    last_action=last_action,
+                    last_thoughts=last_thoughts,
+                    critique=critique,
+                    success=success,
+                )
+                self._episode_summary_dirty = True
         # Generate new task if there is no current task
         # or if the agent has failed more than 5 times in a row (then append last task to failed tasks)
         # or if task was succeded ( then append last task to completed tasks)

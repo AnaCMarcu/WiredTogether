@@ -332,12 +332,16 @@ class AutoCurriculum:
     def get_completed_tasks(self):
         # This function should return a string of completed tasks
         # TODO: link to memory
-        return "".join(self.completed_tasks)
+        if not self.completed_tasks:
+            return "None"
+        return "\n- " + "\n- ".join(self.completed_tasks)
 
     def get_failed_tasks(self):
         # This function should return a string of failed tasks
         # TODO: link to memory
-        return "".join(self.failed_tasks)
+        if not self.failed_tasks:
+            return "None"
+        return "\n- " + "\n- ".join(self.failed_tasks)
 
     async def get_task_context(self, frame, cancellation_token, communications=""):
         question = f"How to {self.current_task}" f" in this environment?"
