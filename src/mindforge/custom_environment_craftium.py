@@ -101,7 +101,7 @@ class CraftiumEnvironmentInterface:
     # VoxeLibre bare-hand: wood ~15 physics ticks, stone ~30.
     # At frameskip=3: 3 env steps = 9 ticks (enough for wood), 6 steps = 18 ticks.
     _SUSTAINED_TICKS = {
-        "Dig": 3,
+        "Dig": 5,  # 5 env steps × frameskip=3 = 15 physics ticks — enough for wood with any tool
     }
 
     # Position-stuck detection: if x/z haven't moved more than this threshold
