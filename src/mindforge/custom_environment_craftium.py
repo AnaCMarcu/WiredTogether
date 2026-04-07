@@ -52,6 +52,27 @@ ACTION_MAP = {
 
 VALID_ACTIONS = [k for k in ACTION_MAP if k != "Inventory"]
 
+# Macro actions: multi-step sequences executed without LLM calls until complete.
+# Each value is a list of (primitive_action, repeat_count) pairs consumed one
+# step at a time by step().  is_macro_running() exposes queue state to the loop.
+_MACRO_ACTIONS = {
+    # Rotate ~180° (9 × ~20° at _MOUSE_MOV=1.0)
+    "TurnAround":     [("TurnRight", 9)],
+    # Full 360° scan to locate teammates or resources (18 steps)
+    "ScanArea":       [("TurnRight", 18)],
+    # Coarse heading fix + approach: 3 TurnRight then 8 MoveForward (11 steps)
+    "ApproachTarget": [("TurnRight", 3), ("MoveForward", 8)],
+    # Manual unstick: same sequence the auto-escape used (23 steps total)
+    "Escape": [
+        ("Jump", 3),
+        ("MoveBackward", 5),
+        ("TurnRight", 4),
+        ("Jump", 3),
+        ("MoveForward", 8),
+    ],
+}
+VALID_ACTIONS = VALID_ACTIONS + list(_MACRO_ACTIONS.keys())
+
 
 class CraftiumEnvironmentInterface:
     """Wraps OpenWorldMultiAgentEnv to match CausalForge's Environment_Interface contract.
@@ -125,6 +146,7 @@ class CraftiumEnvironmentInterface:
         self._last_xz = {}           # agent_name -> (x, z) at last movement action
         self._stuck_move_steps = {}  # agent_name -> int, consecutive non-idle steps without xz change
         self._escape_queue = {}      # agent_name -> list of (action, ticks) remaining
+        self._macro_queue = {}       # agent_name -> list of [action, remaining_count]
 
         # Camera pitch tracker (net LookDown steps minus LookUp steps).
         # Positive = looking down, negative = looking up.
@@ -151,6 +173,7 @@ class CraftiumEnvironmentInterface:
         self._last_xz = {}
         self._stuck_move_steps = {}
         self._escape_queue = {}
+        self._macro_queue = {}
         self._pitch = {}
         self.reset_log_offset()
         return self._observations
@@ -168,18 +191,34 @@ class CraftiumEnvironmentInterface:
         Raises:
             ValueError: If action_str is not in ACTION_MAP
         """
+        import logging as _logging
+
+        agent_name = f"agent_{agentId}"
+
+        # ── Macro dispatch ────────────────────────────────────────────────────
+        # If the LLM picked a macro name, load its primitive sequence.
+        if action_str in _MACRO_ACTIONS:
+            self._macro_queue[agent_name] = [[a, n] for a, n in _MACRO_ACTIONS[action_str]]
+            _logging.info("Agent %d macro '%s' queued: %s", agentId, action_str, _MACRO_ACTIONS[action_str])
+
+        # Consume from the macro queue — but only when the escape queue is NOT
+        # active (escape takes priority; macro count only decrements when it fires).
+        if self._macro_queue.get(agent_name) and not self._escape_queue.get(agent_name):
+            seg = self._macro_queue[agent_name][0]   # [action_str, remaining]
+            action_str = seg[0]
+            seg[1] -= 1
+            if seg[1] <= 0:
+                self._macro_queue[agent_name].pop(0)
+        # ── End macro dispatch ────────────────────────────────────────────────
+
         if action_str not in ACTION_MAP:
-            import logging
-            logging.warning(
+            _logging.warning(
                 f"Invalid action: '{action_str}', clamping to NoOp. "
                 f"Valid actions: {VALID_ACTIONS}"
             )
             action_str = "NoOp"
 
-        import logging as _logging
-
         # Guard: break idle loops (NoOp/Inventory spam)
-        agent_name = f"agent_{agentId}"
         if action_str in self._IDLE_ACTIONS:
             self._consecutive_idle[agent_name] = (
                 self._consecutive_idle.get(agent_name, 0) + 1
@@ -233,20 +272,14 @@ class CraftiumEnvironmentInterface:
                         self._stuck_move_steps[agent_name] = 0
 
                     if self._stuck_move_steps.get(agent_name, 0) >= self._STUCK_MAX_STEPS:
+                        # Stuck detected — inform via log but do NOT auto-escape.
+                        # The LLM can pick the "Escape" macro action to unstick.
                         _logging.warning(
-                            f"Agent {agentId} physically stuck at xz={cur_xz} for "
-                            f"{self._stuck_move_steps[agent_name]} steps — injecting escape sequence"
+                            f"Agent {agentId} stuck at xz={cur_xz} for "
+                            f"{self._stuck_move_steps[agent_name]} steps — use Escape macro"
                         )
                         self._stuck_move_steps[agent_name] = 0
                         self._last_xz[agent_name] = None
-                        self._escape_queue[agent_name] = [
-                            list(step) for step in self._ESCAPE_SEQUENCE
-                        ]
-                        esc_action, esc_ticks = self._escape_queue[agent_name][0]
-                        self._escape_queue[agent_name][0] = [esc_action, esc_ticks - 1]
-                        if self._escape_queue[agent_name][0][1] <= 0:
-                            self._escape_queue[agent_name].pop(0)
-                        action_str = esc_action
             else:
                 # Non-movement action — reset stuck counter (position change not expected)
                 self._stuck_move_steps[agent_name] = 0
@@ -525,6 +558,10 @@ class CraftiumEnvironmentInterface:
                 lines.append(f"  [{slot_num}] {name} x{count}{marker}")
 
         return "Hotbar:\n" + "\n".join(lines)
+
+    def is_macro_running(self, agentId: int) -> bool:
+        """True while a macro action is still consuming steps for this agent."""
+        return bool(self._macro_queue.get(f"agent_{agentId}"))
 
     # Tool tier ranking — higher = better. Covers pickaxes, swords, and axes.
     _TOOL_TIER = {

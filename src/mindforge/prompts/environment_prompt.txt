@@ -22,6 +22,19 @@ You can perform the following actions each step (choose EXACTLY ONE by name):
 - "LookDown": Tilt the camera down
 - "LookUp": Tilt the camera up
 
+MACRO ACTIONS — multi-step sequences (you are NOT called again until they complete):
+- "TurnAround": Rotate ~180° automatically (9 turn steps)
+- "ScanArea": Rotate a full 360° to scan surroundings and spot teammates or resources (18 turn steps)
+- "ApproachTarget": Turn slightly right then walk forward 8 steps toward a visible target (11 steps total)
+- "Escape": Jump, move back, turn, jump, move forward — use when physically stuck (23 steps)
+
+WHEN TO USE MACROS:
+- Use ScanArea when you cannot see anything useful or are trying to locate teammates or resources.
+- Use TurnAround to reverse direction efficiently instead of 9 individual TurnRight steps.
+- Use ApproachTarget when a target is visible but not centered — handles turns + movement automatically.
+- Use Escape when you are stuck (position not changing after several MoveForward attempts).
+- While a macro runs, you will not be asked to choose actions. Your next choice comes after it completes.
+
 There are three progression tracks in this world. All agents share progress on all tracks:
 
 TOOLS TRACK (resource gathering):

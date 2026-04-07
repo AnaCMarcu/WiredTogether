@@ -515,6 +515,14 @@ async def run(args):
                 if environment._terminations.get(agent_name, False):
                     continue
 
+                # ── Macro skip: advance macro queue without calling the LLM ──
+                if environment.is_macro_running(agent_id):
+                    environment.step("NoOp", agentId=agent_id)
+                    step_rewards_raw[agent_id] = environment.get_step_reward(agent_id)
+                    step_contents[agent_id] = None
+                    continue
+                # ─────────────────────────────────────────────────────────────
+
                 error_count = agents_error_count[agent_id]
                 frame_image = environment.get_pil_image(agent_id)
                 reward_text = environment.get_reward_summary(agent_id)

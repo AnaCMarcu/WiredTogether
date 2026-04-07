@@ -59,6 +59,10 @@ COMMON MISTAKES TO AVOID (these are the most frequent errors — avoid them):
 NAVIGATION WITHOUT A TARGET:
 - To explore: alternate MoveForward with TurnLeft or TurnRight to scan different directions.
 - To find something: turn slowly until you see it in the image, then approach and aim.
+- To scan for teammates or resources efficiently: use "ScanArea" instead of 18 individual TurnRight steps.
+- To reverse direction efficiently: use "TurnAround" instead of 9 TurnRight steps.
+- To move toward a visible target: use "ApproachTarget" — handles turns + forward movement automatically.
+- If you are stuck (MoveForward not moving you): use "Escape" to break free.
 
 YOUR COGNITIVE MODULES (updated each step):
 - Perception beliefs: describe what you see and where targets are relative to image center
