@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=fixes_reduce_llm
 #SBATCH --partition=gpu-a100
-#SBATCH --time=08:00:00
+#SBATCH --time=02:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
@@ -106,7 +106,7 @@ python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK
 #     --warmup-time 300 --rl --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
 #     --rl-update-interval 32
 
-python multi_agent_craftium.py --num-agents 3 --episodes 2 --max-steps 2000 \
+python multi_agent_craftium.py --num-agents 3 --episodes 2 --max-steps 100 \
     --belief-interval 5 --critic-interval 20 \
     --warmup-time 300
 # python test_scripted_agent.py --num-agents 1 --max-steps 500 --warmup-time 120 --verbose
