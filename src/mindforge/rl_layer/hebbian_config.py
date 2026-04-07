@@ -46,7 +46,10 @@ class HebbianConfig:
     failure_memory_window: int = 50  # rolling window size for Fij; tasks take 50-100+ steps
 
     # ── Social replay (Eq. 7) ──
-    social_replay_rho: float = 0.3  # ρ, blend own vs neighbour buffers
+    # Disabled: PPO ratio exp(log_π_i - log_π_j_old) is undefined for cross-agent transitions
+    # (π_j_old is not π_i's old policy). All neighbour transitions are clipped to near-zero
+    # gradient. Hebbian reward diffusion already provides the social signal via rewards.
+    social_replay_rho: float = 0.0  # was 0.3 — disabled until IS correction is added
 
     # ── Reward diffusion (Eq. 8) ──
     reward_diffusion_gamma: float = 0.2  # γ
