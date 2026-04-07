@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=macro_actions
+#SBATCH --job-name=all_changes
 #SBATCH --partition=gpu-a100
 #SBATCH --time=02:00:00
 #SBATCH --ntasks=1

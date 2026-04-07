@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=rl
+#SBATCH --job-name=rl_long
 #SBATCH --partition=gpu-a100
 #SBATCH --time=15:00:00
 #SBATCH --ntasks=1
