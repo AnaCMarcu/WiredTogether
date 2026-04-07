@@ -94,7 +94,7 @@ def action_level_ppo_step(
     )
     v_loss1 = F.mse_loss(new_values, returns, reduction="none")
     v_loss2 = F.mse_loss(value_clipped, returns, reduction="none")
-    value_loss = torch.max(v_loss1, v_loss2).mean()
+    value_loss = torch.min(v_loss1, v_loss2).mean()
 
     # ── Total loss ──
     loss = policy_loss + value_coef * value_loss - entropy_coef * entropy
@@ -156,7 +156,11 @@ def token_level_ppo_step(
 
     # PPO ratio (sequence-level)
     ratio = (seq_log_probs - old_log_probs_seq).exp()
-    advantages = _normalize(rewards)
+    # Use mean-std normalization of rewards as a REINFORCE baseline (not raw _normalize,
+    # which would be reward-scaling without a value baseline — same issue as normalizing
+    # raw rewards and calling them advantages).
+    rewards_t = torch.tensor(rewards, dtype=torch.float32, device=device)
+    advantages = (rewards_t - rewards_t.mean()) / (rewards_t.std() + 1e-8)
     surr1 = ratio * advantages
     surr2 = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * advantages
     loss = -torch.min(surr1, surr2).mean()
