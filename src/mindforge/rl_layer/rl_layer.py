@@ -231,6 +231,21 @@ class RLLayer:
             "communication": communication,
         }
 
+    def get_pending_value(self) -> Optional[float]:
+        """Return V(s_t) from the pending transition (stored during select_action).
+
+        Used to compute a one-step advantage estimate δ_t = r_t - V(s_t) before
+        store_reward() is called, so Hebbian updates can use per-agent advantages
+        at the same step rather than one step behind.
+
+        Returns None if RL is disabled, mode is 'token', or no action has been
+        selected yet this step.
+        """
+        if not self.config.enabled or self.config.mode == "token":
+            return None
+        pending = self.buffer._pending
+        return pending.old_value if pending is not None else None
+
     def store_reward(self, reward: float, done: bool = False) -> None:
         """Feed the environment reward back into the buffer."""
         if not self.config.enabled:

@@ -577,10 +577,25 @@ async def run(args):
                     pos = None
                 positions.append(pos)
 
+            # Per-agent one-step advantage δ_t = r_t - V(s_t).
+            # V(s_t) was stored by select_action() in the pending transition.
+            # We compute this before store_reward() so Hebbian sees the current
+            # step's signal rather than a one-step-lagged value.
+            # Agents without an active RL layer contribute None (falls back to
+            # normalised reward for that agent inside _compute_modulator).
+            step_advantages = []
+            for _aid, _agent in enumerate(agents):
+                v = _agent.rl_layer.get_pending_value() if _agent.rl_layer else None
+                if v is not None:
+                    step_advantages.append(step_rewards_raw[_aid] - v)
+                else:
+                    step_advantages.append(None)
+            _any_advantage = any(a is not None for a in step_advantages)
+
             hebbian_graph.update(
                 positions=positions,
                 step_rewards=step_rewards_raw,
-                advantages=None,
+                advantages=step_advantages if _any_advantage else None,
                 comm_events=comm_events if communication else None,
             )
             diffused_rewards = hebbian_graph.diffuse_rewards(step_rewards_raw)

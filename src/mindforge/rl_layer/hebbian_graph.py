@@ -179,43 +179,58 @@ class HebbianSocialGraph:
 
     def _compute_modulator(
         self,
-        advantages: Optional[List[float]],
+        advantages: Optional[List[Optional[float]]],
         step_rewards: Optional[List[float]] = None,
-    ) -> float:
-        """Compute the net modulatory signal m(t).
+    ) -> np.ndarray:
+        """Compute the per-pair modulatory signal matrix m(t) ∈ R^{N×N}.
 
-        Implements Eq. 4+5 from the thesis proposal:
-        asymmetric two-component signal with LTP for positive advantage
-        and LTD for negative advantage.
+        Each entry m_ij uses only the advantage signals of agents i and j,
+        not the team mean.  This gives proper credit assignment: the bond
+        between i and j only strengthens when *both* involved agents had a
+        positive outcome, not because a third agent happened to succeed.
+
+        Implements the asymmetric LTP/LTD rule (Eq. 4+5) per pair:
+            At_ij  = (A_i + A_j) / 2
+            m_ltp  = ltp_lr  * tanh(β * max(At_ij,  0))
+            m_ltd  = ltd_lr  * tanh(β * max(-At_ij, 0))
+            m_ij   = m_ltp - m_ltd
 
         Parameters
         ----------
-        advantages : list of per-agent advantages, or None
-            When provided (MAPPO is active), uses mean advantage.
-        step_rewards : list of per-agent rewards, optional
-            Fallback when advantages is None — normalised by
-            _max_reward_seen.
+        advantages : list of per-agent one-step advantages (δ = r - V(s)),
+            or None per agent when RL layer is disabled for that agent.
+            When the whole list is None, falls back to normalised rewards.
+        step_rewards : per-agent rewards — fallback for agents without RL.
 
         Returns
         -------
-        float : net modulator m(t) = m_ltp(t) - m_ltd(t)
+        np.ndarray shape (N, N) : per-pair modulator matrix, diagonal = 0
         """
+        N = self.config.num_agents
         cfg = self.config
 
-        # Determine team-level advantage At
-        if advantages is not None:
-            At = float(np.mean([_sanitize_reward(a) for a in advantages]))
-        elif step_rewards is not None:
-            # Fallback: normalised mean reward when MAPPO is disabled
-            sanitized = [_sanitize_reward(r) for r in step_rewards]
-            At = float(np.mean(sanitized)) / (self._max_reward_seen + _EPS)
-        else:
-            return 0.0
+        # Build per-agent signal: prefer advantage, fall back to reward/max
+        agent_signals = np.zeros(N, dtype=np.float32)
+        for i in range(N):
+            if advantages is not None and i < len(advantages) and advantages[i] is not None:
+                agent_signals[i] = _sanitize_reward(advantages[i])
+            elif step_rewards is not None and i < len(step_rewards):
+                agent_signals[i] = (
+                    _sanitize_reward(step_rewards[i]) / (self._max_reward_seen + _EPS)
+                )
 
-        # Asymmetric modulation
-        m_ltp = cfg.ltp_lr * math.tanh(cfg.modulation_beta * max(At, 0.0))
-        m_ltd = cfg.ltd_lr * math.tanh(cfg.modulation_beta * max(-At, 0.0))
-        return m_ltp - m_ltd
+        # Per-pair modulator matrix
+        m = np.zeros((N, N), dtype=np.float32)
+        for i in range(N):
+            for j in range(N):
+                if i == j:
+                    continue
+                At_ij = (agent_signals[i] + agent_signals[j]) / 2.0
+                m_ltp = cfg.ltp_lr * math.tanh(cfg.modulation_beta * max(At_ij, 0.0))
+                m_ltd = cfg.ltd_lr * math.tanh(cfg.modulation_beta * max(-At_ij, 0.0))
+                m[i, j] = m_ltp - m_ltd
+
+        return m
 
     # ──────────────────────────────────────────────
     # 2.4  Sustained LTD from repeated co-failure
@@ -292,20 +307,23 @@ class HebbianSocialGraph:
         cij = self._compute_coactivity(positions, step_rewards, comm_events)
         self._last_coactivity = cij
 
-        # Modulator
+        # Per-pair modulator matrix (N×N) — uses per-agent advantages when available
         m = self._compute_modulator(advantages, step_rewards)
 
-        # Determine team advantage for failure window
+        # Team-level advantage for the failure window (scalar mean — intentional:
+        # sustained LTD tracks episodes where the *whole team* repeatedly co-fails,
+        # which is a team-level signal, not per-pair).
         if advantages is not None:
-            At = float(np.mean([_sanitize_reward(a) for a in advantages]))
+            valid = [a for a in advantages if a is not None]
+            At_team = float(np.mean([_sanitize_reward(a) for a in valid])) if valid else 0.0
         else:
             sanitized = [_sanitize_reward(r) for r in step_rewards]
-            At = float(np.mean(sanitized)) / (self._max_reward_seen + _EPS)
+            At_team = float(np.mean(sanitized)) / (self._max_reward_seen + _EPS)
 
         # Update failure window BEFORE computing sustained LTD
-        self._update_failure_window(cij, At)
+        self._update_failure_window(cij, At_team)
 
-        # Main Hebbian delta
+        # Main Hebbian delta — m is now (N×N), element-wise with cij and W
         delta_main = m * cij * (1.0 - self.W) - cfg.decay * self.W
 
         # Sustained LTD

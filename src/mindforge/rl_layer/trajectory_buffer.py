@@ -76,20 +76,34 @@ class RolloutBuffer:
 
     def compute_gae(self, gamma: float, gae_lambda: float,
                     last_value: float = 0.0) -> None:
-        """Compute Generalised Advantage Estimation in-place."""
+        """Compute Generalised Advantage Estimation in-place.
+
+        After GAE is computed, advantages are normalized over the *full rollout*
+        so that mini-batch assignment does not affect advantage scaling.  Per-
+        mini-batch normalization (the previous approach) destroyed the signal
+        about which parts of the rollout were actually better than others.
+        """
         gae = 0.0
         for t in reversed(range(len(self._buf))):
             tr = self._buf[t]
             if t == len(self._buf) - 1:
                 next_value = last_value
-                next_non_terminal = 1.0 - float(tr.done)
             else:
                 next_value = self._buf[t + 1].old_value
-                next_non_terminal = 1.0 - float(self._buf[t + 1].done)
+            # Use the CURRENT transition's done flag, not the next step's.
+            # tr.done=True means the episode ended after this step, so V(s_{t+1})=0.
+            next_non_terminal = 1.0 - float(tr.done)
             delta = tr.reward + gamma * next_value * next_non_terminal - tr.old_value
             gae = delta + gamma * gae_lambda * next_non_terminal * gae
             tr.advantage = gae
             tr.returns = gae + tr.old_value
+
+        # Normalize advantages over the full rollout (not per mini-batch).
+        adv = torch.tensor([tr.advantage for tr in self._buf], dtype=torch.float32)
+        if adv.numel() > 1:
+            adv = (adv - adv.mean()) / (adv.std() + 1e-5)
+            for i, tr in enumerate(self._buf):
+                tr.advantage = adv[i].item()
 
     # ── Batching for training ──
 

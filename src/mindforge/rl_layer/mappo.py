@@ -50,7 +50,9 @@ def action_level_ppo_step(
     old_values = torch.tensor([t.old_value for t in batch],
                               dtype=torch.float32, device=device)
 
-    advantages = _normalize(advantages)
+    # Advantages are already normalized over the full rollout in compute_gae().
+    # Do NOT normalize here — per-mini-batch normalization would destroy the
+    # signal about which parts of the rollout were better than others.
 
     # Tokenize prompts — cap at max_length to bound activation memory.
     # At 512 tokens the RL prompt fits comfortably; model_max_length (32768)
