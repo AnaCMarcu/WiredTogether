@@ -29,19 +29,19 @@ class RLConfig:
     # 512 tokens is sufficient for policy learning on discrete actions and keeps
     # PPO activation memory to a manageable size during the backward pass.
     rl_prompt_max_tokens: int = 512
-    gradient_checkpointing: bool = True  # recompute activations during backward
+    gradient_checkpointing: bool = False  # LoRA rank=8 has negligible activation memory; checkpointing adds ~35% compute overhead for no benefit
 
     # ── PPO / MAPPO hyper-parameters ──
     gamma: float = 0.99
     gae_lambda: float = 0.95
     clip_eps: float = 0.2
-    value_clip_eps: float = 0.2
+    value_clip_eps: float = 1.0   # was 0.2 — after RunningMeanStd normalization returns are ~[-3,+3]; ±0.2 was too tight, value head converged in 50-100 updates instead of 5-10
     entropy_coef: float = 0.01
     value_coef: float = 0.5
     max_grad_norm: float = 0.5
-    ppo_epochs: int = 4
-    mini_batch_size: int = 8
-    lr: float = 3e-4
+    ppo_epochs: int = 2           # was 4 — with update_interval=256: 2×8 mini-batches = 16 passes (was 32, causing gradient saturation)
+    mini_batch_size: int = 32     # was 8 — stable gradient estimates; 8 samples/batch gave high-variance updates
+    lr: float = 1e-4              # was 3e-4 — LoRA rank=8 has ~0.1% trainable params; 3e-4 overshoots the LoRA manifold
 
     # ── Reward shaping ──
     normalize_rewards: bool = True   # running mean/std normalisation before buffer storage
@@ -56,7 +56,7 @@ class RLConfig:
 
     # ── Rollout / update schedule ──
     buffer_size: int = 2048
-    update_interval: int = 64  # steps between MAPPO updates
+    update_interval: int = 256  # was 64 — more diverse experience per update; avoids 50× transition reuse
 
     # ── Token-level self-improvement ──
     auto_token_opt: bool = False  # let agent decide when to do token-level PPO
