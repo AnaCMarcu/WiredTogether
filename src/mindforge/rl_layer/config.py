@@ -43,6 +43,17 @@ class RLConfig:
     mini_batch_size: int = 8
     lr: float = 3e-4
 
+    # ── Reward shaping ──
+    normalize_rewards: bool = True   # running mean/std normalisation before buffer storage
+    death_penalty: float = -50.0     # added to reward when agent terminates (done=True)
+
+    # ── Entropy annealing ──
+    # Linearly decay entropy coefficient from entropy_start to entropy_end over
+    # entropy_anneal_steps PPO updates.  Set entropy_anneal_steps=0 to disable.
+    entropy_start: float = 0.05
+    entropy_end: float = 0.001
+    entropy_anneal_steps: int = 500   # PPO update steps (not env steps)
+
     # ── Rollout / update schedule ──
     buffer_size: int = 2048
     update_interval: int = 64  # steps between MAPPO updates

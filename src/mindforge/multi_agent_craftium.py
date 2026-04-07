@@ -620,9 +620,21 @@ async def run(args):
                         task=agent.auto_curriculum.current_task or "Explore",
                     )
 
-                    # MAPPO update when enough steps collected
+                    # MAPPO update when enough steps collected.
+                    # Pass all agents' buffers so social replay (Eq. 7) can
+                    # mix in neighbour transitions weighted by Hebbian bonds.
                     if agent.rl_layer.should_update():
-                        update_info = agent.rl_layer.update()
+                        neighbour_buffers = {
+                            aid: agents[aid].rl_layer.buffer
+                            for aid in range(num_agents)
+                            if aid != agent_id
+                            and agents[aid].rl_layer
+                            and agents[aid].rl_layer.enabled
+                        }
+                        update_info = agent.rl_layer.update(
+                            neighbour_buffers=neighbour_buffers,
+                            hebbian_graph=hebbian_graph,
+                        )
                         metric.record_rl_update(agent_id, update_info)
 
                     # Agent-decided token-level optimisation

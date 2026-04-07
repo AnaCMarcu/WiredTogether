@@ -36,6 +36,30 @@ except FileNotFoundError:
     LEARNING_BELIEF_PROMPT = None
 
 
+# ── Running reward normaliser ──
+
+class RunningMeanStd:
+    """Online running mean/variance using Welford's algorithm.
+
+    Used to normalise rewards before storing in the rollout buffer so the
+    value head sees a roughly unit-variance signal regardless of whether
+    the episode returns 0.1 (exploration) or 2048 (stage completion).
+    """
+    def __init__(self, eps: float = 1e-4):
+        self.mean: float = 0.0
+        self.var: float = 1.0
+        self.count: float = eps  # start non-zero to avoid /0 on first step
+
+    def update(self, x: float) -> None:
+        self.count += 1.0
+        delta = x - self.mean
+        self.mean += delta / self.count
+        self.var += (delta * (x - self.mean) - self.var) / self.count
+
+    def normalize(self, x: float) -> float:
+        return x / (self.var ** 0.5 + 1e-8)
+
+
 # ── Lightweight heads ──
 
 class ActionHead(nn.Module):
@@ -167,6 +191,9 @@ class RLLayer:
         self._action_to_idx = {a: i for i, a in enumerate(config.actions)}
         self._idx_to_action = {i: a for i, a in enumerate(config.actions)}
 
+        # ── Reward normaliser ──
+        self._reward_rms = RunningMeanStd() if config.normalize_rewards else None
+
         # ── Recent outcomes (for token-opt trigger) ──
         self._recent_successes: List[bool] = []
         self._recent_actions: List[str] = []
@@ -247,9 +274,22 @@ class RLLayer:
         return pending.old_value if pending is not None else None
 
     def store_reward(self, reward: float, done: bool = False) -> None:
-        """Feed the environment reward back into the buffer."""
+        """Feed the environment reward back into the buffer.
+
+        Applies two transforms before storage:
+        1. Death penalty: subtracts ``config.death_penalty`` on termination so
+           the value head learns that dying is worse than running out of steps.
+        2. Reward normalisation: scales by running 1/std so the 0.1–2048 range
+           the environment produces maps to roughly unit variance, stabilising
+           value function learning.
+        """
         if not self.config.enabled:
             return
+        if done and self.config.death_penalty != 0.0:
+            reward += self.config.death_penalty
+        if self._reward_rms is not None:
+            self._reward_rms.update(reward)
+            reward = self._reward_rms.normalize(reward)
         self.buffer.store_reward(reward, done)
 
     def record_success(self, success: bool) -> None:
@@ -279,8 +319,19 @@ class RLLayer:
             and len(self.buffer) >= self.config.update_interval
         )
 
-    def update(self) -> Dict:
-        """Run a full MAPPO update over the collected rollout."""
+    def update(self, neighbour_buffers: Optional[Dict[int, "RolloutBuffer"]] = None,
+               hebbian_graph=None) -> Dict:
+        """Run a full MAPPO update over the collected rollout.
+
+        Parameters
+        ----------
+        neighbour_buffers : dict of {agent_id: RolloutBuffer}, optional
+            Other agents' rollout buffers for social replay (Eq. 7).
+            When provided alongside a Hebbian graph, transitions from
+            strongly-bonded neighbours are mixed into each mini-batch.
+        hebbian_graph : HebbianSocialGraph, optional
+            Used to compute social replay sample indices via get_social_replay_indices().
+        """
         if not self.config.enabled or not self.buffer.ready:
             return {}
 
@@ -303,13 +354,54 @@ class RLLayer:
             self.config.gamma, self.config.gae_lambda, last_value
         )
 
+        # ── Social replay: collect neighbour transitions (Eq. 7) ──────────
+        social_transitions = []
+        if neighbour_buffers and hebbian_graph is not None:
+            buffer_sizes = {
+                aid: len(buf) for aid, buf in neighbour_buffers.items()
+            }
+            # get_social_replay_indices expects a list indexed by agent_id
+            max_id = max(buffer_sizes.keys()) + 1 if buffer_sizes else 0
+            sizes_list = [buffer_sizes.get(i, 0) for i in range(max_id)]
+            indices = hebbian_graph.get_social_replay_indices(
+                agent_i=self.agent_id,
+                buffer_sizes=sizes_list,
+                rho=self.config.social_replay_rho,
+            )
+            for buf_idx, agent_j in indices:
+                buf_j = neighbour_buffers.get(agent_j)
+                if buf_j is not None:
+                    all_j = buf_j.get_all()
+                    if buf_idx < len(all_j):
+                        social_transitions.append(all_j[buf_idx])
+            if social_transitions:
+                logger.info(
+                    "RLLayer agent %d: social replay — %d neighbour transitions from %d agents",
+                    self.agent_id, len(social_transitions),
+                    len({j for _, j in indices}),
+                )
+        # ─────────────────────────────────────────────────────────────────
+
+        # ── Entropy annealing ──────────────────────────────────────────────
+        if self.config.entropy_anneal_steps > 0:
+            progress = min(self._update_count / self.config.entropy_anneal_steps, 1.0)
+            entropy_coef = self.config.entropy_start + progress * (
+                self.config.entropy_end - self.config.entropy_start
+            )
+        else:
+            entropy_coef = self.config.entropy_coef
+        # ─────────────────────────────────────────────────────────────────
+
         all_info = {}
         # GradScaler requires FP32 model weights; since the model is loaded
         # directly in FP16/BF16, gradients are already in that dtype and the
         # scaler would raise "Attempting to unscale FP16 gradients." Disable it.
         scaler = torch.amp.GradScaler("cuda", enabled=False)
         for _ in range(self.config.ppo_epochs):
-            for batch in self.buffer.sample_batches(self.config.mini_batch_size):
+            for batch in self.buffer.sample_batches(
+                self.config.mini_batch_size,
+                extra_transitions=social_transitions,
+            ):
                 with torch.amp.autocast(self._device.type, dtype=self._dtype):
                     loss, info = action_level_ppo_step(
                         model=self.model,
@@ -319,7 +411,7 @@ class RLLayer:
                         batch=batch,
                         clip_eps=self.config.clip_eps,
                         value_clip_eps=self.config.value_clip_eps,
-                        entropy_coef=self.config.entropy_coef,
+                        entropy_coef=entropy_coef,
                         value_coef=self.config.value_coef,
                         device=self._device,
                         max_length=self.config.rl_prompt_max_tokens,
@@ -336,6 +428,7 @@ class RLLayer:
 
         self._update_count += 1
         self.buffer.clear()
+        all_info["entropy_coef"] = entropy_coef
 
         logger.info(
             "RLLayer agent %d update #%d: %s",

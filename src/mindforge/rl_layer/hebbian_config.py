@@ -43,7 +43,7 @@ class HebbianConfig:
 
     # ── Sustained LTD from repeated co-failure ──
     ltd_sustained_lr: float = 0.002  # λ_F
-    failure_memory_window: int = 10  # rolling window size for Fij
+    failure_memory_window: int = 50  # rolling window size for Fij; tasks take 50-100+ steps
 
     # ── Social replay (Eq. 7) ──
     social_replay_rho: float = 0.3  # ρ, blend own vs neighbour buffers

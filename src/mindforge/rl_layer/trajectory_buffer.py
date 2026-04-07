@@ -107,13 +107,24 @@ class RolloutBuffer:
 
     # ── Batching for training ──
 
-    def sample_batches(self, mini_batch_size: int):
-        """Yield mini-batches of transitions (shuffled)."""
+    def sample_batches(self, mini_batch_size: int,
+                       extra_transitions: Optional[List["Transition"]] = None):
+        """Yield mini-batches of transitions (shuffled).
+
+        Parameters
+        ----------
+        mini_batch_size : int
+        extra_transitions : list of Transition, optional
+            Social-replay transitions from neighbour buffers (Eq. 7).
+            Appended to the pool before shuffling so they are distributed
+            across all mini-batches proportionally.
+        """
         assert mini_batch_size > 0, "mini_batch_size must be positive"
-        indices = torch.randperm(len(self._buf)).tolist()
-        for start in range(0, len(self._buf), mini_batch_size):
+        pool = self._buf + (extra_transitions or [])
+        indices = torch.randperm(len(pool)).tolist()
+        for start in range(0, len(pool), mini_batch_size):
             batch_idx = indices[start:start + mini_batch_size]
-            yield [self._buf[i] for i in batch_idx]
+            yield [pool[i] for i in batch_idx]
 
     def get_all(self) -> List[Transition]:
         return list(self._buf)

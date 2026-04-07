@@ -87,7 +87,10 @@ class EpisodicMemoryManager:
             raise RuntimeError("Failed to initialize ChromaDB")
         self.vectordb._collection.add(
             documents=[episode],
-            metadatas=[{"episode": self.vectordb._collection.count()}],
+            metadatas=[{
+                "episode": self.vectordb._collection.count(),
+                "success": int(success),   # stored as int for ChromaDB filter compat
+            }],
             ids=[f"episode_{self.vectordb._collection.count()}"],
         )
         return episode
@@ -118,24 +121,56 @@ class EpisodicMemoryManager:
         return response
 
     # retrieve episodes
-    def retrieve_episodes(self, query: str):
+    def retrieve_episodes(self, query: str, success_ratio: float = 0.7):
+        """Retrieve episodes by semantic similarity with success-weighted re-ranking.
+
+        Fetches 2×k candidates then selects ceil(success_ratio * k) successes
+        and floor((1-success_ratio) * k) failures, so the agent sees mostly
+        positive examples without losing all failure signal.
+
+        Parameters
+        ----------
+        query : str
+            Task description used as the embedding query.
+        success_ratio : float
+            Fraction of returned episodes that should be successes (default 0.7).
+        """
         self.vectordb._ensure_initialized()
         if self.vectordb._collection.count() == 0:
             return None
         k = min(self.vectordb._collection.count(), self.vectordb._config.k)
-        # query vector db
+
+        # Fetch 2×k candidates to have enough for re-ranking
+        fetch_k = min(self.vectordb._collection.count(), k * 2)
         logging.info(f"Querying vector db for episodes with query: {query}")
         data = self.vectordb._collection.query(
             query_texts=[query],
-            n_results=k,
+            n_results=fetch_k,
             include=["documents", "metadatas", "distances"],
         )
         logging.info(f"episodes found: {data}")
 
-        # format episodes
-        formatted_episodes = data["documents"][0] if data.get("documents") and data["documents"] else []
+        docs = data["documents"][0] if data.get("documents") and data["documents"] else []
+        metas = data["metadatas"][0] if data.get("metadatas") and data["metadatas"] else []
 
-        return formatted_episodes
+        if not docs:
+            return []
+
+        # Split candidates by success flag (stored as int: 1=success, 0=failure)
+        successes = [d for d, m in zip(docs, metas) if m.get("success", 0) == 1]
+        failures  = [d for d, m in zip(docs, metas) if m.get("success", 0) == 0]
+
+        import math
+        n_success = math.ceil(success_ratio * k)
+        n_failure = k - n_success
+
+        selected = successes[:n_success] + failures[:n_failure]
+        # Pad with remaining candidates if either pool was too small
+        if len(selected) < k:
+            remaining = [d for d in docs if d not in selected]
+            selected += remaining[:k - len(selected)]
+
+        return selected[:k]
 
     async def clear_data(self):
         await self.vectordb.clear()
