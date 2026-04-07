@@ -22,7 +22,7 @@ with open(os.path.join(_this_dir, "prompts", "environment_prompt.txt"), "r") as 
 # The integer mapping matches _DISCRETE_ACTIONS in openworld_multi_agents.py:
 #   0 = NOP
 #   1-16 = forward, backward, left, right, jump, sneak, dig, place,
-#           slot_1..slot_5, mouse_x+, mouse_x-, mouse_y+
+#           slot_1..slot_5, TurnRight(mouse x+), TurnLeft(mouse x-), LookDown(mouse y-), LookUp(mouse y+)
 ACTION_MAP = {
     "NoOp": 0,
     "MoveForward": 1,

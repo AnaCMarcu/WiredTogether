@@ -336,7 +336,7 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
 _DISCRETE_ACTIONS = [
     "forward", "backward", "left", "right", "jump", "sneak",
     "dig", "place", "slot_1", "slot_2", "slot_3", "slot_4", "slot_5",
-    "mouse x+", "mouse x-", "mouse y+", "mouse y-",
+    "mouse x+", "mouse x-", "mouse y-", "mouse y+",  # y- = look down, y+ = look up (Minetest Y-axis is inverted)
     # --- added actions (indices 17-21) ---
     "inventory",                          # toggle inventory/crafting menu
     "drop",                               # drop held item
@@ -453,6 +453,9 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
             seed=seed,  # fixed_map_seed for Minetest world generation
             frameskip=frameskip,
             pmul=pmul,
+            # Scale HUD down to 0.5 (engine minimum) so hearts/food bar occupy
+            # less of the 320×180 observation frame.
+            mt_clients_conf={"hud_scaling": 0.5},
         )
 
         # Define observation and action spaces
