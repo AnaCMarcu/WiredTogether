@@ -32,7 +32,7 @@ class RLConfig:
     gradient_checkpointing: bool = False  # LoRA rank=8 has negligible activation memory; checkpointing adds ~35% compute overhead for no benefit
 
     # ── PPO / MAPPO hyper-parameters ──
-    gamma: float = 0.99
+    gamma: float = 0.995  # was 0.99 — extends effective credit horizon from ~100 to ~200 steps; needed since tasks take 50-100 steps before a completion reward fires
     gae_lambda: float = 0.95
     clip_eps: float = 0.2
     value_clip_eps: float = 1.0   # was 0.2 — after RunningMeanStd normalization returns are ~[-3,+3]; ±0.2 was too tight, value head converged in 50-100 updates instead of 5-10

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=rl
 #SBATCH --partition=gpu-a100
-#SBATCH --time=12:00:00
+#SBATCH --time=15:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
@@ -103,9 +103,9 @@ VLLM_PID=""
 
 cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
-python multi_agent_craftium.py --num-agents 3 --episodes 5 --max-steps 500 \
+python multi_agent_craftium.py --num-agents 3 --episodes 5 \
     --warmup-time 300 --rl --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
-    --rl-update-interval 32 --rl-prompt-max-tokens 512
+    --rl-prompt-max-tokens 512
 
 # python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 100
 

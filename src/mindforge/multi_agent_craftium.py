@@ -52,7 +52,7 @@ def parse_args():
                         help="Number of agents (roles cycle: gatherer, hunter, defender)")
     parser.add_argument("--episodes", type=int, default=1,
                         help="Number of episodes to run")
-    parser.add_argument("--max-steps", type=int, default=500,
+    parser.add_argument("--max-steps", type=int, default=1000,
                         help="Maximum steps per episode")
     parser.add_argument("--obs-width", type=int, default=320,
                         help="Observation width in pixels")
@@ -85,9 +85,9 @@ def parse_args():
                         help="Path to base model for RL (e.g. /scratch/.../Qwen3.5-2B)")
     parser.add_argument("--rl-lora-rank", type=int, default=8,
                         help="LoRA rank for RL adapter")
-    parser.add_argument("--rl-update-interval", type=int, default=64,
+    parser.add_argument("--rl-update-interval", type=int, default=256,
                         help="Steps between MAPPO updates")
-    parser.add_argument("--rl-lr", type=float, default=3e-4,
+    parser.add_argument("--rl-lr", type=float, default=1e-4,
                         help="Learning rate for RL optimiser")
     parser.add_argument("--rl-auto-token-opt", action="store_true",
                         help="Let agents self-trigger token-level optimisation")
