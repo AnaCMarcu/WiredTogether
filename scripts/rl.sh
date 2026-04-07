@@ -35,6 +35,7 @@ export SDL_VIDEODRIVER=dummy
 export SDL_AUDIODRIVER=dummy
 export DISPLAY=
 export LIBGL_ALWAYS_SOFTWARE=1
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export MESA_GL_VERSION_OVERRIDE=3.3
 
 # Force offline mode — compute nodes have no internet
@@ -104,7 +105,7 @@ cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
 python multi_agent_craftium.py --num-agents 3 --episodes 5 --max-steps 500 \
     --warmup-time 300 --rl --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
-    --rl-update-interval 32
+    --rl-update-interval 32 --rl-prompt-max-tokens 512
 
 # python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 100
 

@@ -35,6 +35,7 @@ def action_level_ppo_step(
     entropy_coef: float,
     value_coef: float,
     device: torch.device,
+    max_length: int = 512,
 ) -> Tuple[torch.Tensor, dict]:
     """Single PPO mini-batch update.  Returns scalar loss + info dict."""
 
@@ -51,13 +52,15 @@ def action_level_ppo_step(
 
     advantages = _normalize(advantages)
 
-    # Tokenize prompts (truncate to model max length)
+    # Tokenize prompts — cap at max_length to bound activation memory.
+    # At 512 tokens the RL prompt fits comfortably; model_max_length (32768)
+    # would make the padded batch 64× larger and OOM during backprop.
     enc = tokenizer(
         prompts,
         return_tensors="pt",
         padding=True,
         truncation=True,
-        max_length=tokenizer.model_max_length,
+        max_length=max_length,
     ).to(device)
 
     # Forward pass – get last hidden state

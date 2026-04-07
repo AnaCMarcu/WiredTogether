@@ -131,6 +131,12 @@ class RLLayer:
         self.model.print_trainable_parameters()
         self._adapter_name = adapter_name
 
+        # Gradient checkpointing: recompute activations during backward instead of
+        # storing them all live.  Reduces peak VRAM by ~40-50% at ~33% compute cost.
+        if config.gradient_checkpointing:
+            self.model.gradient_checkpointing_enable()
+            logger.info("RLLayer: gradient checkpointing enabled")
+
         # ── Heads — always float32 ──
         # pooled hidden states are upcast to float32 (in _encode_prompt and mappo.py)
         # to prevent NaN from fp16 overflow, so heads must also be float32.
@@ -256,6 +262,10 @@ class RLLayer:
         if not self.config.enabled or not self.buffer.ready:
             return {}
 
+        # Release any fragmented CUDA cache before the backward pass so the
+        # activation tensors have room to allocate.
+        torch.cuda.empty_cache()
+
         self.model.train()
 
         # Compute last value for GAE bootstrap
@@ -290,6 +300,7 @@ class RLLayer:
                         entropy_coef=self.config.entropy_coef,
                         value_coef=self.config.value_coef,
                         device=self._device,
+                        max_length=self.config.rl_prompt_max_tokens,
                     )
                 self.optimizer.zero_grad()
                 scaler.scale(loss).backward()
@@ -495,7 +506,7 @@ class RLLayer:
             prompt_text,
             return_tensors="pt",
             truncation=True,
-            max_length=self.tokenizer.model_max_length,
+            max_length=self.config.rl_prompt_max_tokens,
         ).to(self._device)
         outputs = self.model(**enc, output_hidden_states=True)
         last_hidden = outputs.hidden_states[-1]  # (1, L, H)

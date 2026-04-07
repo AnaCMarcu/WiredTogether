@@ -24,6 +24,13 @@ class RLConfig:
     # ── Value head ──
     value_hidden: int = 256
 
+    # ── Memory management ──
+    # RL prompts can be very long (beliefs + skills + episodes).  Truncating at
+    # 512 tokens is sufficient for policy learning on discrete actions and keeps
+    # PPO activation memory to a manageable size during the backward pass.
+    rl_prompt_max_tokens: int = 512
+    gradient_checkpointing: bool = True  # recompute activations during backward
+
     # ── PPO / MAPPO hyper-parameters ──
     gamma: float = 0.99
     gae_lambda: float = 0.95

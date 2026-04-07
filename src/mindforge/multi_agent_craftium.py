@@ -95,6 +95,11 @@ def parse_args():
                         choices=["action", "token"],
                         help="RL mode: 'action' = MAPPO action head, "
                              "'token' = token-opt only (LLM picks actions)")
+    parser.add_argument("--rl-prompt-max-tokens", type=int, default=512,
+                        help="Max tokens for RL prompt encoding. Capping this is critical "
+                             "for VRAM: at model_max_length=32768 a mini-batch of 8 prompts "
+                             "needs ~21 GB just for hidden states. 512 is sufficient for "
+                             "discrete action policy learning.")
     # ── Hebbian social plasticity ──
     parser.add_argument("--hebbian", action="store_true",
                         help="Enable Hebbian social plasticity graph")
@@ -364,6 +369,7 @@ async def run(args):
         update_interval=args.rl_update_interval,
         lr=args.rl_lr,
         auto_token_opt=args.rl_auto_token_opt,
+        rl_prompt_max_tokens=args.rl_prompt_max_tokens,
     )
     if rl_config.enabled:
         print(f"RL layer ENABLED: model={rl_config.model_path}, "
