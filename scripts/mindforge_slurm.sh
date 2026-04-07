@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=loc_change
+#SBATCH --job-name=macro_actions
 #SBATCH --partition=gpu-a100
 #SBATCH --time=02:00:00
 #SBATCH --ntasks=1
@@ -106,7 +106,7 @@ python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK
 #     --warmup-time 300 --rl --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
 #     --rl-update-interval 32
 
-python multi_agent_craftium.py --num-agents 3 --episodes 2 --max-steps 100 \
+python multi_agent_craftium.py --num-agents 3 --episodes 2 --max-steps 300 \
     --belief-interval 5 --critic-interval 20 \
     --warmup-time 300
 # python test_scripted_agent.py --num-agents 1 --max-steps 500 --warmup-time 120 --verbose
