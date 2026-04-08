@@ -70,6 +70,8 @@ def parse_args():
                              "cached success/critique are reused, saving 1 LLM call per skipped step.")
     parser.add_argument("--no-gif", action="store_true",
                         help="Disable GIF saving")
+    parser.add_argument("--gif-interval", type=int, default=100,
+                        help="Save a checkpoint GIF every N steps (default 100). 0 = only save at episode end.")
     parser.add_argument("--warmup-time", type=int, default=60,
                         help="Minimum seconds before checking if media loaded (default 60). "
                              "Smart detection exits early once all clients show game world.")
@@ -305,6 +307,7 @@ async def run(args):
     communication = not args.no_communication
     sleep_time = args.sleep_time
     save_gif = not args.no_gif
+    gif_interval = args.gif_interval
 
     # ── Reproducibility: seed all RNG sources ──
     # LLM sampling (temperature > 0) is inherently stochastic and not seeded —
@@ -470,6 +473,28 @@ async def run(args):
         agents_error_count = [0] * num_agents
         frames_list = []
 
+        def _save_gif_checkpoint(step_num):
+            """Write a GIF for each agent from frames collected so far."""
+            for i in range(num_agents):
+                agent_frames = [
+                    PIL.Image.fromarray(f[i]) for f in frames_list if f[i] is not None
+                ]
+                if agent_frames:
+                    gif_path = (
+                        f"gifs/{role_configs[i]['agent_name']}_ep{episode+1}"
+                        f"_step{step_num}"
+                        f"_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.gif"
+                    )
+                    agent_frames[0].save(
+                        gif_path,
+                        format="GIF",
+                        append_images=agent_frames[1:],
+                        save_all=True,
+                        duration=500,
+                        loop=0,
+                    )
+                    print(f"  Saved GIF checkpoint: {gif_path}")
+
         for step in range(max_steps):
             logging.info(f"Episode {episode+1}, Step {step+1}/{max_steps}")
 
@@ -489,6 +514,10 @@ async def run(args):
                     else np.zeros((obs_height, obs_width, 3), dtype=np.uint8)
                 )
             frames_list.append(current_frames)
+
+            # Periodic GIF checkpoint so partial episodes are visible on HPC time limits
+            if save_gif and gif_interval > 0 and (step + 1) % gif_interval == 0:
+                _save_gif_checkpoint(step + 1)
 
             # ── Phase 1: All agents act (collect data for Hebbian) ──
             step_comm_count = 0
