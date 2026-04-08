@@ -5,8 +5,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
-#SBATCH --mem-per-cpu=4G
-#SBATCH --exclusive  
+#SBATCH --mem=0
+#SBATCH --exclusive
 #SBATCH --account=education-eemcs-msc-dsait
 #SBATCH --output=/scratch/%u/WiredTogether/slurm_logs/%x-%j.out
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/%x-%j.err
