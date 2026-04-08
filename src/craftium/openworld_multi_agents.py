@@ -90,9 +90,14 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         """
         import shutil
 
-        persistent_cache = os.path.join(
-            os.path.expanduser("~"), ".craftium_media_cache"
-        )
+        # Prefer $SCRATCH (node-local SSD) over $HOME (NFS) for the media cache.
+        # NFS latency during texture loading can cause the client to time out and
+        # drop its Python TCP connection, producing the "Connection closed by peer" error.
+        scratch = os.environ.get("SCRATCH", "")
+        if scratch:
+            persistent_cache = os.path.join(scratch, ".craftium_media_cache")
+        else:
+            persistent_cache = os.path.join(os.path.expanduser("~"), ".craftium_media_cache")
         os.makedirs(persistent_cache, exist_ok=True)
 
         for i, client in enumerate(self.mt_clients):
