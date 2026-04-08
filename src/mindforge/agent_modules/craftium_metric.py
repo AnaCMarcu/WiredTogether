@@ -62,9 +62,11 @@ class CraftiumMetric:
         num_agents=3,
         communication=True,
         path="./run_metrics",
+        run_id=None,
     ):
         self.num_agents = num_agents
         self.communication = communication
+        self.run_id = run_id
         self.timestep = 0
 
         # Per-agent cumulative return
@@ -620,7 +622,8 @@ class CraftiumMetric:
         os.makedirs(path, exist_ok=True)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         comm_str = "comm" if self.communication else "noComm"
-        folder_name = f"craftium_{self.num_agents}agents_{comm_str}_{timestamp}"
+        base = self.run_id if self.run_id else f"craftium_{self.num_agents}agents_{comm_str}_{timestamp}"
+        folder_name = base
         target = os.path.join(path, folder_name)
         os.makedirs(target, exist_ok=True)
         return target

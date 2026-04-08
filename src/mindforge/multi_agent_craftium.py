@@ -126,6 +126,8 @@ def parse_args():
     # ── Experiment tracking ──
     parser.add_argument("--experiment-id", type=str, default=None,
                         help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
+    parser.add_argument("--log-interval", type=int, default=10,
+                        help="Print a reward/metric summary every N steps (default 10)")
     return parser.parse_args()
 
 
@@ -324,6 +326,13 @@ async def run(args):
         torch.backends.cudnn.benchmark = False
         print(f"Seeded RNG: seed={seed}")
 
+    # ── Run ID: short unique tag shared by all log/gif/metric filenames ──
+    from uuid import uuid4
+    _ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    _exp = args.experiment_id or ""
+    run_id = f"{_exp+'_' if _exp else ''}{_ts}_{uuid4().hex[:6]}"
+    print(f"[RUN ID] {run_id}")
+
     # Logging
     os.makedirs("logs", exist_ok=True)
     os.makedirs("gifs", exist_ok=True)
@@ -332,10 +341,12 @@ async def run(args):
     event_logger.disabled = True
     logging.basicConfig(
         level=logging.INFO,
-        filename=f"logs/craftium_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log",
+        filename=f"logs/{run_id}.log",
         filemode="a",
+        format=f"[{run_id}] %(asctime)s %(levelname)s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+    log_interval = args.log_interval
 
     # Load prompts
     prompts = load_prompts()
@@ -353,6 +364,7 @@ async def run(args):
     metric = CraftiumMetric(
         num_agents=num_agents,
         communication=communication,
+        run_id=run_id,
     )
 
     environment = CraftiumEnvironmentInterface(
@@ -481,9 +493,8 @@ async def run(args):
                 ]
                 if agent_frames:
                     gif_path = (
-                        f"gifs/{role_configs[i]['agent_name']}_ep{episode+1}"
-                        f"_step{step_num}"
-                        f"_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.gif"
+                        f"gifs/{run_id}_{role_configs[i]['agent_name']}_ep{episode+1}"
+                        f"_step{step_num}.gif"
                     )
                     agent_frames[0].save(
                         gif_path,
@@ -496,10 +507,22 @@ async def run(args):
                     print(f"  Saved GIF checkpoint: {gif_path}")
 
         for step in range(max_steps):
-            logging.info(f"Episode {episode+1}, Step {step+1}/{max_steps}")
+            logging.info(f"ep={episode+1} step={step+1}/{max_steps}")
 
-            if step % 50 == 0:
-                print(f"  Step {step+1}/{max_steps}")
+            if step % log_interval == 0:
+                returns_str = "  ".join(
+                    f"agent_{i}={metric.cumulative_returns[i]:.1f}"
+                    for i in range(num_agents)
+                )
+                tasks_str = "  ".join(
+                    f"agent_{i}={agents[i].auto_curriculum.current_task or 'None'!r}"
+                    for i in range(num_agents)
+                )
+                print(
+                    f"[{run_id}] ep={episode+1} step={step+1}/{max_steps} | "
+                    f"returns: {returns_str} | "
+                    f"tasks: {tasks_str}"
+                )
 
             if environment.all_done():
                 print(f"  All agents done at step {step+1}")
@@ -692,8 +715,7 @@ async def run(args):
                 ]
                 if agent_frames:
                     gif_path = (
-                        f"gifs/{role_configs[i]['agent_name']}_ep{episode+1}"
-                        f"_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.gif"
+                        f"gifs/{run_id}_{role_configs[i]['agent_name']}_ep{episode+1}.gif"
                     )
                     agent_frames[0].save(
                         gif_path,
@@ -703,9 +725,9 @@ async def run(args):
                         duration=500,
                         loop=0,
                     )
-                    print(f"  Saved GIF: {gif_path}")
+                    print(f"[{run_id}] Saved GIF: {gif_path}")
 
-    print(f"\nExperiment complete! Timesteps logged: {metric.timestep}")
+    print(f"[{run_id}] Experiment complete! Timesteps logged: {metric.timestep}")
     # Attach run config for reproducibility before saving
     metric.seed = seed
     metric.max_steps = max_steps
