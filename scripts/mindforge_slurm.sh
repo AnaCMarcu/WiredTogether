@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=all_changes
 #SBATCH --partition=gpu-a100
-#SBATCH --time=25:00:00
+#SBATCH --time=20:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
