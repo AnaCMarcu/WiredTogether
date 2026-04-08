@@ -1,12 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=rl_long
+#SBATCH --job-name=rl
 #SBATCH --partition=gpu-a100
 #SBATCH --time=15:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
-#SBATCH --mem=0
-#SBATCH --exclusive
+#SBATCH --mem-per-cpu=4G
 #SBATCH --account=education-eemcs-msc-dsait
 #SBATCH --output=/scratch/%u/WiredTogether/slurm_logs/%x-%j.out
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/%x-%j.err
