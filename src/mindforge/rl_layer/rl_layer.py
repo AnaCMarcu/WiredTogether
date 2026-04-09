@@ -366,7 +366,7 @@ class RLLayer:
             indices = hebbian_graph.get_social_replay_indices(
                 agent_i=self.agent_id,
                 buffer_sizes=sizes_list,
-                rho=self.config.social_replay_rho,
+                rho=hebbian_graph.config.social_replay_rho,
             )
             for buf_idx, agent_j in indices:
                 buf_j = neighbour_buffers.get(agent_j)
