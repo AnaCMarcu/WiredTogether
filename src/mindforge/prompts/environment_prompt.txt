@@ -27,6 +27,7 @@ MACRO ACTIONS — multi-step sequences (you are NOT called again until they comp
 - "ScanArea": Rotate a full 360° to scan surroundings and spot teammates or resources (18 turn steps)
 - "ApproachTarget": Turn slightly right then walk forward 8 steps toward a visible target (11 steps total)
 - "Escape": Jump, move back, turn, jump, move forward — use when physically stuck (23 steps)
+- "MineStairs": Dig a 3-step staircase going forward-downward — use instead of LookDown+Dig when mining underground (9 steps)
 
 WHEN TO USE MACROS:
 - Use ScanArea when you cannot see anything useful or are trying to locate teammates or resources.
@@ -60,6 +61,11 @@ DEFEND TRACK (monster fighting):
 You start with a stone axe and torches. New tools are awarded to ALL agents when a tools stage is completed.
 Your current inventory is shown in the "Inventory" field above. Use Slot1-Slot8 to select which item to hold.
 Digging blocks always gives a small reward. Dying gives a large penalty.
+
+MINING SAFETY — important:
+  NEVER mine straight down (LookDown → Dig repeatedly) — you will fall into a pit you cannot escape.
+  Always use MineStairs when going underground — it creates a slope you can walk back up.
+  If you are already stuck in a pit, use Escape to attempt to climb out.
 
 ITEM COLLECTION — this is required to progress:
   When you dig a block, the item drops on the ground at that location.
