@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=test
+#SBATCH --job-name=6_agents
 #SBATCH --partition=gpu-a100
-#SBATCH --time=03:00:00
+#SBATCH --time=20:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
@@ -106,8 +106,10 @@ python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK
 #     --warmup-time 300 --rl --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
 #     --rl-update-interval 32
 
-# python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 100
-python test_scripted_agent.py --mode dig --num-agents 2 --warmup-time 120
+python multi_agent_craftium.py --num-agents 6 --episodes 3 --max-steps 200 \
+    --belief-interval 5 --critic-interval 20 \
+    --warmup-time 300
+# python test_scripted_agent.py --num-agents 1 --max-steps 500 --warmup-time 120 --verbose
 
 # Cleanup vLLM server
 if [ -n "${VLLM_PID:-}" ]; then
