@@ -1,0 +1,9 @@
+Task: {task}
+Last action: {last_action}
+Chosen action this step: {action}
+Inventory: {picked_object}
+
+Write a short message to your teammates (1 sentence) describing what you observe or intend to do.
+Examples: 'I found a tree to the north, heading there', 'Digging stone to the east', 'I am stuck, trying to escape', 'Moving forward to explore'.
+
+Respond in JSON: {{"communication": "<message>"}}

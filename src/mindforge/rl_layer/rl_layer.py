@@ -250,7 +250,7 @@ class RLLayer:
         task_line = prompt_text.split("\n", 1)[0] if prompt_text else ""
         communication = f"[RL step {self.step_count}] {task_line} → {action_name}"
 
-        logger.debug("RLLayer select_action: step=%d action=%s", self.step_count, action_name)
+        logger.info("RLLayer step=%d action=%s prompt:\n%s", self.step_count, action_name, prompt_text)
 
         return {
             "action": action_name,

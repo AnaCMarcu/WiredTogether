@@ -45,6 +45,10 @@ class AgentResponse(BaseModel):
     communication: str
 
 
+class CommunicationResponse(BaseModel):
+    communication: str
+
+
 class CandidateResponse(BaseModel):
     candidate_actions: List[str]
 

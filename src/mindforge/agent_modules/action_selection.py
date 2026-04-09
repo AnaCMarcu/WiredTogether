@@ -1,6 +1,6 @@
 import os
 from agent_modules.llm_call import llm_call
-from agent_modules.util import AgentResponse, CandidateResponse, create_model_client, safe_format
+from agent_modules.util import AgentResponse, CandidateResponse, CommunicationResponse, create_model_client, safe_format
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
@@ -19,6 +19,8 @@ with open(os.path.join(_PROMPT_DIR, "system_prompt_candidate_interventions.txt")
     system_prompt_candidate_interventions = f.read()
 with open(os.path.join(_PROMPT_DIR, "instruction_prompt_p2_candidate.txt"), "r") as f:
     instruction_prompt_p2_candidate = f.read()
+with open(os.path.join(_PROMPT_DIR, "rl_communication_prompt.txt"), "r") as f:
+    rl_communication_prompt = f.read()
 
 
 class ActionSelection:
@@ -103,6 +105,32 @@ class ActionSelection:
                 **beliefs,
             )
             return content
+
+    async def generate_communication(
+        self,
+        action,
+        task,
+        last_action,
+        picked_object,
+        last_frame,
+        cancellation_token,
+        agent_name,
+    ):
+        """Generate a natural language communication message for an RL-selected action."""
+        comm_client = create_model_client(response_format=CommunicationResponse)
+        content = await llm_call(
+            comm_client,
+            system_prompt=self.system_prompt,
+            user_prompt=rl_communication_prompt,
+            frame=last_frame,
+            cancellation_token=cancellation_token,
+            log_prefix=f"Agent {agent_name} rl_comm: ",
+            task=task,
+            last_action=last_action,
+            action=action,
+            picked_object=picked_object or "empty",
+        )
+        return content.get("communication", "")
 
     async def select_candidate_actions(
         self,

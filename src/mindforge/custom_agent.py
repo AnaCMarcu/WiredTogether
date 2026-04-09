@@ -313,6 +313,16 @@ class CustomAgent(BaseChatAgent):
             rl_content = self.rl_layer.select_action(rl_prompt)
 
         if rl_content is not None:
+            comm = await self.action_selection.generate_communication(
+                action=rl_content["action"],
+                task=task,
+                last_action=last_action,
+                picked_object=picked_object,
+                last_frame=last_frame,
+                cancellation_token=cancellation_token,
+                agent_name=self.name,
+            )
+            rl_content["communication"] = comm
             content = rl_content
         else:
             content = await self.action_selection.select_action(
