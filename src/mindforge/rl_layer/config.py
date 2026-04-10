@@ -28,8 +28,8 @@ class RLConfig:
     # RL prompts can be very long (beliefs + skills + episodes).  Truncating at
     # 512 tokens is sufficient for policy learning on discrete actions and keeps
     # PPO activation memory to a manageable size during the backward pass.
-    rl_prompt_max_tokens: int = 512
-    gradient_checkpointing: bool = False  # LoRA rank=8 has negligible activation memory; checkpointing adds ~35% compute overhead for no benefit
+    rl_prompt_max_tokens: int = 256  # was 512 — halving sequence length reduces attention memory ~4×; 256 tokens is enough for task+status+beliefs
+    gradient_checkpointing: bool = True  # re-enabled: serving model + RL model share the 80GB A100, leaving ~1.5GB free; checkpointing trades 35% compute for ~60% activation memory reduction
 
     # ── PPO / MAPPO hyper-parameters ──
     gamma: float = 0.995  # was 0.99 — extends effective credit horizon from ~100 to ~200 steps; needed since tasks take 50-100 steps before a completion reward fires
@@ -40,7 +40,7 @@ class RLConfig:
     value_coef: float = 0.5
     max_grad_norm: float = 0.5
     ppo_epochs: int = 2           # was 4 — with update_interval=256: 2×8 mini-batches = 16 passes (was 32, causing gradient saturation)
-    mini_batch_size: int = 32     # was 8 — stable gradient estimates; 8 samples/batch gave high-variance updates
+    mini_batch_size: int = 4      # was 32 — reduced to fit PPO backward pass in ~1.5GB headroom on shared A100 (serving model uses ~77GB)
     lr: float = 1e-4              # was 3e-4 — LoRA rank=8 has ~0.1% trainable params; 3e-4 overshoots the LoRA manifold
 
     # ── Reward shaping ──
