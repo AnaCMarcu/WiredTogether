@@ -1210,11 +1210,36 @@ async def run(args):
                     except Exception as _tok_exc:
                         logging.warning(f"Agent {agent_id} token_optimize failed: {_tok_exc}")
 
-            # ── Phase 4: Graph metrics snapshot ──
+            # ── Phase 4: Graph metrics snapshot + SLURM log ──
             if hebbian_config.enabled and step % hebbian_config.log_graph_every == 0:
                 graph_metrics = hebbian_graph.get_graph_metrics()
                 metric.record_graph_snapshot(step, graph_metrics)
                 metric.log(f"[Hebbian step {step}] {graph_metrics}")
+
+                # Print a compact weight table to stdout so it lands in
+                # the SLURM .out file alongside the reward/task summaries.
+                W = hebbian_graph.get_all_weights()
+                N = num_agents
+                mean_bond = graph_metrics.get("mean_bond_strength", 0.0)
+                top = graph_metrics.get("top_3_pairs", [])
+
+                # Header row
+                col_hdrs = "      " + "  ".join(f"ag{j:>2}" for j in range(N))
+                rows = [col_hdrs, "      " + "------" * N]
+                for i in range(N):
+                    role_i = role_configs[i]["name"][:3].upper()
+                    cells = "  ".join(f"{W[i, j]:5.3f}" for j in range(N))
+                    rows.append(f"ag{i} {role_i}  {cells}")
+
+                top_str = "  ".join(
+                    f"({p['i']}→{p['j']})={p['w']:.3f}" for p in top
+                ) or "none"
+
+                print(
+                    f"[{run_id}] [HEBBIAN] ep={episode+1} step={step+1} "
+                    f"mean={mean_bond:.4f}  top3: {top_str}\n"
+                    + "\n".join(f"  {r}" for r in rows)
+                )
 
             metric.store_timestep(step_comm_count=step_comm_count)
 
