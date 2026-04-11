@@ -590,7 +590,7 @@ class RLLayer:
     # ── Persistence ──
 
     def save(self, path: Optional[str] = None) -> None:
-        """Save LoRA adapter + heads to disk."""
+        """Save LoRA adapter, heads, optimizer, and running state to disk."""
         if not self.config.enabled:
             return
         save_dir = Path(path or self.config.lora_save_dir) / self._adapter_name
@@ -599,6 +599,23 @@ class RLLayer:
         self.model.save_pretrained(str(save_dir))
         torch.save(self.action_head.state_dict(), save_dir / "action_head.pt")
         torch.save(self.value_head.state_dict(), save_dir / "value_head.pt")
+
+        # Extended state for checkpoint/resume
+        rms = self._reward_rms
+        torch.save({
+            "optimizer": self.optimizer.state_dict(),
+            "step_count": self.step_count,
+            "_update_count": self._update_count,
+            "_last_token_opt_step": self._last_token_opt_step,
+            "_recent_successes": list(self._recent_successes),
+            "_recent_actions": list(self._recent_actions),
+            "_recent_rewards": list(self._recent_rewards),
+            "_current_task": self._current_task,
+            "rms_mean": rms.mean if rms is not None else 0.0,
+            "rms_var": rms.var if rms is not None else 1.0,
+            "rms_count": rms.count if rms is not None else 1e-4,
+        }, save_dir / "rl_state.pt")
+
         logger.info("RLLayer agent %d: saved to %s", self.agent_id, save_dir)
 
     def load(self, path: Optional[str] = None) -> None:
@@ -640,6 +657,30 @@ class RLLayer:
                 self.action_head.load_state_dict(saved_state)
         if vh_path.exists():
             self.value_head.load_state_dict(torch.load(vh_path, map_location=self._device))
+
+        # Extended state for checkpoint/resume
+        state_path = load_dir / "rl_state.pt"
+        if state_path.exists():
+            state = torch.load(state_path, map_location=self._device)
+            try:
+                self.optimizer.load_state_dict(state["optimizer"])
+            except (ValueError, KeyError):
+                logger.warning(
+                    "RLLayer agent %d: optimizer state mismatch, reinitialising.", self.agent_id
+                )
+            self.step_count = state.get("step_count", 0)
+            self._update_count = state.get("_update_count", 0)
+            self._last_token_opt_step = state.get("_last_token_opt_step", 0)
+            self._recent_successes = list(state.get("_recent_successes", []))
+            self._recent_actions = list(state.get("_recent_actions", []))
+            self._recent_rewards = list(state.get("_recent_rewards", []))
+            self._current_task = state.get("_current_task", "Explore")
+            if self._reward_rms is not None:
+                self._reward_rms.mean = state.get("rms_mean", 0.0)
+                self._reward_rms.var = state.get("rms_var", 1.0)
+                self._reward_rms.count = state.get("rms_count", 1e-4)
+            logger.info("RLLayer agent %d: restored rl_state (step=%d, updates=%d)",
+                        self.agent_id, self.step_count, self._update_count)
 
     # ── Internal ──
 

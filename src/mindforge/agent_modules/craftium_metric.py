@@ -615,6 +615,74 @@ class CraftiumMetric:
             f.write("\n".join(lines) + "\n")
 
     # ------------------------------------------------------------------
+    # Checkpoint restore
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def restore_from_dict(cls, d: dict, path: str = "./run_metrics") -> "CraftiumMetric":
+        """Reconstruct a CraftiumMetric from a checkpoint run_state dict.
+
+        All lists are assigned directly so plots generated after a resumed
+        job show the full trajectory from episode 1, not just the continuation.
+        """
+        num_agents = d["num_agents"]
+        communication = d.get("communication", True)
+        run_id = d.get("run_id")
+        metric = cls(num_agents=num_agents, communication=communication,
+                     path=path, run_id=run_id)
+
+        metric.timestep = d.get("timestep", 0)
+        metric.cumulative_returns = d.get("cumulative_returns", [0.0] * num_agents)
+
+        # reward_history: list[list[tuple]]
+        rh = d.get("reward_history", [[] for _ in range(num_agents)])
+        metric.reward_history = [[tuple(x) for x in agent_h] for agent_h in rh]
+
+        # milestones: JSON uses str keys
+        ms = d.get("milestones", {})
+        metric.milestones = {
+            i: {
+                track: [tuple(x) for x in ms.get(str(i), {}).get(track, [])]
+                for track in TRACKS
+            }
+            for i in range(num_agents)
+        }
+
+        # first_milestone_step: {track: {tier_idx(int): step}}
+        fms = d.get("first_milestone_step", {})
+        metric.first_milestone_step = {
+            track: {int(k): v for k, v in fms.get(track, {}).items()}
+            for track in TRACKS
+        }
+
+        # track_rewards
+        tr = d.get("track_rewards", {})
+        metric.track_rewards = {
+            i: tr.get(str(i), {"tools": 0.0, "hunt": 0.0, "defend": 0.0, "other": 0.0})
+            for i in range(num_agents)
+        }
+
+        metric.communication_log = [tuple(x) for x in d.get("communication_log", [])]
+        metric.comm_counts_per_step = d.get("comm_counts_per_step", [])
+
+        metric.rl_updates = [tuple(x) for x in d.get("rl_updates", [])]
+        metric.rl_token_opts = [tuple(x) for x in d.get("rl_token_opts", [])]
+        metric._graph_snapshots = d.get("graph_snapshots", [])
+        metric._co_completion_events = d.get("co_completion_events", [])
+
+        lms = d.get("_last_milestone_step", {})
+        metric._last_milestone_step = {int(k): v for k, v in lms.items()}
+
+        metric.ts_data = d.get("ts_data", {
+            "timesteps": [],
+            "cumulative_returns": [[] for _ in range(num_agents)],
+            "milestone_count": [[] for _ in range(num_agents)],
+            "total_milestones": [],
+        })
+
+        return metric
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
