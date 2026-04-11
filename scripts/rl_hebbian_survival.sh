@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=rl_survival
 #SBATCH --partition=gpu-a100
-#SBATCH --time=08:00:00
+#SBATCH --time=20:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
@@ -71,7 +71,7 @@ python multi_agent_craftium.py \
     --hebbian-init-weight 0.1 \
     --targeted-communication \
     --survival-mode \
-    --survival-episode 2 \
+    --survival-episode 3 \
     --survival-gradual \
     --survival-gradual-delay 500 \
     --experiment-id "$EXPERIMENT_ID" \
