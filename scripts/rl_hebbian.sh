@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=rl_hebbian
 #SBATCH --partition=gpu-a100
-#SBATCH --time=08:00:00
+#SBATCH --time=20:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
@@ -52,7 +52,7 @@ python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK
 
 python multi_agent_craftium.py \
     --num-agents 3 \
-    --episodes 1 \
+    --episodes 3 \
     --warmup-time 300 \
     --rl \
     --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
