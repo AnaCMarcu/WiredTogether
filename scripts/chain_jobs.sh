@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=wt_chain
-#SBATCH --partition=gpu-a100
+#SBATCH --partition=compute
 #SBATCH --time=00:05:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
