@@ -138,6 +138,46 @@ def parse_args():
                         help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
     parser.add_argument("--log-interval", type=int, default=10,
                         help="Print a reward/metric summary every N steps (default 10)")
+    # ── Team composition ──
+    parser.add_argument(
+        "--team-mode",
+        type=str,
+        default="heterogeneous",
+        choices=[
+            "heterogeneous",
+            "homogeneous-gatherer",
+            "homogeneous-hunter",
+            "homogeneous-defender",
+            "homogeneous-auto",
+        ],
+        help="Role assignment strategy. 'heterogeneous' (default) cycles roles as before. "
+             "'homogeneous-*' assigns the same role to all agents.",
+    )
+    parser.add_argument(
+        "--homogeneous-role",
+        type=str,
+        default="gatherer",
+        choices=["gatherer", "hunter", "defender"],
+        help="Role used when --team-mode homogeneous-auto (default: gatherer)",
+    )
+    # ── Phased difficulty ──
+    parser.add_argument("--survival-mode", action="store_true",
+                        help="Enable the phased difficulty system. Without this flag "
+                             "the run stays in exploration phase (current behavior).")
+    parser.add_argument("--survival-episode", type=int, default=1,
+                        help="Switch to survival at the start of this episode (1-indexed). "
+                             "Only active when --survival-mode is set. (default: 1)")
+    parser.add_argument("--survival-step", type=int, default=None,
+                        help="Switch to survival at this cumulative global step count. "
+                             "Whichever of --survival-episode / --survival-step triggers "
+                             "first wins. Only active when --survival-mode is set.")
+    parser.add_argument("--survival-gradual", action="store_true",
+                        help="Ramp difficulty: enable mobs first, then hunger "
+                             "--survival-gradual-delay steps later. "
+                             "Only active when --survival-mode is set.")
+    parser.add_argument("--survival-gradual-delay", type=int, default=500,
+                        help="Steps between mobs-only and full survival in gradual mode "
+                             "(default: 500). Only active when --survival-gradual is set.")
     # ── Checkpoint / resume ──
     parser.add_argument("--checkpoint-dir", type=str, default=None,
                         help="Directory to write checkpoints into. "
@@ -187,17 +227,51 @@ def load_prompts():
     return prompts
 
 
-def build_role_configs(num_agents, role_prompts):
-    """Build ROLE_CONFIGS for num_agents, cycling through roles."""
-    configs = []
-    for i in range(num_agents):
-        role = ROLE_NAMES[i % len(ROLE_NAMES)]
-        configs.append({
-            "name": role,
-            "agent_name": f"agent_{i}_{role}",
-            "curriculum_prompt": role_prompts[role].format(num_agents=num_agents),
-        })
-    return configs
+def build_role_configs(
+    num_agents,
+    role_prompts,
+    team_mode="heterogeneous",
+    homogeneous_role="gatherer",
+):
+    """Build ROLE_CONFIGS for num_agents.
+
+    team_mode choices:
+      "heterogeneous"         — cycle [gatherer, hunter, defender, …] (default, unchanged)
+      "homogeneous-gatherer"  — all agents get gatherer role
+      "homogeneous-hunter"    — all agents get hunter role
+      "homogeneous-defender"  — all agents get defender role
+      "homogeneous-auto"      — all agents get the role named by homogeneous_role
+    """
+    if team_mode != "heterogeneous":
+        # Resolve target role from mode string or explicit override
+        if team_mode == "homogeneous-auto":
+            role_name = homogeneous_role
+        else:
+            # "homogeneous-gatherer" → "gatherer"
+            role_name = team_mode.split("-", 1)[1] if "-" in team_mode else homogeneous_role
+        if role_name not in ROLE_NAMES:
+            raise ValueError(
+                f"Unknown homogeneous role '{role_name}'. Must be one of {ROLE_NAMES}."
+            )
+        return [
+            {
+                "name": role_name,
+                "agent_name": f"agent_{i}_{role_name}",
+                "curriculum_prompt": role_prompts[role_name].format(num_agents=num_agents),
+            }
+            for i in range(num_agents)
+        ]
+    else:
+        # Existing cycling logic — unchanged
+        configs = []
+        for i in range(num_agents):
+            role = ROLE_NAMES[i % len(ROLE_NAMES)]
+            configs.append({
+                "name": role,
+                "agent_name": f"agent_{i}_{role}",
+                "curriculum_prompt": role_prompts[role].format(num_agents=num_agents),
+            })
+        return configs
 
 
 def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
@@ -346,6 +420,9 @@ def save_checkpoint(
     hebbian_graph: "HebbianSocialGraph",
     frames_list=None,
     save_frames: bool = False,
+    current_phase: str = "exploration",
+    global_step: int = 0,
+    gradual_trigger_step=None,
 ) -> None:
     """Serialize full run state to *checkpoint_dir* so a new SLURM job can resume.
 
@@ -384,6 +461,13 @@ def save_checkpoint(
             "run_id": run_id,
             "metric": metric_dict,
             "cli_args": vars(args),
+            # Phase state — restored in run() so a resumed job re-signals the server
+            "current_phase": current_phase,
+            "global_step": global_step,
+            "gradual_trigger_step": gradual_trigger_step,
+            # Team composition
+            "team_mode": getattr(metric, "team_mode", "heterogeneous"),
+            "homogeneous_role": getattr(metric, "homogeneous_role", "gatherer"),
         }
         with open(os.path.join(checkpoint_dir, "run_state.json"), "w") as f:
             _json.dump(run_state, f, indent=2, default=str)
@@ -486,7 +570,13 @@ def load_checkpoint(
             cur.failed_tasks = list(cur_state.get("failed_tasks", []))
             print(f"[CKPT] Restored curriculum for agent_{i}: task={cur.current_task!r}")
 
-    print(f"[CKPT] Loaded checkpoint: ep={episode} step={step} run_id={run_id}")
+    # Restore phase state — stashed on metric so run() can pick it up
+    metric._current_phase_ckpt = run_state.get("current_phase", "exploration")
+    metric._global_step_ckpt   = run_state.get("global_step", 0)
+    metric._gradual_trigger_step_ckpt = run_state.get("gradual_trigger_step", None)
+
+    print(f"[CKPT] Loaded checkpoint: ep={episode} step={step} run_id={run_id} "
+          f"phase={metric._current_phase_ckpt}")
     return {"episode": episode, "step": step, "run_id": run_id, "metric": metric}
 
 
@@ -512,6 +602,27 @@ def _gif_to_mp4(gif_path: str) -> None:
         print(f"  Converted to MP4: {mp4_path}")
     except subprocess.CalledProcessError:
         pass  # ffmpeg failed silently — GIF still available
+
+
+def _should_transition_to_survival(episode: int, global_step: int, args) -> bool:
+    """Return True when the run should leave exploration phase.
+
+    episode     — 0-indexed current episode number
+    global_step — cumulative step count across all episodes
+    args        — parsed CLI namespace
+
+    Returns False immediately when --survival-mode is not set, so existing
+    runs with no new flags are completely unaffected.
+    """
+    if not args.survival_mode:
+        return False
+    # --survival-step fires on cumulative step count
+    if args.survival_step is not None and global_step >= args.survival_step:
+        return True
+    # --survival-episode fires at start of that episode (1-indexed → 0-indexed)
+    if episode + 1 >= args.survival_episode:
+        return True
+    return False
 
 
 # ===========================
@@ -577,13 +688,21 @@ async def run(args):
     system_prompt = safe_format(system_prompt_template, environment_prompt=environment_prompt)
 
     # Roles & agents
-    role_configs = build_role_configs(num_agents, prompts["roles"])
+    role_configs = build_role_configs(
+        num_agents,
+        prompts["roles"],
+        team_mode=args.team_mode,
+        homogeneous_role=args.homogeneous_role,
+    )
 
     metric = CraftiumMetric(
         num_agents=num_agents,
         communication=communication,
         run_id=run_id,
     )
+    # Attach team composition metadata for summary/checkpoint
+    metric.team_mode = args.team_mode
+    metric.homogeneous_role = args.homogeneous_role
 
     environment = CraftiumEnvironmentInterface(
         num_agents=num_agents,
@@ -677,12 +796,27 @@ async def run(args):
         metric = restored["metric"]
         print(f"[CKPT] Resuming from episode {resume_episode} step {resume_step}")
 
+    # ── Phase state ──
+    # current_phase and global_step persist across episodes for the survival trigger.
+    current_phase = "exploration"
+    global_step = 0
+    _gradual_trigger_step = None   # set when survival_mobs_only is first written
+
+    # If resuming, restore phase state from checkpoint metric
+    if args.resume:
+        current_phase = getattr(metric, "_current_phase_ckpt", "exploration")
+        global_step = getattr(metric, "_global_step_ckpt", 0)
+        _gradual_trigger_step = getattr(metric, "_gradual_trigger_step_ckpt", None)
+
     for episode in range(resume_episode, num_episodes):
         print(f"\n{'='*60}")
         print(f"Episode {episode + 1}/{num_episodes}")
         print(f"{'='*60}")
 
         environment.reset()
+        # Re-signal the Minetest server with the current phase (important on resume
+        # or whenever the world is freshly reset).
+        environment._write_phase_file(current_phase)
 
         # ── Warm-up: wait for media to load ──
         # VoxeLibre media download can take 5-15 minutes on HPC nodes
@@ -776,7 +910,8 @@ async def run(args):
                     _gif_to_mp4(gif_path)
 
         for step in range(max_steps):
-            logging.info(f"ep={episode+1} step={step+1}/{max_steps}")
+            global_step += 1
+            logging.info(f"ep={episode+1} step={step+1}/{max_steps} global_step={global_step}")
 
             if step % log_interval == 0:
                 returns_str = "  ".join(
@@ -792,6 +927,39 @@ async def run(args):
                     f"returns: {returns_str} | "
                     f"tasks: {tasks_str}"
                 )
+
+            # ── Phase transition check ────────────────────────────────────
+            if current_phase == "exploration" and _should_transition_to_survival(
+                episode, global_step, args
+            ):
+                new_phase = "survival_mobs_only" if args.survival_gradual else "survival"
+                current_phase = new_phase
+                _gradual_trigger_step = global_step
+                environment._write_phase_file(current_phase)
+                metric.record_phase_transition(global_step, episode + 1, current_phase)
+                _border = "!" * 60
+                print(f"\n{_border}")
+                print(f"[PHASE TRANSITION] → {current_phase}  ep={episode+1}  global_step={global_step}")
+                print(f"{_border}\n")
+                logging.info("[PHASE TRANSITION] → %s ep=%d global_step=%d",
+                             current_phase, episode + 1, global_step)
+
+            elif (
+                current_phase == "survival_mobs_only"
+                and args.survival_gradual
+                and _gradual_trigger_step is not None
+                and global_step >= _gradual_trigger_step + args.survival_gradual_delay
+            ):
+                current_phase = "survival"
+                environment._write_phase_file(current_phase)
+                metric.record_phase_transition(global_step, episode + 1, current_phase)
+                _border = "!" * 60
+                print(f"\n{_border}")
+                print(f"[PHASE TRANSITION] → {current_phase} (hunger enabled)  ep={episode+1}  global_step={global_step}")
+                print(f"{_border}\n")
+                logging.info("[PHASE TRANSITION] → %s (hunger) ep=%d global_step=%d",
+                             current_phase, episode + 1, global_step)
+            # ─────────────────────────────────────────────────────────────
 
             if environment.all_done():
                 print(f"  All agents done at step {step+1}")
@@ -865,9 +1033,17 @@ async def run(args):
                 comms_for_agent = (
                     agent_communications[agent_id] if targeted_communication else communications
                 )
+                # Prepend a one-line survival notice to the instruction prompt so
+                # agents know the world has changed. Empty string in exploration
+                # phase — no effect on existing behavior.
+                _phase_prefix = (
+                    "[SURVIVAL MODE ACTIVE: hostile mobs now spawn, hunger drains. "
+                    "Prioritize safety alongside your role tasks.]\n\n"
+                    if current_phase != "exploration" else ""
+                )
                 content, last_action, error_count = await agent_do_action(
                     agent, agent_id, frame_image, comms_for_agent, reward_text,
-                    instruction_prompt, environment,
+                    _phase_prefix + instruction_prompt, environment,
                     error_count=error_count,
                     social_bonds=_bond_strings.get(agent_id),
                     position_text=environment.get_position_text(agent_id),
@@ -1056,6 +1232,9 @@ async def run(args):
                     hebbian_graph=hebbian_graph,
                     frames_list=frames_list if args.checkpoint_frames else None,
                     save_frames=args.checkpoint_frames,
+                    current_phase=current_phase,
+                    global_step=global_step,
+                    gradual_trigger_step=_gradual_trigger_step,
                 )
 
             # ── Graceful shutdown on signal ──
@@ -1072,6 +1251,9 @@ async def run(args):
                     hebbian_graph=hebbian_graph,
                     frames_list=frames_list if args.checkpoint_frames else None,
                     save_frames=args.checkpoint_frames,
+                    current_phase=current_phase,
+                    global_step=global_step,
+                    gradual_trigger_step=_gradual_trigger_step,
                 )
                 print(f"[CKPT] Shutdown checkpoint saved → {_ep_ckpt_dir}")
                 environment.close()
@@ -1088,6 +1270,9 @@ async def run(args):
             metric=metric,
             agents=agents,
             hebbian_graph=hebbian_graph,
+            current_phase=current_phase,
+            global_step=global_step,
+            gradual_trigger_step=_gradual_trigger_step,
         )
 
         # Save GIFs for this episode

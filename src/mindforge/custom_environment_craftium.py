@@ -516,6 +516,32 @@ class CraftiumEnvironmentInterface:
             )
         return self._world_path
 
+    def _write_phase_file(self, phase: str) -> None:
+        """Atomically write *phase* to {world_path}/phase.txt.
+
+        Uses write-to-tmp + os.replace so the Lua mod never reads a partial
+        file.  Safe to call before reset() — returns early if the world path
+        is not yet resolved.
+
+        Valid phase strings (must match Lua phase-polling block):
+          "exploration"        — mobs frozen, hunger frozen (default)
+          "survival_mobs_only" — mobs hostile, hunger still frozen
+          "survival"           — mobs hostile + hunger drains
+        """
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            return  # called before reset(); env not yet initialised
+        tmp = os.path.join(world_path, "phase.tmp")
+        dst = os.path.join(world_path, "phase.txt")
+        try:
+            with open(tmp, "w") as f:
+                f.write(phase)
+            os.replace(tmp, dst)  # POSIX-atomic rename
+        except OSError as e:
+            import logging as _log
+            _log.warning("[PHASE] _write_phase_file failed: %s", e)
+
     @staticmethod
     def _pretty_item_name(raw_name: str) -> str:
         """Turn 'mcl_tools:pick_iron' into 'iron pickaxe', etc."""
@@ -627,7 +653,11 @@ class CraftiumEnvironmentInterface:
     # ------------------------------------------------------------------
 
     # Lines from the Lua server log that are worth surfacing in Python output.
-    _LOG_TAGS = ("[TOOLS]", "[INVENTORY]", "[TRACK STATUS]", "[DIG]", "[HUNT]", "[DEFEND]")
+    _LOG_TAGS = (
+        "[TOOLS]", "[INVENTORY]", "[TRACK STATUS]",
+        "[DIG]", "[HUNT]", "[DEFEND]",
+        "[PHASE]",   # phase transitions: "[PHASE] switched to survival"
+    )
 
     def _get_server_log_path(self):
         """Resolve and cache the path to the server's stderr.txt."""

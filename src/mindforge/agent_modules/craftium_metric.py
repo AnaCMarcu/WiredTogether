@@ -108,6 +108,13 @@ class CraftiumMetric:
         self._co_completion_events = []  # {"step", "agent_i", "agent_j", "track"}
         self._last_milestone_step = {}   # agent_id -> last milestone timestep
 
+        # Phase transitions (set by phased difficulty system)
+        self.phase_transitions = []  # [{"step": int, "episode": int, "phase": str}]
+
+        # Team composition metadata (set from args after build)
+        self.team_mode = "heterogeneous"
+        self.homogeneous_role = "gatherer"
+
         # Timestep-level data for plotting
         self.ts_data = {
             "timesteps": [],
@@ -163,6 +170,11 @@ class CraftiumMetric:
     def record_graph_snapshot(self, step: int, graph_dict: dict):
         """Record a Hebbian social graph metrics snapshot."""
         self._graph_snapshots.append({"step": step, **graph_dict})
+
+    def record_phase_transition(self, step: int, episode: int, phase: str):
+        """Record a phase transition event (exploration → survival_mobs_only → survival)."""
+        self.phase_transitions.append({"step": step, "episode": episode, "phase": phase})
+        self.log(f"[PHASE] ep={episode} step={step} → {phase}")
 
     def store_timestep(self, step_comm_count: int = 0):
         """Snapshot metrics at end of a timestep."""
@@ -351,6 +363,9 @@ class CraftiumMetric:
             ],
             "graph_snapshots": self._graph_snapshots,
             "co_completion_events": self._co_completion_events,
+            "phase_transitions": self.phase_transitions,
+            "team_mode": getattr(self, "team_mode", "heterogeneous"),
+            "homogeneous_role": getattr(self, "homogeneous_role", "gatherer"),
         }
 
         file_path = os.path.join(self.target_folder, file_name)
@@ -395,6 +410,12 @@ class CraftiumMetric:
         for i in range(self.num_agents):
             ax.plot(ts, self.ts_data["cumulative_returns"][i],
                     label=f"Agent {i}")
+        # Phase transition markers: vertical dashed line at each transition step
+        for pt in self.phase_transitions:
+            ax.axvline(x=pt["step"], color="red", linestyle="--", alpha=0.7, linewidth=1.5)
+            ylim = ax.get_ylim()
+            ax.text(pt["step"], ylim[1] * 0.97, f"→ {pt['phase']}",
+                    fontsize=7, color="red", rotation=90, va="top", ha="right")
         ax.set_xlabel("Timestep")
         ax.set_ylabel("Cumulative Return")
         ax.set_title("Cumulative Return per Agent")
@@ -608,6 +629,24 @@ class CraftiumMetric:
                     lines.append(f"    Agent {p['i']} -> Agent {p['j']}: {p['w']:.4f}")
             lines.append("")
 
+        # Team composition
+        team_mode = getattr(self, "team_mode", "heterogeneous")
+        lines.append("--- Team Composition ---")
+        lines.append(f"  Mode: {team_mode}")
+        if team_mode != "heterogeneous":
+            lines.append(f"  Role: {getattr(self, 'homogeneous_role', 'gatherer')}")
+            lines.append("  NOTE: Homogeneous team — specialization index is expected uniform.")
+        lines.append("")
+
+        # Phase transitions
+        lines.append("--- Phase Transitions ---")
+        if self.phase_transitions:
+            for pt in self.phase_transitions:
+                lines.append(f"  [ep={pt['episode']} step={pt['step']}] → {pt['phase']}")
+        else:
+            lines.append("  None (exploration phase throughout)")
+        lines.append("")
+
         lines.append("=" * 50)
 
         summary_path = os.path.join(self.target_folder, "summary.txt")
@@ -669,6 +708,9 @@ class CraftiumMetric:
         metric.rl_token_opts = [tuple(x) for x in d.get("rl_token_opts", [])]
         metric._graph_snapshots = d.get("graph_snapshots", [])
         metric._co_completion_events = d.get("co_completion_events", [])
+        metric.phase_transitions = d.get("phase_transitions", [])
+        metric.team_mode = d.get("team_mode", "heterogeneous")
+        metric.homogeneous_role = d.get("homogeneous_role", "gatherer")
 
         lms = d.get("_last_milestone_step", {})
         metric._last_milestone_step = {int(k): v for k, v in lms.items()}
