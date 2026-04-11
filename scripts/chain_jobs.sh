@@ -32,10 +32,12 @@
 
 NUM_CONT=${1:-2}   # number of continuation jobs (default: 2)
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Use a fixed path so the scripts are found even when SLURM copies this file
+# to its spool directory before execution.
+SCRIPTS_DIR=/scratch/acmarcu/WiredTogether/scripts
 
 echo "Submitting first job..."
-FIRST_JOB=$(sbatch --parsable "${SCRIPT_DIR}/run_first.sh")
+FIRST_JOB=$(sbatch --parsable "${SCRIPTS_DIR}/run_first.sh")
 echo "  First job ID: $FIRST_JOB"
 
 PREV_JOB=$FIRST_JOB
@@ -43,7 +45,7 @@ for i in $(seq 1 "$NUM_CONT"); do
     echo "Submitting continuation $i (after job $PREV_JOB)..."
     CONT_JOB=$(sbatch --parsable \
         --dependency=afterany:"$PREV_JOB" \
-        "${SCRIPT_DIR}/run_continue.sh")
+        "${SCRIPTS_DIR}/run_continue.sh")
     echo "  Continuation $i job ID: $CONT_JOB"
     PREV_JOB=$CONT_JOB
 done
