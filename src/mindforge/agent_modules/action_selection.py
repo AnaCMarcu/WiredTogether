@@ -115,13 +115,29 @@ class ActionSelection:
         last_frame,
         cancellation_token,
         agent_name,
+        targeted_communication: bool = False,
+        num_agents: int = 1,
     ):
         """Generate a natural language communication message for an RL-selected action."""
         comm_client = create_model_client(response_format=CommunicationResponse)
+        user_prompt = rl_communication_prompt
+        if targeted_communication:
+            try:
+                self_idx = int(agent_name.split("_")[1])
+            except (IndexError, ValueError):
+                self_idx = -1
+            targets = ", ".join(
+                f"agent_{i}" for i in range(num_agents) if i != self_idx
+            )
+            user_prompt = rl_communication_prompt.replace(
+                'Respond in JSON: {"communication": "<message>"}',
+                f'Also set "communication_target" to the most relevant recipient: one of {targets}, or "all" for broadcast.\n'
+                f'Respond in JSON: {{"communication": "<message>", "communication_target": "<target>"}}'
+            )
         content = await llm_call(
             comm_client,
             system_prompt=self.system_prompt,
-            user_prompt=rl_communication_prompt,
+            user_prompt=user_prompt,
             frame=last_frame,
             cancellation_token=cancellation_token,
             log_prefix=f"Agent {agent_name} rl_comm: ",
@@ -130,7 +146,7 @@ class ActionSelection:
             action=action,
             picked_object=picked_object or "empty",
         )
-        return content.get("communication", "")
+        return content.get("communication", ""), content.get("communication_target", None)
 
     async def select_candidate_actions(
         self,

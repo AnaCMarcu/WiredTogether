@@ -134,10 +134,10 @@ class CraftiumMetric:
         # Detect stage completion from reward value
         self._detect_milestone(agent_id, reward)
 
-    def record_communication(self, source_agent: str, message: str):
+    def record_communication(self, source_agent: str, message: str, target: str = None):
         """Record a communication event."""
         preview = message[:100] if message else ""
-        self.communication_log.append((self.timestep, source_agent, preview))
+        self.communication_log.append((self.timestep, source_agent, preview, target or "all"))
 
     def record_rl_update(self, agent_id: int, info: dict):
         """Record an action-level MAPPO update event."""

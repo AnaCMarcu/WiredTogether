@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from typing import List, Literal, Tuple
+from typing import List, Literal, Optional, Tuple
 
 import PIL
 import base64
@@ -43,10 +43,12 @@ class AgentResponse(BaseModel):
     thoughts: str
     action: str
     communication: str
+    communication_target: Optional[str] = None
 
 
 class CommunicationResponse(BaseModel):
     communication: str
+    communication_target: Optional[str] = None
 
 
 class CandidateResponse(BaseModel):

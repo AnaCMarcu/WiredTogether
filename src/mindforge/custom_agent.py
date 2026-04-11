@@ -35,6 +35,8 @@ class CustomAgent(BaseChatAgent):
         rl_layer=None,
         belief_interval: int = 1,
         critic_interval: int = 1,
+        targeted_communication: bool = False,
+        num_agents: int = 1,
     ) -> None:
         super().__init__(name, description)
         self.rl_layer = rl_layer
@@ -68,6 +70,8 @@ class CustomAgent(BaseChatAgent):
         self.last_response = None
         self.metric = metric
         self.voyager = voyager
+        self.targeted_communication = targeted_communication
+        self.num_agents = num_agents
         self._last_reward_text = "N/A"
         self._episode_summary_cache = "There are no past episodes."
         self._episode_summary_dirty = False
@@ -313,7 +317,7 @@ class CustomAgent(BaseChatAgent):
             rl_content = self.rl_layer.select_action(rl_prompt)
 
         if rl_content is not None:
-            comm = await self.action_selection.generate_communication(
+            comm, comm_target = await self.action_selection.generate_communication(
                 action=rl_content["action"],
                 task=task,
                 last_action=last_action,
@@ -321,8 +325,11 @@ class CustomAgent(BaseChatAgent):
                 last_frame=last_frame,
                 cancellation_token=cancellation_token,
                 agent_name=self.name,
+                targeted_communication=self.targeted_communication,
+                num_agents=self.num_agents,
             )
             rl_content["communication"] = comm
+            rl_content["communication_target"] = comm_target
             content = rl_content
         else:
             content = await self.action_selection.select_action(
