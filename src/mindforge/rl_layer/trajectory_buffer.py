@@ -52,16 +52,21 @@ class RolloutBuffer:
 
     def store_reward(self, reward: float, done: bool = False) -> None:
         """Called after the environment returns the reward for the last action."""
-        if self._pending is not None:
-            # Clamp invalid reward values to prevent NaN/inf corruption
-            if not isinstance(reward, (int, float)) or reward != reward:  # NaN check
-                logger.warning("Invalid reward %s, clamping to 0.0", reward)
-                reward = 0.0
-            reward = max(-1e6, min(1e6, reward))
-            self._pending.reward = reward
-            self._pending.done = done
-            self._buf.append(self._pending)
-            self._pending = None
+        if self._pending is None:
+            logger.warning(
+                "store_reward() called with no pending transition "
+                "(timing bug or macro mid-execution). reward=%.4f discarded.", reward
+            )
+            return
+        # Clamp invalid reward values to prevent NaN/inf corruption
+        if not isinstance(reward, (int, float)) or reward != reward:  # NaN check
+            logger.warning("Invalid reward %s, clamping to 0.0", reward)
+            reward = 0.0
+        reward = max(-1e6, min(1e6, reward))
+        self._pending.reward = reward
+        self._pending.done = done
+        self._buf.append(self._pending)
+        self._pending = None
 
     # ── Query ──
 

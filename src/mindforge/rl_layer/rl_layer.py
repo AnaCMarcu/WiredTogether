@@ -602,14 +602,42 @@ class RLLayer:
         logger.info("RLLayer agent %d: saved to %s", self.agent_id, save_dir)
 
     def load(self, path: Optional[str] = None) -> None:
-        """Load heads from disk (LoRA loaded at init)."""
+        """Load heads from disk (LoRA loaded at init).
+
+        Handles action head size mismatches gracefully: if a checkpoint was
+        saved with fewer actions than the current config (e.g. before macros
+        were added), the action head is reinitialised from scratch rather than
+        crashing.  The value head and LoRA weights are still restored.
+        """
         if not self.config.enabled:
             return
         load_dir = Path(path or self.config.lora_save_dir) / self._adapter_name
         ah_path = load_dir / "action_head.pt"
         vh_path = load_dir / "value_head.pt"
         if ah_path.exists():
-            self.action_head.load_state_dict(torch.load(ah_path, map_location=self._device))
+            saved_state = torch.load(ah_path, map_location=self._device)
+            saved_n_actions = saved_state["net.weight"].shape[0]
+            current_n_actions = len(self.config.actions)
+            if saved_n_actions != current_n_actions:
+                logger.warning(
+                    "RLLayer agent %d: action head size mismatch — "
+                    "checkpoint has %d actions, config has %d. "
+                    "Reinitialising action head (LoRA weights preserved).",
+                    self.agent_id, saved_n_actions, current_n_actions,
+                )
+                hidden_size = self.model.config.hidden_size
+                self.action_head = ActionHead(hidden_size, current_n_actions).to(
+                    device=self._device, dtype=torch.float32
+                )
+                # Rebuild optimizer to include the new head parameters
+                trainable = (
+                    list(filter(lambda p: p.requires_grad, self.model.parameters()))
+                    + list(self.action_head.parameters())
+                    + list(self.value_head.parameters())
+                )
+                self.optimizer = torch.optim.Adam(trainable, lr=self.config.lr)
+            else:
+                self.action_head.load_state_dict(saved_state)
         if vh_path.exists():
             self.value_head.load_state_dict(torch.load(vh_path, map_location=self._device))
 

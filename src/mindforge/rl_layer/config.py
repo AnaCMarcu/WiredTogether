@@ -65,11 +65,18 @@ class RLConfig:
     token_opt_success_threshold: float = 0.3  # trigger when success < this
     token_opt_epochs: int = 2
 
-    # ── Action space (must match ACTION_MAP in custom_environment_craftium.py) ──
+    # ── Action space (must match VALID_ACTIONS in custom_environment_craftium.py) ──
+    # Primitive actions first (indices 0-21), macros appended at the end (22-26)
+    # so existing checkpoints retain correct primitive indices.
+    # Macros execute over multiple environment ticks; the RL buffer receives a
+    # single store_action() when the macro is chosen and one store_reward() with
+    # the accumulated total once is_macro_running() returns False.
     actions: tuple = (
         "NoOp", "MoveForward", "MoveBackward", "MoveLeft", "MoveRight",
         "Jump", "Sneak", "Dig", "Place",
         "Slot1", "Slot2", "Slot3", "Slot4", "Slot5",
         "TurnRight", "TurnLeft", "LookDown", "LookUp",
         "Drop", "Slot6", "Slot7", "Slot8",
+        # ── Macro actions (multi-step, rewards accumulated across ticks) ──
+        "TurnAround", "ScanArea", "ApproachTarget", "Escape", "MineStairs",
     )

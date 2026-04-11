@@ -47,6 +47,10 @@ from rl_layer import RLConfig, RLLayer, HebbianConfig, HebbianSocialGraph
 
 ROLE_NAMES = ["gatherer", "hunter", "defender"]
 
+# Macro action names — used to detect when a macro was selected so the RL
+# buffer defers store_reward() until the macro completes.
+_MACRO_NAMES = frozenset({"TurnAround", "ScanArea", "ApproachTarget", "Escape", "MineStairs"})
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run Mindforge agents in Craftium OpenWorld")
@@ -62,6 +66,10 @@ def parse_args():
                         help="Observation height in pixels")
     parser.add_argument("--no-communication", action="store_true",
                         help="Disable inter-agent communication")
+    parser.add_argument("--targeted-communication", action="store_true",
+                        help="Enable targeted communication: agents choose recipients via "
+                             "communication_target field (one of agent_N or 'all'). "
+                             "Default: broadcast to all.")
     parser.add_argument("--sleep-time", type=float, default=0.0,
                         help="Seconds to sleep between LLM calls (rate-limit protection)")
     parser.add_argument("--belief-interval", type=int, default=5,
@@ -178,8 +186,19 @@ def build_role_configs(num_agents, role_prompts):
 
 
 def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
-                 rl_config=None, belief_interval=5, critic_interval=20):
+                 rl_config=None, belief_interval=5, critic_interval=20,
+                 targeted_communication=False):
     """Initialize all Mindforge agents."""
+    # Inject targeted communication instruction into system prompt at runtime
+    if targeted_communication:
+        target_list = ", ".join(f"agent_{i}" for i in range(num_agents))
+        system_prompt = system_prompt + (
+            f"\n\nTARGETED COMMUNICATION: When filling in the \"communication\" field, "
+            f"also set \"communication_target\" to the agent your message is most relevant to: "
+            f"one of {target_list}. Use \"all\" to broadcast to everyone. "
+            f"Prefer targeted messages when coordinating directly with one teammate."
+        )
+
     agents = []
     for i, role_cfg in enumerate(role_configs):
         # Build per-agent RL layer (no-op when rl_config.enabled is False)
@@ -218,6 +237,8 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
             rl_layer=rl_layer,
             belief_interval=belief_interval,
             critic_interval=critic_interval,
+            targeted_communication=targeted_communication,
+            num_agents=num_agents,
         )
         agents.append(agent)
         rl_status = " [RL enabled]" if rl_layer else ""
@@ -333,6 +354,7 @@ async def run(args):
     obs_width = args.obs_width
     obs_height = args.obs_height
     communication = not args.no_communication
+    targeted_communication = args.targeted_communication
     sleep_time = args.sleep_time
     save_gif = not args.no_gif
     gif_interval = args.gif_interval
@@ -419,7 +441,8 @@ async def run(args):
     agents = build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
                          rl_config=rl_config,
                          belief_interval=args.belief_interval,
-                         critic_interval=args.critic_interval)
+                         critic_interval=args.critic_interval,
+                         targeted_communication=targeted_communication)
 
     # ── Hebbian social plasticity ──
     hebbian_config = HebbianConfig(
@@ -442,8 +465,9 @@ async def run(args):
               f"ltd={hebbian_config.ltd_lr}, radius={hebbian_config.interaction_radius}, "
               f"γ={hebbian_config.reward_diffusion_gamma}")
 
+    comm_mode = "off" if not communication else ("targeted" if targeted_communication else "broadcast")
     print(f"\nConfig: {num_agents} agents, {num_episodes} episodes, "
-          f"{max_steps} max steps, comm={'on' if communication else 'off'}, "
+          f"{max_steps} max steps, comm={comm_mode}, "
           f"seed={seed}")
 
     for episode in range(num_episodes):
@@ -507,8 +531,16 @@ async def run(args):
             std_str = ", ".join(f"agent_{i}={s:.1f}" for i, s in enumerate(stds)) if stds else "N/A"
             print(f"  * Warm-up timeout ({elapsed:.0f}s). std-dev: {std_str}. Starting anyway.")
 
-        communications = []
+        communications = []  # broadcast mode (shared list)
+        agent_communications = {i: [] for i in range(num_agents)}  # targeted mode (per-agent)
         agents_error_count = [0] * num_agents
+
+        # ── Macro credit assignment: accumulate rewards across macro ticks ──
+        # When the RL policy selects a macro, store_reward() is deferred until
+        # the macro completes so the buffer receives the full accumulated return.
+        _macro_acc_reward = {i: 0.0 for i in range(num_agents)}   # accumulated reward
+        _macro_acc_active = {i: False for i in range(num_agents)}  # deferred store_reward
+        _was_macro_running = {i: False for i in range(num_agents)} # previous-step macro state
         frames_list = []
 
         def _save_gif_checkpoint(step_num):
@@ -599,15 +631,32 @@ async def run(args):
                     environment.step("NoOp", agentId=agent_id)
                     step_rewards_raw[agent_id] = environment.get_step_reward(agent_id)
                     step_contents[agent_id] = None
+                    _was_macro_running[agent_id] = True
                     continue
+                # ─────────────────────────────────────────────────────────────
+
+                # ── Macro just finished: flush accumulated reward to RL buffer ──
+                # The pending transition was created when the macro was selected.
+                # Rewards from all macro ticks are accumulated in _macro_acc_reward
+                # and flushed here so the policy sees the full macro return signal.
+                if _was_macro_running[agent_id]:
+                    if agent.rl_layer and agent.rl_layer.enabled and _macro_acc_active[agent_id]:
+                        agent_done = environment._terminations.get(agent_name, False)
+                        agent.rl_layer.store_reward(_macro_acc_reward[agent_id], done=agent_done)
+                    _macro_acc_reward[agent_id] = 0.0
+                    _macro_acc_active[agent_id] = False
+                    _was_macro_running[agent_id] = False
                 # ─────────────────────────────────────────────────────────────
 
                 error_count = agents_error_count[agent_id]
                 frame_image = environment.get_pil_image(agent_id)
                 reward_text = environment.get_reward_summary(agent_id)
 
+                comms_for_agent = (
+                    agent_communications[agent_id] if targeted_communication else communications
+                )
                 content, last_action, error_count = await agent_do_action(
-                    agent, agent_id, frame_image, communications, reward_text,
+                    agent, agent_id, frame_image, comms_for_agent, reward_text,
                     instruction_prompt, environment,
                     error_count=error_count,
                     social_bonds=_bond_strings.get(agent_id),
@@ -625,25 +674,54 @@ async def run(args):
                     and content["communication"] not in ("", "None")
                     and communication
                 ):
-                    message = TextMessage(
-                        content=content["communication"],
-                        source=agent.name,
-                    )
-                    communications.append(message)
-                    metric.record_communication(agent.name, content["communication"])
+                    msg_text = content["communication"]
+                    comm_target = content.get("communication_target") or "all"
+                    message = TextMessage(content=msg_text, source=agent.name)
+                    metric.record_communication(agent.name, msg_text, target=comm_target)
                     step_comm_count += 1
 
-                    # Extract sender index for Hebbian comm_events
                     try:
                         sender_idx = int(agent.name.split("_")[1])
-                        for recv_idx in range(num_agents):
-                            if recv_idx != sender_idx:
-                                comm_events.append((sender_idx, recv_idx))
                     except (IndexError, ValueError):
-                        pass
+                        sender_idx = -1
 
-                if len(communications) > num_agents - 1:
-                    communications.pop(0)
+                    if targeted_communication and sender_idx >= 0:
+                        # Resolve recipients from communication_target
+                        is_targeted = (
+                            comm_target
+                            and comm_target != "all"
+                            and comm_target.startswith("agent_")
+                        )
+                        if is_targeted:
+                            try:
+                                recv_idx = int(comm_target.split("_")[1])
+                                if 0 <= recv_idx < num_agents and recv_idx != sender_idx:
+                                    recipients = [recv_idx]
+                                else:
+                                    recipients = [i for i in range(num_agents) if i != sender_idx]
+                                    is_targeted = False
+                            except (IndexError, ValueError):
+                                recipients = [i for i in range(num_agents) if i != sender_idx]
+                                is_targeted = False
+                        else:
+                            recipients = [i for i in range(num_agents) if i != sender_idx]
+
+                        for recv_idx in recipients:
+                            agent_communications[recv_idx].append(message)
+                            if len(agent_communications[recv_idx]) > num_agents - 1:
+                                agent_communications[recv_idx].pop(0)
+                        # Hebbian δ_comm only fires when the message was deliberately targeted —
+                        # broadcast ("all") contributes no directed co-activity signal.
+                        if is_targeted:
+                            for recv_idx in recipients:
+                                comm_events.append((sender_idx, recv_idx))
+                    else:
+                        # Broadcast mode: deliver to shared list, no Hebbian comm bonus.
+                        # Spatial co-activity is sufficient; broadcasting to everyone
+                        # carries no information about which specific bond is active.
+                        communications.append(message)
+                        if len(communications) > num_agents - 1:
+                            communications.pop(0)
 
                 time.sleep(sleep_time)
 
@@ -690,9 +768,29 @@ async def run(args):
 
                 # Feed reward to RL layer
                 if agent.rl_layer and agent.rl_layer.enabled:
-                    agent_done = environment._terminations.get(agent_name, False)
-                    agent.rl_layer.store_reward(reward, done=agent_done)
                     content = step_contents[agent_id]
+                    action_chosen = content.get("action", "NoOp") if content else "NoOp"
+                    agent_done = environment._terminations.get(agent_name, False)
+
+                    if action_chosen in _MACRO_NAMES:
+                        # Macro just selected this step — defer store_reward.
+                        # The pending transition stays open; rewards accumulate
+                        # across macro ticks and are flushed when macro finishes.
+                        _macro_acc_active[agent_id] = True
+                        _macro_acc_reward[agent_id] = reward
+                    elif _macro_acc_active[agent_id]:
+                        # Still accumulating across macro ticks.
+                        # Hebbian still sees per-tick rewards via step_rewards_raw.
+                        _macro_acc_reward[agent_id] += reward
+                        # Flush now if agent terminated mid-macro
+                        if agent_done:
+                            agent.rl_layer.store_reward(_macro_acc_reward[agent_id], done=True)
+                            _macro_acc_active[agent_id] = False
+                            _macro_acc_reward[agent_id] = 0.0
+                    else:
+                        # Normal step — close the pending transition immediately.
+                        agent.rl_layer.store_reward(reward, done=agent_done)
+
                     agent.rl_layer.record_context(
                         action=content.get("action", "NoOp") if content else "NoOp",
                         reward=reward,
