@@ -619,6 +619,7 @@ class HebbianSocialGraph:
             "_step_count": self._step_count,
             "num_agents": self.config.num_agents,
             "init_weight": self.config.init_weight,
+            "_last_coactivity": self._last_coactivity.tolist() if self._last_coactivity is not None else None,
         }
 
     def from_dict(self, d: Dict) -> None:
@@ -637,6 +638,8 @@ class HebbianSocialGraph:
         )
         self._max_reward_seen = float(d.get("_max_reward_seen", 0.0))
         self._step_count = int(d.get("_step_count", 0))
+        lc = d.get("_last_coactivity")
+        self._last_coactivity = np.array(lc, dtype=np.float32) if lc is not None else None
         # Clear the deque — we cannot restore per-step snapshots from JSON
         self._failure_window_buffer.clear()
 

@@ -143,7 +143,7 @@ def token_level_ppo_step(
     # outputs.loss is already mean over tokens; we need per-sequence
     logits = outputs.logits[:, :-1, :]  # (B, L-1, V)
     targets = enc.input_ids[:, 1:]  # (B, L-1)
-    mask = enc.attention_mask[:, 1:]  # (B, L-1)
+    mask = enc.attention_mask[:, 1:].float()  # (B, L-1)
 
     per_token_log_probs = -F.cross_entropy(
         logits.reshape(-1, logits.size(-1)),
@@ -159,8 +159,7 @@ def token_level_ppo_step(
     # Use mean-std normalization of rewards as a REINFORCE baseline (not raw _normalize,
     # which would be reward-scaling without a value baseline — same issue as normalizing
     # raw rewards and calling them advantages).
-    rewards_t = torch.tensor(rewards, dtype=torch.float32, device=device)
-    advantages = (rewards_t - rewards_t.mean()) / (rewards_t.std() + 1e-8)
+    advantages = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
     surr1 = ratio * advantages
     surr2 = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * advantages
     loss = -torch.min(surr1, surr2).mean()

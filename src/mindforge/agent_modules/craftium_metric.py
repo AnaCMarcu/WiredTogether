@@ -706,7 +706,7 @@ class CraftiumMetric:
 
         metric.rl_updates = [tuple(x) for x in d.get("rl_updates", [])]
         metric.rl_token_opts = [tuple(x) for x in d.get("rl_token_opts", [])]
-        metric._graph_snapshots = d.get("graph_snapshots", [])
+        metric._graph_snapshots = d.get("_graph_snapshots", d.get("graph_snapshots", []))
         metric._co_completion_events = d.get("co_completion_events", [])
         metric.phase_transitions = d.get("phase_transitions", [])
         metric.team_mode = d.get("team_mode", "heterogeneous")
