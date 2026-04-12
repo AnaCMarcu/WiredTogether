@@ -5,6 +5,7 @@ the buffer is consumed by ``mappo.ppo_update`` and then cleared.
 """
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -59,8 +60,13 @@ class RolloutBuffer:
             )
             return
         # Clamp invalid reward values to prevent NaN/inf corruption
-        if not isinstance(reward, (int, float)) or reward != reward:  # NaN check
+        try:
+            reward = float(reward)
+        except (TypeError, ValueError):
             logger.warning("Invalid reward %s, clamping to 0.0", reward)
+            reward = 0.0
+        if math.isnan(reward) or math.isinf(reward):
+            logger.warning("Non-finite reward %s, clamping to 0.0", reward)
             reward = 0.0
         reward = max(-1e6, min(1e6, reward))
         self._pending.reward = reward

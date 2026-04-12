@@ -29,13 +29,18 @@ _EPS = 1e-8  # numerical guard for division-by-zero
 
 def _sanitize_reward(value: float) -> float:
     """Clamp invalid reward values to prevent NaN/inf corruption."""
-    if not isinstance(value, (int, float)) or value != value:  # NaN check
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
         logger.warning("Invalid reward %s, clamping to 0.0", value)
         return 0.0
-    if math.isinf(value):
+    if math.isnan(v):
+        logger.warning("NaN reward, clamping to 0.0")
+        return 0.0
+    if math.isinf(v):
         logger.warning("Infinite reward %s, clamping to 0.0", value)
         return 0.0
-    return max(-1e6, min(1e6, float(value)))
+    return max(-1e6, min(1e6, v))
 
 
 class HebbianSocialGraph:

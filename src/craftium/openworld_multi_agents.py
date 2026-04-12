@@ -561,7 +561,7 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
                 # Euclidean distance in xz plane (ignore y to avoid jump-spam)
                 dx = curr[0] - prev[0]
                 dz = curr[2] - prev[2]
-                dist = np.sqrt(dx * dx + dz * dz)
+                dist = float(np.sqrt(dx * dx + dz * dz))
                 # Scale: ~0.1 reward per node moved (small vs dig=1.0, stage=128+)
                 rewards[f"agent_{i}"] += 0.1 * dist
 
