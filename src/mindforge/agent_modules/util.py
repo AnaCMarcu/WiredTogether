@@ -51,6 +51,12 @@ class CommunicationResponse(BaseModel):
     communication_target: Optional[str] = None
 
 
+class TargetedCommunicationResponse(BaseModel):
+    """Used when targeted_communication=True: forces the model to always emit a target."""
+    communication: str
+    communication_target: str  # required — no Optional, so the schema enforcer fills it in
+
+
 class CandidateResponse(BaseModel):
     candidate_actions: List[str]
 

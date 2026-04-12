@@ -278,16 +278,6 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
                  rl_config=None, belief_interval=5, critic_interval=20,
                  targeted_communication=False):
     """Initialize all Mindforge agents."""
-    # Inject targeted communication instruction into system prompt at runtime
-    if targeted_communication:
-        target_list = ", ".join(f"agent_{i}" for i in range(num_agents))
-        system_prompt = system_prompt + (
-            f"\n\nTARGETED COMMUNICATION: When filling in the \"communication\" field, "
-            f"also set \"communication_target\" to the agent your message is most relevant to: "
-            f"one of {target_list}. Use \"all\" to broadcast to everyone. "
-            f"Prefer targeted messages when coordinating directly with one teammate."
-        )
-
     agents = []
     for i, role_cfg in enumerate(role_configs):
         # Build per-agent RL layer (no-op when rl_config.enabled is False)
@@ -295,10 +285,21 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
         if rl_config and rl_config.enabled:
             rl_layer = RLLayer(config=rl_config, role=role_cfg["name"], agent_id=i)
 
+        # Build per-agent system prompt: exclude self from target list so the LLM
+        # never accidentally addresses itself.
+        agent_system_prompt = system_prompt
+        if targeted_communication:
+            target_list = ", ".join(f"agent_{j}" for j in range(num_agents) if j != i)
+            agent_system_prompt = system_prompt + (
+                f"\n\nTARGETED COMMUNICATION: When filling in the \"communication\" field, "
+                f"also set \"communication_target\" to the agent your message is most relevant to: "
+                f"one of {target_list}. Prefer targeted messages when coordinating directly with one teammate."
+            )
+
         agent = CustomAgent(
             name=role_cfg["agent_name"],
             description=f"{role_cfg['name']} agent in Craftium open world",
-            action_selection=ActionSelection(system_prompt=system_prompt),
+            action_selection=ActionSelection(system_prompt=agent_system_prompt),
             auto_curriculum=AutoCurriculum(
                 override_curriculum_prompt=role_cfg["curriculum_prompt"],
                 override_questions_prompt=prompts["curriculum_questions"],
@@ -1109,7 +1110,20 @@ async def run(args):
                                 recipients = [i for i in range(num_agents) if i != sender_idx]
                                 is_targeted = False
                         else:
-                            recipients = [i for i in range(num_agents) if i != sender_idx]
+                            # Model returned "all" despite the targeted-communication
+                            # instruction.  Fall back to the agent with the strongest
+                            # current Hebbian bond so the comm still earns bond credit.
+                            if hebbian_graph.config.enabled:
+                                candidates = [
+                                    (j, float(hebbian_graph.W[sender_idx, j]))
+                                    for j in range(num_agents) if j != sender_idx
+                                ]
+                                fallback_target = max(candidates, key=lambda x: x[1])[0]
+                            else:
+                                others = [j for j in range(num_agents) if j != sender_idx]
+                                fallback_target = random.choice(others)
+                            recipients = [fallback_target]
+                            is_targeted = True
 
                         for recv_idx in recipients:
                             agent_communications[recv_idx].append(message)

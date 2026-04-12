@@ -1,6 +1,6 @@
 import os
 from agent_modules.llm_call import llm_call
-from agent_modules.util import AgentResponse, CandidateResponse, CommunicationResponse, create_model_client, safe_format
+from agent_modules.util import AgentResponse, CandidateResponse, CommunicationResponse, TargetedCommunicationResponse, create_model_client, safe_format
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
@@ -119,9 +119,11 @@ class ActionSelection:
         num_agents: int = 1,
     ):
         """Generate a natural language communication message for an RL-selected action."""
-        comm_client = create_model_client(response_format=CommunicationResponse)
-        user_prompt = rl_communication_prompt
         if targeted_communication:
+            # TargetedCommunicationResponse has communication_target: str (required, not Optional).
+            # This forces the JSON schema enforcer to always emit the field — prompt alone is
+            # not enough because the model treats Optional fields as skippable.
+            comm_client = create_model_client(response_format=TargetedCommunicationResponse)
             try:
                 self_idx = int(agent_name.split("_")[1])
             except (IndexError, ValueError):
@@ -131,9 +133,12 @@ class ActionSelection:
             )
             user_prompt = rl_communication_prompt.replace(
                 'Respond in JSON: {"communication": "<message>"}',
-                f'Also set "communication_target" to the most relevant recipient: one of {targets}, or "all" for broadcast.\n'
+                f'Also set "communication_target" to the most relevant recipient: one of {targets}.\n'
                 f'Respond in JSON: {{"communication": "<message>", "communication_target": "<target>"}}'
             )
+        else:
+            comm_client = create_model_client(response_format=CommunicationResponse)
+            user_prompt = rl_communication_prompt
         content = await llm_call(
             comm_client,
             system_prompt=self.system_prompt,
