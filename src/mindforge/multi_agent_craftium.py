@@ -17,8 +17,6 @@ import argparse
 import asyncio
 import os
 import random
-import shutil
-import subprocess
 import sys
 import time
 import logging
@@ -921,7 +919,7 @@ async def run(args):
                         loop=0,
                     )
                     print(f"  Saved GIF checkpoint: {gif_path}")
-                    _gif_to_mp4(gif_path)
+                    _frames_to_mp4(agent_frames, gif_path.replace(".gif", ".mp4"))
 
         for step in range(max_steps):
             global_step += 1
@@ -1346,7 +1344,7 @@ async def run(args):
                         loop=0,
                     )
                     print(f"[{run_id}] Saved GIF: {gif_path}")
-                    _gif_to_mp4(gif_path)
+                    _frames_to_mp4(agent_frames, gif_path.replace(".gif", ".mp4"))
 
     print(f"[{run_id}] Experiment complete! Timesteps logged: {metric.timestep}")
     # Attach run config for reproducibility before saving
