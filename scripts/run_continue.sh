@@ -67,15 +67,34 @@ echo "Using local model: $LOCAL_MODEL_PATH"
 export LLM_MODEL_PATH="$LOCAL_MODEL_PATH"
 
 # ── Locate resume checkpoint ──────────────────────────────────────────────────
+# Try latest_checkpoint.txt first; if it points to an invalid dir (no
+# run_state.json — e.g. a previous job crashed mid-save), fall back to
+# scanning all ep* directories for the most recently modified valid one.
 LATEST_FILE="${CKPT_ROOT}/latest_checkpoint.txt"
-if [ ! -f "$LATEST_FILE" ]; then
-    echo "ERROR: No latest_checkpoint.txt found in $CKPT_ROOT"
-    echo "       Run run_first.sh before run_continue.sh."
-    exit 1
+RESUME_DIR=""
+
+if [ -f "$LATEST_FILE" ]; then
+    _pointed=$(cat "$LATEST_FILE")
+    if [ -f "${_pointed}/run_state.json" ]; then
+        RESUME_DIR="$_pointed"
+    else
+        echo "WARNING: latest_checkpoint.txt points to ${_pointed} which has no run_state.json — scanning for valid checkpoint..."
+    fi
 fi
-RESUME_DIR=$(cat "$LATEST_FILE")
-if [ ! -f "${RESUME_DIR}/run_state.json" ]; then
-    echo "ERROR: Checkpoint dir $RESUME_DIR has no run_state.json"
+
+if [ -z "$RESUME_DIR" ]; then
+    for dir in $(ls -td "${CKPT_ROOT}"/ep* 2>/dev/null); do
+        if [ -f "${dir}/run_state.json" ]; then
+            RESUME_DIR="$dir"
+            echo "Found valid checkpoint via scan: $RESUME_DIR"
+            break
+        fi
+    done
+fi
+
+if [ -z "$RESUME_DIR" ]; then
+    echo "ERROR: No valid checkpoint (with run_state.json) found in $CKPT_ROOT"
+    echo "       Run run_first.sh before run_continue.sh."
     exit 1
 fi
 echo "Resuming from: $RESUME_DIR"
@@ -104,8 +123,14 @@ python multi_agent_craftium.py \
     --resume "$RESUME_DIR" \
     --resume-skip-warmup
 
-# Update the latest checkpoint pointer
-LATEST=$(ls -td "${CKPT_ROOT}"/ep*_end 2>/dev/null | head -1)
+# Update the latest checkpoint pointer — scan all types, pick most recent valid one
+LATEST=""
+for dir in $(ls -td "${CKPT_ROOT}"/ep* 2>/dev/null); do
+    if [ -f "${dir}/run_state.json" ]; then
+        LATEST="$dir"
+        break
+    fi
+done
 if [ -n "$LATEST" ]; then
     echo "$LATEST" > "${CKPT_ROOT}/latest_checkpoint.txt"
     echo "Updated latest checkpoint: $LATEST"

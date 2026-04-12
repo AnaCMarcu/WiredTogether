@@ -713,6 +713,20 @@ async def run(args):
     )
 
     # ── RL layer config ──
+    # Give each run its own lora_save_dir so concurrent or sequential jobs
+    # never share or accidentally load each other's adapters.
+    # Layout: rl_checkpoints/<run_id>/<role>
+    # On resume: peek at the checkpoint run_state.json NOW (before build_agents)
+    # so the RLLayer loads the correct existing adapter instead of init-ing a
+    # fresh one that would immediately be overwritten by load_checkpoint().
+    _rl_run_id = run_id
+    if args.resume:
+        _ckpt_state_path = os.path.join(args.resume, "run_state.json")
+        if os.path.exists(_ckpt_state_path):
+            with open(_ckpt_state_path) as _f:
+                _rl_run_id = _json.load(_f).get("run_id", run_id)
+            print(f"[RL] Resume: using adapter dir from original run_id={_rl_run_id!r}")
+    rl_save_dir = os.path.join("rl_checkpoints", _rl_run_id)
     rl_config = RLConfig(
         enabled=args.rl,
         mode=args.rl_mode,
@@ -722,6 +736,7 @@ async def run(args):
         lr=args.rl_lr,
         auto_token_opt=args.rl_auto_token_opt,
         rl_prompt_max_tokens=args.rl_prompt_max_tokens,
+        lora_save_dir=rl_save_dir,
     )
     if rl_config.enabled:
         print(f"RL layer ENABLED: model={rl_config.model_path}, "
@@ -794,6 +809,8 @@ async def run(args):
         resume_step = restored["step"]
         run_id = restored["run_id"]
         metric = restored["metric"]
+        # Patch rl_config so adapters are loaded from the original run's directory
+        rl_config.lora_save_dir = os.path.join("rl_checkpoints", run_id)
         print(f"[CKPT] Resuming from episode {resume_episode} step {resume_step}")
 
     # ── Phase state ──

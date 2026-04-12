@@ -142,7 +142,7 @@ class RLLayer:
         adapter_name = role if config.lora_per_role else "shared"
         adapter_path = Path(config.lora_save_dir) / adapter_name
 
-        if adapter_path.exists():
+        if (adapter_path / "adapter_config.json").exists():
             logger.info("RLLayer: loading existing LoRA adapter from %s", adapter_path)
             self.model = PeftModel.from_pretrained(
                 self.model, str(adapter_path), adapter_name=adapter_name,

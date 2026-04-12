@@ -87,14 +87,22 @@ python multi_agent_craftium.py \
     --checkpoint-dir "$CKPT_ROOT" \
     --checkpoint-interval 200
 
-# Write a pointer to the latest end-of-run checkpoint so run_continue.sh
-# can find it without parsing the run_id.
-# The checkpoint layout is: $CKPT_ROOT/ep{N}_end/run_state.json
-# Find the most recently-written ep*_end directory.
-LATEST=$(ls -td "${CKPT_ROOT}"/ep*_end 2>/dev/null | head -1)
+# Write a pointer to the most recent VALID checkpoint (one that has run_state.json).
+# Considers all checkpoint types: ep*_end, ep*_shutdown, ep*_step*.
+# Sorted by modification time (newest first) so a shutdown checkpoint beats
+# a stale ep*_end from a previous incomplete run.
+LATEST=""
+for dir in $(ls -td "${CKPT_ROOT}"/ep* 2>/dev/null); do
+    if [ -f "${dir}/run_state.json" ]; then
+        LATEST="$dir"
+        break
+    fi
+done
 if [ -n "$LATEST" ]; then
     echo "$LATEST" > "${CKPT_ROOT}/latest_checkpoint.txt"
-    echo "Latest checkpoint: $LATEST"
+    echo "Latest valid checkpoint: $LATEST"
+else
+    echo "WARNING: no valid checkpoint found in $CKPT_ROOT"
 fi
 
 echo "Done"
