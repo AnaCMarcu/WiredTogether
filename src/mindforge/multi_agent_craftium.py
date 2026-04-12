@@ -80,6 +80,9 @@ def parse_args():
                              "cached success/critique are reused, saving 1 LLM call per skipped step.")
     parser.add_argument("--no-gif", action="store_true",
                         help="Disable GIF saving")
+    parser.add_argument("--gif-dir", type=str, default="gifs",
+                        help="Directory to save GIFs (default: gifs/ relative to cwd). "
+                             "On HPC set to an absolute path under /scratch.")
     parser.add_argument("--gif-interval", type=int, default=100,
                         help="Save a checkpoint GIF every N steps (default 100). 0 = only save at episode end.")
     parser.add_argument("--warmup-time", type=int, default=60,
@@ -583,28 +586,16 @@ def load_checkpoint(
     return {"episode": episode, "step": step, "run_id": run_id, "metric": metric}
 
 
-def _gif_to_mp4(gif_path: str) -> None:
-    """Convert a GIF to MP4 using ffmpeg (if available). Keeps the GIF."""
-    if not shutil.which("ffmpeg"):
-        return
-    mp4_path = gif_path.replace(".gif", ".mp4")
+def _frames_to_mp4(pil_frames: list, mp4_path: str, fps: int = 2) -> None:
+    """Write PIL frames directly to MP4 using imageio[ffmpeg] (bundled binary, no system ffmpeg)."""
     try:
-        subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-i", gif_path,
-                "-movflags", "faststart",
-                "-pix_fmt", "yuv420p",
-                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                mp4_path,
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-        print(f"  Converted to MP4: {mp4_path}")
-    except subprocess.CalledProcessError:
-        pass  # ffmpeg failed silently — GIF still available
+        import imageio
+        with imageio.get_writer(mp4_path, fps=fps, macro_block_size=1) as writer:
+            for frame in pil_frames:
+                writer.append_data(np.array(frame))
+        print(f"  Saved MP4: {mp4_path}")
+    except Exception as exc:
+        logging.warning("MP4 save failed (%s): %s", mp4_path, exc)
 
 
 def _should_transition_to_survival(episode: int, global_step: int, args) -> bool:
@@ -641,7 +632,10 @@ async def run(args):
     targeted_communication = args.targeted_communication
     sleep_time = args.sleep_time
     save_gif = not args.no_gif
+    gif_dir = args.gif_dir
     gif_interval = args.gif_interval
+    if save_gif:
+        os.makedirs(gif_dir, exist_ok=True)
 
     # ── Reproducibility: seed all RNG sources ──
     # LLM sampling (temperature > 0) is inherently stochastic and not seeded —
@@ -915,7 +909,7 @@ async def run(args):
                 ]
                 if agent_frames:
                     gif_path = (
-                        f"gifs/{run_id}_{role_configs[i]['agent_name']}_ep{episode+1}"
+                        f"{gif_dir}/{run_id}_{role_configs[i]['agent_name']}_ep{episode+1}"
                         f"_step{step_num}.gif"
                     )
                     agent_frames[0].save(
@@ -1341,7 +1335,7 @@ async def run(args):
                 ]
                 if agent_frames:
                     gif_path = (
-                        f"gifs/{run_id}_{role_configs[i]['agent_name']}_ep{episode+1}.gif"
+                        f"{gif_dir}/{run_id}_{role_configs[i]['agent_name']}_ep{episode+1}.gif"
                     )
                     agent_frames[0].save(
                         gif_path,

@@ -121,7 +121,8 @@ python multi_agent_craftium.py \
     --checkpoint-dir "$CKPT_ROOT" \
     --checkpoint-interval 200 \
     --resume "$RESUME_DIR" \
-    --resume-skip-warmup
+    --resume-skip-warmup \
+    --gif-dir /scratch/acmarcu/WiredTogether/gifs/${EXPERIMENT_ID}
 
 # Update the latest checkpoint pointer — scan all types, pick most recent valid one
 LATEST=""

@@ -85,7 +85,8 @@ python multi_agent_craftium.py \
     --targeted-communication \
     --experiment-id "$EXPERIMENT_ID" \
     --checkpoint-dir "$CKPT_ROOT" \
-    --checkpoint-interval 200
+    --checkpoint-interval 200 \
+    --gif-dir /scratch/acmarcu/WiredTogether/gifs/${EXPERIMENT_ID}
 
 # Write a pointer to the most recent VALID checkpoint (one that has run_state.json).
 # Considers all checkpoint types: ep*_end, ep*_shutdown, ep*_step*.
