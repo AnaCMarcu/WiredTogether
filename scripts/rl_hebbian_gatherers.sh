@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=rl_token_opt
+#SBATCH --job-name=rl_gatherers
 #SBATCH --partition=gpu-a100
 #SBATCH --time=20:00:00
 #SBATCH --ntasks=1
@@ -14,6 +14,9 @@ PROJECT_DIR=/scratch/acmarcu/WiredTogether
 ENV_PREFIX=/scratch/acmarcu/.conda/envs/WiredTogether
 LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-9B
 RL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
+
+EXPERIMENT_ID=hebbian_rl_gatherers_v1
+CKPT_ROOT=/scratch/acmarcu/WiredTogether/checkpoints/${EXPERIMENT_ID}
 
 module purge
 module load 2025
@@ -48,14 +51,11 @@ nvidia-smi
 echo "Using local model: $LOCAL_MODEL_PATH"
 export LLM_MODEL_PATH="$LOCAL_MODEL_PATH"
 
-cd src/mindforge
-python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
-
-EXPERIMENT_ID=token_opt_v1
-CKPT_ROOT=/scratch/acmarcu/WiredTogether/checkpoints/${EXPERIMENT_ID}
-
 mkdir -p "$CKPT_ROOT"
 mkdir -p /scratch/acmarcu/WiredTogether/slurm_logs
+
+cd src/mindforge
+python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
 
 python multi_agent_craftium.py \
     --num-agents 3 \
@@ -63,8 +63,6 @@ python multi_agent_craftium.py \
     --warmup-time 300 \
     --rl \
     --rl-model-path "$RL_MODEL_PATH" \
-    --rl-mode token \
-    --rl-auto-token-opt \
     --hebbian \
     --hebbian-gamma 0.2 \
     --hebbian-ltp 0.05 \
@@ -74,9 +72,23 @@ python multi_agent_craftium.py \
     --hebbian-radius 20.0 \
     --hebbian-init-weight 0.1 \
     --targeted-communication \
+    --team-mode homogeneous-gatherer \
     --experiment-id "$EXPERIMENT_ID" \
     --checkpoint-dir "$CKPT_ROOT" \
     --checkpoint-interval 200 \
     --gif-dir /scratch/acmarcu/WiredTogether/gifs/${EXPERIMENT_ID}
+
+# Update latest checkpoint pointer for chained continuation jobs
+LATEST=""
+for dir in $(ls -td "${CKPT_ROOT}"/ep* 2>/dev/null); do
+    if [ -f "${dir}/run_state.json" ]; then
+        LATEST="$dir"
+        break
+    fi
+done
+if [ -n "$LATEST" ]; then
+    echo "$LATEST" > "${CKPT_ROOT}/latest_checkpoint.txt"
+    echo "Latest valid checkpoint: $LATEST"
+fi
 
 echo "Done"

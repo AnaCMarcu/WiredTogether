@@ -59,7 +59,7 @@ python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK
 
 python multi_agent_craftium.py \
     --num-agents 3 \
-    --episodes 5 \
+    --episodes 6 \
     --warmup-time 300 \
     --rl \
     --rl-model-path "$RL_MODEL_PATH" \
