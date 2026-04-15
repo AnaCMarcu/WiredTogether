@@ -436,7 +436,8 @@ class RLLayer:
         )
         return all_info
 
-    async def maybe_token_optimize(self, cancellation_token=None) -> Optional[Dict]:
+    async def maybe_token_optimize(self, cancellation_token=None,
+                                    hebbian_graph=None) -> Optional[Dict]:
         """Agent-decided token-level fine-tuning.
 
         The agent is shown its recent performance stats and decides for
@@ -448,6 +449,14 @@ class RLLayer:
         - Cooldown: at least ``token_opt_window`` steps since last training
         - Minimum data: need ``token_opt_min_samples`` transitions
         - Enough history: need a full window of success/failure data
+
+        Parameters
+        ----------
+        hebbian_graph : HebbianSocialGraph, optional
+            When provided and enabled, bond strengths are included in the
+            LLM decision prompt (social context) and transitions are
+            prioritised by |advantage| so training focuses on the most
+            informative steps.
         """
         if not self.config.enabled or not self.config.auto_token_opt:
             return None
@@ -456,15 +465,28 @@ class RLLayer:
 
         window = self._recent_successes
         if len(window) < self.config.token_opt_window:
-            return None  # not enough data to assess
+            logger.debug(
+                "RLLayer agent %d: token-opt guard — window too small (%d/%d steps)",
+                self.agent_id, len(window), self.config.token_opt_window,
+            )
+            return None
 
         # Cooldown — don't retrain too frequently
-        if (self.step_count - self._last_token_opt_step) < self.config.token_opt_window:
+        steps_since_last = self.step_count - self._last_token_opt_step
+        if steps_since_last < self.config.token_opt_window:
+            logger.debug(
+                "RLLayer agent %d: token-opt guard — cooldown (%d/%d steps since last opt)",
+                self.agent_id, steps_since_last, self.config.token_opt_window,
+            )
             return None
 
         # Need enough transitions to actually learn from
         transitions = self.buffer.get_all()
         if len(transitions) < self.config.token_opt_min_samples:
+            logger.debug(
+                "RLLayer agent %d: token-opt guard — not enough transitions (%d/%d)",
+                self.agent_id, len(transitions), self.config.token_opt_min_samples,
+            )
             return None
 
         # ── Build stats for the agent ──
@@ -499,6 +521,25 @@ class RLLayer:
         else:
             failure_description = "no clear repeated failure pattern"
 
+        # ── Social bond context (Hebbian) ──────────────────────────────────────
+        # Adds bond strengths to the prompt so the agent can reason about
+        # whether its failures are correlated with low social coordination.
+        bond_context = ""
+        if hebbian_graph is not None and hebbian_graph.config.enabled:
+            n = hebbian_graph.W.shape[0]
+            bond_parts = [
+                f"agent_{j}: {float(hebbian_graph.W[self.agent_id, j]):.3f}"
+                for j in range(n) if j != self.agent_id
+            ]
+            mean_bond = float(hebbian_graph.W[self.agent_id].mean())
+            bond_context = (
+                "\n\nSocial bond strengths (Hebbian weights with teammates):\n"
+                f"- {', '.join(bond_parts)}\n"
+                f"- Mean bond strength: {mean_bond:.3f}\n"
+                "Consider whether your failures are linked to weak social coordination — "
+                "training can improve how you communicate and cooperate with teammates."
+            )
+
         # ── Ask the agent ──
         prompt = LEARNING_BELIEF_PROMPT.format(
             window_size=total,
@@ -511,6 +552,14 @@ class RLLayer:
             failure_description=failure_description,
             min_samples=self.config.token_opt_min_samples,
             recent_actions=", ".join(self._recent_actions[-total:]) if self._recent_actions else "none",
+        ) + bond_context
+
+        logger.info(
+            "RLLayer agent %d: token-opt checking (step=%d, success_rate=%.1f%%, "
+            "trend=%s, fail_streak=%d, transitions=%d, bond_context=%s)",
+            self.agent_id, self.step_count, success_rate * 100,
+            reward_trend, fail_streak, len(transitions),
+            "yes" if bond_context else "no",
         )
 
         # LLM call through the same infrastructure as the rest of MindForge
@@ -545,24 +594,53 @@ class RLLayer:
         )
 
         if not needs_training:
+            logger.info(
+                "RLLayer agent %d: token-opt SKIPPED by agent decision — '%s'",
+                self.agent_id, reason,
+            )
             return {"decision": "skip", "reason": reason}
 
-        # ── Agent decided to train — run token-level PPO ──
-        # Optionally filter transitions by skill_focus
+        # ── Select transitions for training ────────────────────────────────────
+        # 1. Skill-focus filter (by keyword in prompt text)
         if skill_focus:
             relevant = self.buffer.filter_by_keyword(skill_focus)
             if len(relevant) >= self.config.token_opt_min_samples:
                 transitions = relevant
+                logger.info(
+                    "RLLayer agent %d: skill-focused selection — "
+                    "%d transitions matching '%s'",
+                    self.agent_id, len(transitions), skill_focus,
+                )
 
+        # 2. Hebbian advantage-weighted prioritisation: prefer high-|advantage|
+        #    transitions (steps where the agent's policy had the most impact).
+        if hebbian_graph is not None and hebbian_graph.config.enabled and \
+                len(transitions) > self.config.token_opt_min_samples:
+            n_top = max(self.config.token_opt_min_samples,
+                        int(len(transitions) * 0.75))
+            transitions = sorted(
+                transitions, key=lambda t: abs(t.advantage), reverse=True
+            )[:n_top]
+            logger.info(
+                "RLLayer agent %d: Hebbian advantage-weighted selection — "
+                "top-%d high-impact transitions (of %d available)",
+                self.agent_id, n_top, len(self.buffer),
+            )
+
+        # ── Agent decided to train — run token-level PPO ──────────────────────
         logger.info(
-            "RLLayer agent %d: token-opt triggered by agent (reason='%s'), %d transitions",
-            self.agent_id, reason, len(transitions),
+            "RLLayer agent %d: token-opt STARTED (step=%d) — "
+            "reason='%s', skill='%s', transitions=%d, "
+            "success_rate=%.1f%%, reward_trend=%s",
+            self.agent_id, self.step_count, reason, skill_focus,
+            len(transitions), success_rate * 100, reward_trend,
         )
 
         self.model.train()
         all_info = {"decision": "train", "reason": reason, "skill_focus": skill_focus}
         scaler = torch.amp.GradScaler("cuda", enabled=False)
-        for _ in range(self.config.token_opt_epochs):
+        for epoch_idx in range(self.config.token_opt_epochs):
+            epoch_losses = []
             for start in range(0, len(transitions), self.config.mini_batch_size):
                 batch = transitions[start:start + self.config.mini_batch_size]
                 with torch.amp.autocast(self._device.type, dtype=self._dtype):
@@ -581,10 +659,42 @@ class RLLayer:
                 )
                 scaler.step(self.optimizer)
                 scaler.update()
+                epoch_losses.append(loss.item())
                 all_info.update(info)
 
+            avg_loss = sum(epoch_losses) / len(epoch_losses) if epoch_losses else 0.0
+            logger.info(
+                "RLLayer agent %d: token-opt epoch %d/%d — "
+                "avg_loss=%.4f (%d batches)",
+                self.agent_id, epoch_idx + 1, self.config.token_opt_epochs,
+                avg_loss, len(epoch_losses),
+            )
+
         self._last_token_opt_step = self.step_count
-        logger.info("RLLayer agent %d: token-opt done: %s", self.agent_id, all_info)
+        all_info["success_rate_at_trigger"] = round(success_rate, 4)
+        all_info["transitions_used"] = len(transitions)
+
+        # Log strong bonds so the caller can see which agents might benefit
+        # from social propagation of the training signal.
+        if hebbian_graph is not None and hebbian_graph.config.enabled:
+            n = hebbian_graph.W.shape[0]
+            strong = [
+                f"agent_{j}({float(hebbian_graph.W[self.agent_id, j]):.3f})"
+                for j in range(n)
+                if j != self.agent_id
+                and float(hebbian_graph.W[self.agent_id, j]) > 0.3
+            ]
+            if strong:
+                logger.info(
+                    "RLLayer agent %d: strong Hebbian bonds with [%s] — "
+                    "social propagation may benefit these agents",
+                    self.agent_id, ", ".join(strong),
+                )
+
+        logger.info(
+            "RLLayer agent %d: token-opt DONE (step=%d) — %s",
+            self.agent_id, self.step_count, all_info,
+        )
         return all_info
 
     # ── Persistence ──

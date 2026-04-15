@@ -1229,9 +1229,38 @@ async def run(args):
                     try:
                         token_info = await agent.rl_layer.maybe_token_optimize(
                             cancellation_token=CancellationToken(),
+                            hebbian_graph=hebbian_graph,
                         )
                         if token_info:
                             metric.record_rl_token_opt(agent_id, token_info)
+
+                        # Social propagation: when an agent trains, offer the
+                        # same opportunity to strongly-bonded teammates.
+                        if (token_info and token_info.get("decision") == "train"
+                                and hebbian_config.enabled):
+                            for j in range(num_agents):
+                                if j == agent_id:
+                                    continue
+                                bond_w = float(hebbian_graph.W[agent_id, j])
+                                if bond_w > 0.3 and agents[j].rl_layer.enabled:
+                                    try:
+                                        soc_info = await agents[j].rl_layer.maybe_token_optimize(
+                                            cancellation_token=CancellationToken(),
+                                            hebbian_graph=hebbian_graph,
+                                        )
+                                        if soc_info:
+                                            logging.info(
+                                                "[social token-opt] agent_%d triggered "
+                                                "agent_%d (bond=%.3f) → decision=%s",
+                                                agent_id, j, bond_w,
+                                                soc_info.get("decision", "?"),
+                                            )
+                                            metric.record_rl_token_opt(j, soc_info)
+                                    except Exception as _soc_exc:
+                                        logging.warning(
+                                            "Social token-opt agent_%d failed: %s",
+                                            j, _soc_exc,
+                                        )
                     except Exception as _tok_exc:
                         logging.warning(f"Agent {agent_id} token_optimize failed: {_tok_exc}")
 
