@@ -671,7 +671,7 @@ class CraftiumMetric:
                      path=path, run_id=run_id)
 
         metric.timestep = d.get("timestep", 0)
-        metric.cumulative_returns = d.get("cumulative_returns", [0.0] * num_agents)
+        metric.cumulative_returns = [float(x) for x in d.get("cumulative_returns", [0.0] * num_agents)]
 
         # reward_history: list[list[tuple]]
         rh = d.get("reward_history", [[] for _ in range(num_agents)])

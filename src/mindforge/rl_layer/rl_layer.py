@@ -632,7 +632,7 @@ class RLLayer:
         ah_path = load_dir / "action_head.pt"
         vh_path = load_dir / "value_head.pt"
         if ah_path.exists():
-            saved_state = torch.load(ah_path, map_location=self._device)
+            saved_state = torch.load(ah_path, map_location=self._device, weights_only=True)
             saved_n_actions = saved_state["net.weight"].shape[0]
             current_n_actions = len(self.config.actions)
             if saved_n_actions != current_n_actions:
@@ -656,12 +656,12 @@ class RLLayer:
             else:
                 self.action_head.load_state_dict(saved_state)
         if vh_path.exists():
-            self.value_head.load_state_dict(torch.load(vh_path, map_location=self._device))
+            self.value_head.load_state_dict(torch.load(vh_path, map_location=self._device, weights_only=True))
 
         # Extended state for checkpoint/resume
         state_path = load_dir / "rl_state.pt"
         if state_path.exists():
-            state = torch.load(state_path, map_location=self._device)
+            state = torch.load(state_path, map_location=self._device, weights_only=False)
             try:
                 self.optimizer.load_state_dict(state["optimizer"])
             except (ValueError, KeyError):

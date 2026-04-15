@@ -446,7 +446,7 @@ def save_checkpoint(
             "communication": metric.communication,
             "run_id": metric.run_id,
             "timestep": metric.timestep,
-            "cumulative_returns": list(metric.cumulative_returns),
+            "cumulative_returns": [float(x) for x in metric.cumulative_returns],
             "comm_counts_per_step": list(metric.comm_counts_per_step),
             "communication_log": metric.communication_log,
             "rl_updates": metric.rl_updates,
