@@ -232,7 +232,13 @@ class HebbianSocialGraph:
                     continue
                 At_ij = (agent_signals[i] + agent_signals[j]) / 2.0
                 m_ltp = cfg.ltp_lr * math.tanh(cfg.modulation_beta * max(At_ij, 0.0))
-                m_ltd = cfg.ltd_lr * math.tanh(cfg.modulation_beta * max(-At_ij, 0.0))
+                # LTD only fires when the average advantage is clearly negative
+                # (beyond ltd_threshold). This prevents zero-reward exploration
+                # steps (advantage ≈ −V(s), small negative) from continuously
+                # depressing bonds that were never actively failing.
+                m_ltd = cfg.ltd_lr * math.tanh(
+                    cfg.modulation_beta * max(-At_ij - cfg.ltd_threshold, 0.0)
+                )
                 m[i, j] = m_ltp - m_ltd
 
         return m
@@ -329,7 +335,11 @@ class HebbianSocialGraph:
         self._update_failure_window(cij, At_team)
 
         # Main Hebbian delta — m is now (N×N), element-wise with cij and W
-        delta_main = m * cij * (1.0 - self.W) - cfg.decay * self.W
+        delta_main = (
+            m * cij * (1.0 - self.W)               # advantage-gated LTP/LTD
+            + cfg.base_ltp * cij * (1.0 - self.W)  # unconditional co-activity LTP
+            - cfg.decay * self.W                    # passive decay
+        )
 
         # Sustained LTD
         delta_ltd = self._compute_sustained_ltd()
@@ -342,6 +352,18 @@ class HebbianSocialGraph:
         np.fill_diagonal(self.W, 0.0)
 
         self._step_count += 1
+
+        # Per-interval logging: show LTP vs LTD pair counts so weight trends are visible
+        if self._step_count % cfg.log_graph_every == 0:
+            ltp_pairs = int((delta_main > 0).sum())
+            ltd_pairs = int((delta_main < 0).sum())
+            mean_w = float(self.W[self.W > 0].mean()) if (self.W > 0).any() else 0.0
+            max_w = float(self.W.max())
+            logger.info(
+                "[Hebbian step=%d] W mean=%.4f max=%.4f  LTP pairs=%d  LTD pairs=%d",
+                self._step_count, mean_w, max_w, ltp_pairs, ltd_pairs,
+            )
+
         return self.W
 
     # ──────────────────────────────────────────────

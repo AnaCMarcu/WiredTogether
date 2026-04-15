@@ -35,6 +35,16 @@ class HebbianConfig:
     # ── LTD — depression on negative advantage (single-step) ──
     ltd_lr: float = 0.005  # η_-
 
+    # ── LTD threshold — LTD only fires when At_ij < -ltd_threshold ──
+    # Prevents zero-reward steps (advantage ≈ small negative) from
+    # continuously depressing bonds during normal exploration.
+    ltd_threshold: float = 0.1
+
+    # ── Base co-activity LTP — unconditional bond growth when cij > 0 ──
+    # Fires regardless of advantage sign: base_ltp * cij * (1-W).
+    # Provides a floor against pure decay so co-presence alone builds bonds.
+    base_ltp: float = 0.002
+
     # ── Decay — passive bond flexibility ──
     decay: float = 0.005  # λ
 

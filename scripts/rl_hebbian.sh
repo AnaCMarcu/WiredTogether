@@ -58,11 +58,13 @@ python multi_agent_craftium.py \
     --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
     --hebbian \
     --hebbian-gamma 0.2 \
-    --hebbian-ltp 0.01 \
+    --hebbian-ltp 0.05 \
     --hebbian-ltd 0.005 \
-    --hebbian-radius 5.0 \
+    --hebbian-radius 20.0 \
+    --hebbian-decay 0.001 \
+    --hebbian-beta 3.0 \
     --hebbian-init-weight 0.1 \
     --targeted-communication \
-    --experiment-id hebbian_rl_v1
+    --experiment-id hebbian_rl_v2
 
 echo "Done"
