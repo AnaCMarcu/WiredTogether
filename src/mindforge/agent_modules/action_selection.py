@@ -131,8 +131,11 @@ class ActionSelection:
             targets = ", ".join(
                 f"agent_{i}" for i in range(num_agents) if i != self_idx
             )
+            # The prompt file uses Python format-string escaping: {{ and }} produce
+            # literal braces after .format() is called.  The search string must
+            # match the raw file content (double braces), not the rendered output.
             user_prompt = rl_communication_prompt.replace(
-                'Respond in JSON: {"communication": "<message>"}',
+                'Respond in JSON: {{"communication": "<message>"}}',
                 f'Also set "communication_target" to the most relevant recipient: one of {targets}.\n'
                 f'Respond in JSON: {{"communication": "<message>", "communication_target": "<target>"}}'
             )
