@@ -71,4 +71,5 @@ function five_chambers.clear_state_files()
     local world_path = minetest.get_worldpath()
     os.remove(world_path .. "/milestone_events.jsonl")
     os.remove(world_path .. "/switch_events.jsonl")
+    os.remove(world_path .. "/episode_done.txt")
 end

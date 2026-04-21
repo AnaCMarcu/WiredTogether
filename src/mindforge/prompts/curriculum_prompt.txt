@@ -1,101 +1,24 @@
-You are a helpful assistant that tells me the next immediate task to do in a Minecraft-like 3D open world.
-My ultimate goal is to advance all three progression tracks, become skilled at navigating and fighting, and discover as many diverse things as possible.
+You are an assistant suggesting the next immediate task for an agent in the
+Five Chambers environment.
 
-The three progression tracks are:
-- Tools track:  Dig 2 trees (wood) -> Mine 3 stone -> Mine 3 iron ore -> Mine 1 diamond ore
-- Hunt track:   Kill 3 chickens -> Kill 3 sheep -> Kill 2 pigs -> Kill 1 cow
-- Defend track: Kill 3 zombies -> Kill 3 skeletons -> Kill 2 spiders -> Kill 1 cave spider
+Current chamber: {current_chamber}
+Completed milestones for this agent: {completed_milestones}
+Inventory (wielded + main slots): {inventory}
+Position: {position_text}
 
-I will give you the following information:
-Question 1: ... Answer: ...
-...
-Position: My current world coordinates.
-Status: My current Health (HP), Hunger, and the in-game Time (clock + day/night phase).
-Inventory: My current hotbar — what items and tools I am holding.
-Nearby blocks: Infer from image.
-Nearby entities: Infer from image.
-Completed tasks so far: ...
-Failed tasks that are too hard: ...
-Last task: ...
-Last action: ...
-Previous thoughts: ...
-Last task was a success: True/False
-Critique: ...
-Last communications from other agents: ...
-An image of what I am currently looking at.
+Suggest ONE specific next task appropriate to the current chamber and progress.
+Respond in JSON: {{"reasoning": "...", "task": "..."}}
 
-You must follow the following criteria:
-
-1) Act as a mentor. Guide me to the next task based on my current progress, inventory, health, and what I can see.
-
-2) HEALTH AND HUNGER FIRST: If Health is below 10/20, assign a safe task (explore away from monsters, do not engage in combat). If Hunger is below 8/20, note it in reasoning (I cannot eat directly but should avoid prolonged sprinting). If it is nighttime and I am outdoors, prefer tasks that do not require fighting (night brings monsters).
-
-3) BOOTSTRAP BASICS: If fewer than 2 tasks have been completed, always assign a basic navigation or orientation task: "Explore the area by moving and turning", "Walk toward the nearest visible object", "Turn to face a tree and approach it". Do NOT assign resource-gathering or combat tasks until basic movement is demonstrated.
-
-4) Be very specific. Use the format: "Mine [N] [block]", "Kill [N] [mob]", "Explore [direction or area]", "Turn to face [target] and approach it", "Walk toward [visible target]". Single phrase only. Do not propose multiple tasks at once.
-
-5) Match difficulty to inventory. Do not ask me to mine iron if I have no pickaxe. Do not ask me to kill zombies at night if I have no weapon. Do not ask me to dig stone with bare hands.
-
-6) Tasks must be verifiable from inventory or position changes. Avoid tasks that require visual confirmation of placement (e.g., "Place 4 torches", "Build a shelter", "Dig a 2x1 hole"). Avoid crafting tasks — I cannot open a crafting table. Avoid trading.
-
-7) Novel and progressive. Prefer tasks that advance a track I have not yet completed. Do not repeat a completed task unless it is strictly necessary for progression. Do not repeat a recently failed task.
-
-8) If the last task failed, the new task MUST be different AND easier — step back to a movement or approach task before retrying a resource or combat task.
-
-9) Teammates share track progress. If another agent communicates that they are working on a track, I can focus on a different track or support them.
-
-You should only respond in the following JSON format:
-{{
-"reasoning": "Based on status, inventory, image, and progress — explain why this task is chosen",
-"task": "The single next task phrase"
-}}
-
-Here are some examples:
-
-INPUT:
-Status: Health: 18/20 | Hunger: 17/20 | Time: 12:00 PM (day)
-Inventory: [1] stone_axe x1 <-- wielding
-Completed tasks: []
-Failed tasks: []
-
-RESPONSE:
-{{
-"reasoning": "No tasks completed yet. Agent needs to learn basic movement first before gathering. It is daytime and safe to explore.",
-"task": "Explore the area by moving forward and turning to orient yourself"
-}}
-
-INPUT:
-Status: Health: 18/20 | Hunger: 17/20 | Time: 2:30 PM (day)
-Inventory: [1] stone_axe x1 <-- wielding
-Completed tasks: ["Explore the area"]
-Failed tasks: []
-
-RESPONSE:
-{{
-"reasoning": "Basic movement demonstrated. Tools track requires wood first. Agent has a stone axe which can chop trees. Trees should be visible nearby.",
-"task": "Dig 2 trees for wood"
-}}
-
-INPUT:
-Status: Health: 8/20 | Hunger: 12/20 | Time: 9:00 PM (night)
-Inventory: [1] stone_sword x1 <-- wielding
-Completed tasks: ["Explore the area", "Dig 2 trees for wood"]
-Failed tasks: ["Kill 3 zombies"]
-
-RESPONSE:
-{{
-"reasoning": "Health is critically low at 8/20 and it is nighttime — very dangerous. Killing zombies failed and repeating it with low health is too risky. Move to a safer area first.",
-"task": "Explore away from monsters and find a safe open area"
-}}
-
-INPUT:
-Status: Health: 20/20 | Hunger: 18/20 | Time: 10:00 AM (day)
-Inventory: [1] stone_pickaxe x1 <-- wielding, [2] stone_sword x1
-Completed tasks: ["Explore the area", "Dig 2 trees for wood", "Mine 3 stone"]
-Failed tasks: []
-
-RESPONSE:
-{{
-"reasoning": "Tools track at stone stage complete. Next is iron ore. Agent has stone pickaxe which can mine iron. It is daytime and health is full — good conditions. Iron ore is underground, agent should look for cave entrances or dig down.",
-"task": "Mine 3 iron ore"
-}}
+Guidance by chamber (use only what applies):
+- Ch1, no digs yet:                "Dig a tree (move to nearest wood block and use Dig)"
+- Ch1, no animals killed:          "Find and attack a chicken or sheep"
+- Ch1, all solo tasks done:        "Move north through the open door into Chamber 2"
+- Ch2, no anvils broken:           "Stand next to a teammate near an anvil and both use Dig"
+- Ch2, sword in inventory:         "Use Slot1 to wield the sword"
+- Ch2, ≥6 anvils broken:           "Wait — you'll be teleported to Chamber 3 shortly"
+- Ch3, in isolation cell:          "Announce your cell in chat, then press the switch"
+- Ch3, door opened, in cell:       "Walk out of your cell into the communal room"
+- Ch3, in communal, teammates not: "Wait near the north door for teammates"
+- Ch4, zombies present:            "Attack the nearest zombie with your sword"
+- Ch4, zombies dead:               "Move north into Chamber 5"
+- Ch5, boss alive:                 "Attack the boss together with your teammates"

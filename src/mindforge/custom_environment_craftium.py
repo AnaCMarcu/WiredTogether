@@ -725,7 +725,15 @@ class CraftiumEnvironmentInterface:
                     if not line:
                         continue
                     try:
-                        new_events.append(json.loads(line))
+                        ev = json.loads(line)
+                        new_events.append(ev)
+                        # Inject milestone reward into _rewards so get_step_reward()
+                        # carries it into the RL buffer on the next step.
+                        # (craftium.reward() is not available in the Lua mod context.)
+                        for agent_name in ev.get("contributors", []):
+                            self._rewards[agent_name] = (
+                                self._rewards.get(agent_name, 0.0) + ev.get("reward", 0)
+                            )
                     except json.JSONDecodeError:
                         pass
                 self._milestone_file_offset = f.tell()

@@ -1,11 +1,8 @@
-"""Main loop for running Mindforge agents in Craftium OpenWorld.
+"""Main loop for running Mindforge agents in Five Chambers (Craftium).
 
-Role-specialized agents (gatherer, hunter, defender) interact with
-the Craftium multi-agent environment, using LLM-based action selection,
-episodic memory, belief systems, and auto-curriculum.
-
-Supports any number of agents -- roles cycle (gatherer, hunter, defender,
-gatherer, hunter, ...) when NUM_AGENTS > 3.
+Homogeneous agents progress cooperatively through five enclosed chambers,
+using LLM-based action selection, episodic memory, belief systems, and auto-curriculum.
+Milestones M1–M28 are tracked via JSONL polling from the Lua mod.
 
 Usage:
     cd src/mindforge
@@ -40,11 +37,14 @@ from agent_modules.critic import Critic
 from agent_modules.skill_manager import SkillManager
 from agent_modules.episodic_memory_manager import EpisodicMemoryManager
 from agent_modules.craftium_metric import CraftiumMetric
+from communication_rewards import CommunicationTracker
+from cooperation_metric import CooperationMetric
+from episode_logger import EpisodeLogger
 import json as _json
 
 from rl_layer import RLConfig, RLLayer, HebbianConfig, HebbianSocialGraph
 
-ROLE_NAMES = ["gatherer", "hunter", "defender"]
+ROLE_NAMES = ["agent"]
 
 # Macro action names — used to detect when a macro was selected so the RL
 # buffer defers store_reward() until the macro completes.
@@ -54,7 +54,7 @@ _MACRO_NAMES = frozenset({"TurnAround", "ScanArea", "ApproachTarget", "Escape", 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run Mindforge agents in Craftium OpenWorld")
     parser.add_argument("--num-agents", type=int, default=3,
-                        help="Number of agents (roles cycle: gatherer, hunter, defender)")
+                        help="Number of agents in five-chambers (all share the agent role)")
     parser.add_argument("--episodes", type=int, default=1,
                         help="Number of episodes to run")
     parser.add_argument("--max-steps", type=int, default=1000,
@@ -140,27 +140,20 @@ def parse_args():
                         help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
     parser.add_argument("--log-interval", type=int, default=10,
                         help="Print a reward/metric summary every N steps (default 10)")
-    # ── Team composition ──
+    # ── Team composition (five-chambers: all agents are homogeneous) ──
     parser.add_argument(
         "--team-mode",
         type=str,
-        default="heterogeneous",
-        choices=[
-            "heterogeneous",
-            "homogeneous-gatherer",
-            "homogeneous-hunter",
-            "homogeneous-defender",
-            "homogeneous-auto",
-        ],
-        help="Role assignment strategy. 'heterogeneous' (default) cycles roles as before. "
-             "'homogeneous-*' assigns the same role to all agents.",
+        default="homogeneous-agent",
+        choices=["homogeneous-agent"],
+        help="All agents share the same 'agent' role in five-chambers.",
     )
     parser.add_argument(
         "--homogeneous-role",
         type=str,
-        default="gatherer",
-        choices=["gatherer", "hunter", "defender"],
-        help="Role used when --team-mode homogeneous-auto (default: gatherer)",
+        default="agent",
+        choices=["agent"],
+        help="Role for all agents (fixed: agent).",
     )
     # ── Phased difficulty ──
     parser.add_argument("--survival-mode", action="store_true",
@@ -232,48 +225,19 @@ def load_prompts():
 def build_role_configs(
     num_agents,
     role_prompts,
-    team_mode="heterogeneous",
-    homogeneous_role="gatherer",
+    team_mode="homogeneous-agent",
+    homogeneous_role="agent",
 ):
-    """Build ROLE_CONFIGS for num_agents.
-
-    team_mode choices:
-      "heterogeneous"         — cycle [gatherer, hunter, defender, …] (default, unchanged)
-      "homogeneous-gatherer"  — all agents get gatherer role
-      "homogeneous-hunter"    — all agents get hunter role
-      "homogeneous-defender"  — all agents get defender role
-      "homogeneous-auto"      — all agents get the role named by homogeneous_role
-    """
-    if team_mode != "heterogeneous":
-        # Resolve target role from mode string or explicit override
-        if team_mode == "homogeneous-auto":
-            role_name = homogeneous_role
-        else:
-            # "homogeneous-gatherer" → "gatherer"
-            role_name = team_mode.split("-", 1)[1] if "-" in team_mode else homogeneous_role
-        if role_name not in ROLE_NAMES:
-            raise ValueError(
-                f"Unknown homogeneous role '{role_name}'. Must be one of {ROLE_NAMES}."
-            )
-        return [
-            {
-                "name": role_name,
-                "agent_name": f"agent_{i}_{role_name}",
-                "curriculum_prompt": role_prompts[role_name].format(num_agents=num_agents),
-            }
-            for i in range(num_agents)
-        ]
-    else:
-        # Existing cycling logic — unchanged
-        configs = []
-        for i in range(num_agents):
-            role = ROLE_NAMES[i % len(ROLE_NAMES)]
-            configs.append({
-                "name": role,
-                "agent_name": f"agent_{i}_{role}",
-                "curriculum_prompt": role_prompts[role].format(num_agents=num_agents),
-            })
-        return configs
+    """Build ROLE_CONFIGS for num_agents. All agents share the 'agent' role."""
+    role_name = "agent"
+    return [
+        {
+            "name": role_name,
+            "agent_name": f"agent_{i}",
+            "curriculum_prompt": role_prompts[role_name].format(num_agents=num_agents),
+        }
+        for i in range(num_agents)
+    ]
 
 
 def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
@@ -452,13 +416,13 @@ def save_checkpoint(
             "communication_log": metric.communication_log,
             "rl_updates": metric.rl_updates,
             "rl_token_opts": metric.rl_token_opts,
-            "milestones": {str(k): v for k, v in metric.milestones.items()},
+            "milestones_per_agent": {name: sorted(ms) for name, ms in metric._agent_milestones.items()},
             "track_rewards": metric.track_rewards,
             "_graph_snapshots": metric._graph_snapshots,
             "ts_data": metric.ts_data,
             "phase_transitions": getattr(metric, "phase_transitions", []),
             "team_mode": getattr(metric, "team_mode", "heterogeneous"),
-            "homogeneous_role": getattr(metric, "homogeneous_role", "gatherer"),
+            "homogeneous_role": getattr(metric, "homogeneous_role", "agent"),
         }
         run_state = {
             "episode": episode,
@@ -472,7 +436,7 @@ def save_checkpoint(
             "gradual_trigger_step": gradual_trigger_step,
             # Team composition
             "team_mode": getattr(metric, "team_mode", "heterogeneous"),
-            "homogeneous_role": getattr(metric, "homogeneous_role", "gatherer"),
+            "homogeneous_role": getattr(metric, "homogeneous_role", "agent"),
         }
         with open(os.path.join(checkpoint_dir, "run_state.json"), "w") as f:
             _json.dump(run_state, f, indent=2, default=str)
@@ -853,6 +817,7 @@ async def run(args):
         print(f"{'='*60}")
 
         environment.reset()
+        environment.reset_milestone_offset()
         # Re-signal the Minetest server with the current phase (important on resume
         # or whenever the world is freshly reset).
         environment._write_phase_file(current_phase)
@@ -917,6 +882,9 @@ async def run(args):
         communications = []  # broadcast mode (shared list)
         agent_communications = {i: [] for i in range(num_agents)}  # targeted mode (per-agent)
         agents_error_count = [0] * num_agents
+        comm_tracker = CommunicationTracker(agent_ids=list(range(num_agents)))
+        coop_metric = CooperationMetric(agent_ids=list(range(num_agents)))
+        ep_logger = EpisodeLogger(run_dir=metric.target_folder, episode=episode + 1)
 
         # ── Macro credit assignment: accumulate rewards across macro ticks ──
         # When the RL policy selects a macro, store_reward() is deferred until
@@ -1168,7 +1136,7 @@ async def run(args):
 
                 time.sleep(sleep_time)
 
-            # ── Phase 2: Hebbian update + reward diffusion ──
+            # ── Phase 1b: Communication rewards + cooperation metrics + step logging ──
             positions = []
             for i in range(num_agents):
                 try:
@@ -1176,6 +1144,59 @@ async def run(args):
                 except (AttributeError, IndexError):
                     pos = None
                 positions.append(pos)
+
+            # Capture task rewards before comm bonus is added (for decomposition)
+            _task_rewards_this_step = {i: step_rewards_raw[i] for i in range(num_agents)}
+            _chat_this_step = {}
+            _agent_pos_map = {}
+            _actions_this_step = {}
+            for _i in range(num_agents):
+                _c = step_contents[_i]
+                msg = _c.get("communication", "") if _c else ""
+                if msg and msg != "None":
+                    _chat_this_step[_i] = msg
+                _actions_this_step[_i] = (_c.get("action", "NoOp") if _c else "NoOp")
+                _env_pos = environment.get_agent_position(_i)
+                _agent_pos_map[_i] = _env_pos if _env_pos is not None else positions[_i]
+
+            _comm_rewards_this_step: dict = {}
+            if communication:
+                _comm_rewards_this_step, _comm_milestones, _valid_speakers = comm_tracker.process_step(
+                    step, _chat_this_step, _agent_pos_map
+                )
+                for _aid, _bonus in _comm_rewards_this_step.items():
+                    step_rewards_raw[_aid] += _bonus
+                for _aid, _mid, _rw in _comm_milestones:
+                    _comm_ev = {
+                        "step": step,
+                        "milestone": _mid,
+                        "contributors": [f"agent_{_aid}"],
+                        "reward": _rw,
+                    }
+                    metric.record_milestone_event(_comm_ev)
+                    coop_metric.observe_milestone(step, _mid, [f"agent_{_aid}"])
+                    ep_logger.log_event({"step": step, "type": "comm_milestone",
+                                         "milestone": _mid, "agent": f"agent_{_aid}",
+                                         "reward": _rw})
+
+            coop_metric.observe_step(
+                step,
+                positions=_agent_pos_map,
+                actions=_actions_this_step,
+                messages=_chat_this_step,
+                task_rewards=_task_rewards_this_step,
+            )
+            ep_logger.log_step(
+                step,
+                positions=_agent_pos_map,
+                actions=_actions_this_step,
+                messages=_chat_this_step,
+                task_rewards=_task_rewards_this_step,
+                comm_rewards=_comm_rewards_this_step,
+                infos={"chambers": {i: environment.get_chamber(i) for i in range(num_agents)}},
+            )
+
+            # ── Phase 2: Hebbian update + reward diffusion ──
 
             # Per-agent one-step advantage δ_t = r_t - V(s_t).
             # V(s_t) was stored by select_action() in the pending transition.
@@ -1252,7 +1273,11 @@ async def run(args):
                             _macro_acc_reward[agent_id] = 0.0
                     else:
                         # Normal step — close the pending transition immediately.
-                        agent.rl_layer.store_reward(reward, done=agent_done)
+                        agent.rl_layer.store_reward(
+                            reward, done=agent_done,
+                            reward_task=_task_rewards_this_step.get(agent_id, 0.0),
+                            reward_comm=_comm_rewards_this_step.get(agent_id, 0.0),
+                        )
 
                     agent.rl_layer.record_context(
                         action=content.get("action", "NoOp") if content else "NoOp",
@@ -1315,6 +1340,22 @@ async def run(args):
                                         )
                     except Exception as _tok_exc:
                         logging.warning(f"Agent {agent_id} token_optimize failed: {_tok_exc}")
+
+            # ── Phase 3b: Five-chambers milestone events ──
+            for _ev in environment.poll_milestone_events():
+                metric.record_milestone_event(_ev)
+                coop_metric.observe_milestone(
+                    _ev.get("step", step),
+                    _ev.get("milestone", ""),
+                    _ev.get("contributors", []),
+                )
+                ep_logger.log_event({
+                    "step": _ev.get("step", step),
+                    "type": "milestone",
+                    "id": _ev.get("milestone", ""),
+                    "contributors": _ev.get("contributors", []),
+                    "reward": _ev.get("reward", 0),
+                })
 
             # ── Phase 4: Graph metrics snapshot + SLURM log ──
             if hebbian_config.enabled and step % hebbian_config.log_graph_every == 0:
@@ -1389,6 +1430,35 @@ async def run(args):
                 print(f"[CKPT] Shutdown checkpoint saved → {_ep_ckpt_dir}")
                 environment.close()
                 return
+
+        # ── End-of-episode: finalize cooperation metrics + structured logs ──
+        _hebb_W = hebbian_graph.snapshot().get("W") if hebbian_config.enabled else None
+        _ep_final_step = (step + 1) if max_steps > 0 else 0
+        _coop_summary = coop_metric.episode_summary(
+            final_step=_ep_final_step,
+            hebbian_weights=_hebb_W,
+        )
+        _ep_summary = {
+            "episode": episode + 1,
+            "final_step": _ep_final_step,
+            "total_reward_per_agent": {
+                f"agent_{i}": metric.cumulative_returns[i]
+                for i in range(num_agents)
+            },
+            "cooperation_metrics": _coop_summary,
+        }
+        ep_logger.finalize(_ep_summary)
+
+        # Append Hebbian snapshot to run-level JSONL stream
+        _hebb_snapshot_path = os.path.join(metric.target_folder, "hebbian_snapshots.jsonl")
+        with open(_hebb_snapshot_path, "a", encoding="utf-8") as _hf:
+            _hf.write(_json.dumps({
+                "episode": episode + 1,
+                "final_step": _coop_summary["final_step"],
+                "W": _hebb_W,
+                "cooperation_score": _coop_summary.get("cooperation_score", 0.0),
+                "reward_total": sum(metric.cumulative_returns),
+            }) + "\n")
 
         # ── End-of-episode checkpoint ──
         _ep_ckpt_dir = os.path.join(checkpoint_dir, f"ep{episode+1}_end")

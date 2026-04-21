@@ -66,7 +66,7 @@ function five_chambers.reset_milestone_state()
     five_chambers.pickup_counts   = {}
     five_chambers.kill_counts     = {}
     five_chambers.prev_inv_total  = {}
-    -- Keep spawn_pos: it's set by joinplayer and doesn't change between episodes.
+    -- Re-record current position as spawn reference so M1 resets correctly each episode.
     five_chambers.step_counter = 0
 
     for _, p in ipairs(minetest.get_connected_players()) do
@@ -175,6 +175,16 @@ minetest.register_on_dignode(function(pos, oldnode, digger)
     if counts.stone >= 3 then five_chambers.fire_milestone("m7_dig_3_stone", {name}) end
 end)
 
+-- ── Globalstep: M14/M15 gear equip (Ch2) ────────────────────────
+-- check_equip is defined in gear.lua (loaded after milestones.lua).
+
+minetest.register_globalstep(function(dtime)
+    if not five_chambers.CHAMBERS[2].enabled then return end
+    for _, player in ipairs(minetest.get_connected_players()) do
+        five_chambers.check_equip(player)
+    end
+end)
+
 -- ── Globalstep: M1 (movement) + M3 (pickup) ─────────────────────
 
 minetest.register_globalstep(function(dtime)
@@ -188,7 +198,7 @@ minetest.register_globalstep(function(dtime)
 
         -- M1: distance >5 from initial spawn position (Y-plane only).
         local sp = five_chambers.spawn_pos[name]
-        if sp and not (five_chambers.milestone_fired[name] or {})["m1_move_5"] then
+        if sp and not five_chambers.milestone_fired[name]["m1_move_5"] then
             local cur = player:get_pos()
             if cur then
                 local dx = cur.x - sp.x

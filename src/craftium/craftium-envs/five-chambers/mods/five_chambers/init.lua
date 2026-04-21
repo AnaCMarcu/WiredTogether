@@ -14,6 +14,7 @@ dofile(modpath .. "/switches.lua")
 dofile(modpath .. "/doors.lua")
 dofile(modpath .. "/gear.lua")
 dofile(modpath .. "/mobs.lua")
+dofile(modpath .. "/player_state.lua")
 
 -- ── Server-start initialisation ───────────────────────────────────
 -- Runs after all mods (including mobs_mc) have loaded, so entity
@@ -29,6 +30,7 @@ minetest.register_on_mods_loaded(function()
     -- 3. Initialise all per-episode state tables BEFORE spawning animals.
     five_chambers.init_doors()
     five_chambers.init_switches()
+    five_chambers.init_anvils()
     five_chambers.reset_mob_state()   -- clears active_ch1_mobs = {}
 
     -- 4. Spawn Ch1 animals (after geometry + after state tables exist).
@@ -94,6 +96,7 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
     five_chambers.reset_milestone_state()
     five_chambers.init_doors()
     five_chambers.init_switches()
+    five_chambers.init_anvils()
     five_chambers.reset_mob_state()
     five_chambers.clear_state_files()
 

@@ -1,6 +1,6 @@
 You are a helpful assistant that tells me the next immediate task to do.
 I am an agent in a Five Chambers cooperative environment with {num_agents} team members.
-All agents have identical capabilities — there is no role specialization.
+All agents share the same goal: progress through the five chambers together.
 
 Chamber 1 (current) — earn all 7 milestones:
   M1: move >5 blocks from spawn  |  M2: dig 3 blocks   |  M3: pick up 3 items

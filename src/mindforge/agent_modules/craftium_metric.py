@@ -2,8 +2,8 @@
 
 Tracks:
 - Cumulative return per agent
-- Steps-to-milestone for each progression track (Tools, Hunt, Defend)
-- Per-track reward breakdown and specialization index
+- Milestone events from five-chambers JSONL (M1-M28)
+- Steps-to-milestone per track
 - Communication events
 - Generates plots and saves JSON data
 """
@@ -17,45 +17,85 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-# Stage completion reward thresholds (from Lua mods).
-# Stages emit rewards 128, 256, 1024, 2048 — we detect them via reward spikes.
-STAGE_REWARDS = {128.0, 256.0, 1024.0, 2048.0}
+# Five-chambers milestone definitions: milestone_id -> track
+MILESTONE_TRACK = {
+    "m1_move_5":               "ch1_solo",
+    "m2_dig_3_any":            "ch1_solo",
+    "m3_pickup_3":             "ch1_solo",
+    "m4_dig_5_wood":           "ch1_solo",
+    "m5_kill_1_animal":        "ch1_solo",
+    "m6_kill_2_animals":       "ch1_solo",
+    "m7_dig_3_stone":          "ch1_solo",
+    "m8_anvil_A1":             "ch2_anvils",
+    "m9_anvil_A2":             "ch2_anvils",
+    "m10_anvil_A3":            "ch2_anvils",
+    "m11_anvil_B1":            "ch2_anvils",
+    "m12_anvil_B2":            "ch2_anvils",
+    "m13_anvil_B3":            "ch2_anvils",
+    "m14_sword_equipped":      "ch2_anvils",
+    "m15_chestplate_equipped": "ch2_anvils",
+    "m16_enter_cell":          "ch3_switches",
+    "m17_switch_pressed":      "ch3_switches",
+    "m18_door_opened":         "ch3_switches",
+    "m19_all_in_communal":     "ch3_switches",
+    "m20_enter_ch4":           "ch4_combat",
+    "m21_first_mob_kill":      "ch4_combat",
+    "m22_all_mobs_killed":     "ch4_combat",
+    "m23_all_alive_ch4":       "ch4_combat",
+    "m24_enter_ch5":           "ch5_boss",
+    "m25_first_boss_dmg":      "ch5_boss",
+    "m26_boss_half_hp":        "ch5_boss",
+    "m27_boss_defeated":       "ch5_boss",
+    "m28_all_alive_bonus":     "ch5_boss",
+    "m_comm_ch2":              "communication",
+    "m_comm_ch3":              "communication",
+    "m_comm_ch4":              "communication",
+    "m_comm_ch5":              "communication",
+}
 
-# Ordered milestones per track (tier_index -> (name, stage_reward_value))
+# Ordered (milestone_id, reward) tuples per track (for steps-to-milestone table)
 TRACKS = {
-    "tools": [
-        ("wood", 128.0),
-        ("stone", 256.0),
-        ("iron", 1024.0),
-        ("diamond", 2048.0),
+    "ch1_solo": [
+        ("m1_move_5", 10.0), ("m2_dig_3_any", 30.0), ("m3_pickup_3", 30.0),
+        ("m4_dig_5_wood", 50.0), ("m5_kill_1_animal", 50.0),
+        ("m6_kill_2_animals", 80.0), ("m7_dig_3_stone", 60.0),
     ],
-    "hunt": [
-        ("chicken", 128.0),
-        ("sheep", 256.0),
-        ("pig", 1024.0),
-        ("cow", 2048.0),
+    "ch2_anvils": [
+        ("m8_anvil_A1",  40.0), ("m9_anvil_A2",  40.0), ("m10_anvil_A3", 40.0),
+        ("m11_anvil_B1", 40.0), ("m12_anvil_B2", 40.0), ("m13_anvil_B3", 40.0),
+        ("m14_sword_equipped", 50.0), ("m15_chestplate_equipped", 30.0),
     ],
-    "defend": [
-        ("zombie", 128.0),
-        ("skeleton", 256.0),
-        ("spider", 1024.0),
-        ("cave_spider", 2048.0),
+    "ch3_switches": [
+        ("m16_enter_cell", 20.0), ("m17_switch_pressed", 40.0),
+        ("m18_door_opened", 60.0), ("m19_all_in_communal", 100.0),
+    ],
+    "ch4_combat": [
+        ("m20_enter_ch4", 30.0), ("m21_first_mob_kill", 60.0),
+        ("m22_all_mobs_killed", 150.0), ("m23_all_alive_ch4", 100.0),
+    ],
+    "ch5_boss": [
+        ("m24_enter_ch5", 50.0), ("m25_first_boss_dmg", 80.0),
+        ("m26_boss_half_hp", 120.0), ("m27_boss_defeated", 300.0),
+        ("m28_all_alive_bonus", 250.0),
+    ],
+    "communication": [
+        ("m_comm_ch2", 20.0), ("m_comm_ch3", 30.0),
+        ("m_comm_ch4", 15.0), ("m_comm_ch5", 20.0),
     ],
 }
 
-# Reward multipliers per role for stage events (from Lua client mod).
-# Role 0=gatherer (tools 1.0x, hunt 0.3x, defend 0.3x)
-# Role 1=hunter   (tools 0.3x, hunt 1.0x, defend 0.3x)
-# Role 2=defender (tools 0.3x, hunt 0.3x, defend 1.0x)
-ROLE_STAGE_MULTIPLIERS = [
-    {"tools": 1.0, "hunt": 0.3, "defend": 0.3},  # gatherer
-    {"tools": 0.3, "hunt": 1.0, "defend": 0.3},  # hunter
-    {"tools": 0.3, "hunt": 0.3, "defend": 1.0},  # defender
-]
+# Milestone rewards emitted by Lua (used to identify milestone events from raw values)
+STAGE_REWARDS = {
+    10.0, 15.0, 20.0, 30.0, 40.0, 50.0, 60.0, 80.0,
+    100.0, 120.0, 150.0, 250.0, 300.0,
+}
+
+# Track ordering for plots and progress display
+TRACK_ORDER = ["ch1_solo", "ch2_anvils", "ch3_switches", "ch4_combat", "ch5_boss", "communication"]
 
 
 class CraftiumMetric:
-    """Tracks evaluation metrics for Craftium multi-agent experiments."""
+    """Tracks evaluation metrics for Craftium five-chambers multi-agent experiments."""
 
     def __init__(
         self,
@@ -75,229 +115,197 @@ class CraftiumMetric:
         # Per-agent, per-step reward history
         self.reward_history = [[] for _ in range(num_agents)]
 
-        # Milestone tracking: agent_id -> track -> list of (timestep, tier_name)
-        self.milestones = {
-            i: {"tools": [], "hunt": [], "defend": []}
-            for i in range(num_agents)
-        }
+        # Milestone events: list of {step, milestone_id, contributor, reward}
+        # Flat log — one entry per (milestone, contributor) pair
+        self.milestone_events = []
 
-        # Steps-to-milestone: track -> tier_index -> first timestep achieved (any agent)
-        self.first_milestone_step = {
-            track: {} for track in TRACKS
-        }
+        # Per-agent milestone set: agent_name -> set of milestone_ids earned
+        self._agent_milestones = {}
 
-        # Per-track reward accumulation (for specialization index)
-        # Estimated from reward spikes matching known stage values
+        # Steps-to-first: milestone_id -> first global step it fired (any agent)
+        self.first_milestone_step = {}
+
+        # Per-track reward totals per agent (summed from milestone rewards)
         self.track_rewards = {
-            i: {"tools": 0.0, "hunt": 0.0, "defend": 0.0, "other": 0.0}
+            i: {track: 0.0 for track in TRACKS}
             for i in range(num_agents)
         }
 
-        # Communication log: list of (timestep, source_agent, message_preview)
+        # Communication log
         self.communication_log = []
         self.comm_counts_per_step = []
 
         # RL layer tracking
-        self.rl_updates = []       # (timestep, agent_id, info_dict)
-        self.rl_token_opts = []    # (timestep, agent_id, decision, reason, info_dict)
+        self.rl_updates = []
+        self.rl_token_opts = []
 
         # Hebbian social graph snapshots
-        self._graph_snapshots = []  # list of {"step": int, ...metrics}
+        self._graph_snapshots = []
 
-        # Co-completion events for structural-behavioral alignment (H7/RQ2)
-        self._co_completion_events = []  # {"step", "agent_i", "agent_j", "track"}
-        self._last_milestone_step = {}   # agent_id -> last milestone timestep
+        # Co-completion events
+        self._co_completion_events = []
+        self._last_milestone_step = {}  # agent_id -> last milestone timestep
 
-        # Phase transitions (set by phased difficulty system)
-        self.phase_transitions = []  # [{"step": int, "episode": int, "phase": str}]
+        # Phase transitions
+        self.phase_transitions = []
 
-        # Team composition metadata (set from args after build)
+        # Team composition metadata
         self.team_mode = "heterogeneous"
-        self.homogeneous_role = "gatherer"
+        self.homogeneous_role = "agent"
 
         # Timestep-level data for plotting
         self.ts_data = {
             "timesteps": [],
             "cumulative_returns": [[] for _ in range(num_agents)],
             "milestone_count": [[] for _ in range(num_agents)],
-            "total_milestones": [],  # joint across all agents
+            "total_milestones": [],
         }
 
         self.target_folder = self._mkdir_metrics(path)
 
     # ------------------------------------------------------------------
-    # Recording methods (called from the main loop)
+    # Recording methods
     # ------------------------------------------------------------------
 
     def record_reward(self, agent_id: int, reward: float):
-        """Record a single-step reward for an agent.
-
-        Detects milestone events from reward spikes and classifies them
-        by track using the agent's role multiplier.
-        """
+        """Record a single-step reward for an agent (cumulative return only)."""
         self.cumulative_returns[agent_id] += reward
         self.reward_history[agent_id].append((self.timestep, reward))
 
-        # Detect stage completion from reward value
-        self._detect_milestone(agent_id, reward)
+    def record_milestone_event(self, ev: dict):
+        """Record a milestone event from poll_milestone_events().
+
+        ev = {"step": int, "milestone": str, "contributors": [str, ...], "reward": int}
+        """
+        mid = ev.get("milestone", "")
+        reward = ev.get("reward", 0)
+        lua_step = ev.get("step", self.timestep)
+        contributors = ev.get("contributors", [])
+
+        if mid not in self.first_milestone_step:
+            self.first_milestone_step[mid] = self.timestep
+
+        for agent_name in contributors:
+            self.milestone_events.append({
+                "step":        self.timestep,
+                "lua_step":    lua_step,
+                "milestone_id": mid,
+                "contributor": agent_name,
+                "reward":      reward,
+            })
+
+            # Per-agent set
+            if agent_name not in self._agent_milestones:
+                self._agent_milestones[agent_name] = set()
+            self._agent_milestones[agent_name].add(mid)
+
+            # Per-track reward accumulation (map agent name to id)
+            try:
+                agent_id = int(agent_name.split("_")[1])
+            except (IndexError, ValueError):
+                agent_id = -1
+
+            track = MILESTONE_TRACK.get(mid)
+            if track and 0 <= agent_id < self.num_agents:
+                self.track_rewards[agent_id][track] += reward
+
+            # Co-completion detection
+            CO_WINDOW = 5
+            if 0 <= agent_id < self.num_agents:
+                for other_id, other_step in self._last_milestone_step.items():
+                    if other_id != agent_id and (self.timestep - other_step) <= CO_WINDOW:
+                        self._co_completion_events.append({
+                            "step":      self.timestep,
+                            "agent_i":   agent_id,
+                            "agent_j":   other_id,
+                            "milestone": mid,
+                        })
+                self._last_milestone_step[agent_id] = self.timestep
+
+        logging.info(
+            "Milestone %s fired for %s at step %d (reward=%d)",
+            mid, contributors, self.timestep, reward,
+        )
 
     def record_communication(self, source_agent: str, message: str, target: str = None):
-        """Record a communication event."""
         preview = message[:100] if message else ""
         self.communication_log.append((self.timestep, source_agent, preview, target or "all"))
 
     def record_rl_update(self, agent_id: int, info: dict):
-        """Record an action-level MAPPO update event."""
         self.rl_updates.append((self.timestep, agent_id, info))
-        self.log(f"[RL] Agent {agent_id} MAPPO update at step {self.timestep}: "
-                 f"policy_loss={info.get('policy_loss', '?'):.4f}, "
-                 f"value_loss={info.get('value_loss', '?'):.4f}, "
-                 f"entropy={info.get('entropy', '?'):.4f}")
+        logging.info(
+            "[RL] Agent %d MAPPO update at step %d: policy_loss=%.4f, "
+            "value_loss=%.4f, entropy=%.4f",
+            agent_id, self.timestep,
+            info.get("policy_loss", 0), info.get("value_loss", 0), info.get("entropy", 0),
+        )
 
     def record_rl_token_opt(self, agent_id: int, info: dict):
-        """Record a token-level optimisation decision (train or skip)."""
         decision = info.get("decision", "unknown")
         reason = info.get("reason", "")
         self.rl_token_opts.append((self.timestep, agent_id, decision, reason, info))
-        if decision == "train":
-            self.log(f"[RL] Agent {agent_id} TOKEN-OPT at step {self.timestep}: "
-                     f"reason='{reason}', skill='{info.get('skill_focus', '?')}', "
-                     f"token_policy_loss={info.get('token_policy_loss', '?')}")
-        else:
-            self.log(f"[RL] Agent {agent_id} token-opt SKIPPED at step {self.timestep}: "
-                     f"reason='{reason}'")
 
     def record_graph_snapshot(self, step: int, graph_dict: dict):
-        """Record a Hebbian social graph metrics snapshot."""
         self._graph_snapshots.append({"step": step, **graph_dict})
 
     def record_phase_transition(self, step: int, episode: int, phase: str):
-        """Record a phase transition event (exploration → survival_mobs_only → survival)."""
         self.phase_transitions.append({"step": step, "episode": episode, "phase": phase})
-        self.log(f"[PHASE] ep={episode} step={step} → {phase}")
+        logging.info("[PHASE] ep=%d step=%d → %s", episode, step, phase)
 
     def store_timestep(self, step_comm_count: int = 0):
-        """Snapshot metrics at end of a timestep."""
+        """Snapshot per-timestep metrics."""
         self.ts_data["timesteps"].append(self.timestep)
 
         for i in range(self.num_agents):
-            self.ts_data["cumulative_returns"][i].append(
-                self.cumulative_returns[i]
-            )
-            total_ms = sum(
-                len(self.milestones[i][t]) for t in TRACKS
-            )
-            self.ts_data["milestone_count"][i].append(total_ms)
+            self.ts_data["cumulative_returns"][i].append(self.cumulative_returns[i])
+            name = f"agent_{i}"
+            count = len(self._agent_milestones.get(name, set()))
+            self.ts_data["milestone_count"][i].append(count)
 
-        # Joint milestones (union across agents per track)
-        joint = 0
-        for track in TRACKS:
-            achieved_tiers = set()
-            for i in range(self.num_agents):
-                for ts, tier_name in self.milestones[i][track]:
-                    achieved_tiers.add(tier_name)
-            joint += len(achieved_tiers)
-        self.ts_data["total_milestones"].append(joint)
+        # Joint: union of all milestone IDs achieved by any agent
+        joint = set()
+        for ms_set in self._agent_milestones.values():
+            joint |= ms_set
+        self.ts_data["total_milestones"].append(len(joint))
 
         self.comm_counts_per_step.append(step_comm_count)
         self.timestep += 1
-
-    # ------------------------------------------------------------------
-    # Milestone detection
-    # ------------------------------------------------------------------
-
-    def _detect_milestone(self, agent_id: int, reward: float):
-        """Infer which track/tier a large reward belongs to.
-
-        Stage rewards are 128, 256, 1024, 2048. The agent receives:
-          own_track:   stage_value * 1.0
-          other_track: stage_value * 0.3
-
-        We check if the reward matches a known stage value (within tolerance)
-        at either the 1.0x or 0.3x multiplier.
-        """
-        role_idx = agent_id % len(ROLE_STAGE_MULTIPLIERS)
-        role_mults = ROLE_STAGE_MULTIPLIERS[role_idx]
-
-        for track, tiers in TRACKS.items():
-            mult = role_mults[track]
-            for tier_idx, (tier_name, base_value) in enumerate(tiers):
-                expected = base_value * mult
-                if abs(reward - expected) < 1.0:
-                    # Check if this tier was already achieved by this agent
-                    achieved = [name for _, name in self.milestones[agent_id][track]]
-                    if tier_name not in achieved:
-                        self.milestones[agent_id][track].append(
-                            (self.timestep, tier_name)
-                        )
-                        self.track_rewards[agent_id][track] += reward
-
-                        # Record first global achievement
-                        if tier_idx not in self.first_milestone_step[track]:
-                            self.first_milestone_step[track][tier_idx] = self.timestep
-
-                        logging.info(
-                            f"Milestone: agent {agent_id} reached "
-                            f"{track}/{tier_name} at step {self.timestep} "
-                            f"(reward={reward:.1f})"
-                        )
-
-                        # Co-completion detection (H7/RQ2):
-                        # If another agent hit a milestone within 5 steps,
-                        # record the pair as co-completing.
-                        CO_WINDOW = 5
-                        for other_id, other_step in self._last_milestone_step.items():
-                            if other_id != agent_id and (self.timestep - other_step) <= CO_WINDOW:
-                                self._co_completion_events.append({
-                                    "step": self.timestep,
-                                    "agent_i": agent_id,
-                                    "agent_j": other_id,
-                                    "track": track,
-                                })
-                        self._last_milestone_step[agent_id] = self.timestep
-                        return
-
-        # Not a milestone — classify as "other"
-        if abs(reward) > 0.01:
-            self.track_rewards[agent_id]["other"] += reward
 
     # ------------------------------------------------------------------
     # Computed metrics
     # ------------------------------------------------------------------
 
     def specialization_index(self, agent_id: int) -> dict:
-        """Fraction of track rewards from each track for an agent.
-
-        A fully specialized gatherer would have tools~1.0, hunt~0.0, defend~0.0.
-        """
+        """Fraction of milestone reward from each track for an agent."""
         tr = self.track_rewards[agent_id]
-        total = sum(tr[t] for t in TRACKS)
+        total = sum(tr.values())
         if total == 0:
             return {t: 0.0 for t in TRACKS}
         return {t: tr[t] / total for t in TRACKS}
 
     def steps_to_milestone_table(self) -> dict:
-        """Returns {track: {tier_name: first_step}} for the team."""
+        """Returns {track: {milestone_id: first_step}} for the team."""
         result = {}
-        for track, tiers in TRACKS.items():
+        for track, entries in TRACKS.items():
             result[track] = {}
-            for tier_idx, (tier_name, _) in enumerate(tiers):
-                step = self.first_milestone_step[track].get(tier_idx)
-                result[track][tier_name] = step  # None if not reached
+            for entry in entries:
+                mid = entry[0] if isinstance(entry, tuple) else entry
+                result[track][mid] = self.first_milestone_step.get(mid)
         return result
 
     def social_lift_data(self) -> dict:
-        """Returns data needed for social lift comparison.
-
-        To compute social lift, run once with communication=True and once
-        with communication=False, then compare steps_to_milestone and
-        cumulative_returns.
-        """
         return {
             "communication": self.communication,
             "steps_to_milestone": self.steps_to_milestone_table(),
             "final_returns": list(self.cumulative_returns),
             "total_comm_events": len(self.communication_log),
+        }
+
+    def milestones_per_agent(self) -> dict:
+        """Returns {agent_name: sorted list of milestone_ids earned}."""
+        return {
+            name: sorted(ms_set)
+            for name, ms_set in self._agent_milestones.items()
         }
 
     # ------------------------------------------------------------------
@@ -306,7 +314,6 @@ class CraftiumMetric:
 
     @staticmethod
     def _get_git_info():
-        """Best-effort git commit hash and branch for reproducibility."""
         import subprocess
         info = {}
         for key, cmd in [
@@ -322,27 +329,28 @@ class CraftiumMetric:
         return info
 
     def save_run_metrics(self, file_name="data.json"):
-        """Save all metrics to JSON and generate plots."""
         git_info = self._get_git_info()
         data = {
             "config": {
-                "num_agents": self.num_agents,
-                "communication": self.communication,
-                "total_steps": self.timestep,
-                "seed": getattr(self, "seed", None),
+                "num_agents":           self.num_agents,
+                "communication":        self.communication,
+                "total_steps":          self.timestep,
+                "seed":                 getattr(self, "seed", None),
                 "max_steps_per_episode": getattr(self, "max_steps", None),
-                "num_episodes": getattr(self, "num_episodes", None),
-                "experiment_id": getattr(self, "experiment_id", None),
-                "timestamp": datetime.now().isoformat(),
-                "git_commit": git_info.get("git_commit"),
-                "git_branch": git_info.get("git_branch"),
-                "cli_args": getattr(self, "cli_args", None),
+                "num_episodes":         getattr(self, "num_episodes", None),
+                "experiment_id":        getattr(self, "experiment_id", None),
+                "timestamp":            datetime.now().isoformat(),
+                "git_commit":           git_info.get("git_commit"),
+                "git_branch":           git_info.get("git_branch"),
+                "cli_args":             getattr(self, "cli_args", None),
             },
-            "cumulative_returns": list(self.cumulative_returns),
-            "steps_to_milestone": self.steps_to_milestone_table(),
+            "cumulative_returns":   list(self.cumulative_returns),
+            "steps_to_milestone":   self.steps_to_milestone_table(),
             "milestones_per_agent": {
-                str(i): self.milestones[i] for i in range(self.num_agents)
+                name: sorted(ms_set)
+                for name, ms_set in self._agent_milestones.items()
             },
+            "milestone_events":     self.milestone_events,
             "specialization_index": {
                 str(i): self.specialization_index(i)
                 for i in range(self.num_agents)
@@ -350,8 +358,8 @@ class CraftiumMetric:
             "track_rewards": {
                 str(i): self.track_rewards[i] for i in range(self.num_agents)
             },
-            "social_lift_data": self.social_lift_data(),
-            "timestep_data": self.ts_data,
+            "social_lift_data":     self.social_lift_data(),
+            "timestep_data":        self.ts_data,
             "comm_counts_per_step": self.comm_counts_per_step,
             "rl_updates": [
                 {"timestep": ts, "agent_id": aid, "info": info}
@@ -361,11 +369,11 @@ class CraftiumMetric:
                 {"timestep": ts, "agent_id": aid, "decision": d, "reason": r, "info": info}
                 for ts, aid, d, r, info in self.rl_token_opts
             ],
-            "graph_snapshots": self._graph_snapshots,
-            "co_completion_events": self._co_completion_events,
-            "phase_transitions": self.phase_transitions,
-            "team_mode": getattr(self, "team_mode", "heterogeneous"),
-            "homogeneous_role": getattr(self, "homogeneous_role", "gatherer"),
+            "graph_snapshots":        self._graph_snapshots,
+            "co_completion_events":   self._co_completion_events,
+            "phase_transitions":      self.phase_transitions,
+            "team_mode":              getattr(self, "team_mode", "heterogeneous"),
+            "homogeneous_role":       getattr(self, "homogeneous_role", "agent"),
         }
 
         file_path = os.path.join(self.target_folder, file_name)
@@ -373,12 +381,9 @@ class CraftiumMetric:
         class _NumpyEncoder(json.JSONEncoder):
             def default(self, obj):
                 import numpy as _np
-                if isinstance(obj, (_np.floating,)):
-                    return float(obj)
-                if isinstance(obj, (_np.integer,)):
-                    return int(obj)
-                if isinstance(obj, _np.ndarray):
-                    return obj.tolist()
+                if isinstance(obj, (_np.floating,)):   return float(obj)
+                if isinstance(obj, (_np.integer,)):    return int(obj)
+                if isinstance(obj, _np.ndarray):       return obj.tolist()
                 return super().default(obj)
 
         with open(file_path, "w", encoding="utf-8") as f:
@@ -387,7 +392,6 @@ class CraftiumMetric:
         self._save_plots()
         self._save_text_summary()
 
-        # Save communication log separately
         comm_path = os.path.join(self.target_folder, "communication_log.json")
         with open(comm_path, "w", encoding="utf-8") as f:
             json.dump(self.communication_log, f, indent=2, ensure_ascii=False)
@@ -408,14 +412,9 @@ class CraftiumMetric:
         # 1. Cumulative return per agent
         fig, ax = plt.subplots(figsize=(10, 5))
         for i in range(self.num_agents):
-            ax.plot(ts, self.ts_data["cumulative_returns"][i],
-                    label=f"Agent {i}")
-        # Phase transition markers: vertical dashed line at each transition step
+            ax.plot(ts, self.ts_data["cumulative_returns"][i], label=f"Agent {i}")
         for pt in self.phase_transitions:
             ax.axvline(x=pt["step"], color="red", linestyle="--", alpha=0.7, linewidth=1.5)
-            ylim = ax.get_ylim()
-            ax.text(pt["step"], ylim[1] * 0.97, f"→ {pt['phase']}",
-                    fontsize=7, color="red", rotation=90, va="top", ha="right")
         ax.set_xlabel("Timestep")
         ax.set_ylabel("Cumulative Return")
         ax.set_title("Cumulative Return per Agent")
@@ -423,58 +422,56 @@ class CraftiumMetric:
         fig.savefig(os.path.join(path, "cumulative_returns.png"), dpi=150)
         plt.close(fig)
 
-        # 2. Milestones over time (per agent + joint)
+        # 2. Milestone count per agent over time
         fig, ax = plt.subplots(figsize=(10, 5))
         for i in range(self.num_agents):
-            ax.plot(ts, self.ts_data["milestone_count"][i],
-                    label=f"Agent {i}", alpha=0.7)
+            ax.plot(ts, self.ts_data["milestone_count"][i], label=f"Agent {i}", alpha=0.7)
         ax.plot(ts, self.ts_data["total_milestones"],
-                label="Joint (team)", linewidth=2, color="black")
+                label="Joint (unique)", linewidth=2, color="black")
         ax.set_xlabel("Timestep")
         ax.set_ylabel("Milestones Achieved")
-        ax.set_title("Track Milestones Over Time")
+        ax.set_title("Five-Chambers Milestone Progress")
         ax.legend()
         fig.savefig(os.path.join(path, "milestones.png"), dpi=150)
         plt.close(fig)
 
-        # 3. Specialization index bar chart
-        fig, ax = plt.subplots(figsize=(8, 5))
+        # 3. Track reward breakdown per agent (stacked bar)
+        fig, ax = plt.subplots(figsize=(10, 5))
         x = np.arange(self.num_agents)
-        width = 0.25
-        for idx, track in enumerate(TRACKS):
-            vals = [self.specialization_index(i).get(track, 0) for i in range(self.num_agents)]
-            ax.bar(x + idx * width, vals, width, label=track.capitalize())
+        bottom = np.zeros(self.num_agents)
+        colors = plt.cm.tab10(np.linspace(0, 1, len(TRACKS)))
+        for idx, track in enumerate(TRACK_ORDER):
+            vals = np.array([self.track_rewards[i].get(track, 0.0) for i in range(self.num_agents)])
+            ax.bar(x, vals, bottom=bottom, label=track, color=colors[idx])
+            bottom += vals
         ax.set_xlabel("Agent")
-        ax.set_ylabel("Fraction of Track Rewards")
-        ax.set_title("Specialization Index")
-        ax.set_xticks(x + width)
+        ax.set_ylabel("Total Milestone Reward")
+        ax.set_title("Reward by Chamber Track per Agent")
+        ax.set_xticks(x)
         ax.set_xticklabels([f"Agent {i}" for i in range(self.num_agents)])
-        ax.legend()
-        fig.savefig(os.path.join(path, "specialization_index.png"), dpi=150)
+        ax.legend(loc="upper right", fontsize=8)
+        fig.savefig(os.path.join(path, "track_rewards.png"), dpi=150)
         plt.close(fig)
 
-        # 4. Steps-to-milestone table as text file
+        # 4. Steps-to-milestone table as text
         table = self.steps_to_milestone_table()
         lines = ["Steps to Milestone (first agent to reach)\n"]
-        lines.append(f"{'Track':<10} {'Tier':<15} {'Step':>8}")
-        lines.append("-" * 35)
-        for track, tiers in table.items():
-            for tier_name, step in tiers.items():
+        lines.append(f"{'Track':<12} {'Milestone':<28} {'Step':>8}")
+        lines.append("-" * 50)
+        for track, mids in table.items():
+            for mid, step in mids.items():
                 step_str = str(step) if step is not None else "---"
-                lines.append(f"{track:<10} {tier_name:<15} {step_str:>8}")
+                lines.append(f"{track:<12} {mid:<28} {step_str:>8}")
         with open(os.path.join(path, "steps_to_milestone.txt"), "w") as f:
             f.write("\n".join(lines))
 
-        # 5. Communication frequency over time
+        # 5. Communication frequency
         if self.comm_counts_per_step:
             fig, ax = plt.subplots(figsize=(10, 4))
-            # Smooth with rolling window
             window = min(50, len(self.comm_counts_per_step))
             if window > 1:
                 smoothed = np.convolve(
-                    self.comm_counts_per_step,
-                    np.ones(window) / window,
-                    mode="valid",
+                    self.comm_counts_per_step, np.ones(window) / window, mode="valid"
                 )
                 ax.plot(range(len(smoothed)), smoothed)
             else:
@@ -489,139 +486,92 @@ class CraftiumMetric:
         if self._graph_snapshots:
             fig, ax = plt.subplots(figsize=(10, 5))
             snap_steps = [s["step"] for s in self._graph_snapshots]
-            snap_mean = [s.get("mean_bond_strength", 0) for s in self._graph_snapshots]
+            snap_mean  = [s.get("mean_bond_strength", 0) for s in self._graph_snapshots]
             ax.plot(snap_steps, snap_mean, label="Mean bond strength", linewidth=2)
-
-            # Per top-pair lines (from the last snapshot's top_3_pairs)
             last_top = self._graph_snapshots[-1].get("top_3_pairs", [])
             for pair_info in last_top:
                 i_idx, j_idx = pair_info["i"], pair_info["j"]
-                pair_label = f"Agent {i_idx} -> {j_idx}"
                 pair_vals = []
                 for s in self._graph_snapshots:
-                    # Find this pair in each snapshot's top_3
                     found = False
                     for tp in s.get("top_3_pairs", []):
                         if tp["i"] == i_idx and tp["j"] == j_idx:
-                            pair_vals.append(tp["w"])
-                            found = True
-                            break
+                            pair_vals.append(tp["w"]); found = True; break
                     if not found:
                         pair_vals.append(0.0)
-                ax.plot(snap_steps, pair_vals, label=pair_label, alpha=0.6)
-
+                ax.plot(snap_steps, pair_vals,
+                        label=f"Agent {i_idx} -> {j_idx}", alpha=0.6)
             ax.set_xlabel("Timestep")
             ax.set_ylabel("Bond Strength")
-            ax.set_title("Hebbian Social Graph - Bond Evolution")
+            ax.set_title("Hebbian Social Graph — Bond Evolution")
             ax.legend()
             fig.savefig(os.path.join(path, "graph_bond_evolution.png"), dpi=150)
             plt.close(fig)
 
-        # 7. LTD heatmap (final snapshot)
-        if self._graph_snapshots and self._graph_snapshots[-1].get("ltd_heatmap"):
-            ltd_data = np.array(self._graph_snapshots[-1]["ltd_heatmap"])
-            fig, ax = plt.subplots(figsize=(6, 5))
-            im = ax.imshow(ltd_data, cmap="Reds", vmin=0)
-            ax.set_xlabel("Agent j")
-            ax.set_ylabel("Agent i")
-            ax.set_title("Failure Co-occurrence Fij (final)")
-            role_labels = ["gatherer", "hunter", "defender"]
-            tick_labels = [
-                f"{i} ({role_labels[i % len(role_labels)]})"
-                for i in range(ltd_data.shape[0])
-            ]
-            ax.set_xticks(range(ltd_data.shape[0]))
-            ax.set_xticklabels(tick_labels, fontsize=8)
-            ax.set_yticks(range(ltd_data.shape[0]))
-            ax.set_yticklabels(tick_labels, fontsize=8)
-            fig.colorbar(im)
-            fig.savefig(os.path.join(path, "graph_ltd_heatmap.png"), dpi=150)
-            plt.close(fig)
-
     def _save_text_summary(self):
-        """Write a human-readable summary.txt with all key metrics."""
-        role_names = ["gatherer", "hunter", "defender"]
+        role_names = ["agent"]
         lines = []
-        lines.append("=" * 50)
+        lines.append("=" * 55)
         exp_id = getattr(self, "experiment_id", None)
-        title = f"  Experiment Summary — {exp_id}" if exp_id else "  Experiment Summary"
-        lines.append(title)
-        lines.append("=" * 50)
+        lines.append(f"  Five Chambers — {exp_id or 'Experiment Summary'}")
+        lines.append("=" * 55)
         comm_str = "on" if self.communication else "off"
-        lines.append(f"Agents: {self.num_agents}  |  Steps: {self.timestep}  |  Communication: {comm_str}")
-        seed_str = getattr(self, "seed", None)
-        if seed_str is not None:
-            lines.append(f"Seed: {seed_str}")
+        lines.append(f"Agents: {self.num_agents}  |  Steps: {self.timestep}  |  Comm: {comm_str}")
         lines.append("")
 
-        # Final cumulative returns
         lines.append("--- Cumulative Returns ---")
         for i in range(self.num_agents):
             role = role_names[i % len(role_names)]
             lines.append(f"  Agent {i} ({role}): {self.cumulative_returns[i]:.2f}")
         lines.append("")
 
-        # Milestones per agent
-        lines.append("--- Milestones Reached ---")
+        lines.append("--- Milestones per Agent ---")
         for i in range(self.num_agents):
+            name = f"agent_{i}"
             role = role_names[i % len(role_names)]
-            agent_ms = []
-            for track in TRACKS:
-                for ts, tier_name in self.milestones[i][track]:
-                    agent_ms.append(f"{track}/{tier_name} (step {ts})")
-            if agent_ms:
-                lines.append(f"  Agent {i} ({role}): {', '.join(agent_ms)}")
-            else:
-                lines.append(f"  Agent {i} ({role}): none")
+            earned = sorted(self._agent_milestones.get(name, set()))
+            lines.append(f"  Agent {i} ({role}): {', '.join(earned) if earned else 'none'}")
         lines.append("")
 
-        # Steps to milestone (team-level)
-        lines.append("--- Steps to Milestone (first agent to reach) ---")
+        lines.append("--- Steps to Milestone (first agent) ---")
         table = self.steps_to_milestone_table()
-        for track, tiers in table.items():
-            for tier_name, step in tiers.items():
+        for track, mids in table.items():
+            for mid, step in mids.items():
                 step_str = str(step) if step is not None else "---"
-                lines.append(f"  {track:<10} {tier_name:<15} {step_str:>8}")
+                lines.append(f"  {track:<12} {mid:<28} {step_str:>8}")
         lines.append("")
 
-        # Specialization index
-        lines.append("--- Specialization Index ---")
+        lines.append("--- Track Reward Breakdown ---")
         for i in range(self.num_agents):
             role = role_names[i % len(role_names)]
             si = self.specialization_index(i)
-            parts = [f"{t}={si[t]:.2f}" for t in TRACKS]
+            parts = [f"{t}={si[t]:.2f}" for t in TRACK_ORDER]
             lines.append(f"  Agent {i} ({role}): {', '.join(parts)}")
         lines.append("")
 
-        # Communication stats
         total_msgs = len(self.communication_log)
-        avg_per_step = total_msgs / max(self.timestep, 1)
         lines.append("--- Communication ---")
         lines.append(f"  Total messages: {total_msgs}")
-        lines.append(f"  Avg per step:   {avg_per_step:.2f}")
+        lines.append(f"  Avg per step:   {total_msgs / max(self.timestep, 1):.2f}")
         lines.append("")
 
-        # RL stats
         if self.rl_updates or self.rl_token_opts:
             lines.append("--- RL Layer ---")
             lines.append(f"  MAPPO updates: {len(self.rl_updates)}")
             if self.rl_updates:
                 last = self.rl_updates[-1][2]
-                lines.append(f"    Last update — policy_loss={last.get('policy_loss', '?'):.4f}, "
-                             f"value_loss={last.get('value_loss', '?'):.4f}, "
-                             f"entropy={last.get('entropy', '?'):.4f}")
+                lines.append(f"    Last: policy_loss={last.get('policy_loss', 0):.4f}, "
+                             f"value_loss={last.get('value_loss', 0):.4f}")
             train_count = sum(1 for _, _, d, _, _ in self.rl_token_opts if d == "train")
-            skip_count = sum(1 for _, _, d, _, _ in self.rl_token_opts if d != "train")
-            lines.append(f"  Token-opt decisions: {train_count} train, {skip_count} skip")
+            skip_count  = sum(1 for _, _, d, _, _ in self.rl_token_opts if d != "train")
+            lines.append(f"  Token-opt: {train_count} train, {skip_count} skip")
             lines.append("")
 
-        # Hebbian stats
         if self._graph_snapshots:
-            lines.append("--- Hebbian Social Plasticity ---")
             last = self._graph_snapshots[-1]
+            lines.append("--- Hebbian Social Plasticity ---")
             lines.append(f"  Final mean bond:  {last.get('mean_bond_strength', 0):.4f}")
             lines.append(f"  Final sparsity:   {last.get('sparsity', 0):.2f}")
-            lines.append(f"  Graph snapshots:  {len(self._graph_snapshots)}")
             top = last.get("top_3_pairs", [])
             if top:
                 lines.append("  Top bonds:")
@@ -629,26 +579,7 @@ class CraftiumMetric:
                     lines.append(f"    Agent {p['i']} -> Agent {p['j']}: {p['w']:.4f}")
             lines.append("")
 
-        # Team composition
-        team_mode = getattr(self, "team_mode", "heterogeneous")
-        lines.append("--- Team Composition ---")
-        lines.append(f"  Mode: {team_mode}")
-        if team_mode != "heterogeneous":
-            lines.append(f"  Role: {getattr(self, 'homogeneous_role', 'gatherer')}")
-            lines.append("  NOTE: Homogeneous team — specialization index is expected uniform.")
-        lines.append("")
-
-        # Phase transitions
-        lines.append("--- Phase Transitions ---")
-        if self.phase_transitions:
-            for pt in self.phase_transitions:
-                lines.append(f"  [ep={pt['episode']} step={pt['step']}] → {pt['phase']}")
-        else:
-            lines.append("  None (exploration phase throughout)")
-        lines.append("")
-
-        lines.append("=" * 50)
-
+        lines.append("=" * 55)
         summary_path = os.path.join(self.target_folder, "summary.txt")
         with open(summary_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
@@ -659,58 +590,42 @@ class CraftiumMetric:
 
     @classmethod
     def restore_from_dict(cls, d: dict, path: str = "./run_metrics") -> "CraftiumMetric":
-        """Reconstruct a CraftiumMetric from a checkpoint run_state dict.
-
-        All lists are assigned directly so plots generated after a resumed
-        job show the full trajectory from episode 1, not just the continuation.
-        """
-        num_agents = d["num_agents"]
+        num_agents   = d["num_agents"]
         communication = d.get("communication", True)
-        run_id = d.get("run_id")
+        run_id       = d.get("run_id")
         metric = cls(num_agents=num_agents, communication=communication,
                      path=path, run_id=run_id)
 
-        metric.timestep = d.get("timestep", 0)
+        metric.timestep          = d.get("timestep", 0)
         metric.cumulative_returns = [float(x) for x in d.get("cumulative_returns", [0.0] * num_agents)]
 
-        # reward_history: list[list[tuple]]
         rh = d.get("reward_history", [[] for _ in range(num_agents)])
         metric.reward_history = [[tuple(x) for x in agent_h] for agent_h in rh]
 
-        # milestones: JSON uses str keys
-        ms = d.get("milestones", {})
-        metric.milestones = {
-            i: {
-                track: [tuple(x) for x in ms.get(str(i), {}).get(track, [])]
-                for track in TRACKS
-            }
-            for i in range(num_agents)
-        }
-
-        # first_milestone_step: {track: {tier_idx(int): step}}
-        fms = d.get("first_milestone_step", {})
+        metric.milestone_events = d.get("milestone_events", [])
         metric.first_milestone_step = {
-            track: {int(k): v for k, v in fms.get(track, {}).items()}
-            for track in TRACKS
+            k: v for k, v in d.get("first_milestone_step", {}).items()
         }
 
-        # track_rewards
+        # Rebuild per-agent milestone sets from events
+        mpa = d.get("milestones_per_agent", {})
+        metric._agent_milestones = {name: set(ids) for name, ids in mpa.items()}
+
         tr = d.get("track_rewards", {})
         metric.track_rewards = {
-            i: tr.get(str(i), {"tools": 0.0, "hunt": 0.0, "defend": 0.0, "other": 0.0})
+            i: tr.get(str(i), {t: 0.0 for t in TRACKS})
             for i in range(num_agents)
         }
 
-        metric.communication_log = [tuple(x) for x in d.get("communication_log", [])]
+        metric.communication_log    = [tuple(x) for x in d.get("communication_log", [])]
         metric.comm_counts_per_step = d.get("comm_counts_per_step", [])
-
-        metric.rl_updates = [tuple(x) for x in d.get("rl_updates", [])]
-        metric.rl_token_opts = [tuple(x) for x in d.get("rl_token_opts", [])]
-        metric._graph_snapshots = d.get("_graph_snapshots", d.get("graph_snapshots", []))
+        metric.rl_updates           = [tuple(x) for x in d.get("rl_updates", [])]
+        metric.rl_token_opts        = [tuple(x) for x in d.get("rl_token_opts", [])]
+        metric._graph_snapshots     = d.get("_graph_snapshots", d.get("graph_snapshots", []))
         metric._co_completion_events = d.get("co_completion_events", [])
-        metric.phase_transitions = d.get("phase_transitions", [])
-        metric.team_mode = d.get("team_mode", "heterogeneous")
-        metric.homogeneous_role = d.get("homogeneous_role", "gatherer")
+        metric.phase_transitions    = d.get("phase_transitions", [])
+        metric.team_mode            = d.get("team_mode", "heterogeneous")
+        metric.homogeneous_role     = d.get("homogeneous_role", "agent")
 
         lms = d.get("_last_milestone_step", {})
         metric._last_milestone_step = {int(k): v for k, v in lms.items()}
@@ -718,8 +633,8 @@ class CraftiumMetric:
         metric.ts_data = d.get("ts_data", {
             "timesteps": [],
             "cumulative_returns": [[] for _ in range(num_agents)],
-            "milestone_count": [[] for _ in range(num_agents)],
-            "total_milestones": [],
+            "milestone_count":    [[] for _ in range(num_agents)],
+            "total_milestones":   [],
         })
 
         return metric
@@ -731,10 +646,9 @@ class CraftiumMetric:
     def _mkdir_metrics(self, path="./run_metrics"):
         os.makedirs(path, exist_ok=True)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        comm_str = "comm" if self.communication else "noComm"
-        base = self.run_id if self.run_id else f"craftium_{self.num_agents}agents_{comm_str}_{timestamp}"
-        folder_name = base
-        target = os.path.join(path, folder_name)
+        comm_str  = "comm" if self.communication else "noComm"
+        base = self.run_id if self.run_id else f"five_chambers_{self.num_agents}agents_{comm_str}_{timestamp}"
+        target = os.path.join(path, base)
         os.makedirs(target, exist_ok=True)
         return target
 
@@ -744,17 +658,14 @@ class CraftiumMetric:
             f.write(text + "\n")
 
     # ------------------------------------------------------------------
-    # Compatibility with CustomAgent (which calls these on self.metric)
+    # Compatibility stubs
     # ------------------------------------------------------------------
 
     def found_skill(self, description: str, main=True):
-        """Record a learned skill (maps to milestone tracking)."""
         logging.info(f"Skill learned: {description}")
 
     def save_predictions(self, *args, **kwargs):
-        """No-op: causal predictions not used in Craftium."""
         pass
 
     def check_surgical(self, action, held_item, valid_interventions=None):
-        """No-op: surgical interventions not used in Craftium."""
         return False, ""

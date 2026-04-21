@@ -33,9 +33,7 @@ _TASK_BLOCKLIST = frozenset({
 })
 
 _ROLE_DEFAULT_TASKS = {
-    "gatherer": "Explore by moving forward and turning to find trees or stone nearby",
-    "hunter":   "Explore by moving and turning to orient yourself and find animals",
-    "defender": "Explore by moving and turning to orient yourself in the world",
+    "agent": "Explore by moving forward and turning to survey the room",
 }
 
 
@@ -121,9 +119,7 @@ class AutoCurriculum:
         )
         self.completed_tasks = []
         self.failed_tasks = []
-        # Extract role from agent_name (e.g. "agent_0_gatherer" → "gatherer")
-        parts = agent_name.rsplit("_", 1)
-        self._role = parts[-1] if len(parts) > 1 and parts[-1] in _ROLE_DEFAULT_TASKS else "gatherer"
+        self._role = "agent"
         # self.vectordb = ChromaDBVectorMemory(
         #     config=PersistentChromaDBVectorMemoryConfig(
         #         collection_name="autocurriculum_vectordb_nvidia",
@@ -373,6 +369,9 @@ class AutoCurriculum:
         return context
 
     def retrieve_context(self, query):
+        self.vectordb._ensure_initialized()
+        if self.vectordb._collection is None:
+            return None
         if self.vectordb._collection.count() == 0:
             return None
         k = min(self.vectordb._collection.count(), self.vectordb._config.k)

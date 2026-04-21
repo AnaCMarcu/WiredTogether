@@ -26,6 +26,9 @@ class Transition:
     # populated by GAE after the rollout segment
     advantage: float = 0.0
     returns: float = 0.0
+    # reward decomposition for post-hoc analysis (training uses reward only)
+    reward_task: float = 0.0
+    reward_comm: float = 0.0
 
 
 class RolloutBuffer:
@@ -51,7 +54,8 @@ class RolloutBuffer:
             old_value=value,
         )
 
-    def store_reward(self, reward: float, done: bool = False) -> None:
+    def store_reward(self, reward: float, done: bool = False,
+                     reward_task: float = 0.0, reward_comm: float = 0.0) -> None:
         """Called after the environment returns the reward for the last action."""
         if self._pending is None:
             logger.warning(
@@ -71,6 +75,8 @@ class RolloutBuffer:
         reward = max(-1e6, min(1e6, reward))
         self._pending.reward = reward
         self._pending.done = done
+        self._pending.reward_task = reward_task
+        self._pending.reward_comm = reward_comm
         self._buf.append(self._pending)
         self._pending = None
 

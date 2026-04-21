@@ -644,6 +644,16 @@ class HebbianSocialGraph:
             "_last_coactivity": self._last_coactivity.tolist() if self._last_coactivity is not None else None,
         }
 
+    def snapshot(self) -> dict:
+        """Compact per-episode snapshot for hebbian_snapshots.jsonl."""
+        d = self.to_dict()
+        return {
+            "W": d.get("W"),
+            "step": d.get("_step_count", 0),
+            "max_reward_seen": d.get("_max_reward_seen", 0.0),
+            "num_agents": self.config.num_agents,
+        }
+
     def from_dict(self, d: Dict) -> None:
         """Restore state from a to_dict() snapshot.
 

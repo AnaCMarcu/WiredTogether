@@ -80,22 +80,195 @@ end
 
 local function build_chamber_2()
     if not five_chambers.CHAMBERS[2].enabled then return end
-    -- D3: 10×10 bedrock shell; 2*NUM_AGENTS anvils in two rows.
+
+    local c    = five_chambers.CH2         -- {x0=2,x1=11,z0=13,z1=22}
+    local y0   = five_chambers.FLOOR_Y     -- 10
+    local y1   = five_chambers.CEIL_Y      -- 15
+    local wall = five_chambers.WALL_NODE
+    local N    = five_chambers.NUM_AGENTS
+
+    minetest.load_area({x=c.x0, y=y0-1, z=c.z0-1}, {x=c.x1, y=y1+1, z=c.z1+2})
+
+    -- 1. Fill entire Ch2 volume with bedrock.
+    fill_box(c.x0, y0, c.z0, c.x1, y1, c.z1, wall)
+
+    -- 2. Carve interior to air.
+    fill_box(c.x0+1, y0+1, c.z0+1, c.x1-1, y1-1, c.z1-1, "air")
+
+    -- 3. Grass floor.
+    for x = c.x0+1, c.x1-1 do
+        for z = c.z0+1, c.z1-1 do
+            minetest.set_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+        end
+    end
+
+    -- 4. South entrance (aligns with Door 1 gap at x=DOOR1_X=6, z=CH1.z1=11).
+    --    Ch2 south wall is at z=CH2.z0=13. Open 2-block tall gap at x=6.
+    local door_x = five_chambers.DOOR1_X
+    minetest.set_node({x=door_x, y=y0+1, z=c.z0}, {name="air"})
+    minetest.set_node({x=door_x, y=y0+2, z=c.z0}, {name="air"})
+    minetest.set_node({x=door_x, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
+
+    -- 5. Corridor floor at z=12 (gap between Ch1 z=11 and Ch2 z=13).
+    minetest.set_node({x=door_x, y=y0, z=12}, {name="mcl_core:dirt_with_grass"})
+
+    -- 6. North wall exit at x=door_x, z=CH2.z1=22 (towards Door 2 at z=23).
+    minetest.set_node({x=door_x, y=y0+1, z=c.z1}, {name="air"})
+    minetest.set_node({x=door_x, y=y0+2, z=c.z1}, {name="air"})
+    minetest.set_node({x=door_x, y=y0,   z=c.z1}, {name="mcl_core:dirt_with_grass"})
+
+    -- 7. Door 2: single bedrock block at DOOR2_POS (z=23) — opened later by doors.lua.
+    local d2 = five_chambers.DOOR2_POS
+    minetest.set_node({x=d2.x, y=y0+1, z=d2.z}, {name=wall})
+    minetest.set_node({x=d2.x, y=y0+2, z=d2.z}, {name=wall})
+    -- Floor tile so agents can stand in front of it.
+    minetest.set_node({x=d2.x, y=y0, z=d2.z}, {name="mcl_core:dirt_with_grass"})
+
+    -- 8. Place anvils: Row A (z=z0+2=15) and Row B (z=z0+5=18).
+    --    x = x0+1 + i*3 = 3, 6, 9 for N=3.
+    for i = 0, N - 1 do
+        local ax = c.x0 + 1 + (i * 3)
+        minetest.set_node({x=ax, y=y0+1, z=c.z0+2}, {name="five_chambers:anvil"})
+        minetest.set_node({x=ax, y=y0+1, z=c.z0+5}, {name="five_chambers:anvil"})
+    end
+
+    minetest.log("action", "[five_chambers] Chamber 2 built.")
 end
 
 local function build_chamber_3()
     if not five_chambers.CHAMBERS[3].enabled then return end
-    -- D5: N cells + inter-cell bedrock + communal room.
+
+    local N    = five_chambers.NUM_AGENTS
+    local y0   = five_chambers.FLOOR_Y               -- 10
+    local y1   = five_chambers.CEIL_Y                -- 15
+    local wall = five_chambers.WALL_NODE
+    local x0   = 0
+    local x1   = 4 * N                               -- 12 for N=3
+
+    local z0      = five_chambers.CH3_Z0             -- 24
+    local z1      = five_chambers.CH3_NORTH_WALL_Z   -- 38
+    local cell_z0 = five_chambers.CH3_CELL_Z0        -- 25
+    local cell_z1 = five_chambers.CH3_CELL_Z1        -- 27
+    local comm_z0 = five_chambers.CH3_COMMUNAL_Z0    -- 29
+    local comm_z1 = five_chambers.CH3_COMMUNAL_Z1    -- 37
+
+    minetest.load_area({x=x0, y=y0-1, z=z0}, {x=x1, y=y1+1, z=z1+1})
+
+    -- 1. Fill entire Ch3 volume with bedrock.
+    --    This places south back wall (z=24), inter-cell walls (x=4,8 for N=3),
+    --    front wall (z=28, with locked cell-door positions), north wall (z=38).
+    fill_box(x0, y0, z0, x1, y1, z1, wall)
+
+    -- 2. Carve N isolation cells.
+    --    Cell i interior: x = 1+4i .. 3+4i, z = cell_z0 .. cell_z1.
+    --    D5 places switch nodes at (cell_x_center(i), y0+1, cell_z0).
+    for i = 0, N - 1 do
+        local cx0 = 1 + i * 4
+        local cx1 = cx0 + 2
+        fill_box(cx0, y0+1, cell_z0, cx1, y1-1, cell_z1, "air")
+        for x = cx0, cx1 do
+            for z = cell_z0, cell_z1 do
+                minetest.set_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+            end
+        end
+    end
+    -- 2b. Place switch nodes on the south-facing wall of each cell (z=cell_z0).
+    --     five_chambers:switch is registered by switches.lua (already dofile'd).
+    for i = 0, N - 1 do
+        local sx = five_chambers.cell_x_center(i)
+        minetest.set_node({x=sx, y=y0+1, z=cell_z0}, {name="five_chambers:switch"})
+    end
+    -- z=28 (front wall) stays full bedrock; open_cell_door() clears doors there.
+
+    -- 3. Carve communal room (interior x=1..x1-1, z=comm_z0..comm_z1).
+    fill_box(x0+1, y0+1, comm_z0, x1-1, y1-1, comm_z1, "air")
+    for x = x0+1, x1-1 do
+        for z = comm_z0, comm_z1 do
+            minetest.set_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+        end
+    end
+
+    -- 4. Corridor floor at z=39 (gap between Ch3 north wall and Ch4 south wall).
+    minetest.set_node({x=five_chambers.DOOR3_X, y=y0, z=z1+1},
+                      {name="mcl_core:dirt_with_grass"})
+
+    minetest.log("action", "[five_chambers] Chamber 3 built.")
 end
 
 local function build_chamber_4()
     if not five_chambers.CHAMBERS[4].enabled then return end
-    -- D6: 7×7 bedrock shell; NUM_AGENTS weak zombies spawned on entry.
+
+    local c    = five_chambers.CH4      -- {x0=3, x1=9, z0=40, z1=46}
+    local y0   = five_chambers.FLOOR_Y  -- 10
+    local y1   = five_chambers.CEIL_Y   -- 15
+    local wall = five_chambers.WALL_NODE
+    local dx   = five_chambers.DOOR3_X  -- 6
+
+    minetest.load_area({x=c.x0, y=y0-1, z=c.z0}, {x=c.x1, y=y1+1, z=c.z1+2})
+
+    -- 1. Fill entire Ch4 volume with bedrock.
+    fill_box(c.x0, y0, c.z0, c.x1, y1, c.z1, wall)
+
+    -- 2. Carve interior.
+    fill_box(c.x0+1, y0+1, c.z0+1, c.x1-1, y1-1, c.z1-1, "air")
+
+    -- 3. Grass floor.
+    for x = c.x0+1, c.x1-1 do
+        for z = c.z0+1, c.z1-1 do
+            minetest.set_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+        end
+    end
+
+    -- 4. South entrance at x=6, z=40 (aligns with Door 3 corridor at z=39).
+    minetest.set_node({x=dx, y=y0+1, z=c.z0}, {name="air"})
+    minetest.set_node({x=dx, y=y0+2, z=c.z0}, {name="air"})
+    minetest.set_node({x=dx, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
+
+    -- 5. North passage at x=6, z=46 (exits toward Door 4 at z=47).
+    minetest.set_node({x=dx, y=y0+1, z=c.z1}, {name="air"})
+    minetest.set_node({x=dx, y=y0+2, z=c.z1}, {name="air"})
+    minetest.set_node({x=dx, y=y0,   z=c.z1}, {name="mcl_core:dirt_with_grass"})
+
+    -- 6. Door 4: bedrock at DOOR4_POS z=47; stays locked until all Ch4 mobs die.
+    local d4 = five_chambers.DOOR4_POS  -- {x=6, z=47}
+    minetest.set_node({x=d4.x, y=y0+1, z=d4.z}, {name=wall})
+    minetest.set_node({x=d4.x, y=y0+2, z=d4.z}, {name=wall})
+    minetest.set_node({x=d4.x, y=y0,   z=d4.z}, {name="mcl_core:dirt_with_grass"})
+
+    minetest.log("action", "[five_chambers] Chamber 4 built.")
 end
 
 local function build_chamber_5()
     if not five_chambers.CHAMBERS[5].enabled then return end
-    -- D7: 5×5 bedrock shell; boss spawned on entry.
+
+    local c    = five_chambers.CH5      -- {x0=4, x1=8, z0=48, z1=52}
+    local y0   = five_chambers.FLOOR_Y  -- 10
+    local y1   = five_chambers.CEIL_Y   -- 15
+    local wall = five_chambers.WALL_NODE
+    local dx   = five_chambers.DOOR3_X  -- 6  (shared corridor x)
+
+    minetest.load_area({x=c.x0, y=y0-1, z=c.z0}, {x=c.x1, y=y1+1, z=c.z1})
+
+    -- 1. Fill entire Ch5 volume with bedrock.
+    fill_box(c.x0, y0, c.z0, c.x1, y1, c.z1, wall)
+
+    -- 2. Carve interior (x=5..7, z=49..51).
+    fill_box(c.x0+1, y0+1, c.z0+1, c.x1-1, y1-1, c.z1-1, "air")
+
+    -- 3. Grass floor.
+    for x = c.x0+1, c.x1-1 do
+        for z = c.z0+1, c.z1-1 do
+            minetest.set_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+        end
+    end
+
+    -- 4. South entrance at x=6, z=48 (from Door 4 corridor at z=47).
+    minetest.set_node({x=dx, y=y0+1, z=c.z0}, {name="air"})
+    minetest.set_node({x=dx, y=y0+2, z=c.z0}, {name="air"})
+    minetest.set_node({x=dx, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
+    -- No exit — episode ends on boss death.
+
+    minetest.log("action", "[five_chambers] Chamber 5 built.")
 end
 
 -- Public entry-point called from init.lua's on_mods_loaded callback.

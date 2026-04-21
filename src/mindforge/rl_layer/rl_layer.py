@@ -273,7 +273,8 @@ class RLLayer:
         pending = self.buffer._pending
         return pending.old_value if pending is not None else None
 
-    def store_reward(self, reward: float, done: bool = False) -> None:
+    def store_reward(self, reward: float, done: bool = False,
+                     reward_task: float = 0.0, reward_comm: float = 0.0) -> None:
         """Feed the environment reward back into the buffer.
 
         Applies two transforms before storage:
@@ -290,7 +291,8 @@ class RLLayer:
         if self._reward_rms is not None:
             self._reward_rms.update(reward)
             reward = self._reward_rms.normalize(reward)
-        self.buffer.store_reward(reward, done)
+        self.buffer.store_reward(reward, done,
+                                 reward_task=reward_task, reward_comm=reward_comm)
 
     def record_success(self, success: bool) -> None:
         """Track critic success/failure for token-opt self-trigger."""
