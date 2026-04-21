@@ -1,0 +1,111 @@
+-- init.lua: module loader and Craftium entry hooks for Five Chambers.
+
+local modpath = minetest.get_modpath("five_chambers")
+five_chambers = {}
+five_chambers.step_counter = 0
+
+dofile(modpath .. "/config.lua")
+dofile(modpath .. "/util.lua")
+dofile(modpath .. "/state_files.lua")
+dofile(modpath .. "/world_gen.lua")
+dofile(modpath .. "/milestones.lua")
+dofile(modpath .. "/anvil.lua")
+dofile(modpath .. "/switches.lua")
+dofile(modpath .. "/doors.lua")
+dofile(modpath .. "/gear.lua")
+dofile(modpath .. "/mobs.lua")
+
+-- ── Server-start initialisation ───────────────────────────────────
+-- Runs after all mods (including mobs_mc) have loaded, so entity
+-- definitions exist and the world database is ready for set_node calls.
+
+minetest.register_on_mods_loaded(function()
+    -- 1. Patch mob entities for kill-tracking BEFORE any entities spawn.
+    five_chambers.patch_mobs_for_kill_tracking()
+
+    -- 2. Build chamber geometry (world_gen.lua).
+    five_chambers.build_all_chambers()
+
+    -- 3. Initialise all per-episode state tables BEFORE spawning animals.
+    five_chambers.init_doors()
+    five_chambers.init_switches()
+    five_chambers.reset_mob_state()   -- clears active_ch1_mobs = {}
+
+    -- 4. Spawn Ch1 animals (after geometry + after state tables exist).
+    five_chambers.spawn_ch1_animals() -- appends to mob_state.active_ch1_mobs
+
+    -- 5. Clear any stale JSONL state files from a previous server run.
+    five_chambers.clear_state_files()
+
+    minetest.log("action", "[five_chambers] Server-start init complete.")
+end)
+
+-- ── Player join ───────────────────────────────────────────────────
+
+minetest.register_on_joinplayer(function(player)
+    local name = player:get_player_name()
+    local idx  = five_chambers.agent_index(name)
+
+    -- Teleport to designated Ch1 spawn corner.
+    local spawn_pos
+    if idx >= 0 then
+        spawn_pos = five_chambers.ch1_spawn_pos(idx)
+    else
+        spawn_pos = {x=5, y=five_chambers.FLOOR_Y + 1, z=5}
+    end
+    player:set_pos(spawn_pos)
+    player:set_hp(20, {type="set_hp", from="mod"})
+
+    -- HUD: hide hotbar/crosshair/healthbar — keep what the RL obs needs.
+    player:hud_set_flags({
+        hotbar    = false,
+        crosshair = false,
+        healthbar = false,
+        chat      = false,
+    })
+    player:set_nametag_attributes({color={a=0, r=0, g=0, b=0}})
+
+    -- Milestone tracking: record initial position for M1 and inventory for M3.
+    five_chambers.init_player_milestone_state(name)
+    five_chambers.record_spawn_pos(name, spawn_pos)
+    -- Inventory is empty on first join; prev_inv_total defaults to 0.
+end)
+
+-- ── Global step ───────────────────────────────────────────────────
+
+minetest.register_globalstep(function(dtime)
+    -- Keep world at midday (no day/night cycle).
+    minetest.set_timeofday(0.5)
+    -- Increment Lua-tick counter (runs at 20Hz; Python step = 3 Lua ticks).
+    five_chambers.step_counter = five_chambers.step_counter + 1
+end)
+
+-- ── Episode reset (Craftium channel) ─────────────────────────────
+
+local channel = minetest.mod_channel_join("craftium_channel")
+
+minetest.register_on_modchannel_message(function(ch, sender, raw)
+    if ch ~= "craftium_channel" then return end
+    local msg = minetest.deserialize(raw)
+    if not (msg and msg.agent == "server" and msg.reset == true) then return end
+
+    -- Clear all per-episode state.
+    five_chambers.step_counter = 0
+    five_chambers.reset_milestone_state()
+    five_chambers.init_doors()
+    five_chambers.init_switches()
+    five_chambers.reset_mob_state()
+    five_chambers.clear_state_files()
+
+    -- Teleport all connected agents back to Ch1 spawns.
+    for _, p in ipairs(minetest.get_connected_players()) do
+        local name = p:get_player_name()
+        local i    = five_chambers.agent_index(name)
+        local pos  = (i >= 0)
+            and five_chambers.ch1_spawn_pos(i)
+            or  {x=5, y=five_chambers.FLOOR_Y + 1, z=5}
+        p:set_pos(pos)
+        p:set_hp(20, {type="set_hp", from="mod"})
+        five_chambers.record_spawn_pos(name, pos)
+    end
+end)

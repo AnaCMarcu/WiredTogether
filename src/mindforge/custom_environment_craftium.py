@@ -2,6 +2,7 @@
 
 import sys
 import os
+import json
 import numpy as np
 import PIL.Image
 
@@ -165,6 +166,9 @@ class CraftiumEnvironmentInterface:
         # Server log tailer — surfaces [TOOLS]/[INVENTORY]/[TRACK STATUS] lines from Lua
         self._server_log_offset = 0   # byte offset into stderr.txt, tracks what we've already read
         self._server_log_path = None  # resolved lazily after first reset()
+
+        # Milestone event file polling (see §4.6, poll_milestone_events())
+        self._milestone_file_offset = 0  # byte offset into milestone_events.jsonl
 
     # ------------------------------------------------------------------
     # Core interface
@@ -656,8 +660,92 @@ class CraftiumEnvironmentInterface:
     _LOG_TAGS = (
         "[TOOLS]", "[INVENTORY]", "[TRACK STATUS]",
         "[DIG]", "[HUNT]", "[DEFEND]",
-        "[PHASE]",   # phase transitions: "[PHASE] switched to survival"
+        "[PHASE]",       # phase transitions
+        "[MILESTONE]",   # five_chambers milestone events
+        "[ANVIL]", "[SWITCH]", "[DOOR]", "[MOB]", "[BOSS]",
     )
+
+    # Python mirror of Lua get_chamber_for_pos (keep in sync with config.lua).
+    _CHAMBER_BOUNDS = {
+        "ch1": lambda p: 0  <= p[2] <= 11,
+        "ch2": lambda p: 13 <= p[2] <= 22,
+        "ch3": lambda p: 24 <= p[2] <= 38,
+        "ch4": lambda p: 40 <= p[2] <= 46,
+        "ch5": lambda p: 48 <= p[2] <= 52,
+    }
+
+    def get_agent_position(self, agentId: int):
+        """Return current (x, y, z) tuple for agent, or None if unavailable."""
+        try:
+            return self.env.env._positions[agentId]
+        except (AttributeError, IndexError, TypeError):
+            return None
+
+    def get_chamber(self, agentId: int):
+        """Return the chamber name for agent's current position, or None."""
+        pos = self.get_agent_position(agentId)
+        if pos is None:
+            return None
+        for name, fn in self._CHAMBER_BOUNDS.items():
+            if fn(pos):
+                return name
+        return None
+
+    def poll_milestone_events(self) -> list:
+        """Read any new milestone events from milestone_events.jsonl since the last call.
+
+        Returns a list of dicts, each with keys: step, milestone, contributors, reward.
+        The byte-offset is advanced so repeated calls never re-read the same lines.
+        If the file is smaller than the tracked offset (episode reset / file cleared),
+        the offset is automatically reset to 0.
+        """
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            return []
+
+        path = os.path.join(world_path, "milestone_events.jsonl")
+        if not os.path.exists(path):
+            self._milestone_file_offset = 0
+            return []
+
+        # Detect file truncation / deletion + recreation (episode reset).
+        try:
+            if os.path.getsize(path) < self._milestone_file_offset:
+                self._milestone_file_offset = 0
+        except OSError:
+            return []
+
+        new_events = []
+        try:
+            with open(path, "r") as f:
+                f.seek(self._milestone_file_offset)
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        new_events.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+                self._milestone_file_offset = f.tell()
+        except OSError:
+            pass
+
+        return new_events
+
+    def reset_milestone_offset(self):
+        """Anchor the milestone event reader to the current EOF (call after env.reset())."""
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            self._milestone_file_offset = 0
+            return
+        path = os.path.join(world_path, "milestone_events.jsonl")
+        try:
+            self._milestone_file_offset = os.path.getsize(path)
+        except OSError:
+            self._milestone_file_offset = 0
 
     def _get_server_log_path(self):
         """Resolve and cache the path to the server's stderr.txt."""

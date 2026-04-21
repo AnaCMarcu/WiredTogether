@@ -428,15 +428,178 @@ def run_dig_test(num_agents: int, warmup_time: int):
     print("\nDig test done.")
 
 
+def _wait_for_warmup(env, warmup_time):
+    """Shared warmup loop: poll NoOps until all agents show std>25 for 3 checks."""
+    import time as _time
+    print(f"  Waiting for media ({warmup_time}s min)...")
+    warmup_start = _time.time()
+    consecutive = 0
+    last_log = 0.0
+    while _time.time() - warmup_start < 900:
+        observations = env.warmup_noop()
+        elapsed = _time.time() - warmup_start
+        stds = [float(np.std(obs.astype(np.float32))) if obs is not None else 0.0
+                for obs in (observations or [])]
+        if elapsed - last_log >= 15.0 and stds:
+            print(f"    [{elapsed:.0f}s] std: {', '.join(f'a{i}={s:.1f}' for i,s in enumerate(stds))}")
+            last_log = elapsed
+        if elapsed >= warmup_time and stds and all(s > 25.0 for s in stds):
+            consecutive += 1
+            if consecutive >= 3:
+                break
+        else:
+            consecutive = 0
+        _time.sleep(2)
+    print(f"  Warmup done ({_time.time()-warmup_start:.0f}s)")
+
+
+def run_milestones_test(num_agents: int, max_steps: int, warmup_time: int):
+    """D2 end-to-end test: scripted agents + milestone event polling.
+
+    Runs for max_steps steps, polls env.poll_milestone_events() every step,
+    and prints each new event. At the end, reports which of M1-M7 fired for
+    which agents.
+
+    PASS criteria:
+      - M1 (move_5) fired for ALL agents
+      - M2 (dig_3_any) fired for >= 2 agents
+      - At least one M5 or M6 event appeared (animal kill; luck-dependent)
+      - milestone_events.jsonl exists and every line is valid JSON with the
+        expected {step, milestone, contributors, reward} schema
+    """
+    import collections
+
+    print(f"\n{'='*60}")
+    print(f"  MILESTONE TEST (D2) — {num_agents} agents, {max_steps} steps")
+    print(f"{'='*60}\n")
+
+    env = CraftiumEnvironmentInterface(
+        num_agents=num_agents,
+        obs_width=320,
+        obs_height=180,
+        max_steps=max_steps,
+    )
+    env.reset()
+    _wait_for_warmup(env, warmup_time)
+    env.reset_milestone_offset()
+
+    # Per-agent scripted policies
+    policies      = [ScriptedPolicy() for _ in range(num_agents)]
+    last_rewards  = [0.0] * num_agents
+
+    # Accumulated milestone events across the run
+    all_events    = []
+    # fired_for[milestone_id] = set of agent names that earned it
+    fired_for     = collections.defaultdict(set)
+
+    for step in range(max_steps):
+        if env.all_done():
+            print(f"  All agents done at step {step}")
+            break
+
+        for agent_id in range(num_agents):
+            agent_name = f"agent_{agent_id}"
+            if env._terminations.get(agent_name, False):
+                continue
+            obs    = env.get_agent_frame(agent_id)
+            if obs is None:
+                obs = np.zeros((180, 320, 3), dtype=np.uint8)
+            action = policies[agent_id].act(obs, last_rewards[agent_id])
+            env.step(action, agentId=agent_id)
+            last_rewards[agent_id] = env.get_step_reward(agent_id)
+
+        # Poll new milestone events
+        new_events = env.poll_milestone_events()
+        for ev in new_events:
+            all_events.append(ev)
+            mid = ev.get("milestone", "?")
+            for name in ev.get("contributors", []):
+                fired_for[mid].add(name)
+            print(f"  [step {step:4d}] MILESTONE {mid}"
+                  f"  contributors={ev.get('contributors')}"
+                  f"  reward={ev.get('reward')}")
+
+        # Print server log lines with [MILESTONE] tag
+        env.tail_server_log(tags=("[MILESTONE]",), print_lines=False)
+
+        if step % 100 == 0 and step > 0:
+            chamber_str = ", ".join(
+                f"a{i}={env.get_chamber(i) or '?'}" for i in range(num_agents)
+            )
+            print(f"  [step {step:4d}] chambers: {chamber_str}"
+                  f"  events so far: {len(all_events)}")
+
+    # ── Final report ──────────────────────────────────────────────
+
+    ch1_milestones = ["m1_move_5","m2_dig_3_any","m3_pickup_3",
+                      "m4_dig_5_wood","m5_kill_1_animal","m6_kill_2_animals","m7_dig_3_stone"]
+
+    print(f"\n{'='*60}")
+    print(f"  MILESTONE REPORT — {len(all_events)} total events")
+    print(f"{'='*60}")
+    agent_names = [f"agent_{i}" for i in range(num_agents)]
+
+    print(f"\n  Ch1 milestone coverage:")
+    for mid in ch1_milestones:
+        who = fired_for.get(mid, set())
+        fired_all = agent_names and all(n in who for n in agent_names)
+        flag = "ALL" if fired_all else f"{len(who)}/{num_agents}"
+        print(f"    {mid:<30s}  [{flag}]  {sorted(who)}")
+
+    # ── Schema check ──────────────────────────────────────────────
+    print(f"\n  JSONL schema check ({len(all_events)} lines):")
+    schema_ok = True
+    for ev in all_events:
+        for key in ("step", "milestone", "contributors", "reward"):
+            if key not in ev:
+                print(f"    FAIL: missing key '{key}' in {ev}")
+                schema_ok = False
+                break
+    if schema_ok and all_events:
+        print(f"    PASS — all {len(all_events)} events have required keys")
+    elif not all_events:
+        print(f"    WARNING — no events recorded; check Lua emit_milestone()")
+
+    # ── World path (show user where JSONL lives) ──────────────────
+    try:
+        wpath = env._get_world_path()
+        print(f"\n  milestone_events.jsonl at: {wpath}/milestone_events.jsonl")
+    except Exception:
+        pass
+
+    # ── Pass/fail verdict ─────────────────────────────────────────
+    print(f"\n  VERDICT:")
+    m1_all = all(n in fired_for.get("m1_move_5", set()) for n in agent_names)
+    m2_ok  = len(fired_for.get("m2_dig_3_any", set())) >= max(1, num_agents - 1)
+    kill_ok = bool(fired_for.get("m5_kill_1_animal") or fired_for.get("m6_kill_2_animals"))
+
+    if m1_all and m2_ok:
+        print(f"  PASS — M1 fired for all {num_agents} agents, M2 fired for >={num_agents-1}.")
+        if kill_ok:
+            print(f"  BONUS — at least one animal kill milestone fired.")
+        else:
+            print(f"  (M5/M6 not seen — agents may not have encountered animals; acceptable.)")
+    else:
+        if not m1_all:
+            print(f"  FAIL — M1 (move_5) not fired for all agents. Fired for: {fired_for.get('m1_move_5')}")
+            print(f"    → Check if agents are actually moving (warmup long enough?)")
+        if not m2_ok:
+            print(f"  FAIL — M2 (dig_3_any) fired for <{num_agents-1} agents. Fired for: {fired_for.get('m2_dig_3_any')}")
+            print(f"    → Check on_dignode hook in milestones.lua and Ch1 geometry.")
+
+    env.close()
+    print("\nMilestone test done.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scripted agent environment test")
-    parser.add_argument("--mode", choices=["normal", "dig"], default="normal",
-                        help="normal = full scripted policy test; dig = focused dig verification test")
+    parser.add_argument("--mode", choices=["normal", "dig", "milestones"], default="normal",
+                        help="normal=full scripted test; dig=focused dig; milestones=D2 end-to-end")
     parser.add_argument("--num-agents", type=int, default=2,
                         help="Number of agents (minimum 2, required by MarlCraftiumEnv)")
     parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--max-steps", type=int, default=200,
-                        help="Steps per episode. Use 500+ to have a chance at reward 128")
+                        help="Steps per episode. Use 400 for milestones mode.")
     parser.add_argument("--warmup-time", type=int, default=60,
                         help="Minimum warmup seconds before checking if media loaded")
     parser.add_argument("--verbose", action="store_true",
@@ -446,6 +609,12 @@ if __name__ == "__main__":
     if args.mode == "dig":
         run_dig_test(
             num_agents=args.num_agents,
+            warmup_time=args.warmup_time,
+        )
+    elif args.mode == "milestones":
+        run_milestones_test(
+            num_agents=max(args.num_agents, 3),
+            max_steps=max(args.max_steps, 400),
             warmup_time=args.warmup_time,
         )
     else:

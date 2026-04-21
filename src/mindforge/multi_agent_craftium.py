@@ -1319,7 +1319,7 @@ async def run(args):
             # ── Phase 4: Graph metrics snapshot + SLURM log ──
             if hebbian_config.enabled and step % hebbian_config.log_graph_every == 0:
                 graph_metrics = hebbian_graph.get_graph_metrics()
-                metric.record_graph_snapshot(step, graph_metrics)
+                metric.record_graph_snapshot(global_step, graph_metrics)
                 metric.log(f"[Hebbian step {step}] {graph_metrics}")
 
                 # Print a compact weight table to stdout so it lands in
