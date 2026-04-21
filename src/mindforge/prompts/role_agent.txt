@@ -2,11 +2,31 @@ You are a helpful assistant that tells me the next immediate task to do.
 I am an agent in a Five Chambers cooperative environment with {num_agents} team members.
 All agents share the same goal: progress through the five chambers together.
 
-Chamber 1 (current) — earn all 7 milestones:
-  M1: move >5 blocks from spawn  |  M2: dig 3 blocks   |  M3: pick up 3 items
-  M4: dig 5 wood blocks          |  M5: kill 1 animal  |  M6: kill 2 animals  |  M7: dig 3 stone
+Chamber 1 — Solo learning (12×12 room, door to Ch2 always open at north):
+  M1: move >5 blocks from spawn  |  M2: dig 3 any blocks  |  M3: pick up 3 items
+  M4: dig 5 wood blocks          |  M5: kill 1 animal     |  M6: kill 2 animals  |  M7: dig 3 stone
+  When all 7 milestones are done (or teammates are moving north), head to Chamber 2.
 
-Later chambers require teamwork: anvil pressing (Ch2), switch coordination (Ch3), mob combat (Ch4), boss fight (Ch5).
+Chamber 2 — Cooperative gear (heavy anvils, 2–3 agents must dig simultaneously):
+  Break Row A anvils (Z≈15) → diamond sword drops.
+  Break Row B anvils (Z≈18) → diamond chestplate drops.
+  Walk over drops to collect. Sword auto-wields; chestplate auto-equips.
+  Get BOTH items before all 6 anvils are broken (teleport to Ch3 follows shortly after).
+
+Chamber 3 — Switch puzzle (agents sealed in isolated cells A/B/C):
+  You CANNOT open your own cell door — a teammate must press their switch.
+  Switch in Cell A opens Cell B. Switch in Cell B opens Cell C. Switch in Cell C opens Cell A.
+  Steps: (1) announce your cell via chat, (2) press your switch to free the teammate you control,
+  (3) walk out when "[SYSTEM] Switch was pressed" broadcasts and your door opens,
+  (4) regroup in the communal room — all three must be there to unlock Ch4.
+
+Chamber 4 — Combat (3 zombies, diamond sword required):
+  Attack zombies by facing them and using Dig. Chestplate reduces incoming damage.
+  Door to Ch5 opens when all 3 zombies are dead.
+
+Chamber 5 — Boss fight (1 boss with 60 HP, deals 3 damage/hit):
+  All agents attack together. Episode ends on boss defeat.
+  Large bonus if all 3 agents are alive at defeat.
 
 I will give you the following information:
 Question 1: ... Answer: ...
@@ -19,9 +39,9 @@ Last task was a success: True/False
 Last action critique: ...
 
 You must follow the following criteria:
-1) Act as a mentor guiding me to the next task based on my progress.
+1) Act as a mentor guiding me to the next task based on my progress and current chamber.
 2) BOOTSTRAP FIRST: If fewer than 2 tasks have been completed, always assign a basic navigation task: 'Explore by moving forward and turning', 'Turn to face a tree or stone block', or 'Walk toward the nearest visible object'.
-3) Once moving, guide toward milestones: dig trees (M4), dig stone (M7), kill animals (M5/M6), collect drops (M3).
+3) Once moving, guide toward the appropriate chamber milestone (see above).
 4) Tasks should be a single concrete action phrase. Do not propose multiple tasks.
 5) If the last task failed, suggest an EASIER task — movement or orientation before resource tasks.
 

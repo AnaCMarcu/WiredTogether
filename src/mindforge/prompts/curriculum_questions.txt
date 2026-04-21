@@ -1,8 +1,11 @@
-You are a helpful assistant that asks questions to help me decide the next immediate task to do.
-I am a player in a Minecraft-like 3D open world with other agents. There are three progression tracks:
-- Tools track: dig trees for wood, mine stone, find iron, find diamonds
-- Hunt track: kill chickens, sheep, pigs, cows
-- Defend track: fight zombies, skeletons, spiders, cave spiders
+You are a helpful assistant that asks questions to help me decide the next immediate task in the Five Chambers environment.
+
+I am one of three agents progressing cooperatively through five sequential chambers:
+- Chamber 1 (Ch1): Solo learning — move, dig trees/stone, kill animals, collect drops.
+- Chamber 2 (Ch2): Cooperative gear — break heavy anvils together (requires 2–3 agents digging simultaneously), collect diamond sword and chestplate.
+- Chamber 3 (Ch3): Switch puzzle — each agent is sealed in an isolated cell, must communicate and press switches to free teammates, then regroup.
+- Chamber 4 (Ch4): Combat — kill 3 zombies together, door opens when all dead.
+- Chamber 5 (Ch5): Boss fight — defeat a 60-HP boss together.
 
 Completed tasks so far: {completed_tasks}
 Failed tasks that are too hard: {failed_tasks}
@@ -13,54 +16,53 @@ I will also provide you with an image of what the player is currently looking at
 
 You must follow the following criteria:
 1) You should ask at least 5 questions (but no more than 10 questions) to help me decide the next immediate task to do. Each question should be followed by the concept that the question is about.
-2) Your question should be specific to a concept relevant to the current environment.
-  Bad example (the question is too general):
+2) Your question should be specific to a concept relevant to the Five Chambers environment.
+  Bad example (too general):
     Question: What is the best action to do?
     Concept: unknown
   Good example:
-    Question: What type of trees can I see nearby?
-    Concept: wood resources
+    Question: Are there other agents digging the same anvil as me right now?
+    Concept: cooperative anvil breaking
 3) Your questions should be self-contained and not require any context.
-  Bad example (the question requires context):
+  Bad example (requires context):
     Question: What blocks am I standing on?
     Concept: unknown
   Good example:
-    Question: What tools are needed to mine iron ore?
-    Concept: iron mining
+    Question: Which slot contains my diamond sword and is it currently wielded?
+    Concept: gear readiness for combat
 
-Let's say you see trees in the image. You can ask questions like:
-Question: What type of wood can I collect from these trees?
-Concept: wood gathering
-Question: How many trees do I need to dig to complete the wood stage?
-Concept: tools track progress
+Example questions by chamber:
+Chamber 1 — Ch1 solo tasks:
+Question: What type of block is directly in my crosshair — tree trunk, stone, or air?
+Concept: digging target identification
+Question: Are there any animals (chickens or sheep) visible in the image?
+Concept: animal hunt targets
 
-Let's say other agents have communicated that they need better weapons. You can ask:
-Question: How can I help my team get better tools?
-Concept: team tools progression
+Chamber 2 — Cooperative anvil breaking:
+Question: Is another agent standing within 3 blocks of the same anvil I am targeting?
+Concept: joint digging coordination
+Question: Do I already have a diamond sword and chestplate in my inventory?
+Concept: gear acquisition progress
 
-Let's say your last completed task is "dig 2 trees". You can ask:
-Question: What resources should I gather next after wood?
-Concept: stone stage
+Chamber 3 — Switch puzzle:
+Question: Which isolation cell am I in (Cell A, B, or C) and have I announced it to my team?
+Concept: cell identification and communication
+Question: Has a "[SYSTEM] Switch was pressed" message appeared, indicating my door was opened?
+Concept: switch state tracking
 
-Here are some more question and concept examples:
-Question 1: What animals can I see in the area?,
-Concept 1: hunt targets,
-Question 2: Are there any hostile mobs nearby?,
-Concept 2: monster threats,
-Question 3: What is the current time of day and is it safe to explore?,
-Concept 3: day night cycle,
-Question 4: What tools do I currently have in my inventory?,
-Concept 4: available tools,
-Question 5: What blocks should I mine to progress the tools track?,
-Concept 5: mining progression,
-IMPORTANT: Always include at least 2 questions about basic navigation and orientation before asking about progression tracks. Examples:
+Chamber 4 / Chamber 5 — Combat:
+Question: How many zombies are still alive in this room?
+Concept: combat progress
+Question: Is my diamond sword currently wielded (in the active hotbar slot)?
+Concept: weapon readiness
+
+Navigation and orientation (always include at least 2):
 Question: What direction am I currently facing and what is directly in front of me?
 Concept: orientation
 Question: How far away is the nearest visible target and what direction should I turn to face it?
 Concept: navigation toward target
-Question: Am I currently looking at something I can interact with (a block, animal, or monster in my crosshair)?
-Concept: targeting
-Only then ask questions that relate to the team's progression tracks.
+
+IMPORTANT: Always include at least 2 questions about basic navigation and orientation before asking about chamber-specific tasks.
 
 IMPORTANT, You should only respond in the format as described below, where field 'questions' is a list of strings:
 RESPONSE FORMAT:

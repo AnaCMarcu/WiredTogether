@@ -26,20 +26,26 @@ Use this priority order to judge success:
    If Hunger is ≤6/20, warn that health drain will start soon.
 
 2. INVENTORY CHECK (primary signal for gathering/crafting tasks):
+   Chamber 1 — Solo learning:
    - "Dig N trees" / "Mine N wood" → check if wood logs appear in inventory (any wood type counts).
    - "Mine N stone" → check for cobblestone or stone in inventory.
-   - "Mine N iron ore" → check for raw_iron in inventory.
    - "Kill N chickens" → check for feather or raw_chicken in inventory (killing drops items).
    - "Kill N sheep" → check for wool or raw_mutton in inventory.
-   - "Kill N pigs" → check for raw_porkchop in inventory.
-   - "Kill N cows" → check for leather or raw_beef in inventory.
-   - "Kill N zombies" → check for rotten_flesh in inventory.
-   - "Kill N skeletons" → check for bone or arrow in inventory.
-   - "Kill N spiders" → check for string or spider_eye in inventory.
+   Chamber 2 — Cooperative gear:
+   - "Break an anvil" / "Get sword" → check for diamond_sword in inventory or wielded slot.
+   - "Get chestplate" → check for diamond_chestplate in inventory or equipped.
+   - Both items present = fully geared for Ch4/Ch5.
+   Chamber 3 — Switch puzzle:
+   - "Press the switch" → success if a "[SYSTEM] Switch was pressed" message appears in Communication, OR if reward > 0 this step.
+   - "Announce my cell" → success if the agent's chat this step contains a cell identifier (A, B, or C).
+   - "Walk to communal room" / "Regroup" → check Position: Z should be in range 33–38 (communal side of Ch3).
+   Chamber 4/5 — Combat:
+   - "Kill zombies" → check for rotten_flesh in inventory (each zombie drops it), or reward > 0.
+   - "Attack the boss" → reward > 0 this step confirms a hit landed.
    If the required drop items are present in sufficient quantity, success=true.
 
 3. REWARD CHECK (supporting signal for combat and digging):
-   - A positive reward (e.g., "Reward: 128.00") strongly suggests a stage was completed.
+   - A positive reward strongly suggests a milestone fired (e.g., 10=M1 move, 30=M2/M3 dig/pickup, 50=M4/M5 wood/animal, 60=M7 stone, 40=Ch2 anvil, 50=Ch2 sword, 100=Ch3 all-in-communal, 150=Ch4 all-mobs-killed, 300=Ch5 boss-defeated).
    - A reward of 0 while the agent is Alive means nothing happened this step — likely still working.
    - Use reward as confirmation, not as the sole success criterion.
 
@@ -167,5 +173,36 @@ RESPONSE:
 {{
 "reasoning": "Status is Dead. The agent died before completing the task. Death is always failure regardless of other conditions.",
 "success": false,
-"critique": "You died. After respawning, avoid engaging monsters until you have a weapon equipped. Use Slot1-Slot8 to equip your stone axe, then find a safe area with trees before digging."
+"critique": "You died. After respawning, stay in Chamber 1 to practice. Use Dig on trees (center the trunk in your crosshair) and avoid fighting zombies until you have a diamond sword from Chamber 2."
+}}
+
+INPUT:
+Task: Break an anvil together with a teammate
+Last action: Dig
+Reward: Reward: 40.00 / Status: Alive
+Inventory:
+  [1] diamond_sword x1 <-- wielding
+Error: None
+
+RESPONSE:
+{{
+"reasoning": "Reward of 40 matches an anvil milestone (M8–M13). diamond_sword in inventory confirms a Row A anvil was broken and the drop collected. Task complete.",
+"success": true,
+"critique": ""
+}}
+
+INPUT:
+Task: Press the switch to free a teammate
+Last action: Dig
+Reward: Reward: 40.00 / Status: Alive
+Inventory:
+  [1] empty
+Communication: [SYSTEM] Switch A was pressed.
+Error: None
+
+RESPONSE:
+{{
+"reasoning": "Communication log shows '[SYSTEM] Switch A was pressed.' and reward > 0. Switch was successfully activated. Task complete.",
+"success": true,
+"critique": ""
 }}
