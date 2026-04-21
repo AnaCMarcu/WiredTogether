@@ -48,6 +48,7 @@ export ST_MODEL_NAME=/scratch/acmarcu/models/all-MiniLM-L6-v2
 
 # Ensure Craftium/Luanti can find libiconv
 export LD_LIBRARY_PATH="${ENV_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+export CRAFTIUM_ENV_DIR="${PROJECT_DIR}/src/craftium/craftium-envs/five-chambers"
 
 cd "$PROJECT_DIR"
 
@@ -104,7 +105,9 @@ VLLM_PID=""
 cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
 python multi_agent_craftium.py --num-agents 3 --episodes 5 \
-    --warmup-time 300 --rl --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B
+    --warmup-time 300 --rl --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
+    --team-mode homogeneous-gatherer \
+    --experiment-id five_chambers_rl_v1
 
 # python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 100
 

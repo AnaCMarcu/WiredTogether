@@ -15,7 +15,7 @@ ENV_PREFIX=/scratch/acmarcu/.conda/envs/WiredTogether
 LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-9B
 RL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
 
-EXPERIMENT_ID=hebbian_rl_survival_v1
+EXPERIMENT_ID=five_chambers_hebbian_v2
 CKPT_ROOT=/scratch/acmarcu/WiredTogether/checkpoints/${EXPERIMENT_ID}
 
 module purge
@@ -40,6 +40,7 @@ export SENTENCE_TRANSFORMERS_HOME=/scratch/acmarcu/models/st_cache
 export ST_MODEL_NAME=/scratch/acmarcu/models/all-MiniLM-L6-v2
 
 export LD_LIBRARY_PATH="${ENV_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+export CRAFTIUM_ENV_DIR="${PROJECT_DIR}/src/craftium/craftium-envs/five-chambers"
 
 cd "$PROJECT_DIR"
 
@@ -70,10 +71,7 @@ python multi_agent_craftium.py \
     --hebbian-radius 5.0 \
     --hebbian-init-weight 0.1 \
     --targeted-communication \
-    --survival-mode \
-    --survival-episode 3 \
-    --survival-gradual \
-    --survival-gradual-delay 500 \
+    --team-mode homogeneous-gatherer \
     --experiment-id "$EXPERIMENT_ID" \
     --checkpoint-dir "$CKPT_ROOT" \
     --checkpoint-interval 200

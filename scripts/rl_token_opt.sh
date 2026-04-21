@@ -37,6 +37,7 @@ export SENTENCE_TRANSFORMERS_HOME=/scratch/acmarcu/models/st_cache
 export ST_MODEL_NAME=/scratch/acmarcu/models/all-MiniLM-L6-v2
 
 export LD_LIBRARY_PATH="${ENV_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+export CRAFTIUM_ENV_DIR="${PROJECT_DIR}/src/craftium/craftium-envs/five-chambers"
 
 cd "$PROJECT_DIR"
 
@@ -74,6 +75,7 @@ python multi_agent_craftium.py \
     --hebbian-radius 20.0 \
     --hebbian-init-weight 0.1 \
     --targeted-communication \
+    --team-mode homogeneous-gatherer \
     --experiment-id "$EXPERIMENT_ID" \
     --checkpoint-dir "$CKPT_ROOT" \
     --checkpoint-interval 200 \

@@ -8,8 +8,13 @@ REMOTE="/scratch/acmarcu/WiredTogether"
 
 FILES=(
     "craftium/craftium/minetest.py"
-    "craftium/craftium-envs/voxel-libre2/clientmods/craftium_env/init.lua"
-    "craftium/craftium-envs/voxel-libre2/mods/craftium_env/init.lua"
+    "src/craftium/craftium-envs/five-chambers/mods/five_chambers/init.lua"
+    "src/craftium/craftium-envs/five-chambers/mods/five_chambers/milestones.lua"
+    "src/craftium/craftium-envs/five-chambers/mods/five_chambers/gear.lua"
+    "src/craftium/craftium-envs/five-chambers/mods/five_chambers/mobs.lua"
+    "src/craftium/craftium-envs/five-chambers/mods/five_chambers/ipc.lua"
+    "src/craftium/craftium-envs/five-chambers/clientmods/craftium_env/init.lua"
+    "src/craftium/craftium-envs/five-chambers/mods/craftium_env/init.lua"
 )
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

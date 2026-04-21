@@ -47,6 +47,7 @@ export ST_MODEL_NAME=/scratch/acmarcu/models/all-MiniLM-L6-v2
 
 # Ensure Craftium/Luanti can find libiconv
 export LD_LIBRARY_PATH="${ENV_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+export CRAFTIUM_ENV_DIR="${PROJECT_DIR}/src/craftium/craftium-envs/five-chambers"
 
 cd "$PROJECT_DIR"
 
@@ -108,7 +109,7 @@ python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK
 
 python multi_agent_craftium.py --num-agents 6 --episodes 3 --max-steps 200 \
     --belief-interval 5 --critic-interval 20 \
-    --warmup-time 300
+    --warmup-time 300 --team-mode homogeneous-gatherer
 # python test_scripted_agent.py --num-agents 1 --max-steps 500 --warmup-time 120 --verbose
 
 # Cleanup vLLM server
