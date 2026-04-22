@@ -109,7 +109,7 @@ python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK
 
 python multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 100 \
     --belief-interval 5 --critic-interval 20 \
-    --warmup-time 300 --team-mode homogeneous-gatherer
+    --warmup-time 300 --team-mode homogeneous-agent
 # python test_scripted_agent.py --num-agents 1 --max-steps 500 --warmup-time 120 --verbose
 
 # Cleanup vLLM server

@@ -86,7 +86,7 @@ python multi_agent_craftium.py \
     --hebbian-radius 20.0 \
     --hebbian-init-weight 0.1 \
     --targeted-communication \
-    --team-mode homogeneous-gatherer \
+    --team-mode homogeneous-agent \
     --experiment-id "$EXPERIMENT_ID" \
     --checkpoint-dir "$CKPT_ROOT" \
     --checkpoint-interval 200 \

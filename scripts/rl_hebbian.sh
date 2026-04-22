@@ -66,7 +66,7 @@ python multi_agent_craftium.py \
     --hebbian-beta 3.0 \
     --hebbian-init-weight 0.1 \
     --targeted-communication \
-    --team-mode homogeneous-gatherer \
+    --team-mode homogeneous-agent \
     --experiment-id five_chambers_hebbian_v1
 
 echo "Done"
