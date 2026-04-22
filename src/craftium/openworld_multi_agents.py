@@ -444,6 +444,7 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
 
         self.env = _PatchedMarlCraftiumEnv(
             env_dir=env_dir,
+            game_id="VoxeLibre",
             num_agents=num_agents,
             obs_width=obs_width,
             obs_height=obs_height,
