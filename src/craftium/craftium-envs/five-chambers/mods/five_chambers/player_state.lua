@@ -23,39 +23,37 @@ minetest.register_globalstep(function(dtime)
     for _, player in ipairs(minetest.get_connected_players()) do
         local name = player:get_player_name()
         local idx  = five_chambers.agent_index(name)
-        if idx < 0 then goto continue end
+        if idx >= 0 then
+            -- Health: player:get_hp() returns 0-20
+            local hp = math.floor(player:get_hp())
+            write_file(world_path .. "/health_agent" .. idx .. ".txt",
+                       hp .. "/20")
 
-        -- Health: player:get_hp() returns 0-20
-        local hp = math.floor(player:get_hp())
-        write_file(world_path .. "/health_agent" .. idx .. ".txt",
-                   hp .. "/20")
+            -- Hunger: VoxeLibre tracks saturation via mcl_hunger, but we pin
+            -- it to full since five-chambers has no hunger drain configured.
+            write_file(world_path .. "/hunger_agent" .. idx .. ".txt",
+                       "20/20")
 
-        -- Hunger: VoxeLibre tracks saturation via mcl_hunger, but we pin
-        -- it to full since five-chambers has no hunger drain configured.
-        write_file(world_path .. "/hunger_agent" .. idx .. ".txt",
-                   "20/20")
+            -- Inventory: wielded slot + up to 9 main slots
+            local inv     = player:get_inventory()
+            local wield   = player:get_wield_index()  -- 1-based hotbar index
+            local parts   = { tostring(wield) }
 
-        -- Inventory: wielded slot + up to 9 main slots
-        local inv     = player:get_inventory()
-        local wield   = player:get_wield_index()  -- 1-based hotbar index
-        local parts   = { tostring(wield) }
-
-        if inv then
-            local main = inv:get_list("main") or {}
-            for slot = 1, math.min(9, #main) do
-                local stack = main[slot]
-                if stack and not stack:is_empty() then
-                    table.insert(parts,
-                        stack:get_name() .. " " .. stack:get_count())
-                else
-                    table.insert(parts, "")
+            if inv then
+                local main = inv:get_list("main") or {}
+                for slot = 1, math.min(9, #main) do
+                    local stack = main[slot]
+                    if stack and not stack:is_empty() then
+                        table.insert(parts,
+                            stack:get_name() .. " " .. stack:get_count())
+                    else
+                        table.insert(parts, "")
+                    end
                 end
             end
+
+            write_file(world_path .. "/inv_agent" .. idx .. ".txt",
+                       table.concat(parts, "|"))
         end
-
-        write_file(world_path .. "/inv_agent" .. idx .. ".txt",
-                   table.concat(parts, "|"))
-
-        ::continue::
     end
 end)

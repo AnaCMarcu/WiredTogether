@@ -142,25 +142,23 @@ minetest.register_globalstep(function(dtime)
     for _, player in ipairs(minetest.get_connected_players()) do
         local name = player:get_player_name()
         local idx  = five_chambers.agent_index(name)
-        if idx < 0 then goto continue end
-        if five_chambers.ch2_transitioned[idx] then goto continue end
+        if idx >= 0 and not five_chambers.ch2_transitioned[idx] then
+            local pos = player:get_pos()
+            if pos and pos.z >= d2z then
+                local dest = five_chambers.cell_teleport_pos(idx)
+                player:set_pos(dest)
+                five_chambers.ch2_transitioned[idx] = true
+                five_chambers.ch2_transitioned_count =
+                    five_chambers.ch2_transitioned_count + 1
+                five_chambers.fire_milestone("m16_enter_cell", {name})
+                minetest.log("action",
+                    "[five_chambers] " .. name .. " teleported to Ch3 cell " .. idx)
 
-        local pos = player:get_pos()
-        if pos and pos.z >= d2z then
-            local dest = five_chambers.cell_teleport_pos(idx)
-            player:set_pos(dest)
-            five_chambers.ch2_transitioned[idx] = true
-            five_chambers.ch2_transitioned_count =
-                five_chambers.ch2_transitioned_count + 1
-            five_chambers.fire_milestone("m16_enter_cell", {name})
-            minetest.log("action",
-                "[five_chambers] " .. name .. " teleported to Ch3 cell " .. idx)
-
-            if five_chambers.ch2_transitioned_count >= five_chambers.NUM_AGENTS then
-                five_chambers.relock_door_2()
-                five_chambers.door_state.door2_open = false
+                if five_chambers.ch2_transitioned_count >= five_chambers.NUM_AGENTS then
+                    five_chambers.relock_door_2()
+                    five_chambers.door_state.door2_open = false
+                end
             end
         end
-        ::continue::
     end
 end)

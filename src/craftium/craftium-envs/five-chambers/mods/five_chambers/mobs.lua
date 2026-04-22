@@ -325,7 +325,7 @@ end
 
 function five_chambers.spawn_boss()
     local c   = five_chambers.CH5
-    local pos = {x = 6, y = five_chambers.FLOOR_Y + 1, z = (c.z0 + c.z1) // 2}
+    local pos = {x = 6, y = five_chambers.FLOOR_Y + 1, z = math.floor((c.z0 + c.z1) / 2)}
 
     local obj = minetest.add_entity(pos, "mobs_mc:zombie")
     if not obj then
