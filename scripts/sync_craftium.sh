@@ -13,6 +13,8 @@ FILES=(
     "src/craftium/craftium-envs/five-chambers/mods/five_chambers/gear.lua"
     "src/craftium/craftium-envs/five-chambers/mods/five_chambers/mobs.lua"
     "src/craftium/craftium-envs/five-chambers/mods/five_chambers/ipc.lua"
+    "src/craftium/craftium-envs/five-chambers/clientmods/mods.conf"
+    "src/craftium/craftium-envs/five-chambers/clientmods/craftium_env/mod.conf"
     "src/craftium/craftium-envs/five-chambers/clientmods/craftium_env/init.lua"
     "src/craftium/craftium-envs/five-chambers/mods/craftium_env/init.lua"
 )

@@ -24,8 +24,8 @@ CHAMBER 2 — Cooperative gear production (10×10 room, 6 heavy anvils):
 • Solo digging an anvil is IMPOSSIBLE (the block decays faster than one agent
   can chip it). Two agents digging simultaneously (within 3 blocks of each other,
   both using Dig) make progress; three agents are even faster.
-• Breaking an anvil in Row A (front row, Z=15) drops a DIAMOND SWORD.
-• Breaking an anvil in Row B (back row, Z=18) drops a DIAMOND CHESTPLATE.
+• Each Row A anvil (front row, Z=15) that breaks drops one DIAMOND SWORD immediately.
+• Each Row B anvil (back row, Z=18) that breaks drops one DIAMOND CHESTPLATE immediately.
 • Pick up drops by walking over them. Your sword auto-wields; chestplate auto-equips.
 • You need BOTH sword and chestplate to survive Chambers 4 and 5.
 • 20 steps after the 6th anvil breaks, you will be teleported into sealed cells

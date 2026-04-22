@@ -8,8 +8,8 @@ Chamber 1 — Solo learning (12×12 room, door to Ch2 always open at north):
   When all 7 milestones are done (or teammates are moving north), head to Chamber 2.
 
 Chamber 2 — Cooperative gear (heavy anvils, 2–3 agents must dig simultaneously):
-  Break Row A anvils (Z≈15) → diamond sword drops.
-  Break Row B anvils (Z≈18) → diamond chestplate drops.
+  Each Row A anvil broken (Z≈15) → one diamond sword drops immediately.
+  Each Row B anvil broken (Z≈18) → one diamond chestplate drops immediately.
   Walk over drops to collect. Sword auto-wields; chestplate auto-equips.
   Get BOTH items before all 6 anvils are broken (teleport to Ch3 follows shortly after).
 
