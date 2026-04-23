@@ -5,13 +5,15 @@
 
 -- Fills a rectangular prism entirely with one node type.
 local function fill_box(x0, y0, z0, x1, y1, z1, node_name)
+    local positions = {}
     for x = x0, x1 do
         for y = y0, y1 do
             for z = z0, z1 do
-                minetest.set_node({x=x, y=y, z=z}, {name=node_name})
+                positions[#positions + 1] = {x=x, y=y, z=z}
             end
         end
     end
+    minetest.bulk_set_nodes(positions, {name=node_name})
 end
 
 -- Build Chamber 1: 12×12 solo-learning room (plan §2, §2.3).
@@ -39,24 +41,24 @@ local function build_chamber_1()
     -- 3. Replace interior floor with grass.
     for x = c.x0+1, c.x1-1 do
         for z = c.z0+1, c.z1-1 do
-            minetest.set_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+            minetest.swap_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
         end
     end
 
     -- 4. Open Door 1 in north wall (Z=z1=11) at X=door_x, Y=11–12.
     --    1×2 opening: 1 block wide, 2 blocks tall (player height ~1.75).
-    minetest.set_node({x=door_x, y=y0+1, z=c.z1}, {name="air"})  -- y=11
-    minetest.set_node({x=door_x, y=y0+2, z=c.z1}, {name="air"})  -- y=12
+    minetest.swap_node({x=door_x, y=y0+1, z=c.z1}, {name="air"})  -- y=11
+    minetest.swap_node({x=door_x, y=y0+2, z=c.z1}, {name="air"})  -- y=12
     -- Floor at door position: leave as dirt_with_grass for walkability.
-    minetest.set_node({x=door_x, y=y0, z=c.z1}, {name="mcl_core:dirt_with_grass"})
+    minetest.swap_node({x=door_x, y=y0, z=c.z1}, {name="mcl_core:dirt_with_grass"})
 
     -- 5. Place trees (trunk + simple leaf crown) at plan §2.3 positions.
     --    All positions are interior and verified clear of walls.
     for _, tp in ipairs(five_chambers.CH1_TREE_POSITIONS) do
         local tx, tz = tp.x, tp.z
         -- Two-block trunk
-        minetest.set_node({x=tx, y=y0+1, z=tz}, {name="mcl_core:tree"})
-        minetest.set_node({x=tx, y=y0+2, z=tz}, {name="mcl_core:tree"})
+        minetest.swap_node({x=tx, y=y0+1, z=tz}, {name="mcl_core:tree"})
+        minetest.swap_node({x=tx, y=y0+2, z=tz}, {name="mcl_core:tree"})
         -- Simple cross-shaped leaf crown at Y=13 — clipped to interior.
         local leaf_offsets = {{0,0},{-1,0},{1,0},{0,-1},{0,1}}
         for _, off in ipairs(leaf_offsets) do
@@ -64,7 +66,7 @@ local function build_chamber_1()
             local lz = tz + off[2]
             if lx >= c.x0+1 and lx <= c.x1-1
                and lz >= c.z0+1 and lz <= c.z1-1 then
-                minetest.set_node({x=lx, y=y0+3, z=lz},
+                minetest.swap_node({x=lx, y=y0+3, z=lz},
                     {name="mcl_core:leaves"})
             end
         end
@@ -72,7 +74,7 @@ local function build_chamber_1()
 
     -- 6. Place stone blocks (single solid block at Y=11).
     for _, sp in ipairs(five_chambers.CH1_STONE_POSITIONS) do
-        minetest.set_node({x=sp.x, y=y0+1, z=sp.z}, {name="mcl_core:stone"})
+        minetest.swap_node({x=sp.x, y=y0+1, z=sp.z}, {name="mcl_core:stone"})
     end
 
     minetest.log("action", "[five_chambers] Chamber 1 built.")
@@ -98,38 +100,38 @@ local function build_chamber_2()
     -- 3. Grass floor.
     for x = c.x0+1, c.x1-1 do
         for z = c.z0+1, c.z1-1 do
-            minetest.set_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+            minetest.swap_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
         end
     end
 
     -- 4. South entrance (aligns with Door 1 gap at x=DOOR1_X=6, z=CH1.z1=11).
     --    Ch2 south wall is at z=CH2.z0=13. Open 2-block tall gap at x=6.
     local door_x = five_chambers.DOOR1_X
-    minetest.set_node({x=door_x, y=y0+1, z=c.z0}, {name="air"})
-    minetest.set_node({x=door_x, y=y0+2, z=c.z0}, {name="air"})
-    minetest.set_node({x=door_x, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
+    minetest.swap_node({x=door_x, y=y0+1, z=c.z0}, {name="air"})
+    minetest.swap_node({x=door_x, y=y0+2, z=c.z0}, {name="air"})
+    minetest.swap_node({x=door_x, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
 
     -- 5. Corridor floor at z=12 (gap between Ch1 z=11 and Ch2 z=13).
-    minetest.set_node({x=door_x, y=y0, z=12}, {name="mcl_core:dirt_with_grass"})
+    minetest.swap_node({x=door_x, y=y0, z=12}, {name="mcl_core:dirt_with_grass"})
 
     -- 6. North wall exit at x=door_x, z=CH2.z1=22 (towards Door 2 at z=23).
-    minetest.set_node({x=door_x, y=y0+1, z=c.z1}, {name="air"})
-    minetest.set_node({x=door_x, y=y0+2, z=c.z1}, {name="air"})
-    minetest.set_node({x=door_x, y=y0,   z=c.z1}, {name="mcl_core:dirt_with_grass"})
+    minetest.swap_node({x=door_x, y=y0+1, z=c.z1}, {name="air"})
+    minetest.swap_node({x=door_x, y=y0+2, z=c.z1}, {name="air"})
+    minetest.swap_node({x=door_x, y=y0,   z=c.z1}, {name="mcl_core:dirt_with_grass"})
 
     -- 7. Door 2: single bedrock block at DOOR2_POS (z=23) — opened later by doors.lua.
     local d2 = five_chambers.DOOR2_POS
-    minetest.set_node({x=d2.x, y=y0+1, z=d2.z}, {name=wall})
-    minetest.set_node({x=d2.x, y=y0+2, z=d2.z}, {name=wall})
+    minetest.swap_node({x=d2.x, y=y0+1, z=d2.z}, {name=wall})
+    minetest.swap_node({x=d2.x, y=y0+2, z=d2.z}, {name=wall})
     -- Floor tile so agents can stand in front of it.
-    minetest.set_node({x=d2.x, y=y0, z=d2.z}, {name="mcl_core:dirt_with_grass"})
+    minetest.swap_node({x=d2.x, y=y0, z=d2.z}, {name="mcl_core:dirt_with_grass"})
 
     -- 8. Place anvils: Row A (z=z0+2=15) and Row B (z=z0+5=18).
     --    x = x0+1 + i*3 = 3, 6, 9 for N=3.
     for i = 0, N - 1 do
         local ax = c.x0 + 1 + (i * 3)
-        minetest.set_node({x=ax, y=y0+1, z=c.z0+2}, {name="five_chambers:anvil"})
-        minetest.set_node({x=ax, y=y0+1, z=c.z0+5}, {name="five_chambers:anvil"})
+        minetest.swap_node({x=ax, y=y0+1, z=c.z0+2}, {name="five_chambers:anvil"})
+        minetest.swap_node({x=ax, y=y0+1, z=c.z0+5}, {name="five_chambers:anvil"})
     end
 
     minetest.log("action", "[five_chambers] Chamber 2 built.")
@@ -168,7 +170,7 @@ local function build_chamber_3()
         fill_box(cx0, y0+1, cell_z0, cx1, y1-1, cell_z1, "air")
         for x = cx0, cx1 do
             for z = cell_z0, cell_z1 do
-                minetest.set_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+                minetest.swap_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
             end
         end
     end
@@ -176,7 +178,7 @@ local function build_chamber_3()
     --     five_chambers:switch is registered by switches.lua (already dofile'd).
     for i = 0, N - 1 do
         local sx = five_chambers.cell_x_center(i)
-        minetest.set_node({x=sx, y=y0+1, z=cell_z0}, {name="five_chambers:switch"})
+        minetest.swap_node({x=sx, y=y0+1, z=cell_z0}, {name="five_chambers:switch"})
     end
     -- z=28 (front wall) stays full bedrock; open_cell_door() clears doors there.
 
@@ -184,12 +186,12 @@ local function build_chamber_3()
     fill_box(x0+1, y0+1, comm_z0, x1-1, y1-1, comm_z1, "air")
     for x = x0+1, x1-1 do
         for z = comm_z0, comm_z1 do
-            minetest.set_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+            minetest.swap_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
         end
     end
 
     -- 4. Corridor floor at z=39 (gap between Ch3 north wall and Ch4 south wall).
-    minetest.set_node({x=five_chambers.DOOR3_X, y=y0, z=z1+1},
+    minetest.swap_node({x=five_chambers.DOOR3_X, y=y0, z=z1+1},
                       {name="mcl_core:dirt_with_grass"})
 
     minetest.log("action", "[five_chambers] Chamber 3 built.")
@@ -215,25 +217,25 @@ local function build_chamber_4()
     -- 3. Grass floor.
     for x = c.x0+1, c.x1-1 do
         for z = c.z0+1, c.z1-1 do
-            minetest.set_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+            minetest.swap_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
         end
     end
 
     -- 4. South entrance at x=6, z=40 (aligns with Door 3 corridor at z=39).
-    minetest.set_node({x=dx, y=y0+1, z=c.z0}, {name="air"})
-    minetest.set_node({x=dx, y=y0+2, z=c.z0}, {name="air"})
-    minetest.set_node({x=dx, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
+    minetest.swap_node({x=dx, y=y0+1, z=c.z0}, {name="air"})
+    minetest.swap_node({x=dx, y=y0+2, z=c.z0}, {name="air"})
+    minetest.swap_node({x=dx, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
 
     -- 5. North passage at x=6, z=46 (exits toward Door 4 at z=47).
-    minetest.set_node({x=dx, y=y0+1, z=c.z1}, {name="air"})
-    minetest.set_node({x=dx, y=y0+2, z=c.z1}, {name="air"})
-    minetest.set_node({x=dx, y=y0,   z=c.z1}, {name="mcl_core:dirt_with_grass"})
+    minetest.swap_node({x=dx, y=y0+1, z=c.z1}, {name="air"})
+    minetest.swap_node({x=dx, y=y0+2, z=c.z1}, {name="air"})
+    minetest.swap_node({x=dx, y=y0,   z=c.z1}, {name="mcl_core:dirt_with_grass"})
 
     -- 6. Door 4: bedrock at DOOR4_POS z=47; stays locked until all Ch4 mobs die.
     local d4 = five_chambers.DOOR4_POS  -- {x=6, z=47}
-    minetest.set_node({x=d4.x, y=y0+1, z=d4.z}, {name=wall})
-    minetest.set_node({x=d4.x, y=y0+2, z=d4.z}, {name=wall})
-    minetest.set_node({x=d4.x, y=y0,   z=d4.z}, {name="mcl_core:dirt_with_grass"})
+    minetest.swap_node({x=d4.x, y=y0+1, z=d4.z}, {name=wall})
+    minetest.swap_node({x=d4.x, y=y0+2, z=d4.z}, {name=wall})
+    minetest.swap_node({x=d4.x, y=y0,   z=d4.z}, {name="mcl_core:dirt_with_grass"})
 
     minetest.log("action", "[five_chambers] Chamber 4 built.")
 end
@@ -258,14 +260,14 @@ local function build_chamber_5()
     -- 3. Grass floor.
     for x = c.x0+1, c.x1-1 do
         for z = c.z0+1, c.z1-1 do
-            minetest.set_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+            minetest.swap_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
         end
     end
 
     -- 4. South entrance at x=6, z=48 (from Door 4 corridor at z=47).
-    minetest.set_node({x=dx, y=y0+1, z=c.z0}, {name="air"})
-    minetest.set_node({x=dx, y=y0+2, z=c.z0}, {name="air"})
-    minetest.set_node({x=dx, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
+    minetest.swap_node({x=dx, y=y0+1, z=c.z0}, {name="air"})
+    minetest.swap_node({x=dx, y=y0+2, z=c.z0}, {name="air"})
+    minetest.swap_node({x=dx, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
     -- No exit — episode ends on boss death.
 
     minetest.log("action", "[five_chambers] Chamber 5 built.")
