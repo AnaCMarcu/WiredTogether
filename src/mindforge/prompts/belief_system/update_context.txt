@@ -1,17 +1,35 @@
-Create a concise context for the current task that will help choose the next action.
-Focus on the IMMEDIATE next physical step needed — not the overall goal, but what specific action or orientation is needed RIGHT NOW.
+Create a concise context for the current task in the Five Chambers dungeon.
+Focus on the IMMEDIATE next physical step — not the overall goal, but what
+specific action or orientation is needed RIGHT NOW.
 
-For example:
-- Task "Dig 2 trees": context should say "Find a tree in the image, turn to center it, approach, and use Dig on the trunk."
-- Task "Kill 3 chickens": context should say "Find a chicken, turn to face it, approach until close, then use Dig to attack."
-- Task "Explore the area": context should say "Move forward while turning to scan for trees, animals, or stone. Vary direction."
-- Task "Mine 3 stone": context should say "Find gray stone blocks, center them in the crosshair, and Dig. Stone is often underground or on hillsides."
+Examples for each chamber:
+- Task "Dig a tree" (Ch1): "Find a tree trunk in the image, turn to center it,
+  approach, and use Dig. Walk over the drop to collect wood."
+- Task "Kill a chicken/sheep" (Ch1): "Find the animal, turn to face it,
+  approach until close, then Dig repeatedly to attack."
+- Task "Move into Chamber 2" (Ch1→Ch2): "Turn north (positive Z), head for the
+  open door in the north wall, then MoveForward through."
+- Task "Break an anvil with a teammate" (Ch2): "Stand next to an anvil, wait
+  until a teammate is also adjacent, then both use Dig. Solo digging fails."
+- Task "Pick up diamond sword/chestplate" (Ch2): "Walk over the dropped item
+  with MoveForward. Sword auto-wields; chestplate auto-equips."
+- Task "Press your switch" (Ch3): "Face the switch node on your cell wall and
+  use Dig. Announce in chat that you pressed it."
+- Task "Exit your cell" (Ch3): "Wait until [SYSTEM] Switch was pressed shows
+  AND your door is gone, then MoveForward out of the cell."
+- Task "Regroup in communal room" (Ch3): "Head north (positive Z) into the
+  shared room; stay there until all teammates arrive."
+- Task "Attack a zombie" (Ch4): "Wield diamond sword (Slot1), face the zombie,
+  approach, and Dig repeatedly until it dies."
+- Task "Attack the boss" (Ch5): "Wield sword, stay close to teammates, Dig the
+  boss. Retreat briefly if HP low, then rejoin."
 
 Previous context: {previous_context}
 Current task: {task}
 Interaction beliefs: {interaction_beliefs}
 
-If interaction beliefs add useful spatial information (e.g., teammate saw trees to the north), include it.
-Keep the context to 2-3 sentences focused on the physical action sequence needed.
+If interaction beliefs add useful info (e.g., teammate already pressed a
+switch, teammate is low HP), include it. Keep the context to 2-3 sentences
+focused on the physical action sequence needed RIGHT NOW.
 
 IMPORTANT respond in the following JSON format: {{"beliefs": "..."}}

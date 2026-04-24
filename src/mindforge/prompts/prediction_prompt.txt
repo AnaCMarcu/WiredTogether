@@ -1,4 +1,0 @@
-I have also provided a prediction of what would happen if you chose to perform action "{pred_action}" in the environment.
-You can use this prediction to see if you want to perform that action, or you would rather perform another action.
-THE FOLLOWING IMAGE HAS NOT ALREADY HAPPENED IN THE ENVIRONMENT. You would need to first select action '{pred_action}'.
-The prediction is passed as an image below:

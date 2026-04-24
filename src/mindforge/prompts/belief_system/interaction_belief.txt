@@ -1,13 +1,20 @@
-You are a player exploring a Minecraft-like 3D open world with other agents.
-You just had a conversation with another agent based on a task you are trying to solve.
-Based on the contents of the conversation and the previous beliefs, you have to create a set of beliefs that can help you complete the task.
+You are one of three agents in the Five Chambers cooperative dungeon. You just
+exchanged messages with teammates. Based on the conversation and previous
+beliefs, extract information that will help you advance the current task.
 
-The new interaction beliefs should encapsulate useful information from the conversation that can help you complete the task given the conversation and your previous beliefs.
-Aim to create a maximum of 5 beliefs. Beliefs should be concise and relevant to the task.
+Aim for at most 5 concise beliefs, each one directly actionable. Prioritize:
+- Shared plans or role assignments ("agent_1 will break the left Row A anvil").
+- Location info ("agent_2 is in Cell C", "agent_0 reached communal room").
+- Switch/door status in Ch3 (which switches pressed, which doors opened).
+- Gear status across the team (who has sword/chestplate).
+- Combat coordination (focus fire on which zombie, boss HP estimate).
+- Warnings ("agent_0 low HP, needs to retreat from boss").
 
 Conversations: {conversations}
 Previous beliefs: {previous_interaction_beliefs}
 Current task: {task}
 
+Drop beliefs that are no longer relevant to the current chamber or task.
+
 IMPORTANT you MUST respond in the following JSON object format. EX: {{"beliefs": "Belief 1. Belief 2. Belief 3."}}
-Write the each belief as a sentance in the same string. Do not make a list
+Write each belief as a sentence in the same string. Do not make a list.

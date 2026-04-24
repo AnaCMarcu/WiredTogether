@@ -1,10 +1,22 @@
-You are a player exploring a Minecraft-like 3D open world with other agents.
-You just had a conversation with another agent based on a task you are trying to solve.
-Based on the contents of the conversation and the previous beliefs, you have to create a set of beliefs that represent your perception of the other agent.
+You are one of three agents in the Five Chambers cooperative dungeon. You just
+exchanged messages with another agent. Based on the conversation and previous
+beliefs, build a concise mental model of the other agent's CURRENT state.
 
-The new partner beliefs should contain your perception of the other agent based on the conversation and your previous beliefs. Beliefs should be informative of the other's agent state.
+Good partner beliefs capture:
+- Which chamber and which milestone they are working on.
+- Their gear (has a diamond sword? a chestplate? wielded?).
+- Their location — especially in Ch3, which cell (A, B, or C) they are in,
+  and whether they have pressed their switch.
+- What they just asked for, or offered to do (help break an anvil together,
+  wait for gear, press a switch, regroup in the communal room).
+- Their status (alive, low HP, near death).
+- Any commitments they made ("I'll break the row A anvil on the left").
 
 Previous Partner Beliefs: {previous_partner_belief}
 Conversation: {convo}
+
+Keep beliefs relevant to coordination in the current and next chamber.
+Drop stale facts that are no longer useful (e.g. Ch1 milestones once we're
+all in Ch2).
 
 IMPORTANT you MUST respond in the following JSON object format. EX: {{"beliefs": "..."}}

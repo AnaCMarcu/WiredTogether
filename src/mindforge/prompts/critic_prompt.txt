@@ -21,9 +21,9 @@ An image frame of what I currently see.
 Use this priority order to judge success:
 
 1. STATUS CHECK (always first): If "Status: Dead" appears in Reward, set success=false immediately. Dying is always failure.
-   Also check the Status field: if Health is ≤6/20, warn the agent to retreat even if the task is otherwise succeeding.
+   Also check the Status field: if Health is smaller than 6/20, warn the agent to retreat even if the task is otherwise succeeding.
    If Time shows "night" and the agent is outdoors, warn about monster spawns.
-   If Hunger is ≤6/20, warn that health drain will start soon.
+   If Hunger is smaller than 6/20, warn that health drain will start soon.
 
 2. INVENTORY CHECK (primary signal for gathering/crafting tasks):
    Chamber 1 — Solo learning:
@@ -34,7 +34,6 @@ Use this priority order to judge success:
    Chamber 2 — Cooperative gear:
    - "Break an anvil" / "Get sword" → check for diamond_sword in inventory or wielded slot.
    - "Get chestplate" → check for diamond_chestplate in inventory or equipped.
-   - Both items present = fully geared for Ch4/Ch5.
    Chamber 3 — Switch puzzle:
    - "Press the switch" → success if a "[SYSTEM] Switch was pressed" message appears in Communication, OR if reward > 0 this step.
    - "Announce my cell" → success if the agent's chat this step contains a cell identifier (A, B, or C).
@@ -45,7 +44,7 @@ Use this priority order to judge success:
    If the required drop items are present in sufficient quantity, success=true.
 
 3. REWARD CHECK (supporting signal for combat and digging):
-   - A positive reward strongly suggests a milestone fired (e.g., 10=M1 move, 30=M2/M3 dig/pickup, 50=M4/M5 wood/animal, 60=M7 stone, 40=Ch2 anvil, 50=Ch2 sword, 100=Ch3 all-in-communal, 150=Ch4 all-mobs-killed, 300=Ch5 boss-defeated).
+   - A positive reward strongly suggests a milestone fired.
    - A reward of 0 while the agent is Alive means nothing happened this step — likely still working.
    - Use reward as confirmation, not as the sole success criterion.
 
@@ -72,6 +71,7 @@ CRITIQUE RULES:
 - If the agent is stuck (digging air, moving in circles), suggest a specific corrective action.
 - If the agent died, say what killed them and how to avoid it.
 - Never give vague critiques like "keep trying" alone — always pair with a specific action.
+- A lot of task need communication with the other agents. If tasks that need collaboration failed, make sure you explain that sending messages and communicating with others is the key to solving the milestones.
 
 IMPORTANT: You should only respond in JSON format as described below:
 {{

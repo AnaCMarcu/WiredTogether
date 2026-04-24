@@ -9,57 +9,75 @@ ACTIONS — choose EXACTLY ONE by name each step:
     ScanArea       — full 360° scan (18 turn steps)
     ApproachTarget — turn slightly + walk forward 8 steps (11 steps total)
     Escape         — jump + turn + walk, for when physically stuck (23 steps)
-  To attack a mob: face it and use Dig (there is no separate "attack" action).
-  To pick up a dropped item: walk over it (items auto-collect within 1 block).
 
-CHAMBER 1 — Solo learning (12×12 room, always-open door to Chamber 2 at north):
-• Practice basic skills. Each reward is individual (not shared).
-• Tasks: move around, dig trees/stone, collect dropped items, kill chickens/sheep.
-• Door to Chamber 2 is always open — move north (positive Z) when ready.
-• Milestones: M1 move >5 blocks (10), M2 dig 3 blocks (30), M3 pick up 3 items (30),
+WHEN TO USE MACROS:
+- Use ScanArea when you can't see anything useful or need to locate teammates/resources.
+- Use TurnAround to reverse direction instead of 9 individual TurnRight steps.
+- Use ApproachTarget when a target is visible but not centered — it handles turn + walk.
+- Use Escape when you are stuck (position unchanged after several MoveForward attempts).
+- While a macro runs you are NOT called again; your next choice comes after it completes.
+
+BASIC BEHAVIOR:
+- To attack a mob: face it and use Dig repeatedly. There is NO separate "kill" action.
+- To break a block (wood, stone, anvil, etc.): face it and use Dig.
+- To pick up a dropped item: walk over it with MoveForward (items auto-collect within ~1 block).
+  After every Dig, follow up with MoveForward to collect the drop — items are NOT auto-collected by digging.
+- Use Slot1–Slot8 to choose which item you wield (e.g. Slot1 for the sword before combat).
+- Your inventory is shown in the "Inventory" field above.
+
+SAFETY:
+- Never mine straight down (LookDown → Dig repeatedly) — you can fall into a pit and get stuck.
+- If you stop moving after several MoveForward attempts, you are physically blocked — use Escape.
+
+CHAMBER 1 — Solo learning:
+- Practice basic skills. Each reward is individual (not shared).
+- Tasks: move around, dig trees/stone, collect dropped items, kill chickens/sheep.
+- Door to Chamber 2 is always open — move north (positive Z) when ready.
+- Milestones: M1 move >5 blocks (10), M2 dig 3 blocks (30), M3 pick up 3 items (30),
   M4 dig 5 wood (50), M5 kill 1 animal (50), M6 kill 2 animals (80), M7 dig 3 stone (60).
 
-CHAMBER 2 — Cooperative gear production (10×10 room, 6 heavy anvils):
-• 6 obsidian-colored anvils require MULTIPLE AGENTS to break.
-• Solo digging an anvil is IMPOSSIBLE (the block decays faster than one agent
+CHAMBER 2 — Cooperative gear production (6 heavy anvils):
+- 6 obsidian-colored anvils require MULTIPLE AGENTS to break.
+- Solo digging an anvil is IMPOSSIBLE (the block decays faster than one agent
   can chip it). Two agents digging simultaneously (within 3 blocks of each other,
   both using Dig) make progress; three agents are even faster.
-• Each Row A anvil (front row, Z=15) that breaks drops one DIAMOND SWORD immediately.
-• Each Row B anvil (back row, Z=18) that breaks drops one DIAMOND CHESTPLATE immediately.
-• Pick up drops by walking over them. Your sword auto-wields; chestplate auto-equips.
-• You need BOTH sword and chestplate to survive Chambers 4 and 5.
-• 20 steps after the 6th anvil breaks, you will be teleported into sealed cells
+- Each Row A anvil (front row, Z=15) that breaks drops one DIAMOND SWORD immediately.
+- Each Row B anvil (back row, Z=18) that breaks drops one DIAMOND CHESTPLATE immediately.
+- Pick up drops by walking over them. Your sword auto-wields; chestplate auto-equips.
+- You need BOTH sword and chestplate to survive Chambers 4 and 5.
+- 20 steps after the 6th anvil breaks, you will be teleported into sealed cells
   (Chamber 3). Make sure you have gear before then.
 
 CHAMBER 3 — Switch Room (communication puzzle):
-• You are teleported into a separate SEALED CELL (A, B, or C) based on your ID:
+- You are teleported into a separate SEALED CELL (A, B, or C) based on your ID:
   agent_0 → Cell A, agent_1 → Cell B, agent_2 → Cell C.
-• You cannot see your teammates. Each cell has ONE switch.
-• Switches are wired rotationally:
+- You cannot see your teammates. Each cell has ONE switch.
+- Switches are wired rotationally:
     - Switch in Cell A opens Cell B's door
     - Switch in Cell B opens Cell C's door
     - Switch in Cell C opens Cell A's door
-• YOU CANNOT OPEN YOUR OWN DOOR. A teammate must press their switch to free you.
-• To escape: (1) announce which cell you are in via team chat, (2) press your
-  switch to free the teammate whose door you control, (3) confirm when your own
-  door opens (you will see a "[SYSTEM] Switch X was pressed." broadcast).
-• All three agents must regroup in the communal room (north side) to unlock the
+- YOU CANNOT OPEN YOUR OWN DOOR. A teammate must press their switch to free you.
+- To escape: 
+  (1) communicate with targeted agents to share information about your room and if you pressed the switch
+  (2) press your switch to free the teammate whose door you control
+  (3) confirm when your own door opens (you will see a "[SYSTEM] Switch X was pressed." broadcast).
+- All three agents must regroup in the communal room (north side) to unlock the
   door to Chamber 4.
 
-CHAMBER 4 — Combat practice (7×7 room, 3 zombies):
-• Attack zombies with your diamond sword (must be wielded).
-• Your diamond chestplate reduces incoming damage.
-• Door to Chamber 5 opens when all 3 zombies are dead.
-• Team bonus if all 3 agents are still alive when the chamber is cleared.
+CHAMBER 4 — Combat practice (3 zombies):
+- Attack zombies with your diamond sword (must be wielded).
+- Your diamond chestplate reduces incoming damage.
+- Door to Chamber 5 opens when all 3 zombies are dead.
+- Make sure you protect your teammates from the zombies. You get a team bonus if all 3 agents are still alive when the chamber is cleared. 
 
-CHAMBER 5 — Boss fight (5×5 room, 1 strong zombie):
-• Boss has 60 HP and deals 3 damage per hit. All 3 agents should attack together.
-• Episode ends when the boss is defeated.
-• Large bonus if all 3 agents are still alive at boss defeat.
+CHAMBER 5 — Boss fight (1 strong zombie):
+- Boss has 60 HP and deals 3 damage per hit. All 3 agents should attack together.
+- Episode ends when the boss is defeated.
+- Large bonus if all 3 agents are still alive at boss defeat.
 
 COMMUNICATION (rewarded in Ch2, Ch3, Ch4, Ch5):
-• You earn reward for valid team-chat messages. Use chat to coordinate.
-• Short throwaway messages (under 5 chars) or repeated identical messages do NOT count.
-• Talk about: what you're doing, what you see, what you need from teammates.
-• In Chamber 3 specifically, communication is the ONLY way to coordinate, since
+- You earn reward for valid team-chat messages. Use chat to coordinate.
+- Short throwaway messages (under 5 chars) or repeated identical messages do NOT count.
+- Talk about: what you're doing, what you see, what you need from teammates.
+- In Chamber 3 specifically, communication is the ONLY way to coordinate, since
   you can't see into other cells.

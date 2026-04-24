@@ -7,6 +7,11 @@ Inventory (wielded + main slots): {inventory}
 Position: {position_text}
 
 Suggest ONE specific next task appropriate to the current chamber and progress.
+The task MUST target the next unfinished milestone for the current chamber.
+Use {completed_milestones} to identify which chamber milestones are still open,
+and pick a concrete action that directly advances one of those open milestones.
+Do not suggest tasks for a different chamber or milestones that are already done.
+
 Respond in JSON: {{"reasoning": "...", "task": "..."}}
 
 Guidance by chamber (use only what applies):

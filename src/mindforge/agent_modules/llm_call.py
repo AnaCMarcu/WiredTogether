@@ -14,8 +14,6 @@ async def llm_call(
     parse_check=None,
     retry_count=0,
     log_prefix="LLM call",
-    pred_prompt=None,
-    pred_frame=None,
     **kwargs,
 ):
     # if failed more than 5 times, return empty fallback instead of crashing
@@ -38,13 +36,6 @@ async def llm_call(
         full_prompt = [SystemMessage(content=system_prompt), user_message]
     else:
         full_prompt = [user_message]
-
-    if pred_prompt is not None and pred_frame is not None:
-        print("using pred")
-        prediction_message = UserMessage(
-            content=[pred_prompt, pred_frame], source="user"
-        )
-        full_prompt.append(prediction_message)
 
     logging.info(
         f"{log_prefix} System prompt: {system_prompt}, user prompt: {filled_user_prompt}"
@@ -69,8 +60,6 @@ async def llm_call(
             frame=frame,
             retry_count=retry_count + 1,
             log_prefix=log_prefix,
-            pred_prompt=pred_prompt,
-            pred_frame=pred_frame,
             **kwargs,
             )
 
@@ -96,7 +85,5 @@ async def llm_call(
             frame=frame,
             retry_count=retry_count + 1,
             log_prefix=log_prefix,
-            pred_prompt=pred_prompt,
-            pred_frame=pred_frame,
             **kwargs,
         )

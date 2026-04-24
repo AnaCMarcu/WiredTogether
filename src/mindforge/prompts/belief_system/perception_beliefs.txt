@@ -1,24 +1,42 @@
-You are an agent in a Minecraft-like 3D open world. Describe what you currently see in the image to help choose the next action.
+You are an agent in the Five Chambers cooperative dungeon. Describe what you
+currently see in the image to help choose the next action.
 
-Focus on SPATIAL information — where things are relative to the center of the image (the crosshair):
-- What is at the CENTER of the image? (This is what Dig/Place would act on.)
-- What is to the LEFT or RIGHT that I should turn toward?
-- What is in the DISTANCE that I should approach?
+Focus on SPATIAL information — where things are relative to the center of the
+image (the crosshair). The center is where Dig/Place will act.
+
+What to look for, depending on your chamber:
+- Ch1 (solo learning): trees, stone blocks, grass floor, chickens/sheep,
+  north door opening, bedrock walls.
+- Ch2 (anvils): 6 obsidian-colored anvils in two rows; teammates standing
+  next to anvils (needed for cooperative digging); dropped diamond sword or
+  chestplate on the ground.
+- Ch3 (cells): you are alone in a small 3x3 sealed cell; one switch on a
+  wall; a door (bedrock) on one side. Or, after exit, you are in the
+  communal room with teammates.
+- Ch4 (combat): zombies (hostile humanoid mobs); diamond sword in inventory
+  should be wielded; north door visible when zombies die.
+- Ch5 (boss): a single stronger zombie (the boss), teammates also attacking.
+
+Also note:
 - Is the view blocked by a block face (too close), or open (far from targets)?
-- Are there any trees, stone, ore, animals, or monsters visible? Where exactly?
+- Are teammates visible? Where relative to you?
+- Are there dropped items (sword, chestplate, meat, wood) to walk over?
 
 Communications from teammates: {communications}
 Execution errors: {error}
 
 Describe the scene in terms that directly inform action selection:
 - "Tree trunk is LEFT of center — need TurnLeft to aim at it"
-- "Stone block is centered and close — ready to Dig"
-- "Chicken visible on the RIGHT at medium distance — TurnRight then approach"
-- "Open grass ahead, nothing close — should MoveForward to explore"
-- "Facing a wall/cliff — should TurnLeft/Right to find a path"
+- "Anvil directly ahead, teammate on the right also facing it — Dig now (cooperative break)"
+- "Switch visible on the wall ahead — approach and use Dig to press it"
+- "Zombie approaching from the RIGHT — TurnRight and Dig with sword wielded"
+- "Diamond sword on ground at feet — MoveForward to pick up"
+- "Cell door open, corridor visible — MoveForward to exit"
+- "Boss centered, teammates flanking — Dig to attack"
+- "Facing a bedrock wall — cannot break, turn to find a door/opening"
 - "Sky visible — looking too high, should LookDown"
-- "A raised block or terrain step is directly in front at foot level — need Jump to get over it"
 - "Flat ground ahead — no jump needed, MoveForward is safe"
 
 IMPORTANT respond in the following JSON format: {{"beliefs": "..."}}
-Write beliefs as a single string of 2-4 sentences. Be specific about image position (left/center/right, near/far).
+Write beliefs as a single string of 2-4 sentences. Be specific about image
+position (left/center/right, near/far) and chamber-relevant entities.

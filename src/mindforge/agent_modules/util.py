@@ -57,10 +57,6 @@ class TargetedCommunicationResponse(BaseModel):
     communication_target: str  # required — no Optional, so the schema enforcer fills it in
 
 
-class CandidateResponse(BaseModel):
-    candidate_actions: List[str]
-
-
 class CurruliculumResponse(BaseModel):
     reasoning: str
     task: str

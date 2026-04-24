@@ -94,6 +94,8 @@ class CustomAgent(BaseChatAgent):
         social_bonds=None,
         position_text=None,
         player_status_text=None,
+        current_chamber=None,
+        completed_milestones=None,
     ):
 
         self._call_count += 1
@@ -210,6 +212,8 @@ class CustomAgent(BaseChatAgent):
                 cancellation_token=cancellation_token,
                 position_text=position_text,
                 player_status_text=player_status_text,
+                current_chamber=current_chamber,
+                completed_milestones=completed_milestones,
                 do_question_answers=False,
             )
             self.metric.log(f"Agent {self.name}: New task: {task}")
