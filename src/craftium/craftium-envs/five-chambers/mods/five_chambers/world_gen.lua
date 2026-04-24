@@ -3,17 +3,29 @@
 -- Doors start as bedrock and are replaced with air by doors.lua when unlocked.
 -- A chamber whose CHAMBERS[n].enabled = false is left as void.
 
--- Fills a rectangular prism entirely with one node type.
+-- API compatibility check — fail fast with a clear message.
+local required_apis = {
+    "swap_node", "load_area", "get_node", "add_entity", "get_worldpath",
+}
+for _, name in ipairs(required_apis) do
+    if not minetest[name] then
+        error("[five_chambers] world_gen.lua: required API minetest." .. name .. " is nil. " ..
+              "This Luanti build is too old or missing required functions.")
+    end
+end
+
+-- Use swap_node instead of set_node: swap_node bypasses per-node callbacks
+-- (including the mcl_observers monkey-patch of set_node that crashes on
+-- unloaded map areas during on_mods_loaded).
 local function fill_box(x0, y0, z0, x1, y1, z1, node_name)
-    local positions = {}
+    local node = {name = node_name}
     for x = x0, x1 do
         for y = y0, y1 do
             for z = z0, z1 do
-                positions[#positions + 1] = {x=x, y=y, z=z}
+                minetest.swap_node({x=x, y=y, z=z}, node)
             end
         end
     end
-    minetest.bulk_set_nodes(positions, {name=node_name})
 end
 
 -- Build Chamber 1: 12×12 solo-learning room (plan §2, §2.3).

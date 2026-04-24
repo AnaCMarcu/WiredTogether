@@ -1,5 +1,18 @@
 -- init.lua: module loader and Craftium entry hooks for Five Chambers.
 
+-- Fast-fail API check: report missing minetest functions before any dofile.
+local _top_level_apis = {
+    "swap_node", "load_area", "get_node", "register_node", "register_entity",
+    "register_on_joinplayer", "register_on_mods_loaded", "register_globalstep",
+    "mod_channel_join", "get_modpath", "get_worldpath", "after",
+}
+for _, _n in ipairs(_top_level_apis) do
+    if not minetest[_n] then
+        error("[five_chambers] init.lua: minetest." .. _n .. " is nil — " ..
+              "Luanti build is missing required API.")
+    end
+end
+
 local modpath = minetest.get_modpath("five_chambers")
 five_chambers = {}
 five_chambers.step_counter = 0
