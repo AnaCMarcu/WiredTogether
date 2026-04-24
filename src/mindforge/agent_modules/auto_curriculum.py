@@ -1,64 +1,18 @@
-import json
 import logging
+import os
 import re
 import shutil
+
 from autogen_core import CancellationToken
-from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
 from autogen_agentchat.messages import TextMessage
-
-# Keywords that indicate a task maps to a real game action.
-# Tasks without any of these are replaced with a role-biased default.
-_ACHIEVABLE_KEYWORDS = frozenset({
-    "dig", "mine", "break", "chop", "punch",        # resource gathering
-    "kill", "attack", "fight", "hit", "hunt",        # combat
-    "find", "move", "walk", "go", "run", "approach", # navigation
-    "place", "build", "craft",                       # construction
-    "collect", "gather", "get", "pick",              # generic gathering
-})
-
-# Words that indicate a task is stuck on a map fixture or UI artifact.
-# Any task containing one of these is replaced with the role default even if
-# it also contains an achievable keyword (e.g. "move away from the golden block").
-_TASK_BLOCKLIST = frozenset({
-    "golden",   # spawn platform block — agents fixate on it
-    "spawn",    # any reference to the spawn point itself
-    "platform", # explicit platform references
-    "hud",      # UI confusion
-    "interface",
-    "inventory screen",
-    "leave the golden",
-    "clear the golden",
-    "collect the golden",
-    "break the golden",
-})
-
-_ROLE_DEFAULT_TASKS = {
-    "agent": "Explore by moving forward and turning to survey the room",
-}
-
-
-def _is_achievable_task(task: str) -> bool:
-    """Check if a task describes something the agent can actually do.
-
-    Returns False if the task references a map fixture or UI element that agents
-    cannot meaningfully interact with (blocklist), even if it contains an action
-    keyword — e.g. "move away from the golden block" passes the keyword check but
-    describes a non-game-progress loop.
-    """
-    task_lower = task.lower()
-    if any(kw in task_lower for kw in _TASK_BLOCKLIST):
-        return False
-    return any(kw in task_lower for kw in _ACHIEVABLE_KEYWORDS)
 from autogen_ext.memory.chromadb import (
     ChromaDBVectorMemory,
     PersistentChromaDBVectorMemoryConfig,
-    ChromaDBVectorMemoryConfig,
-    SentenceTransformerEmbeddingFunctionConfig
+    SentenceTransformerEmbeddingFunctionConfig,
 )
-import os
-from pathlib import Path
 
 from agent_modules.llm_call import llm_call
+from agent_modules.skill_manager import _chromadb_base_dir
 from agent_modules.util import (
     CurriculumAnswerResponse,
     CurriculumQuestionResponse,
@@ -68,18 +22,67 @@ from agent_modules.util import (
     ST_MODEL_NAME,
 )
 
+
+# ─── Task validity rules ───────────────────────────────────────────────
+
+# Tasks without any of these keywords map to nothing the agent can actually do.
+_ACHIEVABLE_KEYWORDS = frozenset({
+    "dig", "mine", "break", "chop", "punch",         # resource gathering
+    "kill", "attack", "fight", "hit", "hunt",        # combat
+    "find", "move", "walk", "go", "run", "approach", # navigation
+    "place", "build", "craft",                       # construction
+    "collect", "gather", "get", "pick",              # generic gathering
+})
+
+# Tasks containing these get replaced even if they match a keyword — they
+# describe map fixtures / UI artefacts that agents fixate on unproductively.
+_TASK_BLOCKLIST = frozenset({
+    "golden", "spawn", "platform",
+    "hud", "interface", "inventory screen",
+    "leave the golden", "clear the golden",
+    "collect the golden", "break the golden",
+})
+
+_ROLE_DEFAULT_TASKS = {
+    "agent": "Explore by moving forward and turning to survey the room",
+}
+
+
+def _is_achievable_task(task: str) -> bool:
+    """True if `task` describes something the agent can do in-world."""
+    task_lower = task.lower()
+    if any(kw in task_lower for kw in _TASK_BLOCKLIST):
+        return False
+    return any(kw in task_lower for kw in _ACHIEVABLE_KEYWORDS)
+
+
+# ─── Prompt loading ────────────────────────────────────────────────────
+
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
-# load in prompts
-with open(os.path.join(_PROMPT_DIR, "curriculum_prompt.txt"), "r") as f:
-    curriculum_prompt = f.read()
-with open(os.path.join(_PROMPT_DIR, "curriculum_info.txt"), "r") as f:
-    curriculum_info = f.read()
-with open(os.path.join(_PROMPT_DIR, "curriculum_questions.txt"), "r") as f:
-    curriculum_questions = f.read()
-with open(os.path.join(_PROMPT_DIR, "curriculum_answer.txt"), "r") as f:
-    curriculum_answer = f.read()
 
+def _load_prompt(name: str) -> str:
+    with open(os.path.join(_PROMPT_DIR, name), "r") as f:
+        return f.read()
+
+
+curriculum_prompt = _load_prompt("curriculum_prompt.txt")
+curriculum_info = _load_prompt("curriculum_info.txt")
+curriculum_questions = _load_prompt("curriculum_questions.txt")
+curriculum_answer = _load_prompt("curriculum_answer.txt")
+
+
+# ─── Parse-check helpers for llm_call ──────────────────────────────────
+
+def _require_key(key):
+    """Build a parse_check that asserts `key` is present and non-null."""
+    def check(content):
+        assert key in content and content[key] is not None
+        return content
+    return check
+
+
+# ─── Main class ────────────────────────────────────────────────────────
 
 class AutoCurriculum:
     def __init__(
@@ -96,61 +99,49 @@ class AutoCurriculum:
     ):
         self.current_task = initial_task
         self.current_context = initial_context
-        self.curriculum_prompt = (
-            override_curriculum_prompt
-            if override_curriculum_prompt
-            else safe_format(curriculum_prompt)
-        )
-        self._questions_prompt = override_questions_prompt or curriculum_questions
-        self.task_model_client = (
-            task_model_client
-            if task_model_client
-            else create_model_client(response_format=CurruliculumResponse)
-        )
-        self.question_model_client = (
-            question_model_client
-            if question_model_client
-            else create_model_client(response_format=CurriculumQuestionResponse)
-        )
-        self.answer_model_client = (
-            answer_model_client
-            if answer_model_client
-            else create_model_client(response_format=CurriculumAnswerResponse)
-        )
         self.completed_tasks = []
         self.failed_tasks = []
         self._role = "agent"
-        # self.vectordb = ChromaDBVectorMemory(
-        #     config=PersistentChromaDBVectorMemoryConfig(
-        #         collection_name="autocurriculum_vectordb_nvidia",
-        #         persistence_path=os.path.join(
-        #             str(Path.home()),
-        #             f"chromadb_autogen/autocurriculum_vectodb_{agent_name}",
-        #         ),
-        #         k=retrieval_top_k,  # Return top  k results
-        #         score_threshold=0.4,  # Minimum similarity score
-        #         embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
-        #             model_name="all-MiniLM-L6-v2", device="cuda"
-        #         ),
-        #     ),
-        # )
-        from agent_modules.skill_manager import _chromadb_base_dir
-        db_path = os.path.join(_chromadb_base_dir(), f"autocurriculum_vectodb_{agent_name}")
 
+        self.curriculum_prompt = (
+            override_curriculum_prompt or safe_format(curriculum_prompt)
+        )
+        self._questions_prompt = override_questions_prompt or curriculum_questions
+
+        self.task_model_client = task_model_client or create_model_client(
+            response_format=CurruliculumResponse
+        )
+        self.question_model_client = question_model_client or create_model_client(
+            response_format=CurriculumQuestionResponse
+        )
+        self.answer_model_client = answer_model_client or create_model_client(
+            response_format=CurriculumAnswerResponse
+        )
+
+        self.vectordb = self._init_vectordb(agent_name, retrieval_top_k)
+
+    @staticmethod
+    def _init_vectordb(agent_name: str, top_k: int) -> ChromaDBVectorMemory:
+        """Create (or reset) a per-agent ChromaDB collection for task context."""
+        db_path = os.path.join(
+            _chromadb_base_dir(), f"autocurriculum_vectodb_{agent_name}"
+        )
         # Wipe stale/corrupted SQLite files from previous runs
         if os.path.exists(db_path):
             shutil.rmtree(db_path, ignore_errors=True)
-
-        self.vectordb = ChromaDBVectorMemory(
+        return ChromaDBVectorMemory(
             config=PersistentChromaDBVectorMemoryConfig(
                 collection_name="autocurriculum_vectordb_nvidia",
                 persistence_path=db_path,
-                k=retrieval_top_k,  # Return top  k results
-                score_threshold=0.4,  # Minimum similarity score
-                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(model_name=ST_MODEL_NAME,
-                                                                                     device="cuda")
+                k=top_k,
+                score_threshold=0.4,
+                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
+                    model_name=ST_MODEL_NAME, device="cuda"
+                ),
             ),
         )
+
+    # ─── Public API: get a new task ────────────────────────────────────
 
     async def get_new_task(
         self,
@@ -168,31 +159,24 @@ class AutoCurriculum:
         current_chamber=None,
         completed_milestones=None,
     ):
-        # gather information for the curriculum prompt
-        # used in eval, do not remove !!!
-        completed_tasks = self.get_completed_tasks()
-        failed_tasks = self.get_failed_tasks()
+        completed = self.get_completed_tasks()
+        failed = self.get_failed_tasks()
+
+        question_answers = ""
         if do_question_answers:
             question_answers = await self.get_question_answers(
-                frame, cancellation_token, completed_tasks, failed_tasks, communications
+                frame, cancellation_token, completed, failed, communications
             )
-        else:
-            question_answers = ""
-
-        def parse_check(content):
-            assert "task" in content and content["task"] is not None
-            return content
 
         response = await llm_call(
             self.task_model_client,
             system_prompt=self.curriculum_prompt,
             user_prompt=curriculum_info,
             cancellation_token=cancellation_token,
-            # frame=frame,
-            parse_check=parse_check,
+            parse_check=_require_key("task"),
             log_prefix="Auto Curriculum get_new_task: ",
-            completed_tasks=completed_tasks,
-            failed_tasks=failed_tasks,
+            completed_tasks=completed,
+            failed_tasks=failed,
             last_task=self.current_task,
             question_answers=question_answers,
             communications=communications,
@@ -202,34 +186,43 @@ class AutoCurriculum:
             critique=critique,
             picked_object=picked_object,
             position_text=position_text or "Unknown",
-            player_status_text=player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
+            player_status_text=player_status_text
+                or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
             current_chamber=current_chamber or "Unknown",
-            completed_milestones=(
-                ", ".join(sorted(completed_milestones)) if completed_milestones else "none"
-            ),
+            completed_milestones=self._format_milestones(completed_milestones),
             inventory=picked_object or "empty",
         )
-        task = response.get("task", self.current_task or "Explore") or "Explore"
-        task = task.strip()
-        if not _is_achievable_task(task):
-            fallback = _ROLE_DEFAULT_TASKS.get(self._role, "Dig a nearby tree to get wood")
-            logging.warning(
-                "Non-actionable task '%s' for %s, replacing with '%s'",
-                task, self._role, fallback,
-            )
-            # Feed the blocked task back as a failed task so the curriculum LLM
-            # learns not to generate it again (without this, it repeats the same
-            # invalid tasks because it never sees them as rejected).
-            self.failed_tasks.append(f"{task} [INVALID: not achievable in this environment]")
-            task = fallback
+
+        task = (response.get("task") or self.current_task or "Explore").strip()
+        task = self._validate_or_fallback(task)
         self.current_task = task
-        context = await self.get_task_context(
+
+        self.current_context = await self.get_task_context(
             frame, cancellation_token, communications=communications
         )
-        self.current_context = context
         return self.current_task, self.current_context
 
-    # This function should return a string of question-answer pairs
+    def _validate_or_fallback(self, task: str) -> str:
+        """Replace unachievable/blocklisted tasks with a role default."""
+        if _is_achievable_task(task):
+            return task
+        fallback = _ROLE_DEFAULT_TASKS.get(self._role, "Dig a nearby tree to get wood")
+        logging.warning(
+            "Non-actionable task '%s' for %s, replacing with '%s'",
+            task, self._role, fallback,
+        )
+        # Record the rejected task so the curriculum LLM stops proposing it.
+        self.failed_tasks.append(f"{task} [INVALID: not achievable in this environment]")
+        return fallback
+
+    @staticmethod
+    def _format_milestones(completed_milestones) -> str:
+        if not completed_milestones:
+            return "none"
+        return ", ".join(sorted(completed_milestones))
+
+    # ─── Question / answer sub-pipeline ────────────────────────────────
+
     async def get_question_answers(
         self,
         frame,
@@ -237,32 +230,20 @@ class AutoCurriculum:
         completed_tasks,
         failed_tasks,
         communications,
-    ):
-
-        # get questions from the model
-        questions, concepts = await self.get_questions(
+    ) -> str:
+        """Return a formatted question-answer string for the curriculum prompt."""
+        questions, _ = await self.get_questions(
             frame, cancellation_token, completed_tasks, failed_tasks, communications
         )
-        # get answers from the model
-        answers = []
-        for question in questions:
-            # TODO: MindForge had a vectordb search here based on embedding similarity of questions to stop repetitions
-            answer = await self.get_answer(
-                question,
-                frame,
-                cancellation_token,
-            )
-            answers.append(answer)
-        # format the question-answer pairs
-        formatted_question_answers = "\n".join(
-            ["question: " + q + "\n" + a for q, a in zip(questions, answers)]
+        answers = [
+            await self.get_answer(q, frame, cancellation_token) for q in questions
+        ]
+        formatted = "\n".join(
+            f"question: {q}\n{a}" for q, a in zip(questions, answers)
         )
-        logging.info(
-            f"Auto Curriculum question-answer pairs: {formatted_question_answers}"
-        )
-        return formatted_question_answers
+        logging.info("Auto Curriculum question-answer pairs: %s", formatted)
+        return formatted
 
-    # This function should return a string of questions
     async def get_questions(
         self,
         frame,
@@ -271,98 +252,75 @@ class AutoCurriculum:
         failed_tasks,
         communications,
     ):
-        def parse_check(content):
-            assert "questions" in content
-            return content
-
         response = await llm_call(
             self.question_model_client,
             user_prompt=self._questions_prompt,
             cancellation_token=cancellation_token,
-            # frame=frame,
-            parse_check=parse_check,
+            parse_check=_require_key("questions"),
             log_prefix="Auto Curriculum get_questions: ",
             completed_tasks=completed_tasks,
             failed_tasks=failed_tasks,
             communications=communications,
         )
+        return self._parse_questions_and_concepts(response.get("questions", []))
 
-        # parse response to get questions and concepts
-        questions = []
-        concepts = []
+    @staticmethod
+    def _parse_questions_and_concepts(lines):
+        """Parse interleaved `Question N: ...` / `Concept N: ...` lines."""
+        questions, concepts = [], []
         try:
-            question_lines = response.get("questions", [])
-
-            for i in range(0, len(question_lines) - 1, 2):
-                q_line = question_lines[i]
-                if i + 1 >= len(question_lines):
-                    break
-                c_line = question_lines[i + 1]
-
-                q_match = re.match(r"Question \d+: (.+)", q_line)
-                c_match = re.match(r"Concept \d+: (.+)", c_line)
-
+            for i in range(0, len(lines) - 1, 2):
+                q_match = re.match(r"Question \d+: (.+)", lines[i])
+                c_match = re.match(r"Concept \d+: (.+)", lines[i + 1])
                 if q_match and c_match:
                     questions.append(q_match.group(1))
                     concepts.append(c_match.group(1))
         except (KeyError, IndexError, TypeError) as e:
-            logging.error("Error in auto curriculum when parsing questions: %s", e)
-
+            logging.error("Error parsing curriculum questions: %s", e)
         return questions, concepts
 
-    # This function should return a the answer to the question
     async def get_answer(
         self,
         question,
         frame,
         cancellation_token: CancellationToken,
         relevant_past_context="",
-    ):
-        def parse_check(content):
-            assert "answer" in content
-            return content
-
+    ) -> str:
         response = await llm_call(
             self.answer_model_client,
             user_prompt=curriculum_answer,
             cancellation_token=cancellation_token,
-            # frame=frame,
-            parse_check=parse_check,
+            parse_check=_require_key("answer"),
             log_prefix="Auto Curriculum get_answer: ",
             question=question,
             relevant_past_context=relevant_past_context,
         )
-        answer = response.get("answer", "")
+        return response.get("answer", "").strip()
 
-        return answer.strip()
+    # ─── Task/failure log + context retrieval ──────────────────────────
 
-    def get_completed_tasks(self):
-        # This function should return a string of completed tasks
-        # TODO: link to memory
+    def get_completed_tasks(self) -> str:
         if not self.completed_tasks:
             return "None"
         return "\n- " + "\n- ".join(self.completed_tasks)
 
-    def get_failed_tasks(self):
-        # This function should return a string of failed tasks
-        # TODO: link to memory
+    def get_failed_tasks(self) -> str:
         if not self.failed_tasks:
             return "None"
         return "\n- " + "\n- ".join(self.failed_tasks)
 
     async def get_task_context(self, frame, cancellation_token, communications=""):
-        question = f"How to {self.current_task}" f" in this environment?"
-        # retrieve past context from memory
+        question = f"How to {self.current_task} in this environment?"
         relevant_past_context = self.retrieve_context(question)
         answer = await self.get_answer(
-            question,
-            frame,
-            cancellation_token,
+            question, frame, cancellation_token,
             relevant_past_context=relevant_past_context,
         )
         context = f"Question: {question}\n{answer}"
-        logging.info(f"Auto Curriculum context: {context}")
+        logging.info("Auto Curriculum context: %s", context)
         return context
+
+    # ─── Vector DB operations ──────────────────────────────────────────
 
     def save_context(self, context):
         self.vectordb._ensure_initialized()
@@ -382,24 +340,20 @@ class AutoCurriculum:
         if self.vectordb._collection.count() == 0:
             return None
         k = min(self.vectordb._collection.count(), self.vectordb._config.k)
-        logging.info(f"Querying vector db for contexts with query: {query}")
+        logging.info("Querying vector db for contexts with query: %s", query)
         data = self.vectordb._collection.query(
             query_texts=[query],
             n_results=k,
             include=["documents", "metadatas", "distances"],
         )
-        logging.info(f"Contexts found: {data}")
-        # format skills
-        semantic_memory = []
-        for s in data["documents"][0]:
-            semantic_memory.append(s)
-        return semantic_memory
+        logging.info("Contexts found: %s", data)
+        return list(data["documents"][0])
 
     async def clear_data(self):
         self.current_task = None
         self.current_context = ""
         self.completed_tasks = []
         self.failed_tasks = []
-        await self.vectordb.clear()  # Clear the vector database collection
+        await self.vectordb.clear()
         logging.info("Auto Curriculum reset.")
         return True
