@@ -25,8 +25,9 @@ local function fill_box(x0, y0, z0, x1, y1, z1, node_name)
     local pos2 = {x=x1, y=y1, z=z1}
     local cid  = minetest.get_content_id(node_name)
 
-    local vm = minetest.get_voxel_manip()
-    local emin, emax = vm:read_from_map(pos1, pos2)
+    -- get_voxel_manip(pos1, pos2) reads the area in one call (documented form).
+    local vm = minetest.get_voxel_manip(pos1, pos2)
+    local emin, emax = vm:get_emerged_area()
     local data = vm:get_data()
     local va = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
 
@@ -47,8 +48,8 @@ end
 -- accepts the same (pos, {name=...}) signature.
 local function place_node(pos, node)
     local cid = minetest.get_content_id(node.name)
-    local vm = minetest.get_voxel_manip()
-    local emin, emax = vm:read_from_map(pos, pos)
+    local vm = minetest.get_voxel_manip(pos, pos)
+    local emin, emax = vm:get_emerged_area()
     local data = vm:get_data()
     local va = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
     data[va:index(pos.x, pos.y, pos.z)] = cid
