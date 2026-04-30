@@ -102,6 +102,8 @@ echo "Resuming from: $RESUME_DIR"
 
 mkdir -p /scratch/acmarcu/WiredTogether/slurm_logs
 
+# Make src/ packages (rl_layer, hebbian, mindforge) importable
+export PYTHONPATH="$PROJECT_DIR/src:${PYTHONPATH:-}"
 cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
 

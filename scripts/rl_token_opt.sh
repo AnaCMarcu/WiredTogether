@@ -49,6 +49,8 @@ nvidia-smi
 echo "Using local model: $LOCAL_MODEL_PATH"
 export LLM_MODEL_PATH="$LOCAL_MODEL_PATH"
 
+# Make src/ packages (rl_layer, hebbian, mindforge) importable
+export PYTHONPATH="$PROJECT_DIR/src:${PYTHONPATH:-}"
 cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
 

@@ -1,6 +1,12 @@
-"""MAPPO (Multi-Agent PPO) update logic.
+"""Per-agent (IPPO) PPO update steps.
 
-Action-level:  optimises log π(action | prompt) for 23 discrete Craftium
+Each agent owns its own actor (LoRA + action head) and value head, and runs
+this update independently. MAPPO is achieved by *adding* a shared
+``CentralizedCritic`` (in ``rl_layer/centralized_critic.py``) and passing
+``value_loss_enabled=False`` to ``action_level_ppo_step`` so the per-agent
+value head is bypassed.
+
+Action-level:  optimises log π(action | prompt) for the discrete Craftium
 actions using a classification head on the LLM's last hidden state.
 
 Token-level:   optimises the full token-level log-likelihood of the generated

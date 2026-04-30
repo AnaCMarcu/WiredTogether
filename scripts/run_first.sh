@@ -68,6 +68,8 @@ export LLM_MODEL_PATH="$LOCAL_MODEL_PATH"
 mkdir -p "$CKPT_ROOT"
 mkdir -p /scratch/acmarcu/WiredTogether/slurm_logs
 
+# Make src/ packages (rl_layer, hebbian, mindforge) importable
+export PYTHONPATH="$PROJECT_DIR/src:${PYTHONPATH:-}"
 cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
 

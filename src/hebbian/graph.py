@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from rl_layer.hebbian_config import HebbianConfig
+from hebbian.config import HebbianConfig
 
 logger = logging.getLogger(__name__)
 

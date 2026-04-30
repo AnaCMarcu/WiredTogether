@@ -62,6 +62,8 @@ echo "Using local model: $LOCAL_MODEL_PATH"
 export LLM_MODEL_PATH="$LOCAL_MODEL_PATH"
 VLLM_PID=""
 
+# Make src/ packages (rl_layer, hebbian, mindforge) importable
+export PYTHONPATH="$PROJECT_DIR/src:${PYTHONPATH:-}"
 cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
 python multi_agent_craftium.py --num-agents 3 --episodes 5 \

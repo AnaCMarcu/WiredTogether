@@ -36,6 +36,8 @@ echo "CRAFTIUM_ENV_DIR: $CRAFTIUM_ENV_DIR"
 
 mkdir -p /scratch/acmarcu/WiredTogether/slurm_logs
 
+# Make src/ packages (rl_layer, hebbian, mindforge) importable
+export PYTHONPATH="$PROJECT_DIR/src:${PYTHONPATH:-}"
 cd src/mindforge
 python test_scripted_agent.py \
     --mode milestones \

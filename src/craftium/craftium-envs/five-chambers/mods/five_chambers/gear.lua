@@ -1,14 +1,14 @@
 -- gear.lua: gear drops from anvils and equip detection (plan §4, D3).
--- Row A anvils drop mcl_swords:sword_iron.
--- Row B anvils drop mcl_armor:chestplate_iron.
+-- Row A anvils drop mcl_tools:sword_diamond.
+-- Row B anvils drop mcl_armor:chestplate_diamond.
 -- Equip detection fires M14 (sword wielded) and M15 (chestplate on armor slot).
 
 -- Called by anvil.lua when an anvil breaks.
 -- drop_type: "sword" | "chestplate"
 function five_chambers.drop_gear(pos, drop_type)
     local item = drop_type == "sword"
-        and "mcl_swords:sword_iron"
-        or  "mcl_armor:chestplate_iron"
+        and "mcl_tools:sword_diamond"
+        or  "mcl_armor:chestplate_diamond"
     minetest.add_item(pos, item)
 end
 

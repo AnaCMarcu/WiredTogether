@@ -241,7 +241,8 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
                 "* Waiting for MT server to initialize (polling stderr). "
                 "This is only required in the first call to reset."
             )
-            deadline = time.time() + 300  # max 5 minutes (VoxeLibre can take 2-3 min on HPC)
+            server_ready_timeout = 1200  # 20 min — slow/contended HPC nodes need this headroom
+            deadline = time.time() + server_ready_timeout
             server_ready = False
             stderr_path = os.path.join(self.mt_server.run_dir, "stderr.txt")
             while time.time() < deadline:
@@ -265,18 +266,17 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
                 except (FileNotFoundError, OSError):
                     pass
             if not server_ready:
-                # Dump last lines of stderr so user can debug
                 try:
                     with open(stderr_path, "r", errors="ignore") as f:
-                        tail = f.read()[-500:]
+                        tail = f.read()[-2000:]
                 except FileNotFoundError:
                     tail = "(file not found)"
-                print(
-                    f"* WARNING: server not confirmed ready after 300 s.\n"
-                    f"  stderr tail:\n{tail}"
+                raise RuntimeError(
+                    f"MT server did not reach 'listening on' within "
+                    f"{server_ready_timeout} s. Aborting before clients connect.\n"
+                    f"stderr tail:\n{tail}"
                 )
-            else:
-                print("* MT server is ready!")
+            print("* MT server is ready!")
 
             # Small extra delay for server to stabilize
             time.sleep(3)

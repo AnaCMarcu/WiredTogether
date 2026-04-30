@@ -37,9 +37,9 @@ from agent_modules.critic import Critic
 from agent_modules.skill_manager import SkillManager
 from agent_modules.episodic_memory_manager import EpisodicMemoryManager
 from agent_modules.craftium_metric import CraftiumMetric
-from communication_rewards import CommunicationTracker
-from cooperation_metric import CooperationMetric
-from episode_logger import EpisodeLogger
+from mindforge.env.communication_rewards import CommunicationTracker
+from mindforge.env.cooperation_metric import CooperationMetric
+from mindforge.env.episode_logger import EpisodeLogger
 import json as _json
 
 from rl_layer import RLConfig, RLLayer, HebbianConfig, HebbianSocialGraph
