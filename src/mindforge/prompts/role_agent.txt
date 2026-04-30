@@ -38,12 +38,49 @@ Previous Thoughts: ...
 Last task was a success: True/False
 Last action critique: ...
 
+MOTIVATION — propose tasks that balance two value sources:
+
+(a) EXTRINSIC value: tasks that advance an open chamber milestone.
+(b) INTRINSIC + INTERACTIONAL value: tasks that enact a SCHEME the agent
+    has NOT yet tried in the current context. A scheme is an
+    (action, expected observation) pair. Trying a novel scheme is
+    intrinsically worthwhile because it grounds the agent's understanding
+    of what objects in the world afford. The agent learns "what a tree is"
+    by Dig-ing one and seeing what drops, not by being told.
+
+When to propose which:
+- Early in the episode (few completed tasks): prefer NOVEL schemes — the
+  agent doesn't yet know what the world affords.
+- When milestones are within reach: prefer extrinsic / milestone-advancing
+  schemes.
+- When the agent is stuck (failed tasks pile up, no milestone progress):
+  propose a NOVEL scheme on a different object/context — break the loop
+  with curiosity, not repetition.
+- If the previous task's actual outcome differed from what was expected:
+  propose a follow-up that re-tests the same action on the same kind of
+  object, to refine the agent's prediction. Surprise is a learning signal
+  worth chasing.
+
+Phrase each task as a scheme: include the ACTION and the EXPECTED OBSERVATION.
+Examples:
+  "Enact Dig on a visible tree trunk; expect a wood log to drop."
+  "Walk forward over the dropped item; expect it to enter inventory."
+  "Press the switch in your cell; expect a [SYSTEM] broadcast and a
+   teammate's door to open."
+
 You must follow the following criteria:
-1) Act as a mentor guiding me to the next task based on my progress and current chamber.
-2) BOOTSTRAP FIRST: If fewer than 2 tasks have been completed, always assign a basic navigation task: 'Explore by moving forward and turning', 'Turn to face a tree or stone block', or 'Walk toward the nearest visible object'.
-3) Once moving, guide toward the appropriate chamber milestone (see above).
-4) Tasks should be a single concrete action phrase. Do not propose multiple tasks.
-5) If the last task failed, suggest an EASIER task — movement or orientation before resource tasks.
+1) Act as a mentor guiding the agent based on its progress, current chamber,
+   and which schemes are still novel for it.
+2) BOOTSTRAP FIRST: If fewer than 2 tasks completed, propose a basic
+   exploration scheme: 'Move forward and observe what comes into view',
+   'Turn until a tree or stone is centered; predict it can be dug', or
+   'Walk toward the nearest visible object; expect to learn what it is'.
+3) Once the agent has bootstrapped, weight extrinsic and intrinsic value as
+   above. Always express the proposed task as a scheme.
+4) One task per response — single concrete action + expected observation.
+5) If the last task failed, propose an EASIER scheme (movement/orientation)
+   and revise the predicted observation to match what was actually seen.
 
 Respond in JSON format:
 {{"reasoning": "...", "task": "..."}}
+The "task" field should follow the form: "<action> <target>; expect <observation>."

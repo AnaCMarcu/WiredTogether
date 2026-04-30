@@ -100,12 +100,24 @@ class RLLayer:
         Numeric agent identifier.
     """
 
-    def __init__(self, config: RLConfig, role: str, agent_id: int):
+    def __init__(self, config: RLConfig, role: str, agent_id: int,
+                 centralized_critic: "Optional[object]" = None):
+        """When ``centralized_critic`` is provided, the per-agent value head is
+        bypassed at update time (MAPPO mode) and GAE uses the critic's V_global
+        baseline. The per-agent value head is still constructed for
+        compatibility with the IPPO ``critic_mode='independent'`` config.
+        """
         self.config = config
         self.role = role
         self.agent_id = agent_id
         self.step_count = 0
         self._update_count = 0
+        self.centralized_critic = centralized_critic
+        # Effective mode: centralised iff a critic was passed AND config says so.
+        self._use_centralized = (
+            centralized_critic is not None
+            and getattr(config, "critic_mode", "centralized") == "centralized"
+        )
 
         if not config.enabled:
             return
@@ -229,7 +241,14 @@ class RLLayer:
         with torch.no_grad():
             pooled = self._encode_prompt(prompt_text)  # (1, H)
             action_logits = self.action_head(pooled)    # (1, A)
-            value = self.value_head(pooled).squeeze(-1)  # (1,)
+            # Skip the per-agent value head when the centralised critic is in
+            # charge — the main loop will populate old_value_global + joint_state
+            # via set_pending_value_global() after all agents have acted.
+            if self._use_centralized:
+                value_scalar = 0.0
+            else:
+                value = self.value_head(pooled).squeeze(-1)  # (1,)
+                value_scalar = value.item()
 
             dist = torch.distributions.Categorical(logits=action_logits)
             action_idx = dist.sample()  # (1,)
@@ -242,7 +261,7 @@ class RLLayer:
             prompt_text=prompt_text,
             action_idx=action_idx.item(),
             log_prob=log_prob.item(),
-            value=value.item(),
+            value=value_scalar,
         )
         self.step_count += 1
 
@@ -263,7 +282,9 @@ class RLLayer:
 
         Used to compute a one-step advantage estimate δ_t = r_t - V(s_t) before
         store_reward() is called, so Hebbian updates can use per-agent advantages
-        at the same step rather than one step behind.
+        at the same step rather than one step behind. In centralised-critic mode
+        this returns V_global if it has been attached, otherwise the per-agent
+        value (which is 0 when the value head was skipped).
 
         Returns None if RL is disabled, mode is 'token', or no action has been
         selected yet this step.
@@ -271,7 +292,22 @@ class RLLayer:
         if not self.config.enabled or self.config.mode == "token":
             return None
         pending = self.buffer._pending
-        return pending.old_value if pending is not None else None
+        if pending is None:
+            return None
+        if pending.old_value_global is not None:
+            return pending.old_value_global
+        return pending.old_value
+
+    def set_pending_value_global(self, value_global: float,
+                                 joint_state=None) -> None:
+        """Attach the centralised critic's V_global (and the joint state it was
+        computed from) to the currently-pending transition. No-op when RL is
+        disabled, in token mode, or when no critic was provided."""
+        if not self.config.enabled or self.config.mode == "token":
+            return
+        if not self._use_centralized:
+            return
+        self.buffer.set_pending_value_global(value_global, joint_state)
 
     def store_reward(self, reward: float, done: bool = False,
                      reward_task: float = 0.0, reward_comm: float = 0.0) -> None:
@@ -343,17 +379,24 @@ class RLLayer:
 
         self.model.train()
 
-        # Compute last value for GAE bootstrap
+        # Compute last value for GAE bootstrap.
+        # In centralised mode we use the critic's evaluation of the last
+        # transition's joint_state; in independent mode we fall back to the
+        # per-agent value head on the last prompt.
         last_value = 0.0
         if len(self.buffer) > 0:
             last_tr = self.buffer.get_all()[-1]
             if not last_tr.done:
-                with torch.no_grad():
-                    pooled = self._encode_prompt(last_tr.prompt_text)
-                    last_value = self.value_head(pooled).squeeze(-1).item()
+                if self._use_centralized and last_tr.joint_state is not None:
+                    last_value = float(self.centralized_critic.evaluate(last_tr.joint_state))
+                elif not self._use_centralized:
+                    with torch.no_grad():
+                        pooled = self._encode_prompt(last_tr.prompt_text)
+                        last_value = self.value_head(pooled).squeeze(-1).item()
 
         self.buffer.compute_gae(
-            self.config.gamma, self.config.gae_lambda, last_value
+            self.config.gamma, self.config.gae_lambda, last_value,
+            use_global_value=self._use_centralized,
         )
 
         # ── Social replay: collect neighbour transitions (Eq. 7) ──────────
@@ -417,6 +460,7 @@ class RLLayer:
                         value_coef=self.config.value_coef,
                         device=self._device,
                         max_length=self.config.rl_prompt_max_tokens,
+                        value_loss_enabled=not self._use_centralized,
                     )
                 self.optimizer.zero_grad()
                 scaler.scale(loss).backward()

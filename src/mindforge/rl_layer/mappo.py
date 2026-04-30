@@ -36,18 +36,21 @@ def action_level_ppo_step(
     value_coef: float,
     device: torch.device,
     max_length: int = 512,
+    value_loss_enabled: bool = True,
 ) -> Tuple[torch.Tensor, dict]:
-    """Single PPO mini-batch update.  Returns scalar loss + info dict."""
+    """Single PPO mini-batch update.  Returns scalar loss + info dict.
+
+    When ``value_loss_enabled`` is False (MAPPO mode with a centralised critic),
+    the per-agent value head is bypassed entirely — no forward, no value loss —
+    so the optimizer only updates the actor (LoRA + action head). The critic
+    is updated separately by ``CentralizedCritic.update``.
+    """
 
     prompts = [t.prompt_text for t in batch]
     action_idxs = torch.tensor([t.action_idx for t in batch], device=device)
     old_log_probs = torch.tensor([t.old_log_prob for t in batch],
                                  dtype=torch.float32, device=device)
     advantages = torch.tensor([t.advantage for t in batch],
-                              dtype=torch.float32, device=device)
-    returns = torch.tensor([t.returns for t in batch],
-                           dtype=torch.float32, device=device)
-    old_values = torch.tensor([t.old_value for t in batch],
                               dtype=torch.float32, device=device)
 
     # Advantages are already normalized over the full rollout in compute_gae().
@@ -79,33 +82,37 @@ def action_level_ppo_step(
     new_log_probs = action_dist.log_prob(action_idxs)
     entropy = action_dist.entropy().mean()
 
-    # Value head
-    new_values = value_head(pooled).squeeze(-1)  # (B,)
-
     # ── PPO clipped policy loss ──
     ratio = (new_log_probs - old_log_probs).exp()
     surr1 = ratio * advantages
     surr2 = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * advantages
     policy_loss = -torch.min(surr1, surr2).mean()
 
-    # ── Clipped value loss (element-wise max, then reduce) ──
-    value_clipped = old_values + torch.clamp(
-        new_values - old_values, -value_clip_eps, value_clip_eps
-    )
-    v_loss1 = F.mse_loss(new_values, returns, reduction="none")
-    v_loss2 = F.mse_loss(value_clipped, returns, reduction="none")
-    value_loss = torch.min(v_loss1, v_loss2).mean()
-
-    # ── Total loss ──
-    loss = policy_loss + value_coef * value_loss - entropy_coef * entropy
-
     info = {
         "policy_loss": policy_loss.item(),
-        "value_loss": value_loss.item(),
         "entropy": entropy.item(),
         "approx_kl": (old_log_probs - new_log_probs).mean().item(),
         "clip_frac": ((ratio - 1.0).abs() > clip_eps).float().mean().item(),
     }
+
+    if value_loss_enabled:
+        returns = torch.tensor([t.returns for t in batch],
+                               dtype=torch.float32, device=device)
+        old_values = torch.tensor([t.old_value for t in batch],
+                                  dtype=torch.float32, device=device)
+        new_values = value_head(pooled).squeeze(-1)  # (B,)
+        value_clipped = old_values + torch.clamp(
+            new_values - old_values, -value_clip_eps, value_clip_eps
+        )
+        v_loss1 = F.mse_loss(new_values, returns, reduction="none")
+        v_loss2 = F.mse_loss(value_clipped, returns, reduction="none")
+        value_loss = torch.min(v_loss1, v_loss2).mean()
+        loss = policy_loss + value_coef * value_loss - entropy_coef * entropy
+        info["value_loss"] = value_loss.item()
+    else:
+        loss = policy_loss - entropy_coef * entropy
+        info["value_loss"] = 0.0
+
     return loss, info
 
 

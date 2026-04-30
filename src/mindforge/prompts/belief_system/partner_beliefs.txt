@@ -11,6 +11,10 @@ Good partner beliefs capture:
   wait for gear, press a switch, regroup in the communal room).
 - Their status (alive, low HP, near death).
 - Any commitments they made ("I'll break the row A anvil on the left").
+- SCHEMES THEY HAVE ENACTED — actions they performed and observations they
+  reported. This builds a shared scheme vocabulary across the team:
+  things you don't have to re-test yourself because a teammate already did.
+  Example: "agent_1 has confirmed (Dig-on-stone → cobblestone-drop)."
 
 Previous Partner Beliefs: {previous_partner_belief}
 Conversation: {convo}

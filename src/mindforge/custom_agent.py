@@ -35,7 +35,6 @@ class CustomAgent(BaseChatAgent):
         rl_layer=None,
         belief_interval: int = 1,
         critic_interval: int = 1,
-        targeted_communication: bool = False,
         num_agents: int = 1,
     ) -> None:
         super().__init__(name, description)
@@ -70,7 +69,6 @@ class CustomAgent(BaseChatAgent):
         self.last_response = None
         self.metric = metric
         self.voyager = voyager
-        self.targeted_communication = targeted_communication
         self.num_agents = num_agents
         self._last_reward_text = "N/A"
         self._episode_summary_cache = "There are no past episodes."
@@ -329,7 +327,6 @@ class CustomAgent(BaseChatAgent):
                 last_frame=last_frame,
                 cancellation_token=cancellation_token,
                 agent_name=self.name,
-                targeted_communication=self.targeted_communication,
                 num_agents=self.num_agents,
             )
             rl_content["communication"] = comm

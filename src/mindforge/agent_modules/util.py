@@ -1,44 +1,38 @@
-import json
-import logging
-import re
-from typing import List, Literal, Optional, Tuple
+"""Shared utility helpers: env config, pydantic schemas, prompt formatting,
+JSON parsing, image conversion, and the unified model-client factory."""
 
-import PIL
 import base64
 import io
-from autogen_core import Image
-
-from matplotlib import pyplot as plt
-import numpy as np
+import json
 import logging
+import os
+import re
+from typing import List, Optional, Tuple
 
+import numpy as np
+import PIL
+from autogen_core import Image
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+from matplotlib import pyplot as plt
 from pydantic import BaseModel
 
-import os
-from autogen_ext.models.openai import OpenAIChatCompletionClient
 
-# Configure via environment variables:
-#
-# Option A — Local model (no server needed):
-#   export LLM_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
-#
-# Option B — HTTP server (SGLang, vLLM, llm_server.py, OpenRouter):
-#   export LLM_BASE_URL=http://localhost:8000/v1
-#   export LLM_MODEL=Qwen3.5-2B
-#   export LLM_API_KEY=no-key-needed
-#
+# ─── Environment config ────────────────────────────────────────────────
+# Two ways to wire up an LLM:
+#   A) Local model:    LLM_MODEL_PATH=/path/to/model
+#   B) HTTP endpoint:  LLM_BASE_URL + LLM_MODEL + LLM_API_KEY (default: OpenRouter)
+
 local_model_path = os.environ.get("LLM_MODEL_PATH", "")
 base_url = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
 model = os.environ.get("LLM_MODEL", "google/gemini-2.5-flash")
 
-# Sentence-transformer model for ChromaDB embeddings.
-# On HPC (offline), set ST_MODEL_NAME to a local path:
+# Sentence-transformer for ChromaDB embeddings. On HPC point at a local path:
 #   export ST_MODEL_NAME=/scratch/acmarcu/models/all-MiniLM-L6-v2
-# To pre-download on a login node:
-#   python -c "from sentence_transformers import SentenceTransformer; m = SentenceTransformer('all-MiniLM-L6-v2'); m.save('/scratch/acmarcu/models/all-MiniLM-L6-v2')"
 ST_MODEL_NAME = os.environ.get("ST_MODEL_NAME", "all-MiniLM-L6-v2")
 
-# LLM response format
+
+# ─── Pydantic response schemas ─────────────────────────────────────────
+
 class AgentResponse(BaseModel):
     thoughts: str
     action: str
@@ -46,15 +40,11 @@ class AgentResponse(BaseModel):
     communication_target: Optional[str] = None
 
 
-class CommunicationResponse(BaseModel):
-    communication: str
-    communication_target: Optional[str] = None
-
-
 class TargetedCommunicationResponse(BaseModel):
-    """Used when targeted_communication=True: forces the model to always emit a target."""
+    """All comm is targeted: communication_target is a required string (not Optional)
+    so the schema enforcer guarantees the model always picks a recipient."""
     communication: str
-    communication_target: str  # required — no Optional, so the schema enforcer fills it in
+    communication_target: str
 
 
 class CurruliculumResponse(BaseModel):
@@ -89,65 +79,48 @@ class EpisodeResponse(BaseModel):
 class BeliefResponse(BaseModel):
     beliefs: str
 
-def safe_format(template: str, **kwargs) -> str:
-    """Format a template string, replacing missing keys with 'N/A' instead of crashing.
 
-    This is the safe replacement for eval(f\"f'''...'''\") patterns.
-    """
+# ─── Prompt formatting ─────────────────────────────────────────────────
+
+def safe_format(template: str, **kwargs) -> str:
+    """Format a template, defaulting any missing placeholders to 'N/A'."""
     placeholders = set(re.findall(r'(?<!\{)\{(\w+)\}(?!\})', template))
     for key in placeholders:
         if key not in kwargs:
             kwargs[key] = "N/A"
-            logging.warning(f"Prompt placeholder '{{{key}}}' not provided, using 'N/A'")
+            logging.warning("Prompt placeholder '{%s}' not provided, using 'N/A'", key)
     try:
         return template.format(**kwargs)
     except (KeyError, IndexError, ValueError) as e:
-        logging.error(f"Template formatting failed even after defaults: {e}")
+        logging.error("Template formatting failed even after defaults: %s", e)
         return template
 
 
-def _fix_common_json_errors(text: str) -> str:
-    """Attempt to repair common JSON formatting mistakes from LLMs.
+# ─── JSON parsing ──────────────────────────────────────────────────────
 
-    Handles:
-    - Missing commas between key-value pairs (e.g. `"a": 1\n"b": 2`)
+def _fix_common_json_errors(text: str) -> str:
+    """Repair common JSON formatting mistakes from LLMs.
+
+    - Missing commas between key-value pairs
     - Trailing commas before closing braces/brackets
-    - Single quotes instead of double quotes (when unambiguous)
-    - Unescaped newlines inside string values
+    - Single quotes instead of double quotes (only when text has zero double quotes)
     """
-    # 1. Fix missing commas between lines: }"line  or "value"\n"key"
-    #    Pattern: end of a value (", number, true/false/null, ], })
-    #    followed by whitespace+newline then start of a new key ("key":)
+    # <value>\n<key>: → <value>,\n<key>:
     text = re.sub(
-        r'("(?:[^"\\]|\\.)*"|true|false|null|\d+\.?\d*|\]|\})'  # value end
-        r'(\s*\n\s*)'                                              # whitespace/newline
-        r'("(?:[^"\\]|\\.)*"\s*:)',                                # next key start
+        r'("(?:[^"\\]|\\.)*"|true|false|null|\d+\.?\d*|\]|\})'
+        r'(\s*\n\s*)'
+        r'("(?:[^"\\]|\\.)*"\s*:)',
         r'\1,\2\3',
         text,
     )
-
-    # 2. Fix trailing commas: ,} or ,]
-    text = re.sub(r',\s*([\}\]])', r'\1', text)
-
-    # 3. Fix single quotes → double quotes (only outside of already-double-quoted strings)
-    #    This is a best-effort heuristic — won't handle all edge cases
-    #    Only apply if the text has NO double quotes at all (pure single-quote JSON)
+    text = re.sub(r',\s*([\}\]])', r'\1', text)  # trailing commas
     if '"' not in text and "'" in text:
         text = text.replace("'", '"')
-
     return text
 
 
-def load_json(response: str) -> dict:
-    """Parse model response from text to dict.
-
-    Accepted formats:
-    1. {...}
-    2. ```json\n{...}\n```
-    3. Thinking text followed by {...}
-    4. Slightly malformed JSON (missing commas, trailing commas)
-    """
-    # Strip markdown code fences
+def _strip_markdown_fences(response: str) -> str:
+    """Remove ```json / ``` wrappers and {{...}} double-brace escaping."""
     response = response.strip()
     if response.startswith("```json"):
         response = response[7:]
@@ -156,61 +129,63 @@ def load_json(response: str) -> dict:
     if response.endswith("```"):
         response = response[:-3]
     response = response.strip()
-
-    # Fix double-brace escaping leaked from prompt templates (e.g. {{ → {)
     if response.startswith("{{") and response.endswith("}}"):
         response = response[1:-1]
+    return response
 
-    # Try direct parse first (fast path)
-    try:
-        return json.loads(response)
-    except json.JSONDecodeError:
-        pass
 
-    # Try to find JSON objects — prefer the last complete one
-    # (thinking text at the start may contain braces)
+def _try_parse(candidate: str) -> Optional[dict]:
+    """Try parsing as-is, then with common-error fixes. Return None on failure."""
+    for attempt in (candidate, _fix_common_json_errors(candidate)):
+        try:
+            return json.loads(attempt)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def load_json(response: str) -> dict:
+    """Parse a model response into a dict.
+
+    Accepts pure JSON, ```json fenced blocks, thinking-text-followed-by-JSON,
+    and slightly malformed JSON (missing commas, trailing commas, single quotes).
+    Returns {} when no candidate parses cleanly.
+    """
+    response = _strip_markdown_fences(response)
+
+    # 1. Direct parse (fast path).
+    parsed = _try_parse(response)
+    if parsed is not None:
+        return parsed
+
+    # 2. Walk all {...} substrings; prefer the LAST (thinking text often precedes
+    #    the real JSON, so the final brace span is more likely to be the answer).
     matches = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response)
     for match in reversed(matches):
-        try:
-            return json.loads(match)
-        except json.JSONDecodeError:
-            # Try fixing common errors before giving up on this match
-            try:
-                fixed = _fix_common_json_errors(match)
-                return json.loads(fixed)
-            except json.JSONDecodeError:
-                continue
+        parsed = _try_parse(match)
+        if parsed is not None:
+            return parsed
 
-    # Last resort: try fixing the entire response
-    try:
-        fixed = _fix_common_json_errors(response)
-        return json.loads(fixed)
-    except json.JSONDecodeError:
-        pass
+    # 3. Fallback: outermost { ... } span across the whole text.
+    first = response.find('{')
+    last = response.rfind('}')
+    if first != -1 and last > first:
+        parsed = _try_parse(response[first:last + 1])
+        if parsed is not None:
+            return parsed
 
-    # Try extracting just the outermost { ... } spanning the whole text
-    first_brace = response.find('{')
-    last_brace = response.rfind('}')
-    if first_brace != -1 and last_brace > first_brace:
-        candidate = response[first_brace:last_brace + 1]
-        try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
-            try:
-                fixed = _fix_common_json_errors(candidate)
-                return json.loads(fixed)
-            except json.JSONDecodeError:
-                pass
-
-    logging.error(f"Failed to decode JSON response: {response[:300]}")
+    logging.error("Failed to decode JSON response: %s", response[:300])
     return {}
 
 
-# print vision frame for each agent
+# ─── Image utilities ───────────────────────────────────────────────────
+
 def visualize_frames(
-    rgb_frames: List[np.ndarray], title: str = "", figsize: Tuple[int, int] = (8, 2)
+    rgb_frames: List[np.ndarray],
+    title: str = "",
+    figsize: Tuple[int, int] = (8, 2),
 ) -> plt.Figure:
-    """Plots the rgb_frames for each agent."""
+    """Plot one frame per agent in a horizontal strip."""
     fig, axs = plt.subplots(
         1, len(rgb_frames), figsize=figsize, facecolor="white", dpi=300
     )
@@ -224,29 +199,42 @@ def visualize_frames(
     return fig
 
 
-def create_model_client(
-    response_format, key_path="api.key"
-):
-    # Option A: local transformers model (no HTTP server)
+def autogenImg_to_Pil(autogen_image):
+    """Convert an autogen_core Image to a PIL Image."""
+    b64 = Image.to_base64(autogen_image)
+    return PIL.Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+
+
+# ─── Model client factory ──────────────────────────────────────────────
+
+def _resolve_api_key(key_path: str) -> str:
+    """Resolve the LLM API key from env, falling back to the key file, then a placeholder."""
+    api_key = os.environ.get("LLM_API_KEY")
+    if api_key:
+        return api_key
+    try:
+        with open(key_path) as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return "no-key-needed"
+
+
+def create_model_client(response_format, key_path="api.key"):
+    """Build a ChatCompletionClient.
+
+    - Local in-process model if LLM_MODEL_PATH is set.
+    - Otherwise an OpenAI-compatible HTTP client (vLLM, SGLang, OpenRouter…).
+    """
     if local_model_path:
         from agent_modules.local_model_client import LocalModelClient
         return LocalModelClient(
             model_path=local_model_path,
             response_format=response_format,
         )
-
-    # Option B: OpenAI-compatible HTTP endpoint
-    api_key = os.environ.get("LLM_API_KEY")
-    if not api_key:
-        try:
-            with open(key_path) as f:
-                api_key = f.read().strip()
-        except FileNotFoundError:
-            api_key = "no-key-needed"
-    model_client = OpenAIChatCompletionClient(
+    return OpenAIChatCompletionClient(
         model=model,
         base_url=base_url,
-        api_key=api_key,
+        api_key=_resolve_api_key(key_path),
         response_format=response_format,
         model_info={
             "vision": True,
@@ -256,12 +244,3 @@ def create_model_client(
             "structured_output": True,
         },
     )
-    return model_client
-
-
-def autogenImg_to_Pil(autogen_image):
-    # Convert autogen_core Image to Pil Image
-    base_img = Image.to_base64(autogen_image)
-    image_data = base64.b64decode(base_img)
-    image = PIL.Image.open(io.BytesIO(image_data)).convert("RGB")
-    return image

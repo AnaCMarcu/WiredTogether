@@ -1,6 +1,6 @@
 import os
 from agent_modules.llm_call import llm_call
-from agent_modules.util import AgentResponse, CommunicationResponse, TargetedCommunicationResponse, create_model_client, safe_format
+from agent_modules.util import AgentResponse, TargetedCommunicationResponse, create_model_client, safe_format
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
@@ -72,37 +72,17 @@ class ActionSelection:
         last_frame,
         cancellation_token,
         agent_name,
-        targeted_communication: bool = False,
         num_agents: int = 1,
     ):
-        """Generate a natural language communication message for an RL-selected action."""
-        if targeted_communication:
-            # TargetedCommunicationResponse has communication_target: str (required, not Optional).
-            # This forces the JSON schema enforcer to always emit the field — prompt alone is
-            # not enough because the model treats Optional fields as skippable.
-            comm_client = create_model_client(response_format=TargetedCommunicationResponse)
-            try:
-                self_idx = int(agent_name.split("_")[1])
-            except (IndexError, ValueError):
-                self_idx = -1
-            targets = ", ".join(
-                f"agent_{i}" for i in range(num_agents) if i != self_idx
-            )
-            # The prompt file uses Python format-string escaping: {{ and }} produce
-            # literal braces after .format() is called.  The search string must
-            # match the raw file content (double braces), not the rendered output.
-            user_prompt = rl_communication_prompt.replace(
-                'Respond in JSON: {{"communication": "<message>"}}',
-                f'Also set "communication_target" to the most relevant recipient: one of {targets}.\n'
-                f'Respond in JSON: {{"communication": "<message>", "communication_target": "<target>"}}'
-            )
-        else:
-            comm_client = create_model_client(response_format=CommunicationResponse)
-            user_prompt = rl_communication_prompt
+        """Generate a targeted natural-language message for an RL-selected action."""
+        # TargetedCommunicationResponse has communication_target: str (required, not
+        # Optional). The schema enforcer guarantees a recipient even when the prompt
+        # alone wouldn't (Optional fields can be silently skipped by the model).
+        comm_client = create_model_client(response_format=TargetedCommunicationResponse)
         content = await llm_call(
             comm_client,
             system_prompt=self.system_prompt,
-            user_prompt=user_prompt,
+            user_prompt=rl_communication_prompt,
             frame=last_frame,
             cancellation_token=cancellation_token,
             log_prefix=f"Agent {agent_name} rl_comm: ",

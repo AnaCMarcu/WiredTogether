@@ -37,6 +37,18 @@ Describe the scene in terms that directly inform action selection:
 - "Sky visible — looking too high, should LookDown"
 - "Flat ground ahead — no jump needed, MoveForward is safe"
 
+SCHEME AWARENESS (interactional motivation):
+After describing the scene, briefly flag any visible object/entity that
+represents an UNENACTED SCHEME — an action+target combination you have
+not yet tried in this context. Examples:
+- "Stone block visible at center — I have not yet enacted Dig on stone."
+- "Anvil ahead, teammate adjacent — joint Dig scheme not yet enacted."
+- "Switch on left wall — Dig-on-switch scheme not yet enacted."
+Unenacted schemes are intrinsically informative regardless of milestone
+status. Surface them so action selection can weigh novelty vs. extrinsic
+value.
+
 IMPORTANT respond in the following JSON format: {{"beliefs": "..."}}
 Write beliefs as a single string of 2-4 sentences. Be specific about image
-position (left/center/right, near/far) and chamber-relevant entities.
+position (left/center/right, near/far), chamber-relevant entities, and
+unenacted schemes.

@@ -21,8 +21,15 @@ class RLConfig:
     lora_save_dir: str = "rl_checkpoints"
     dtype: str = "float16"  # "float16", "bfloat16", "float32"
 
-    # ── Value head ──
+    # ── Value head (per-agent IPPO baseline; reused in 'independent' critic mode) ──
     value_hidden: int = 256
+
+    # ── Centralized critic (MAPPO) ──
+    # 'centralized' = single shared V(joint_state) across all agents (default).
+    # 'independent' = legacy IPPO with per-agent value heads.
+    critic_mode: str = "centralized"
+    critic_hidden: int = 256
+    critic_lr: float = 3e-4
 
     # ── Memory management ──
     # RL prompts can be very long (beliefs + skills + episodes).  Truncating at
@@ -78,5 +85,5 @@ class RLConfig:
         "TurnRight", "TurnLeft", "LookDown", "LookUp",
         "Drop", "Slot6", "Slot7", "Slot8",
         # ── Macro actions (multi-step, rewards accumulated across ticks) ──
-        "TurnAround", "ScanArea", "ApproachTarget", "Escape", "MineStairs",
+        "TurnAround", "ScanArea", "ApproachTarget", "Escape",
     )

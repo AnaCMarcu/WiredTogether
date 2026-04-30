@@ -1,11 +1,24 @@
-import json
 import logging
-import shutil
-from agent_modules.llm_call import llm_call
-from agent_modules.util import SkillResponse, create_model_client, safe_format, ST_MODEL_NAME
 import os
+import shutil
 from pathlib import Path
 
+from autogen_ext.memory.chromadb import (
+    ChromaDBVectorMemory,
+    PersistentChromaDBVectorMemoryConfig,
+    SentenceTransformerEmbeddingFunctionConfig,
+)
+
+from agent_modules.llm_call import llm_call
+from agent_modules.util import (
+    SkillResponse,
+    create_model_client,
+    safe_format,
+    ST_MODEL_NAME,
+)
+
+
+# ─── Module helpers ────────────────────────────────────────────────────
 
 def _chromadb_base_dir() -> str:
     """Return a fast-local directory for ChromaDB persistence.
@@ -20,35 +33,36 @@ def _chromadb_base_dir() -> str:
         base = f"/tmp/mindforge_{job_id}"
         os.makedirs(base, exist_ok=True)
         return os.path.join(base, "chromadb_autogen")
-    # Non-HPC: prefer $SCRATCH, fall back to home
     scratch = os.environ.get("SCRATCH")
     if scratch:
         return os.path.join(scratch, "chromadb_autogen")
     return os.path.join(str(Path.home()), "chromadb_autogen")
 
-from autogen_agentchat.agents import AssistantAgent
-from autogen_agentchat.ui import Console
-from autogen_core.memory import MemoryContent, MemoryMimeType
-from autogen_ext.memory.chromadb import (
-    ChromaDBVectorMemory,
-    PersistentChromaDBVectorMemoryConfig,
-    ChromaDBVectorMemoryConfig,
-    SentenceTransformerEmbeddingFunctionConfig
-)
 
-from autogen_ext.models.openai import OpenAIChatCompletionClient
-from autogen_core.models import UserMessage, SystemMessage
+def _load_prompt(name: str) -> str:
+    with open(os.path.join(_PROMPT_DIR, name), "r") as f:
+        return f.read()
 
+
+def _require_keys(*keys):
+    """Build an llm_call parse_check that asserts all keys are present."""
+    def check(content):
+        for k in keys:
+            assert k in content
+        return content
+    return check
+
+
+# ─── Prompt loading ────────────────────────────────────────────────────
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
-with open(os.path.join(_PROMPT_DIR, "skill_description_prompt.txt"), "r") as f:
-    skill_description_prompt = f.read()
-with open(os.path.join(_PROMPT_DIR, "skill_description_info.txt"), "r") as f:
-    skill_description_info = f.read()
-with open(os.path.join(_PROMPT_DIR, "skill_construct_query.txt"), "r") as f:
-    skill_construct_query = f.read()
+skill_description_prompt = _load_prompt("skill_description_prompt.txt")
+skill_description_info   = _load_prompt("skill_description_info.txt")
+skill_construct_query    = _load_prompt("skill_construct_query.txt")
 
+
+# ─── Main class ────────────────────────────────────────────────────────
 
 class SkillManager:
     def __init__(
@@ -60,130 +74,87 @@ class SkillManager:
         reset=True,
         agent_name="agent_0",
     ):
-        self.skill_model_client = (
-            skill_model_client
-            if skill_model_client
-            else create_model_client(response_format=SkillResponse)
+        self.skill_model_client = skill_model_client or create_model_client(
+            response_format=SkillResponse
         )
         self.skills = {}
-        # self.vectordb = ChromaDBVectorMemory(
-        #     config=PersistentChromaDBVectorMemoryConfig(
-        #         collection_name="skills_vectordb_nvidia",
-        #         persistence_path=os.path.join(
-        #             str(Path.home()),
-        #             f"chromadb_autogen/skills_vectodb_{agent_name}",
-        #         ),
-        #         k=retrieval_top_k,  # Return top  k results
-        #         score_threshold=0.4,  # Minimum similarity score
-        #         embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
-        #             model_name="all-MiniLM-L6-v2", device="cuda"
-        #         ),
-        #     ),
-        # )
-        db_path = os.path.join(_chromadb_base_dir(), f"skills_vectodb_{agent_name}")
-
-        # On reset, delete the directory entirely to avoid corrupted SQLite files
-        if reset and os.path.exists(db_path):
-            shutil.rmtree(db_path, ignore_errors=True)
-
-        self.vectordb = ChromaDBVectorMemory(
-            config=PersistentChromaDBVectorMemoryConfig(
-                collection_name="skill_vectordb_nvidia",
-                persistence_path=db_path,
-                k=retrieval_top_k,  # Return top  k results
-                score_threshold=0.4,  # Minimum similarity score
-                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(model_name=ST_MODEL_NAME,
-                                                                                     device="cuda")
-            ),
-        )
-        if not reset:
-            # Resume: rebuild skills dict from what's persisted
-            try:
-                self.vectordb._ensure_initialized()
-                if self.vectordb._collection is not None:
-                    existing = self.vectordb._collection.get()
-                    for id_, doc, meta in zip(
-                        existing["ids"], existing["documents"], existing["metadatas"]
-                    ):
-                        self.skills[id_] = {
-                            "code": meta.get("code", ""),
-                            "description": doc,
-                        }
-            except Exception as e:
-                logging.warning("SkillManager: failed to load persisted skills: %s", e)
 
         self.skill_prompt = (
-            override_skill_prompt
-            if override_skill_prompt
-            else safe_format(skill_description_prompt)
+            override_skill_prompt or safe_format(skill_description_prompt)
         )
         self._skill_info_prompt = override_skill_info_prompt or skill_description_info
 
-    async def add_skill(
-        self, action: str, cancellation_token, agent_thoughts: str = None
-    ):
+        self.vectordb = self._init_vectordb(agent_name, retrieval_top_k, reset)
+        if not reset:
+            self._restore_skills_from_db()
 
-        # Fix 5: for discrete actions, template the skill entry — no LLM call needed.
-        # generate_skill_description() was designed for code-writing; here the "skill"
-        # is a single action word, so a template is sufficient and cheaper.
-        skill_name = action.lower().replace(" ", "_") if action else "unknown"
-        skill_description = (
-            f"Action: {action}. Context: {agent_thoughts or 'No additional context.'}"
+    @staticmethod
+    def _init_vectordb(agent_name: str, top_k: int, reset: bool) -> ChromaDBVectorMemory:
+        """Create (or reset) a per-agent ChromaDB collection for skill storage."""
+        db_path = os.path.join(_chromadb_base_dir(), f"skills_vectodb_{agent_name}")
+        if reset and os.path.exists(db_path):
+            # Wipe the directory entirely — avoids corrupted SQLite files from prior runs.
+            shutil.rmtree(db_path, ignore_errors=True)
+        return ChromaDBVectorMemory(
+            config=PersistentChromaDBVectorMemoryConfig(
+                collection_name="skill_vectordb_nvidia",
+                persistence_path=db_path,
+                k=top_k,
+                score_threshold=0.4,
+                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
+                    model_name=ST_MODEL_NAME, device="cuda"
+                ),
+            ),
         )
 
-        if skill_name == "unknown" or not skill_description:
-            logging.warning(
-                f"Skipping skill save: name='{skill_name}', description='{skill_description}'"
-            )
+    def _restore_skills_from_db(self):
+        """Resume: rebuild self.skills from what's already persisted in the vector DB."""
+        try:
+            self.vectordb._ensure_initialized()
+            if self.vectordb._collection is None:
+                return
+            existing = self.vectordb._collection.get()
+            for id_, doc, meta in zip(
+                existing["ids"], existing["documents"], existing["metadatas"]
+            ):
+                self.skills[id_] = {
+                    "code": meta.get("code", ""),
+                    "description": doc,
+                }
+        except Exception as e:
+            logging.warning("SkillManager: failed to load persisted skills: %s", e)
+
+    # ─── Public API ────────────────────────────────────────────────
+
+    async def add_skill(
+        self, action: str, cancellation_token, agent_thoughts: str = None,
+    ):
+        """Persist a discrete-action skill (templated, no LLM call).
+
+        For free-form code skills use generate_skill_description() instead.
+        Returns (skill_name, skill_description, already_existed).
+        """
+        skill_name = self._action_to_skill_name(action)
+        skill_description = self._format_skill_description(action, agent_thoughts)
+
+        if skill_name == "unknown":
+            logging.warning("Skipping skill save: empty/invalid action.")
             return skill_name, skill_description, False
 
-        # does skill already exist?
-        already_exists = False
-        if skill_name in self.skills:
-            print(f"Skill '{skill_name}' already exists.")
-            self.vectordb._collection.delete(ids=[skill_name])
-            already_exists = True
-
-        self.vectordb._ensure_initialized()
-        if self.vectordb._collection is None:
-            raise RuntimeError("Failed to initialize ChromaDB")
-
-        # add skill to vectordb
-        self.vectordb._collection.add(
-            documents=[skill_description],
-            metadatas=[{"name": skill_name}],
-            ids=[skill_name],
-        )
-        # add skill to skills dict
-        self.skills[skill_name] = {
-            "code": action,
-            "description": skill_description,
-        }
-        # Verify sync (warn instead of crash — persistence edge cases are possible)
-        db_count = self.vectordb._collection.count()
-        if db_count != len(self.skills):
-            logging.warning(
-                "SkillManager: vectordb count (%d) != skills dict (%d) after add_skill('%s')",
-                db_count, len(self.skills), skill_name,
-            )
+        already_exists = self._delete_existing(skill_name)
+        self._persist_skill(skill_name, skill_description, action)
+        self._verify_db_sync(skill_name)
         return skill_name, skill_description, already_exists
 
     async def generate_skill_description(
-        self,
-        action: str,
-        cancellation_token,
-        agent_thoughts: str = None,
+        self, action: str, cancellation_token, agent_thoughts: str = None,
     ):
-        def parse_check(content):
-            assert "name" in content and "description" in content
-            return content
-
         response = await llm_call(
             self.skill_model_client,
             system_prompt=self.skill_prompt,
             user_prompt=self._skill_info_prompt,
             cancellation_token=cancellation_token,
-            parse_check=parse_check,
+            parse_check=_require_keys("name", "description"),
             log_prefix="SkillManager generate_skill_description: ",
             agent_thoughts=agent_thoughts,
             action=action,
@@ -194,37 +165,23 @@ class SkillManager:
         if self.vectordb._collection.count() == 0:
             return None
         k = min(self.vectordb._collection.count(), self.vectordb._config.k)
-        # query vector db
-        logging.info(f"Querying vector db for skills with query: {query}")
+        logging.info("Querying vector db for skills with query: %s", query)
         data = self.vectordb._collection.query(
             query_texts=[query],
             n_results=k,
             include=["documents", "metadatas", "distances"],
         )
-        logging.info(f"Skills found: {data}")
-        # format skills
-        skill_memory = []
+        logging.info("Skills found: %s", data)
         ids = data["ids"][0] if data.get("ids") and data["ids"] else []
-        for s in ids:
-            if s in self.skills:
-                skill_memory.append(self.skills[s])
+        return [self.skills[s] for s in ids if s in self.skills]
 
-        return skill_memory
-
-    # construct a query for fetching relevant skills based on the task and frame
     async def construct_query(self, task, frame, cancellation_token):
-
-        user_message_prompt = skill_construct_query
-
-        def parse_check(content):
-            assert "description" in content
-            return content
-
+        """Build a description query for skill retrieval, conditioned on task+frame."""
         response = await llm_call(
             self.skill_model_client,
-            user_prompt=user_message_prompt,
+            user_prompt=skill_construct_query,
             cancellation_token=cancellation_token,
-            parse_check=parse_check,
+            parse_check=_require_keys("description"),
             log_prefix="SkillManager construct_query: ",
             task=task,
             frame=frame,
@@ -235,11 +192,43 @@ class SkillManager:
         await self.vectordb.clear()
         return True
 
+    # ─── add_skill internals ───────────────────────────────────────
 
-# await self.vectordb.add(
-#             MemoryContent(
-#                 content=content,
-#                 mime_type=MemoryMimeType.TEXT,
-#                 metadata={"category": catergory, "type": type},
-#             )
-#         )
+    @staticmethod
+    def _action_to_skill_name(action: str) -> str:
+        if not action:
+            return "unknown"
+        return action.lower().replace(" ", "_")
+
+    @staticmethod
+    def _format_skill_description(action: str, agent_thoughts: str | None) -> str:
+        return f"Action: {action}. Context: {agent_thoughts or 'No additional context.'}"
+
+    def _delete_existing(self, skill_name: str) -> bool:
+        if skill_name not in self.skills:
+            return False
+        print(f"Skill '{skill_name}' already exists.")
+        self.vectordb._collection.delete(ids=[skill_name])
+        return True
+
+    def _persist_skill(self, skill_name: str, description: str, action: str):
+        self.vectordb._ensure_initialized()
+        if self.vectordb._collection is None:
+            raise RuntimeError("Failed to initialize ChromaDB")
+        self.vectordb._collection.add(
+            documents=[description],
+            metadatas=[{"name": skill_name}],
+            ids=[skill_name],
+        )
+        self.skills[skill_name] = {
+            "code": action,
+            "description": description,
+        }
+
+    def _verify_db_sync(self, skill_name: str):
+        db_count = self.vectordb._collection.count()
+        if db_count != len(self.skills):
+            logging.warning(
+                "SkillManager: vectordb count (%d) != skills dict (%d) after add_skill('%s')",
+                db_count, len(self.skills), skill_name,
+            )

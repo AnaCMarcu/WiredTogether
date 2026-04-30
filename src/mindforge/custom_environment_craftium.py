@@ -71,15 +71,6 @@ _MACRO_ACTIONS = {
         ("Jump", 3),
         ("MoveForward", 8),
     ],
-    # Mine a 3-step staircase going forward-down: dig at a downward angle then
-    # step forward so each step descends one block but stays walkable.
-    # LookDown × 1 tilts ~15° down, Dig holds for 5 ticks, MoveForward × 2
-    # advances onto the newly cleared step.  Repeat 3 times = ~3 block descent.
-    "MineStairs": [
-        ("LookDown", 1), ("Dig", 1), ("MoveForward", 2),
-        ("LookDown", 1), ("Dig", 1), ("MoveForward", 2),
-        ("LookDown", 1), ("Dig", 1), ("MoveForward", 2),
-    ],
 }
 VALID_ACTIONS = VALID_ACTIONS + list(_MACRO_ACTIONS.keys())
 

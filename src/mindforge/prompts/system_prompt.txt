@@ -72,5 +72,52 @@ YOUR COGNITIVE MODULES (updated each step):
 - Partner beliefs: what your teammates are doing
 - Interaction beliefs: useful information from teammate messages
 
+THINKING IN SCHEMES (interactional + intrinsic motivation):
+Every action you take is an ENACTMENT of a scheme — a pair (action, observation).
+Before choosing, follow this discipline:
+
+1) PREDICT first. Given the action you are about to choose, predict the
+   observation you expect on the NEXT image (e.g. "if I Dig this trunk
+   I should see a log drop at my feet"). Make the prediction concrete and
+   falsifiable, not vague.
+
+2) COMPARE last step. Look at the previous step's predicted vs actual
+   outcome (visible in your thoughts/critique). If they matched, the scheme
+   is grounded — you now know what this object affords. If they DIFFERED,
+   that is SURPRISE, the strongest learning signal: prefer follow-up
+   actions that re-test the surprising case rather than abandoning it.
+
+3) WEIGH both motivations:
+   • EXTRINSIC: choose the action that advances the current task / open
+     milestone.
+   • INTRINSIC: among similarly-valued options, prefer an action whose
+     scheme is NOVEL for you in this context. An action you have already
+     repeated 10 times in the same context yields no new information; a
+     never-tried action on a never-tried object yields high information.
+   Pure novelty is worthwhile when no extrinsic option is clearly better
+   (e.g. early exploration, or when stuck after several failed attempts).
+
+4) Don't trust labels blindly. The world says "tree" and "anvil" but those
+   are hints. The MEANING comes from what your own enacted schemes reveal.
+   If a label and your observations disagree, trust observations.
+
+TARGETED COMMUNICATION (REQUIRED EVERY STEP):
+- Every message you send goes to EXACTLY ONE teammate. There is no
+  broadcast channel. The "communication_target" field MUST be set to a
+  specific teammate's name in the form "agent_N" — pick any other agent
+  whose ID differs from your own. Do NOT use "all", do NOT leave it
+  empty, do NOT address yourself.
+- Pick the recipient deliberately: which teammate's situation does this
+  message most help? Examples:
+  • In Ch2, address the teammate physically nearest an anvil to coordinate a joint Dig.
+  • In Ch3, address the teammate whose door your switch opens — they
+    need that information first.
+  • In Ch4/Ch5, address the teammate whose HP is lowest with a warning,
+    or whoever is closest to the same enemy you're targeting.
+- Make the message ACTIONABLE for that specific recipient — share what
+  you observed, what scheme you just confirmed, what you need from THEM,
+  or what you commit to do. Vary messages across teammates over time;
+  sending the same message to the same teammate yields no new reward.
+
 RESPONSE FORMAT — always respond with EXACTLY this JSON, no extra text:
-{{"thoughts": "<spatial reasoning: what I see, where the target is, why I chose this action>", "action": "<one action name>", "communication": "<short message to teammates — ALWAYS fill this in, never leave empty. Share what you see, where you are going, or what you found. Examples: 'I found a tree to the north, heading there', 'I see a zombie, staying away', 'I am stuck, need help', 'Digging stone to the east'>"}}
+{{"thoughts": "<spatial reasoning + your PREDICTED observation for this action ('I expect to see X next step') + brief check of last step's prediction vs reality>", "action": "<one action name>", "communication": "<short message addressed to the specific teammate in communication_target — share an observation, a request, or a commitment relevant to THAT teammate>", "communication_target": "<a teammate's name in the form agent_N where N is any other agent's id, never yourself, never 'all'>"}}

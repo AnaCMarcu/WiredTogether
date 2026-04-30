@@ -50,6 +50,7 @@ MILESTONE_TRACK = {
     "m26_boss_half_hp":        "ch5_boss",
     "m27_boss_defeated":       "ch5_boss",
     "m28_all_alive_bonus":     "ch5_boss",
+    "m_comm_ch1":              "communication",
     "m_comm_ch2":              "communication",
     "m_comm_ch3":              "communication",
     "m_comm_ch4":              "communication",
@@ -82,6 +83,7 @@ TRACKS = {
         ("m28_all_alive_bonus", 250.0),
     ],
     "communication": [
+        ("m_comm_ch1", 40.0),
         ("m_comm_ch2", 20.0), ("m_comm_ch3", 30.0),
         ("m_comm_ch4", 15.0), ("m_comm_ch5", 20.0),
     ],

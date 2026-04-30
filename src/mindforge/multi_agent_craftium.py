@@ -48,7 +48,7 @@ ROLE_NAMES = ["agent"]
 
 # Macro action names — used to detect when a macro was selected so the RL
 # buffer defers store_reward() until the macro completes.
-_MACRO_NAMES = frozenset({"TurnAround", "ScanArea", "ApproachTarget", "Escape", "MineStairs"})
+_MACRO_NAMES = frozenset({"TurnAround", "ScanArea", "ApproachTarget", "Escape"})
 
 
 def parse_args():
@@ -64,11 +64,7 @@ def parse_args():
     parser.add_argument("--obs-height", type=int, default=180,
                         help="Observation height in pixels")
     parser.add_argument("--no-communication", action="store_true",
-                        help="Disable inter-agent communication")
-    parser.add_argument("--targeted-communication", action="store_true",
-                        help="Enable targeted communication: agents choose recipients via "
-                             "communication_target field (one of agent_N or 'all'). "
-                             "Default: broadcast to all.")
+                        help="Disable inter-agent communication entirely.")
     parser.add_argument("--sleep-time", type=float, default=0.0,
                         help="Seconds to sleep between LLM calls (rate-limit protection)")
     parser.add_argument("--belief-interval", type=int, default=5,
@@ -109,6 +105,13 @@ def parse_args():
                         choices=["action", "token"],
                         help="RL mode: 'action' = MAPPO action head, "
                              "'token' = token-opt only (LLM picks actions)")
+    parser.add_argument("--rl-critic-mode", type=str, default="centralized",
+                        choices=["centralized", "independent"],
+                        help="Critic architecture for action-mode RL. "
+                             "'centralized' (default) = shared V(joint_state) critic across "
+                             "all agents (true MAPPO). "
+                             "'independent' = legacy per-agent value head on per-agent LLM "
+                             "hidden state (IPPO).")
     parser.add_argument("--rl-prompt-max-tokens", type=int, default=512,
                         help="Max tokens for RL prompt encoding. Capping this is critical "
                              "for VRAM: at model_max_length=32768 a mini-batch of 8 prompts "
@@ -242,25 +245,26 @@ def build_role_configs(
 
 def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
                  rl_config=None, belief_interval=5, critic_interval=20,
-                 targeted_communication=False):
-    """Initialize all Mindforge agents."""
+                 centralized_critic=None):
+    """Initialize all Mindforge agents.
+
+    ``centralized_critic`` (when not None) is shared by all agents' RLLayers
+    and turns the value-loss off in their PPO updates.
+    """
     agents = []
     for i, role_cfg in enumerate(role_configs):
         # Build per-agent RL layer (no-op when rl_config.enabled is False)
         rl_layer = None
         if rl_config and rl_config.enabled:
-            rl_layer = RLLayer(config=rl_config, role=role_cfg["name"], agent_id=i)
-
-        # Build per-agent system prompt: exclude self from target list so the LLM
-        # never accidentally addresses itself.
-        agent_system_prompt = system_prompt
-        if targeted_communication:
-            target_list = ", ".join(f"agent_{j}" for j in range(num_agents) if j != i)
-            agent_system_prompt = system_prompt + (
-                f"\n\nTARGETED COMMUNICATION: When filling in the \"communication\" field, "
-                f"also set \"communication_target\" to the agent your message is most relevant to: "
-                f"one of {target_list}. Prefer targeted messages when coordinating directly with one teammate."
+            rl_layer = RLLayer(
+                config=rl_config, role=role_cfg["name"], agent_id=i,
+                centralized_critic=centralized_critic,
             )
+
+        # Targeted communication policy lives in the static prompts. The LLM
+        # uses its own agent name (passed in via the user message) to exclude
+        # itself from the recipient list.
+        agent_system_prompt = system_prompt
 
         agent = CustomAgent(
             name=role_cfg["agent_name"],
@@ -293,7 +297,6 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
             rl_layer=rl_layer,
             belief_interval=belief_interval,
             critic_interval=critic_interval,
-            targeted_communication=targeted_communication,
             num_agents=num_agents,
         )
         agents.append(agent)
@@ -598,7 +601,6 @@ async def run(args):
     obs_width = args.obs_width
     obs_height = args.obs_height
     communication = not args.no_communication
-    targeted_communication = args.targeted_communication
     sleep_time = args.sleep_time
     save_gif = not args.no_gif
     gif_dir = args.gif_dir
@@ -703,16 +705,37 @@ async def run(args):
         auto_token_opt=args.rl_auto_token_opt,
         rl_prompt_max_tokens=args.rl_prompt_max_tokens,
         lora_save_dir=rl_save_dir,
+        critic_mode=args.rl_critic_mode,
     )
     if rl_config.enabled:
         print(f"RL layer ENABLED: model={rl_config.model_path}, "
-              f"lora_rank={rl_config.lora_rank}, update_interval={rl_config.update_interval}")
+              f"lora_rank={rl_config.lora_rank}, update_interval={rl_config.update_interval}, "
+              f"critic_mode={rl_config.critic_mode}")
+
+    # ── Centralised MAPPO critic (one shared V across all agents) ─────────
+    # Built before agents so each RLLayer can hold a reference to it. In
+    # 'independent' mode (or when RL is off) we skip construction.
+    centralized_critic = None
+    if rl_config.enabled and rl_config.mode == "action" \
+            and rl_config.critic_mode == "centralized":
+        from rl_layer.centralized_critic import CentralizedCritic
+        from agent_modules.craftium_metric import MILESTONE_TRACK
+        # Use the canonical milestone ID list as the bitmap order so the
+        # critic input layout is stable across runs.
+        milestone_ids = list(MILESTONE_TRACK.keys())
+        centralized_critic = CentralizedCritic(
+            num_agents=num_agents,
+            config=rl_config,
+            milestone_ids=milestone_ids,
+        )
+        print(f"[MAPPO] Centralised critic ENABLED: joint_dim={centralized_critic.joint_dim}, "
+              f"milestones tracked={len(milestone_ids)}")
 
     agents = build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
                          rl_config=rl_config,
                          belief_interval=args.belief_interval,
                          critic_interval=args.critic_interval,
-                         targeted_communication=targeted_communication)
+                         centralized_critic=centralized_critic)
 
     # ── Hebbian social plasticity ──
     hebbian_config = HebbianConfig(
@@ -735,7 +758,7 @@ async def run(args):
               f"ltd={hebbian_config.ltd_lr}, radius={hebbian_config.interaction_radius}, "
               f"γ={hebbian_config.reward_diffusion_gamma}")
 
-    comm_mode = "off" if not communication else ("targeted" if targeted_communication else "broadcast")
+    comm_mode = "off" if not communication else "targeted"
     print(f"\nConfig: {num_agents} agents, {num_episodes} episodes, "
           f"{max_steps} max steps, comm={comm_mode}, "
           f"seed={seed}")
@@ -885,8 +908,8 @@ async def run(args):
             std_str = ", ".join(f"agent_{i}={s:.1f}" for i, s in enumerate(stds)) if stds else "N/A"
             print(f"  * Warm-up timeout ({elapsed:.0f}s). std-dev: {std_str}. Starting anyway.")
 
-        communications = []  # broadcast mode (shared list)
-        agent_communications = {i: [] for i in range(num_agents)}  # targeted mode (per-agent)
+        # All communication is targeted: each agent has its own inbox.
+        agent_communications = {i: [] for i in range(num_agents)}
         agents_error_count = [0] * num_agents
         comm_tracker = CommunicationTracker(agent_ids=list(range(num_agents)))
         coop_metric = CooperationMetric(agent_ids=list(range(num_agents)))
@@ -1048,9 +1071,7 @@ async def run(args):
                 frame_image = environment.get_pil_image(agent_id)
                 reward_text = environment.get_reward_summary(agent_id)
 
-                comms_for_agent = (
-                    agent_communications[agent_id] if targeted_communication else communications
-                )
+                comms_for_agent = agent_communications[agent_id]
                 # Prepend a one-line survival notice to the instruction prompt so
                 # agents know the world has changed. Empty string in exploration
                 # phase — no effect on existing behavior.
@@ -1093,56 +1114,44 @@ async def run(args):
                     except (IndexError, ValueError):
                         sender_idx = -1
 
-                    if targeted_communication and sender_idx >= 0:
-                        # Resolve recipients from communication_target
-                        is_targeted = (
-                            comm_target
-                            and comm_target != "all"
-                            and comm_target.startswith("agent_")
-                        )
-                        if is_targeted:
-                            try:
-                                recv_idx = int(comm_target.split("_")[1])
-                                if 0 <= recv_idx < num_agents and recv_idx != sender_idx:
-                                    recipients = [recv_idx]
-                                else:
-                                    recipients = [i for i in range(num_agents) if i != sender_idx]
-                                    is_targeted = False
-                            except (IndexError, ValueError):
-                                recipients = [i for i in range(num_agents) if i != sender_idx]
-                                is_targeted = False
-                        else:
-                            # Model returned "all" despite the targeted-communication
-                            # instruction.  Fall back to the agent with the strongest
-                            # current Hebbian bond so the comm still earns bond credit.
-                            if hebbian_graph.config.enabled:
-                                candidates = [
-                                    (j, float(hebbian_graph.W[sender_idx, j]))
-                                    for j in range(num_agents) if j != sender_idx
-                                ]
-                                fallback_target = max(candidates, key=lambda x: x[1])[0]
-                            else:
-                                others = [j for j in range(num_agents) if j != sender_idx]
-                                fallback_target = random.choice(others)
-                            recipients = [fallback_target]
-                            is_targeted = True
+                    if sender_idx < 0:
+                        continue  # malformed agent name; drop the message
 
-                        for recv_idx in recipients:
-                            agent_communications[recv_idx].append(message)
-                            if len(agent_communications[recv_idx]) > num_agents - 1:
-                                agent_communications[recv_idx].pop(0)
-                        # Hebbian δ_comm only fires when the message was deliberately targeted —
-                        # broadcast ("all") contributes no directed co-activity signal.
-                        if is_targeted:
-                            for recv_idx in recipients:
-                                comm_events.append((sender_idx, recv_idx))
-                    else:
-                        # Broadcast mode: deliver to shared list, no Hebbian comm bonus.
-                        # Spatial co-activity is sufficient; broadcasting to everyone
-                        # carries no information about which specific bond is active.
-                        communications.append(message)
-                        if len(communications) > num_agents - 1:
-                            communications.pop(0)
+                    # Resolve recipient from communication_target. The LLM is
+                    # required to pick a specific agent (no broadcasts).
+                    is_valid_target = (
+                        comm_target
+                        and comm_target != "all"
+                        and comm_target.startswith("agent_")
+                    )
+                    recv_idx = -1
+                    if is_valid_target:
+                        try:
+                            cand = int(comm_target.split("_")[1])
+                            if 0 <= cand < num_agents and cand != sender_idx:
+                                recv_idx = cand
+                        except (IndexError, ValueError):
+                            recv_idx = -1
+
+                    if recv_idx < 0:
+                        # Model returned "all" or a malformed/self target despite
+                        # the targeted-communication policy. Fall back to the
+                        # strongest Hebbian bond, or a random teammate, so the
+                        # message still reaches exactly one agent.
+                        if hebbian_graph.config.enabled:
+                            candidates = [
+                                (j, float(hebbian_graph.W[sender_idx, j]))
+                                for j in range(num_agents) if j != sender_idx
+                            ]
+                            recv_idx = max(candidates, key=lambda x: x[1])[0]
+                        else:
+                            others = [j for j in range(num_agents) if j != sender_idx]
+                            recv_idx = random.choice(others)
+
+                    agent_communications[recv_idx].append(message)
+                    if len(agent_communications[recv_idx]) > num_agents - 1:
+                        agent_communications[recv_idx].pop(0)
+                    comm_events.append((sender_idx, recv_idx))
 
                 time.sleep(sleep_time)
 
@@ -1205,6 +1214,43 @@ async def run(args):
                 comm_rewards=_comm_rewards_this_step,
                 infos={"chambers": {i: environment.get_chamber(i) for i in range(num_agents)}},
             )
+
+            # ── Phase 1c: Centralised critic — encode joint state, evaluate V_global ──
+            # Runs once per step, after all agents have acted but before Hebbian
+            # diffusion. Each agent's pending transition is updated with the
+            # SAME V_global and joint_state so the centralised critic sees the
+            # same target across the team.
+            joint_state_t = None
+            v_global_t = 0.0
+            if centralized_critic is not None:
+                _hps = {}
+                _inv = {}
+                _chambers = {}
+                for _i in range(num_agents):
+                    _status = environment.get_player_status_text(_i) or ""
+                    _hp = 20.0
+                    if "Health:" in _status:
+                        try:
+                            _hp = float(_status.split("Health:")[1].split("/")[0].strip())
+                        except (ValueError, IndexError):
+                            _hp = 20.0
+                    _hps[_i] = _hp
+                    _inv[_i] = environment.pickedup_object(agentId=_i) or ""
+                    _chambers[_i] = environment.get_chamber(_i)
+                joint_state_t = centralized_critic.encode_joint(
+                    positions=_agent_pos_map,
+                    chambers=_chambers,
+                    hps=_hps,
+                    inventories=_inv,
+                    milestones_by_agent=metric._agent_milestones,
+                    raw_rewards=_task_rewards_this_step,
+                    last_actions=_actions_this_step,
+                    last_comms=_chat_this_step,
+                )
+                v_global_t = centralized_critic.evaluate(joint_state_t)
+                for _agent in agents:
+                    if _agent.rl_layer is not None and _agent.rl_layer.enabled:
+                        _agent.rl_layer.set_pending_value_global(v_global_t, joint_state_t)
 
             # ── Phase 2: Hebbian update + reward diffusion ──
 
@@ -1350,6 +1396,28 @@ async def run(args):
                                         )
                     except Exception as _tok_exc:
                         logging.warning(f"Agent {agent_id} token_optimize failed: {_tok_exc}")
+
+            # ── Phase 3a: Centralised critic — store team step, maybe update ──
+            if centralized_critic is not None and joint_state_t is not None:
+                _alive_rewards = [
+                    float(diffused_rewards[_i])
+                    for _i in range(num_agents)
+                    if not environment._terminations.get(f"agent_{_i}", False)
+                ]
+                _team_reward = (
+                    sum(_alive_rewards) / len(_alive_rewards) if _alive_rewards else 0.0
+                )
+                _team_done = any(
+                    environment._terminations.get(f"agent_{_i}", False)
+                    for _i in range(num_agents)
+                )
+                centralized_critic.store_step(
+                    joint_state_t, _team_reward, v_global_t, _team_done,
+                )
+                if centralized_critic.should_update():
+                    _critic_info = centralized_critic.update()
+                    if _critic_info:
+                        metric.record_rl_update(-1, _critic_info)
 
             # ── Phase 3b: Five-chambers milestone events ──
             for _ev in environment.poll_milestone_events():

@@ -9,6 +9,13 @@ Aim for at most 5 concise beliefs, each one directly actionable. Prioritize:
 - Gear status across the team (who has sword/chestplate).
 - Combat coordination (focus fire on which zombie, boss HP estimate).
 - Warnings ("agent_0 low HP, needs to retreat from boss").
+- TEAMMATE-ENACTED SCHEMES (free learning): if a teammate reports an
+  (action, observation) pair, record it. Their schemes inform your world
+  model without you having to enact them yourself. Examples:
+  "agent_1 dug solo anvil → no break (schema: solo-Dig-anvil → no progress)."
+  "agent_2 walked over diamond sword drop → auto-wielded (scheme confirmed)."
+  Note CONTRADICTIONS too: if your prediction said X and a teammate observed
+  Y, that is a learning opportunity worth flagging.
 
 Conversations: {conversations}
 Previous beliefs: {previous_interaction_beliefs}

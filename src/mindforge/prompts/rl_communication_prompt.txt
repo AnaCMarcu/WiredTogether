@@ -3,7 +3,19 @@ Last action: {last_action}
 Chosen action this step: {action}
 Inventory: {picked_object}
 
-Write a short message to your teammates (1 sentence) describing what you observe or intend to do.
-Examples: 'I found a tree to the north, heading there', 'Digging stone to the east', 'I am stuck, trying to escape', 'Moving forward to explore'.
+Write a short message (1 sentence) directed at ONE specific teammate
+describing what you observed, what you intend to do, or what you need
+from them. There is no broadcast — the message goes to exactly one
+recipient, and you must pick who.
 
-Respond in JSON: {{"communication": "<message>"}}
+Pick the teammate the message is most useful to (e.g. the one nearest
+your target, the one in the same chamber, the one whose door you can
+open). Address them clearly: "agent_X, ..." style is fine.
+
+Examples:
+- "agent_1, I'm digging the left anvil — meet me to break it together."
+- "agent_2, I see a tree to the north, you can come too."
+- "agent_0, I pressed my switch in Cell B; your door should open now."
+
+Respond in JSON:
+{{"communication": "<message>", "communication_target": "<a teammate's name in the form agent_N — never yourself, never 'all'>"}}

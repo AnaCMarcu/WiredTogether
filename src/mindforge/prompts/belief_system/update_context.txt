@@ -1,6 +1,8 @@
 Create a concise context for the current task in the Five Chambers dungeon.
-Focus on the IMMEDIATE next physical step — not the overall goal, but what
-specific action or orientation is needed RIGHT NOW.
+Focus on the IMMEDIATE next physical step framed as a SCHEME — pair the
+action with the OBSERVATION the agent should expect. The agent learns by
+comparing predicted observation to actual; make the prediction explicit so
+that comparison is possible.
 
 Examples for each chamber:
 - Task "Dig a tree" (Ch1): "Find a tree trunk in the image, turn to center it,

@@ -9,6 +9,7 @@ import math
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+import numpy as np
 import torch
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ class Transition:
     prompt_text: str          # full formatted prompt (needed for recomputing logprobs)
     action_idx: int           # index into RLConfig.actions
     old_log_prob: float       # log π_old(a|s)
-    old_value: float          # V_old(s)
+    old_value: float          # V_old(s) — per-agent value head (IPPO baseline)
     reward: float = 0.0
     done: bool = False
     # populated by GAE after the rollout segment
@@ -29,6 +30,12 @@ class Transition:
     # reward decomposition for post-hoc analysis (training uses reward only)
     reward_task: float = 0.0
     reward_comm: float = 0.0
+    # ── Centralised-critic (MAPPO) fields, populated by main loop ──
+    # When set, GAE uses old_value_global instead of old_value, and
+    # action_level_ppo_step skips its value-loss term (the centralised
+    # critic owns its own update pipeline).
+    old_value_global: Optional[float] = None
+    joint_state: Optional[np.ndarray] = None
 
 
 class RolloutBuffer:
@@ -42,8 +49,15 @@ class RolloutBuffer:
     # ── Collection API ──
 
     def store_action(self, prompt_text: str, action_idx: int,
-                     log_prob: float, value: float) -> None:
-        """Called right after action selection.  Reward comes later."""
+                     log_prob: float, value: float,
+                     value_global: Optional[float] = None,
+                     joint_state: Optional[np.ndarray] = None) -> None:
+        """Called right after action selection.  Reward comes later.
+
+        ``value_global`` and ``joint_state`` are populated when running with a
+        centralised critic; otherwise the per-agent ``value`` is used as the
+        GAE baseline (IPPO behaviour).
+        """
         if self._pending is not None:
             # previous transition never got a reward – store it with 0
             self._buf.append(self._pending)
@@ -52,7 +66,24 @@ class RolloutBuffer:
             action_idx=action_idx,
             old_log_prob=log_prob,
             old_value=value,
+            old_value_global=value_global,
+            joint_state=joint_state,
         )
+
+    def set_pending_value_global(self, value_global: float,
+                                 joint_state: Optional[np.ndarray] = None) -> None:
+        """Attach a centralised critic value (and the joint state it was computed
+        from) to the currently-pending transition.
+
+        Called once per step from the main loop AFTER all agents' select_action
+        have run, so V_global is identical across agents at the same step.
+        No-op if no transition is pending (e.g. agent terminated mid-step).
+        """
+        if self._pending is None:
+            return
+        self._pending.old_value_global = float(value_global)
+        if joint_state is not None:
+            self._pending.joint_state = joint_state
 
     def store_reward(self, reward: float, done: bool = False,
                      reward_task: float = 0.0, reward_comm: float = 0.0) -> None:
@@ -92,30 +123,39 @@ class RolloutBuffer:
     # ── GAE computation ──
 
     def compute_gae(self, gamma: float, gae_lambda: float,
-                    last_value: float = 0.0) -> None:
+                    last_value: float = 0.0,
+                    use_global_value: bool = False) -> None:
         """Compute Generalised Advantage Estimation in-place.
 
-        After GAE is computed, advantages are normalized over the *full rollout*
-        so that mini-batch assignment does not affect advantage scaling.  Per-
-        mini-batch normalization (the previous approach) destroyed the signal
-        about which parts of the rollout were actually better than others.
+        When ``use_global_value`` is True, GAE uses each transition's
+        ``old_value_global`` (centralised critic baseline) instead of the
+        per-agent ``old_value``. Falls back to ``old_value`` for any
+        transition where the global value is missing.
+
+        After GAE is computed, advantages are normalised over the *full rollout*
+        so mini-batch assignment does not affect advantage scaling.
         """
+        def _v(tr: Transition) -> float:
+            if use_global_value and tr.old_value_global is not None:
+                return tr.old_value_global
+            return tr.old_value
+
         gae = 0.0
         for t in reversed(range(len(self._buf))):
             tr = self._buf[t]
             if t == len(self._buf) - 1:
                 next_value = last_value
             else:
-                next_value = self._buf[t + 1].old_value
-            # Use the CURRENT transition's done flag, not the next step's.
-            # tr.done=True means the episode ended after this step, so V(s_{t+1})=0.
+                next_value = _v(self._buf[t + 1])
+            # tr.done=True means the episode ended after this step → V(s_{t+1})=0.
             next_non_terminal = 1.0 - float(tr.done)
-            delta = tr.reward + gamma * next_value * next_non_terminal - tr.old_value
+            cur_value = _v(tr)
+            delta = tr.reward + gamma * next_value * next_non_terminal - cur_value
             gae = delta + gamma * gae_lambda * next_non_terminal * gae
             tr.advantage = gae
-            tr.returns = gae + tr.old_value
+            tr.returns = gae + cur_value
 
-        # Normalize advantages over the full rollout (not per mini-batch).
+        # Normalise advantages over the full rollout (not per mini-batch).
         adv = torch.tensor([tr.advantage for tr in self._buf], dtype=torch.float32)
         if adv.numel() >= 1:
             adv = (adv - adv.mean()) / (adv.std() + 1e-5)

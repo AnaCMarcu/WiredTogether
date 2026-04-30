@@ -20,6 +20,10 @@ MIN_MSG_LEN = 5
 RATE_LIMIT_STEPS = 2  # Min steps between valid messages per agent
 
 CHAMBER_COMM_THRESHOLDS = {
+    # Ch1 has the highest milestone reward to bootstrap the communication
+    # habit early — even though Ch1 is solo, talking about what you observe
+    # is what we want agents to learn first.
+    "ch1": (2, 40.0, "m_comm_ch1"),
     "ch2": (3, 20.0, "m_comm_ch2"),
     "ch3": (2, 30.0, "m_comm_ch3"),
     "ch4": (2, 15.0, "m_comm_ch4"),
