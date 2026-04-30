@@ -1,220 +1,232 @@
 # WiredTogether
 
-Multi-agent reinforcement learning environment built on [Craftium](https://github.com/minosvasilias/craftium) - a Minetest/Luanti-based RL platform.
+Hebbian Social Learning integrated over reinforcement learning with MindForge based agents in a multi-agent cooperative Craftium environment.
 
-## 🎯 Quick Start
+Agents act in **Five Chambers**, a hand-designed 5-room cooperative dungeon
+where progress requires both individual skill (Ch1) and inter-agent coordination
+(Ch2 anvil breaking, Ch3 switch puzzle, Ch4 zombie combat, Ch5 boss fight).
 
-**Want to test immediately?** → See [QUICKSTART.md](QUICKSTART.md)
+The agents combine:
 
-**Setting up from scratch?** → See [SETUP_WSL.md](SETUP_WSL.md)
+- a **MindForge** LLM-driven cognitive stack (perception, beliefs, auto-curriculum, critic, skill memory),
+- a **modular RL layer** with PPO + LoRA fine-tuning over discrete + macro actions,
+- **MAPPO** with a shared centralised critic on a joint state vector (compact features + sentence-transformer embeddings of the agents' last actions/messages),
+- a **Hebbian social-plasticity graph** that learns inter-agent bonds from spatial co-activity, communication, and shared advantage, and uses them for reward diffusion + social replay.
 
-**Check current status** → See [STATUS.md](STATUS.md)
+---
 
-## 📋 Overview
+## Project layout
 
-This project provides a **multi-agent OpenWorld environment** using PettingZoo's ParallelEnv API:
+```
+src/
+├── rl_layer/                  Modular RL layer (PPO actor + optional centralised critic)
+│   ├── config.py
+│   ├── heads.py               ActionHead, ValueHead, RunningMeanStd
+│   ├── trajectory_buffer.py   Per-agent rollout buffer + GAE
+│   ├── ippo.py                Per-agent PPO step (policy + optional value loss)
+│   ├── ppo_update.py          Update orchestration (GAE + social replay + PPO loop)
+│   ├── token_opt.py           Agent-decided token-level fine-tuning
+│   ├── persistence.py         Save / load checkpoint helpers
+│   ├── centralized_critic.py  Shared MAPPO critic (joint state → V)
+│   └── rl_layer.py            RLLayer orchestrator (~350 lines, delegates to the above)
+│
+├── hebbian/                   Social-plasticity graph (independent of rl_layer)
+│   ├── config.py
+│   └── graph.py
+│
+├── mindforge/                 LLM-driven agent stack + main loop
+│   ├── multi_agent_craftium.py    Entry point
+│   ├── custom_agent.py
+│   ├── custom_environment_craftium.py
+│   ├── env/                       Env-side utilities
+│   │   ├── communication_rewards.py
+│   │   ├── cooperation_metric.py
+│   │   └── episode_logger.py
+│   ├── agent_modules/             LLM-side: actions, beliefs, curriculum, critic, …
+│   └── prompts/                   Text templates
+│
+└── craftium/                  Patched MARL Craftium env wrapper + five-chambers env
+    └── craftium-envs/five-chambers/    Bedrock-walled dungeon (Lua mods + VoxeLibre game)
+```
 
-- ✅ **4 agents** (configurable) in VoxeLibre open world
-- ✅ **Standard RL interface** - Works with any MARL library
-- ✅ **Auto-cleanup** - Automatically archives and cleans temp directories
-- ✅ **Role-based variant** (optional) - Engineer/Hunter/Guardian with reward shaping
+---
 
-### What's Implemented
+## Quick start
 
-#### 1. Basic Multi-Agent OpenWorld
-**File**: [src/envs/openworld_parallel.py](src/envs/openworld_parallel.py)
-
-Standard multi-agent OpenWorld environment:
-- 4 agents exploring VoxeLibre terrain
-- 17 discrete actions per agent (move, dig, place, etc.)
-- RGB observations (320x180 per agent)
-- Shared rewards from environment milestones
-
-#### 2. Role-Based Multi-Agent (Optional)
-**File**: [src/envs/openworld_roles_mvp.py](src/envs/openworld_roles_mvp.py)
-
-Adds role mechanics on top of basic multi-agent:
-- **Engineer**: Tools milestones (1.0x), Hunt/Defend (0.5x)
-- **Hunter**: Hunt rewards (1.0x), Tools/Defend (0.5x)
-- **Guardian**: Defend rewards (1.0x), Tools/Hunt (0.5x)
-- Supports multiple agents per role
-
-#### 3. Auto-Cleanup System
-**Files**: [src/envs/auto_cleanup_env.py](src/envs/auto_cleanup_env.py), [src/envs/luanti_cleanup.py](src/envs/luanti_cleanup.py)
-
-Automatically manages temporary directories:
-- Archives `luanti-run-*` directories to `logs/luanti_runs/`
-- Saves debug.txt and log files
-- Deletes temp directories on `env.close()`
-
-## 🚀 Usage
-
-### Run Basic Test
+### Local dev (sanity-check imports + syntax)
 
 ```bash
-# In WSL with conda environment activated
-python scripts/test_openworld.py
+# Conda / Poetry env from pyproject.toml
+poetry install
+# OR: conda env create -f environment.yml && conda activate wiredtogether
+
+# Run a tiny smoke test (3 agents, 3 episodes, 100 steps, no RL)
+cd src/mindforge
+PYTHONPATH=../ python multi_agent_craftium.py \
+    --num-agents 3 --episodes 3 --max-steps 100 \
+    --warmup-time 60 --team-mode homogeneous-agent
 ```
 
-This will:
-1. Create a 4-agent OpenWorld environment
-2. Run 100 steps with random actions
-3. Display per-agent rewards
-4. Clean up temp directories
+### HPC (DelftBlue SLURM)
 
-### Use in Your Code
 
-```python
-from src.envs import AutoCleanupOpenWorld
+| Script | What it runs |
+|---|---|
+| `small.sh` | 3 agents, 3 episodes, 100 steps — quick sanity check |
+| `test.sh` | 6 agents, 3 episodes, 200 steps |
+| `rl.sh` | 3 agents + RL (action-mode MAPPO) |
+| `rl_hebbian.sh` | RL + Hebbian social plasticity |
+| `rl_token_opt.sh` | RL + agent-decided token-level fine-tuning |
+| `rl_hebbian_survival.sh` | RL + Hebbian + phased survival difficulty |
+| `run_first.sh` / `run_continue.sh` | Long runs split across SLURM jobs (8h each) |
+| `mindforge_slurm.sh` | Generic launcher |
 
-# Create environment
-env = AutoCleanupOpenWorld(
-    num_agents=4,
-    obs_width=320,
-    obs_height=180,
-    max_steps=10_000,
-    auto_cleanup=True,  # Automatic cleanup on close
-)
+All scripts:
 
-# Reset
-observations, infos = env.reset()
+- `cd "$PROJECT_DIR"` first
+- `export PYTHONPATH="$PROJECT_DIR/src:$PYTHONPATH"` so `rl_layer`, `hebbian`, and `mindforge.env` resolve as top-level packages
+- `cd src/mindforge` then `python multi_agent_craftium.py …`
 
-# Step
-for _ in range(100):
-    actions = {agent: env.action_space(agent).sample()
-               for agent in env.agents}
-    obs, rewards, terms, truncs, infos = env.step(actions)
+Submit with e.g. `sbatch scripts/small.sh`.
 
-# Close (triggers auto-cleanup)
-env.close()
+---
+
+## CLI flags worth knowing
+
+```text
+--num-agents 3                      # team size (homogeneous role only)
+--episodes 3 --max-steps 100        # episode count and per-episode horizon
+
+--no-communication                  # disable inter-agent chat (default ON, targeted 1-to-1)
+--belief-interval 5                 # refresh perception/partner/interaction beliefs every N steps
+--critic-interval 20                # run task-success critic every N steps
+
+# RL layer
+--rl                                # enable MAPPO action-level training
+--rl-model-path /path/to/Qwen3.5-9B
+--rl-mode action|token              # action: discrete head; token: token-level RLHF
+--rl-critic-mode centralized|independent   # default centralized (MAPPO)
+--rl-update-interval 256
+--rl-lr 1e-4
+--rl-auto-token-opt                 # let agents self-trigger token-level fine-tuning
+
+# Hebbian
+--hebbian                           # enable social-plasticity graph
+--hebbian-radius 5.0                # interaction radius (world units)
+--hebbian-rho 0.3                   # social-replay blend factor
+--hebbian-gamma 0.2                 # reward-diffusion strength
+
+# Phased difficulty (optional)
+--survival-mode --survival-episode 3
+
+# Checkpointing
+--checkpoint-dir checkpoints/<id>
+--checkpoint-interval 500
+--resume <path>
+--resume-skip-warmup
 ```
 
-### Use Role-Based Variant
+---
 
-```python
-from src.envs.openworld_roles_mvp import RoleBasedOpenWorld
+## Five Chambers — environment overview
 
-# Create with custom roles
-env = RoleBasedOpenWorld(
-    num_agents=6,
-    roles=["engineer", "engineer", "hunter", "hunter", "guardian", "guardian"],
-)
+| Chamber | Mechanic | Milestones |
+|---|---|---|
+| **Ch1** | Solo learning (12×12 grass room, north door always open) | M1 move, M2 dig 3 blocks, M3 pickup 3 items, M4 dig 5 wood, M5/M6 kill 1/2 animals, M7 dig 3 stone |
+| **Ch2** | Cooperative anvil breaking (≥2 simultaneous diggers) | M8–M13 anvil breaks, M14 sword wielded, M15 chestplate equipped — drops `mcl_tools:sword_diamond` and `mcl_armor:chestplate_diamond` |
+| **Ch3** | Switch puzzle (3 sealed cells; switch in cell A opens cell B's door, B→C, C→A) | M16 enter cell, M17 switch pressed, M18 door opened, M19 all in communal room |
+| **Ch4** | Combat — 3 zombies | M20 enter, M21/M22 first/all kills, M23 all-alive bonus |
+| **Ch5** | Boss fight — single 60 HP zombie | M24 enter, M25 first damage, M26 boss half-HP, M27 defeated, M28 all-alive bonus |
+| **Comm** | Targeted 1-to-1 chat rewarded in every chamber | `m_comm_ch1..ch5` (Ch1 has the highest milestone bonus to bootstrap chat) |
 
-# Or use default cycling through roles
-env = RoleBasedOpenWorld(num_agents=6)  # Auto-cycles through E/H/G
-```
+The Lua side (`src/craftium/craftium-envs/five-chambers/mods/five_chambers/`) builds
+the world with VoxelManip, tracks milestones, writes JSONL events that Python polls.
 
-## 📦 Environment Details
+---
 
-### Action Space
-Discrete(17) per agent:
-- **Movement**: forward, backward, left, right
-- **Special**: jump, sneak
-- **Interaction**: dig, place
-- **Inventory**: slot_1 through slot_5
-- **Camera**: mouse x+/x-, y+/y-
+## Checkpoint / resume
 
-### Observation Space
-Box(0, 255, (180, 320, 3), uint8) - RGB image per agent
+Every episode end and every `--checkpoint-interval` steps within an episode, the
+run saves its full state. A new SLURM job can restore that state and continue
+without re-running completed episodes.
 
-### Rewards
-**Basic OpenWorld**:
-- Tools milestones: 128, 256, 1024, 2048
-- Hunt: damage × 0.5
-- Defend: damage × 1.0
+What is saved:
 
-**Role-Based OpenWorld**:
-- In-track actions: Full reward (1.0×)
-- Out-of-track actions: Half reward (0.5×)
+| File | Contents |
+|---|---|
+| `run_state.json` | Episode/step counter, metric history, CLI args |
+| `hebbian_graph.json` | Hebbian weight matrix, config |
+| `rl_agent_{i}/` | LoRA adapter, action/value head weights, optimizer, RMS, counters |
+| `agent_{i}_curriculum.json` | Current task, completed/failed task lists |
+| `frames_{i}.npy` | Raw observation frames *(optional, `--checkpoint-frames`)* |
 
-## 🔧 Setup
+The Craftium server is **not** checkpointed — it does a fresh `reset()` on resume.
 
-### Prerequisites
-- **WSL** (Windows Subsystem for Linux) or Linux
-- **Conda** (Miniconda or Anaconda)
-- **Craftium built** with Luanti binary at `craftium/bin/luanti`
-
-**Note**: Craftium cannot be built on Windows natively due to Unix dependencies. Use WSL.
-
-### Installation
-
-```bash
-# 1. Open WSL
-wsl
-
-# 2. Navigate to project
-cd /mnt/c/Users/marcu/OneDrive/Documente/GitHub/WiredTogether
-
-# 3. Create conda environment
-conda env create -f environment.yml
-
-# 4. Activate environment
-conda activate wiredtogether
-
-# 5. Install Craftium
-pip install -e ./craftium
-
-# 6. Install project
-pip install -e .
-```
-
-**Full setup guide**: [SETUP_WSL.md](SETUP_WSL.md)
-
-## 📚 Documentation
-
-- **[QUICKSTART.md](QUICKSTART.md)** - Get running in 5 minutes
-- **[SETUP_WSL.md](SETUP_WSL.md)** - Complete setup guide with troubleshooting
-- **[STATUS.md](STATUS.md)** - Current project status and next steps
-- **[CRAFTIUM_SETUP.md](CRAFTIUM_SETUP.md)** - Craftium-specific setup notes (if exists)
-
-## 🗂️ Project Structure
+Layout:
 
 ```
-WiredTogether/
-├── src/envs/               # Environment implementations
-│   ├── openworld_parallel.py      # Basic multi-agent
-│   ├── openworld_roles_mvp.py     # Role-based variant
-│   ├── auto_cleanup_env.py        # Auto-cleanup wrappers
-│   └── luanti_cleanup.py          # Cleanup utilities
-├── scripts/                # Test and utility scripts
-│   ├── test_openworld.py          # Basic test
-│   └── cleanup_luanti_runs.py     # Manual cleanup
-├── configs/                # Hydra configuration files
-│   └── env/
-│       ├── openworld.yaml         # Basic config
-│       └── openworld_roles_mvp.yaml  # Role-based config
-├── craftium/               # Craftium submodule (built)
-├── environment.yml         # Conda environment specification
-└── logs/                   # Generated logs and archives
-    └── luanti_runs/        # Archived run directories
+checkpoints/<run_id>/
+├── latest_checkpoint.txt      ← path to most recent ep*_end dir
+├── ep1_end/
+│   ├── run_state.json
+│   ├── hebbian_graph.json
+│   ├── rl_agent_0/  rl_agent_1/  rl_agent_2/
+│   ├── agent_0_curriculum.json  …
+│   └── (optional) frames_*.npy
+├── ep1_step500/  ep1_step1000/  …
+└── ep2_end/  …
 ```
 
-## 🐛 Troubleshooting
+`run_continue.sh` reads `latest_checkpoint.txt` to know where to resume.
 
-### Import Error: "cannot import name 'MarlCraftiumEnv'"
-**Solution**: Make sure you're in WSL with conda environment activated, not Git Bash.
+**Graceful shutdown.** The run hooks `SIGTERM`/`SIGINT`. When SLURM sends
+`SIGTERM` at the end of the time limit, the current step completes and a
+`*_shutdown` checkpoint is written before the process exits. The next job
+picks it up via `run_continue.sh`. Trigger manually with
+`scancel --signal=SIGTERM <job_id>`.
 
-### FileNotFoundError: "./bin/luanti"
-**Solution**: Craftium needs to be built. Check `craftium/bin/luanti` exists.
+**Chained jobs.** `bash scripts/chain_jobs.sh 3` submits 1 fresh job + 3
+continuations (`--dependency=afterany`), giving up to ~32 hours of compute.
 
-### Hanging Processes
-**Solution**: Kill manually with `pkill -9 luanti`
+---
 
-**More troubleshooting**: See [SETUP_WSL.md](SETUP_WSL.md#common-issues)
+## RL design at a glance
 
-## 🎓 Next Steps
+```
+                       ┌── Hebbian graph ──┐
+                       │  W[N,N] bonds     │
+                       │  reward diffusion │
+                       └────────┬──────────┘
+                                │
+  per agent:                    │ shaped per-agent rewards
+  ┌─────────────────────────┐   │
+  │ LLM forward → pooled h  │───┼──→ ActionHead → π(a|s)  (per-agent)
+  │ + LoRA adapter          │   │     ValueHead → V(s)     (IPPO baseline)
+  └─────────────────────────┘   │
+                                │
+  shared:                       │
+  ┌─────────────────────────┐   │
+  │ joint state             │   │
+  │ ├ compact features      │───┴──→ CentralizedCritic → V_global   (MAPPO)
+  │ └ sentence-encoded      │
+  │   last action + comm    │
+  └─────────────────────────┘
+```
 
-After confirming tests work:
+**Centralised vs independent critic.** Default is MAPPO (`--rl-critic-mode
+centralized`): one shared `V(joint_state)` across all agents. The legacy IPPO
+mode (`--rl-critic-mode independent`) restores the per-agent `value_head` —
+useful as an ablation/regression guard.
 
-1. **Training pipeline** - Implement PPO/A2C with parameter sharing
-2. **Logging** - Add W&B/TensorBoard tracking
-3. **Video recording** - Save episode videos for analysis
-4. **Hyperparameter tuning** - Optimize learning
+**Hebbian effects on PPO.** The graph diffuses per-agent rewards before they
+land in each agent's buffer, and weights social replay during the PPO update so
+strongly-bonded teammates' transitions are mixed into each mini-batch.
 
-## 📄 License
+---
 
-MIT (or whatever license you choose)
+## Acknowledgments
 
-## 🙏 Acknowledgments
-
-Built on [Craftium](https://github.com/minosvasilias/craftium) by minosvasilias
+- **[Craftium](https://github.com/mikelma/craftium)** — Minetest/Luanti-based RL platform.
+- **VoxeLibre** (formerly MineClone2) — the VoxelLibre game ships as a vendored
+  asset for the five-chambers env.
+- **MindForge** — the LLM-agent reasoning stack this work extends.
