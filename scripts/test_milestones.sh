@@ -28,7 +28,7 @@ export MESA_GL_VERSION_OVERRIDE=3.3
 export LD_LIBRARY_PATH="${ENV_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 
 # Point Craftium at the five-chambers environment.
-export CRAFTIUM_ENV_DIR="${PROJECT_DIR}/src/craftium/craftium-envs/five-chambers"
+export CRAFTIUM_ENV_DIR="${PROJECT_DIR}/src/marl_craftium/craftium-envs/five-chambers"
 
 cd "$PROJECT_DIR"
 echo "Python: $(which python)"

@@ -139,7 +139,7 @@ Submit with e.g. `sbatch scripts/small.sh`.
 | **Ch5** | Boss fight — single 60 HP zombie | M24 enter, M25 first damage, M26 boss half-HP, M27 defeated, M28 all-alive bonus |
 | **Comm** | Targeted 1-to-1 chat rewarded in every chamber | `m_comm_ch1..ch5` (Ch1 has the highest milestone bonus to bootstrap chat) |
 
-The Lua side (`src/craftium/craftium-envs/five-chambers/mods/five_chambers/`) builds
+The Lua side (`src/marl_craftium/craftium-envs/five-chambers/mods/five_chambers/`) builds
 the world with VoxelManip, tracks milestones, writes JSONL events that Python polls.
 
 ---

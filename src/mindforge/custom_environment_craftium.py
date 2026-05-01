@@ -6,12 +6,15 @@ import json
 import numpy as np
 import PIL.Image
 
-# Import the PettingZoo env from src/craftium/
+# Import the multi-agent Craftium env wrapper from src/marl_craftium/.
+# Renamed from src/craftium/ to avoid shadowing the installed `craftium`
+# package once src/ went on PYTHONPATH (the old name made `import craftium`
+# resolve to a namespace package missing root_path / MarlCraftiumEnv / …).
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 _src_dir = os.path.dirname(_this_dir)  # src/
-_craftium_dir = os.path.join(_src_dir, "craftium")
-if _craftium_dir not in sys.path:
-    sys.path.insert(0, _craftium_dir)
+_marl_craftium_dir = os.path.join(_src_dir, "marl_craftium")
+if _marl_craftium_dir not in sys.path:
+    sys.path.insert(0, _marl_craftium_dir)
 
 from openworld_multi_agents import OpenWorldMultiAgentEnv
 

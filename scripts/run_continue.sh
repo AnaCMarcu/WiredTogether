@@ -55,7 +55,7 @@ export SENTENCE_TRANSFORMERS_HOME=/scratch/acmarcu/models/st_cache
 export ST_MODEL_NAME=/scratch/acmarcu/models/all-MiniLM-L6-v2
 
 export LD_LIBRARY_PATH="${ENV_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
-export CRAFTIUM_ENV_DIR="${PROJECT_DIR}/src/craftium/craftium-envs/five-chambers"
+export CRAFTIUM_ENV_DIR="${PROJECT_DIR}/src/marl_craftium/craftium-envs/five-chambers"
 
 cd "$PROJECT_DIR"
 
