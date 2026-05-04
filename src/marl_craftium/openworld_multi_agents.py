@@ -2,12 +2,28 @@
 
 import os
 import socket as socket_mod
+import sys
 import time
 from typing import Any, Dict, Optional
 
 import numpy as np
 from gymnasium import spaces
 from pettingzoo import ParallelEnv
+
+# Ensure the in-tree craftium submodule is importable as the top-level `craftium`
+# package, even when `pip install -e ./craftium` hasn't been run. Otherwise
+# Python may bind `craftium` to the empty namespace package at the project's
+# outer `craftium/` directory and `root_path` (defined only in the real
+# package's __init__.py) would be missing — exactly the
+# "cannot import name 'root_path' from 'craftium' (unknown location)" failure.
+_this_file = os.path.abspath(__file__)
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(_this_file)))
+_real_craftium_parent = os.path.join(_project_root, "craftium")
+if (
+    os.path.isfile(os.path.join(_real_craftium_parent, "craftium", "__init__.py"))
+    and _real_craftium_parent not in sys.path
+):
+    sys.path.insert(0, _real_craftium_parent)
 
 from craftium.multiagent_env import MarlCraftiumEnv, ACTION_ORDER
 
