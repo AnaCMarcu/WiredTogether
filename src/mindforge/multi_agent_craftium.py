@@ -1434,6 +1434,19 @@ async def run(args):
                     "contributors": _ev.get("contributors", []),
                     "reward": _ev.get("reward", 0),
                 })
+                # Surface milestone fires in the SLURM .out file. The Lua side
+                # already writes "[SRV] [MILESTONE] ..." into stderr (tailed
+                # by craftium), but parsing those lines is brittle — this is
+                # the authoritative Python-side line, one per polled event.
+                _contribs = _ev.get("contributors", [])
+                _contrib_str = ",".join(_contribs) if _contribs else "<none>"
+                print(
+                    f"[MILESTONE] ep={ep+1} step={step} "
+                    f"id={_ev.get('milestone', '?')} "
+                    f"agents=[{_contrib_str}] "
+                    f"reward={_ev.get('reward', 0)}",
+                    flush=True,
+                )
 
             # ── Phase 4: Graph metrics snapshot + SLURM log ──
             if hebbian_config.enabled and step % hebbian_config.log_graph_every == 0:
