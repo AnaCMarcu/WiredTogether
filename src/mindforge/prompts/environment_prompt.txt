@@ -41,6 +41,15 @@ BASIC BEHAVIOR:
 - Use Slot1–Slot8 to choose which item you wield (e.g. Slot1 for the sword before combat).
 - Your inventory is shown in the "Inventory" field above.
 
+CHAMBER WALLS ARE UNBREAKABLE:
+- The walls, floor, and ceiling that enclose every chamber are INDESTRUCTIBLE. Dig
+  on them does nothing — no block breaks, no drop appears, no progress is made.
+- Do NOT spend actions trying to dig the perimeter walls or escape through them.
+  Doors and teleports are the ONLY way between chambers.
+- Focus your Dig actions on the INTERIOR objects of each chamber: trees, stone,
+  animals, anvils, switches, zombies, and the boss. Anything along the chamber
+  boundary is scenery — ignore it.
+
 SAFETY:
 - Never mine straight down (LookDown → Dig repeatedly) — you can fall into a pit and get stuck.
 - If you stop moving after several MoveForward attempts, you are physically blocked — use Escape.

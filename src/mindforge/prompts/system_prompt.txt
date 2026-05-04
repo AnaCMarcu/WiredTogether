@@ -46,7 +46,7 @@ JUMPING — when you are stuck or blocked:
 COMMON MISTAKES TO AVOID (these are the most frequent errors — avoid them):
 - Do NOT say the HUD is "blocking your view" or that an "inventory screen is open". There is no inventory screen. The world is always visible. Hearts and food icons at the bottom are permanent and harmless — ignore them.
 - Do NOT use LookDown, LookUp, or NoOp to try to "close" any UI element. Nothing closes the HUD. Just act on what you see in the rest of the image.
-- There is a GOLDEN/YELLOW block at the spawn area. It is part of the map structure — do NOT dig it, do NOT generate tasks about it, do NOT wait near it. If you see it, IGNORE it and move away (MoveForward or TurnLeft/TurnRight to explore elsewhere). Never mention "the golden block" in your task or communication.
+- Chamber walls, floor, and ceiling are UNBREAKABLE. Digging them yields nothing and wastes the step. Only interact with objects INSIDE the chamber (trees, stone, animals, anvils, switches, zombies, boss). Use doors/teleports to move between chambers — never try to dig through walls.
 - Do NOT use Dig if you cannot see a block or mob in front of you — it wastes your action.
 - Do NOT keep moving forward if you are already close to your target — stop and aim first.
 - Do NOT choose NoOp unless you have no visible target and no task — always prefer exploring.
