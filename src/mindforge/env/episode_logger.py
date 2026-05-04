@@ -1,8 +1,11 @@
 """Structured per-episode logging for the Five Chambers environment.
 
-Writes three files per episode to run_metrics/{run_id}/episodes/ep_{N:04d}/:
+Writes four files per episode to runs/<run_id>/episodes/ep_{N:04d}/:
   step_log.csv       — one row per (step, agent)
   event_log.jsonl    — milestone/switch/kill events as JSON objects
+  messages.jsonl     — per-message metadata (sender, receiver, text, tokens,
+                       routing, was-rewarded). Replaces the run-level
+                       communication_log.json for fine-grained analysis.
   episode_summary.json — end-of-episode CooperationMetric summary
 """
 
@@ -27,6 +30,7 @@ class EpisodeLogger:
         self._step_writer.writeheader()
 
         self._event_file = open(self.dir / "event_log.jsonl", "w", encoding="utf-8")
+        self._messages_file = open(self.dir / "messages.jsonl", "w", encoding="utf-8")
         self._closed = False
 
     def log_step(self, step, positions, actions, messages, task_rewards, comm_rewards, infos=None):
@@ -64,15 +68,39 @@ class EpisodeLogger:
     def log_event(self, event: dict):
         """Append one JSON event to event_log.jsonl."""
         self._event_file.write(json.dumps(event) + "\n")
+        self._event_file.flush()
+
+    def log_message(self, msg: dict):
+        """Append one JSON message record to messages.jsonl.
+
+        Expected fields:
+          t                   step counter
+          sender              "agent_N" or int agent id
+          receiver            "agent_N" (resolved by routing) or "all"
+          text                full message text
+          tokens              len(text.split()) is fine for this purpose
+          valid               passed CommunicationTracker validity rules
+          rewarded_base       base reward earned (0.0 if invalid or capped)
+          rewarded_milestone  Tier-2 chamber milestone reward (usually 0.0)
+          chamber             sender's chamber at send time
+          routing             "model" / "hebbian_fallback" / "random_fallback"
+        """
+        self._messages_file.write(json.dumps(msg) + "\n")
+        self._messages_file.flush()
 
     def finalize(self, summary: dict):
         """Write episode_summary.json and close file handles."""
         if self._closed:
             return
+        with open(self.dir / "summary.json", "w", encoding="utf-8") as f:
+            json.dump(summary, f, indent=2, default=str)
+        # Also write the legacy filename for back-compat with any tooling
+        # that still reads episode_summary.json.
         with open(self.dir / "episode_summary.json", "w", encoding="utf-8") as f:
-            json.dump(summary, f, indent=2)
+            json.dump(summary, f, indent=2, default=str)
         self._step_csv.close()
         self._event_file.close()
+        self._messages_file.close()
         self._closed = True
 
     def __del__(self):
@@ -80,5 +108,6 @@ class EpisodeLogger:
             try:
                 self._step_csv.close()
                 self._event_file.close()
+                self._messages_file.close()
             except Exception:
                 pass

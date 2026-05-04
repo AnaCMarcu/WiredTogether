@@ -149,15 +149,21 @@ class CraftiumMetric:
         communication=True,
         path="./run_metrics",
         run_id=None,
+        run_paths=None,
     ):
         self.num_agents = num_agents
         self.communication = communication
         self.run_id = run_id
+        self.run_paths = run_paths
         self.timestep = 0
 
         # Rewards
         self.cumulative_returns = [0.0] * num_agents
         self.reward_history = [[] for _ in range(num_agents)]
+        # Reward decomposition: parallel to reward_history, splits each step
+        # reward into its source streams. Lets us answer "how much of the
+        # policy improvement came from comm rewards vs. task reward".
+        self.reward_history_decomposed = [[] for _ in range(num_agents)]
 
         # Milestones
         self.milestone_events = []                  # flat log: (milestone, contributor) pairs
@@ -194,13 +200,42 @@ class CraftiumMetric:
             "total_milestones":   [],
         }
 
-        self.target_folder = self._mkdir_metrics(path)
+        # If a RunPaths was provided, the run root IS the metrics folder.
+        # Falls back to the legacy ./run_metrics/<run_id>/ layout otherwise.
+        if run_paths is not None:
+            self.target_folder = str(run_paths.root)
+        else:
+            self.target_folder = self._mkdir_metrics(path)
 
     # ─── Recording ─────────────────────────────────────────────────────
 
     def record_reward(self, agent_id: int, reward: float):
         self.cumulative_returns[agent_id] += reward
         self.reward_history[agent_id].append((self.timestep, reward))
+
+    def record_reward_decomposed(self, agent_id: int, components: dict):
+        """Record a per-step reward broken down by source.
+
+        components keys (all floats, default 0):
+          task              base reward from craftium.reward (milestones)
+          comm_base         BASE_MSG_REWARD per valid message
+          comm_milestone    Tier-2 per-chamber communication milestones
+          proximity         Hebbian-gated proximity bonus
+          hebbian_diffuse   reward bled from peers via Hebbian W
+
+        The five streams must sum to the value passed to record_reward().
+        Persisted to reward_history_decomposed so we can answer "what fraction
+        of cumulative return came from each source".
+        """
+        rec = {
+            "t": self.timestep,
+            "task":           float(components.get("task", 0.0)),
+            "comm_base":      float(components.get("comm_base", 0.0)),
+            "comm_milestone": float(components.get("comm_milestone", 0.0)),
+            "proximity":      float(components.get("proximity", 0.0)),
+            "hebbian_diffuse": float(components.get("hebbian_diffuse", 0.0)),
+        }
+        self.reward_history_decomposed[agent_id].append(rec)
 
     def record_milestone_event(self, ev: dict):
         """Record a milestone event from poll_milestone_events().
@@ -327,7 +362,11 @@ class CraftiumMetric:
 
     # ─── Saving ────────────────────────────────────────────────────────
 
-    def save_run_metrics(self, file_name="data.json"):
+    def save_run_metrics(self, file_name="final_metrics.json"):
+        # Run post-hoc evaluators that read the on-disk JSONL artifacts.
+        # Done before _build_metrics_dict so the new fields are in the dump.
+        self._run_posthoc_evaluators()
+
         data = self._build_metrics_dict()
         file_path = os.path.join(self.target_folder, file_name)
         with open(file_path, "w", encoding="utf-8") as f:
@@ -342,6 +381,31 @@ class CraftiumMetric:
 
         print(f"Metrics saved to {self.target_folder}")
         return file_path
+
+    def _run_posthoc_evaluators(self):
+        """Compute communication & cooperation metrics from the on-disk JSONL.
+
+        These don't need any extra recording during the hot loop — they're
+        derived post-hoc from messages.jsonl, step_log.jsonl, event_log.jsonl
+        which the EpisodeLogger already wrote.
+        """
+        try:
+            from agent_modules.comm_eval import compute_comm_metrics
+            self.comm_metrics = compute_comm_metrics(
+                run_root=self.target_folder, num_agents=self.num_agents
+            )
+        except Exception as e:
+            logging.warning("comm_eval failed: %s", e)
+            self.comm_metrics = {}
+
+        try:
+            from agent_modules.coop_eval import compute_coop_metrics
+            self.coop_metrics = compute_coop_metrics(
+                run_root=self.target_folder, num_agents=self.num_agents
+            )
+        except Exception as e:
+            logging.warning("coop_eval failed: %s", e)
+            self.coop_metrics = {}
 
     def _build_metrics_dict(self) -> dict:
         git = _get_git_info()
@@ -385,6 +449,12 @@ class CraftiumMetric:
             "phase_transitions":    self.phase_transitions,
             "team_mode":            self.team_mode,
             "homogeneous_role":     self.homogeneous_role,
+            # Reward decomposition: parallel to reward_history, lets analysis
+            # subtract comm rewards to isolate task-only return curves.
+            "reward_history_decomposed": self.reward_history_decomposed,
+            # Post-hoc-computed metrics (filled in by _run_posthoc_evaluators).
+            "comm_metrics":         getattr(self, "comm_metrics", {}),
+            "coop_metrics":         getattr(self, "coop_metrics", {}),
         }
 
     # ─── Plots ─────────────────────────────────────────────────────────

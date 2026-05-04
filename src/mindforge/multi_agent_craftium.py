@@ -40,6 +40,7 @@ from agent_modules.craftium_metric import CraftiumMetric
 from mindforge.env.communication_rewards import CommunicationTracker
 from mindforge.env.cooperation_metric import CooperationMetric
 from mindforge.env.episode_logger import EpisodeLogger
+from mindforge.run_layout import RunPaths
 import json as _json
 
 from rl_layer import RLConfig, RLLayer, HebbianConfig, HebbianSocialGraph
@@ -630,15 +631,16 @@ async def run(args):
     run_id = f"{_exp+'_' if _exp else ''}{_ts}_{uuid4().hex[:6]}"
     print(f"[RUN ID] {run_id}")
 
-    # Logging
-    os.makedirs("logs", exist_ok=True)
+    # ── Single root for all run artifacts: runs/<run_id>/ ──
+    # Replaces three previously-separate roots (run_metrics/, checkpoints/, logs/).
+    run_paths = RunPaths.create(run_id=run_id, root="runs")
     os.makedirs("gifs", exist_ok=True)
 
     event_logger = logging.getLogger(EVENT_LOGGER_NAME)
     event_logger.disabled = True
     logging.basicConfig(
         level=logging.INFO,
-        filename=f"logs/{run_id}.log",
+        filename=str(run_paths.log_txt),
         filemode="a",
         format=f"[{run_id}] %(asctime)s %(levelname)s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
@@ -667,6 +669,7 @@ async def run(args):
         num_agents=num_agents,
         communication=communication,
         run_id=run_id,
+        run_paths=run_paths,
     )
     # Attach team composition metadata for summary/checkpoint
     metric.team_mode = args.team_mode
@@ -789,11 +792,28 @@ async def run(args):
     print(f"{_feat_sep}\n")
     # ─────────────────────────────────────────────────────────────────────────
 
-    # ── Checkpoint directory ──
-    checkpoint_dir = args.checkpoint_dir or os.path.join("checkpoints", run_id)
+    # ── Checkpoint directory: lives under runs/<run_id>/checkpoints/ ──
+    checkpoint_dir = args.checkpoint_dir or str(run_paths.checkpoints_dir)
     checkpoint_interval = args.checkpoint_interval
     os.makedirs(checkpoint_dir, exist_ok=True)
     print(f"[CKPT] Checkpoint directory: {checkpoint_dir}")
+
+    # ── config.json snapshot: durable record of how this run was launched ──
+    try:
+        import subprocess as _sp
+        _git = _sp.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+    except Exception:
+        _git = None
+    with open(run_paths.config_json, "w") as _f:
+        _json.dump({
+            "run_id": run_id,
+            "start_ts": datetime.now().isoformat(),
+            "git_commit": _git,
+            "cli_args": {k: (v if isinstance(v, (int, float, str, bool, type(None))) else str(v))
+                         for k, v in vars(args).items()},
+            "num_agents": num_agents,
+            "communication_mode": communication,
+        }, _f, indent=2)
 
     # ── Signal handler: gracefully save on SIGTERM / SIGINT ──
     import signal as _signal
@@ -1025,6 +1045,9 @@ async def run(args):
             step_rewards_raw = [0.0] * num_agents
             step_contents = [None] * num_agents
             comm_events = []
+            # Per-message metadata staged here in Phase 1a; rewards stamped
+            # and the records flushed to messages.jsonl in Phase 1b.
+            _messages_this_step = []
 
             # Build per-agent social bond summaries for the LLM prompt
             _bond_strings = {}
@@ -1125,6 +1148,7 @@ async def run(args):
                         and comm_target.startswith("agent_")
                     )
                     recv_idx = -1
+                    routing_source = "model"
                     if is_valid_target:
                         try:
                             cand = int(comm_target.split("_")[1])
@@ -1144,14 +1168,27 @@ async def run(args):
                                 for j in range(num_agents) if j != sender_idx
                             ]
                             recv_idx = max(candidates, key=lambda x: x[1])[0]
+                            routing_source = "hebbian_fallback"
                         else:
                             others = [j for j in range(num_agents) if j != sender_idx]
                             recv_idx = random.choice(others)
+                            routing_source = "random_fallback"
 
                     agent_communications[recv_idx].append(message)
                     if len(agent_communications[recv_idx]) > num_agents - 1:
                         agent_communications[recv_idx].pop(0)
                     comm_events.append((sender_idx, recv_idx))
+                    # Stash per-message metadata; rewards are stamped in Phase 1b
+                    # once CommunicationTracker has processed the step.
+                    _messages_this_step.append({
+                        "t": step,
+                        "sender": f"agent_{sender_idx}",
+                        "receiver": f"agent_{recv_idx}",
+                        "text": msg_text,
+                        "tokens": len(msg_text.split()),
+                        "routing": routing_source,
+                        "model_target": comm_target,
+                    })
 
                 time.sleep(sleep_time)
 
@@ -1179,6 +1216,8 @@ async def run(args):
                 _agent_pos_map[_i] = _env_pos if _env_pos is not None else positions[_i]
 
             _comm_rewards_this_step: dict = {}
+            _comm_milestones: list = []
+            _valid_speakers: set = set()
             if communication:
                 _comm_rewards_this_step, _comm_milestones, _valid_speakers = comm_tracker.process_step(
                     step, _chat_this_step, _agent_pos_map
@@ -1197,6 +1236,23 @@ async def run(args):
                     ep_logger.log_event({"step": step, "type": "comm_milestone",
                                          "milestone": _mid, "agent": f"agent_{_aid}",
                                          "reward": _rw})
+
+            # ── Flush per-message records to messages.jsonl ──
+            # Stamp reward fields now that CommunicationTracker has run.
+            # Note: the tracker bundles base + milestone in one float per
+            # speaker; we split using the milestone events list.
+            _msg_milestone_per_agent = {}
+            for _aid, _mid, _rw in _comm_milestones:
+                _msg_milestone_per_agent[_aid] = _msg_milestone_per_agent.get(_aid, 0.0) + _rw
+            for _msg in _messages_this_step:
+                _sid = int(_msg["sender"].split("_")[1])
+                _comm_total = float(_comm_rewards_this_step.get(_sid, 0.0))
+                _ms = float(_msg_milestone_per_agent.get(_sid, 0.0))
+                _msg["valid"] = _sid in _valid_speakers
+                _msg["rewarded_base"] = max(0.0, _comm_total - _ms)
+                _msg["rewarded_milestone"] = _ms
+                _msg["chamber"] = environment.get_chamber(_sid)
+                ep_logger.log_message(_msg)
 
             coop_metric.observe_step(
                 step,
@@ -1297,6 +1353,36 @@ async def run(args):
             )
             diffused_rewards = hebbian_graph.diffuse_rewards(step_rewards_raw)
 
+            # ── Reward decomposition: split each agent's diffused reward into
+            #    its source streams. Recoverable from values already in scope:
+            #      task              = _task_rewards_this_step[i]   (line ~1188 snapshot)
+            #      comm_total        = _comm_rewards_this_step[i]   (CommTracker output)
+            #      comm_milestone    = sum of milestone rewards in _comm_milestones for i
+            #      comm_base         = comm_total - comm_milestone
+            #      proximity         = step_rewards_raw[i] - task - comm_total
+            #      hebbian_diffuse   = diffused_rewards[i] - step_rewards_raw[i] (signed)
+            _comm_milestone_per_agent = {i: 0.0 for i in range(num_agents)}
+            if communication:
+                for _aid, _mid, _rw in (_comm_milestones or []):
+                    _comm_milestone_per_agent[_aid] = (
+                        _comm_milestone_per_agent.get(_aid, 0.0) + _rw
+                    )
+            _reward_decomp_this_step = {}
+            for _aid in range(num_agents):
+                _task = float(_task_rewards_this_step.get(_aid, 0.0))
+                _comm_total = float(_comm_rewards_this_step.get(_aid, 0.0)) if communication else 0.0
+                _comm_ms = float(_comm_milestone_per_agent.get(_aid, 0.0))
+                _comm_base = _comm_total - _comm_ms
+                _prox = float(step_rewards_raw[_aid]) - _task - _comm_total
+                _hebb = float(diffused_rewards[_aid]) - float(step_rewards_raw[_aid])
+                _reward_decomp_this_step[_aid] = {
+                    "task":            _task,
+                    "comm_base":       _comm_base,
+                    "comm_milestone":  _comm_ms,
+                    "proximity":       _prox,
+                    "hebbian_diffuse": _hebb,
+                }
+
             # ── Phase 3: Record (diffused) rewards for metrics + RL ──
             for agent_id, agent in enumerate(agents):
                 agent_name = f"agent_{agent_id}"
@@ -1305,6 +1391,7 @@ async def run(args):
 
                 reward = diffused_rewards[agent_id]
                 metric.record_reward(agent_id, reward)
+                metric.record_reward_decomposed(agent_id, _reward_decomp_this_step[agent_id])
 
                 # Feed reward to RL layer
                 if agent.rl_layer and agent.rl_layer.enabled:
