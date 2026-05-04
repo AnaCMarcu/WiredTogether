@@ -37,7 +37,12 @@ class AgentResponse(BaseModel):
     thoughts: str
     action: str
     communication: str
-    communication_target: Optional[str] = None
+    # REQUIRED (not Optional): the JSON schema enforcer must always inject a
+    # value, otherwise the LLM treats the field as skippable and we lose
+    # targeted-comm enforcement. Routing in multi_agent_craftium.py rescues
+    # malformed targets ("all", self-target, missing agent_N) by re-routing
+    # via Hebbian-strongest or random teammate, but only if the field exists.
+    communication_target: str
 
 
 class TargetedCommunicationResponse(BaseModel):

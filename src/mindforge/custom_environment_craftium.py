@@ -1,22 +1,15 @@
 """Environment adapter bridging Craftium OpenWorld multi-agent env to CausalForge's interface."""
 
-import sys
 import os
 import json
 import numpy as np
 import PIL.Image
 
-# Import the multi-agent Craftium env wrapper from src/marl_craftium/.
-# Renamed from src/craftium/ to avoid shadowing the installed `craftium`
-# package once src/ went on PYTHONPATH (the old name made `import craftium`
-# resolve to a namespace package missing root_path / MarlCraftiumEnv / …).
-_this_dir = os.path.dirname(os.path.abspath(__file__))
-_src_dir = os.path.dirname(_this_dir)  # src/
-_marl_craftium_dir = os.path.join(_src_dir, "marl_craftium")
-if _marl_craftium_dir not in sys.path:
-    sys.path.insert(0, _marl_craftium_dir)
-
-from openworld_multi_agents import OpenWorldMultiAgentEnv
+# `marl_craftium` is a top-level package under src/ (PYTHONPATH=src is set
+# by every SLURM script). Importing the package runs its _bootstrap side
+# effect, which puts the in-tree craftium submodule on sys.path so the
+# real `craftium` package resolves correctly even when pip-install isn't done.
+from marl_craftium import OpenWorldMultiAgentEnv
 
 # Load environment prompt
 with open(os.path.join(_this_dir, "prompts", "environment_prompt.txt"), "r") as f:
