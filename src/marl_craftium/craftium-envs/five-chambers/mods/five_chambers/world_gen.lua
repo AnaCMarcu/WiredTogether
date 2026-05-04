@@ -213,14 +213,13 @@ local function build_chamber_2()
     carve_doorway(door_x, c.z1, y0, 1)
 
     -- 7. Door 2: enclosed corridor with the y0+1..y0+2 column starting as
-    --    bedrock (= closed). doors.lua replaces those two blocks with air to
-    --    open. Floor / ceiling / side walls / above-door blocks stay bedrock
-    --    so agents can't slip past the door or jump over it.
+    --    a visible locked-door block (red, glowing). doors.lua replaces those
+    --    two blocks with air to open. Floor / ceiling / side walls / above-door
+    --    blocks stay bedrock so agents can't slip past or jump over.
     local d2 = five_chambers.DOOR2_POS
     build_corridor(d2.x, d2.z, y0, y1, wall)
-    -- Re-close the door column over the air the corridor builder put there.
-    place_node({x=d2.x, y=y0+1, z=d2.z}, {name=wall})
-    place_node({x=d2.x, y=y0+2, z=d2.z}, {name=wall})
+    place_node({x=d2.x, y=y0+1, z=d2.z}, {name="five_chambers:door_locked"})
+    place_node({x=d2.x, y=y0+2, z=d2.z}, {name="five_chambers:door_locked"})
     for y = y0+3, y1-1 do
         place_node({x=d2.x, y=y, z=d2.z}, {name=wall})  -- block jumping over
     end
@@ -281,7 +280,17 @@ local function build_chamber_3()
         local sx = five_chambers.cell_x_center(i)
         place_node({x=sx, y=y0+1, z=cell_z0}, {name="five_chambers:switch"})
     end
-    -- z=28 (front wall) stays full bedrock; open_cell_door() clears doors there.
+    -- 2c. Place visible locked-door blocks at each cell front-wall door
+    --     (cell_x_center(i), y0+1..y0+2, CH3_FRONT_WALL_Z). The rest of the
+    --     front wall stays bedrock from step 1. open_cell_door() swaps the
+    --     two door blocks to air when the corresponding switch is pressed.
+    local front_z = five_chambers.CH3_FRONT_WALL_Z
+    for i = 0, N - 1 do
+        local dx = five_chambers.cell_x_center(i)
+        place_node({x=dx, y=y0+1, z=front_z}, {name="five_chambers:door_locked"})
+        place_node({x=dx, y=y0+2, z=front_z}, {name="five_chambers:door_locked"})
+    end
+
 
     -- 3. Carve communal room (interior x=1..x1-1, z=comm_z0..comm_z1).
     fill_box(x0+1, y0+1, comm_z0, x1-1, y1-1, comm_z1, "air")
@@ -291,11 +300,13 @@ local function build_chamber_3()
         end
     end
 
-    -- 4. North wall opening + enclosed corridor between Ch3 (z=z1) and Ch4.
-    --    Without the opening at z=z1 the communal room is sealed northward.
+    -- 4. North-wall Door 3 + enclosed corridor between Ch3 (z=z1) and Ch4.
+    --    Door 3 starts as a visible locked-door block; check_door3() (doors.lua)
+    --    swaps it to air once all NUM_AGENTS agents are simultaneously in the
+    --    communal room.
     local dx3 = five_chambers.DOOR3_X
-    place_node({x=dx3, y=y0+1, z=z1}, {name="air"})
-    place_node({x=dx3, y=y0+2, z=z1}, {name="air"})
+    place_node({x=dx3, y=y0+1, z=z1}, {name="five_chambers:door_locked"})
+    place_node({x=dx3, y=y0+2, z=z1}, {name="five_chambers:door_locked"})
     build_corridor(dx3, z1 + 1, y0, y1, wall)
 
     -- 5. Lighting: one glowstone per cell ceiling + spread across communal ceiling.
@@ -338,19 +349,22 @@ local function build_chamber_4()
     place_node({x=dx, y=y0+2, z=c.z0}, {name="air"})
     place_node({x=dx, y=y0,   z=c.z0}, {name="mcl_core:bedrock"})
 
-    -- 5. North passage at x=6, z=46 (exits toward Door 4 at z=47).
-    place_node({x=dx, y=y0+1, z=c.z1}, {name="air"})
-    place_node({x=dx, y=y0+2, z=c.z1}, {name="air"})
-    place_node({x=dx, y=y0,   z=c.z1}, {name="mcl_core:bedrock"})
+    -- 5. North passage at DOOR4_POS.x, z=c.z1 (exits toward Door 4 at z+1).
+    --    Use DOOR4_POS.x here, not DOOR3_X — they coincide at N=3 but
+    --    diverge at smaller NUM_AGENTS where Door 3 sits at the centre of
+    --    the narrower Ch3 (e.g. x=2 for N=1) while Door 4 stays at x=6.
+    local d4x = five_chambers.DOOR4_POS.x
+    place_node({x=d4x, y=y0+1, z=c.z1}, {name="air"})
+    place_node({x=d4x, y=y0+2, z=c.z1}, {name="air"})
+    place_node({x=d4x, y=y0,   z=c.z1}, {name="mcl_core:bedrock"})
 
-    -- 6. Door 4: enclosed corridor with the y0+1..y0+2 column starting as
-    --    bedrock (= closed). doors.lua replaces those two blocks with air to
-    --    open. Floor / ceiling / side walls / above-door blocks stay bedrock
-    --    so agents can't slip past the door or jump over it.
+    -- 6. Door 4: enclosed corridor with a visible locked-door block at
+    --    y0+1..y0+2. doors.lua replaces those two blocks with air to open
+    --    once all Ch4 mobs are dead.
     local d4 = five_chambers.DOOR4_POS
     build_corridor(d4.x, d4.z, y0, y1, wall)
-    place_node({x=d4.x, y=y0+1, z=d4.z}, {name=wall})
-    place_node({x=d4.x, y=y0+2, z=d4.z}, {name=wall})
+    place_node({x=d4.x, y=y0+1, z=d4.z}, {name="five_chambers:door_locked"})
+    place_node({x=d4.x, y=y0+2, z=d4.z}, {name="five_chambers:door_locked"})
     for y = y0+3, y1-1 do
         place_node({x=d4.x, y=y, z=d4.z}, {name=wall})  -- block jumping over
     end
@@ -367,7 +381,9 @@ local function build_chamber_5()
     local y0   = five_chambers.FLOOR_Y  -- 10
     local y1   = five_chambers.CEIL_Y   -- 15
     local wall = five_chambers.WALL_NODE
-    local dx   = five_chambers.DOOR3_X  -- 6  (shared corridor x)
+    -- Ch5's south entrance must line up with Door 4 (at DOOR4_POS.x), NOT
+    -- with DOOR3_X. They coincide at N=3 but diverge for smaller N.
+    local dx   = five_chambers.DOOR4_POS.x
 
     minetest.load_area({x=c.x0, y=y0-1, z=c.z0}, {x=c.x1, y=y1+1, z=c.z1})
 

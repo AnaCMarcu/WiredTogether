@@ -6,6 +6,23 @@
 --   Door 4: x=DOOR4_POS.x, z=DOOR4_POS.z  — opens when all Ch4 mobs dead
 --   Cell doors: x=cell_x_center(i), z=CH3_FRONT_WALL_Z — opened by switches
 
+-- Visible "locked door" block: distinct red glowing texture so players /
+-- agents can see exactly where doors are. Solid + unbreakable: behaves
+-- like bedrock for collision and digging, but is recognisable on sight.
+minetest.register_node("five_chambers:door_locked", {
+    description = "Locked Door",
+    tiles = {
+        "mcl_core_stonebrick.png^[colorize:#bb1f1f:200",  -- top
+        "mcl_core_stonebrick.png^[colorize:#bb1f1f:200",  -- bottom
+        "mcl_core_stonebrick.png^[colorize:#ff4444:220",  -- sides (brighter)
+    },
+    paramtype = "light",
+    light_source = 7,
+    is_ground_content = false,
+    groups = {unbreakable = 1, not_in_creative_inventory = 1},
+    sounds = nil,
+})
+
 five_chambers.door_state = {
     door2_open = false,
     door2_countdown = -1,
@@ -18,6 +35,38 @@ five_chambers.door_state = {
 five_chambers.ch2_transitioned       = {}
 five_chambers.ch2_transitioned_count = 0
 
+-- Re-place the visible door_locked block at a door position. Inverse of
+-- open_door_at(). Used by relock_all_doors() at episode reset to undo any
+-- doors that were swapped to air during the previous episode.
+local function lock_door_at(x, z)
+    local y = five_chambers.FLOOR_Y
+    minetest.set_node({x=x, y=y+1, z=z}, {name="five_chambers:door_locked"})
+    minetest.set_node({x=x, y=y+2, z=z}, {name="five_chambers:door_locked"})
+end
+
+-- Re-places every door_locked block in the world. Called from the reset
+-- handler so that doors opened during episode N are re-locked before
+-- episode N+1 begins. Without this, only door_state flags reset but the
+-- physical air gap from the previous open_door_at() persists.
+function five_chambers.relock_all_doors()
+    -- Door 2 (Ch2 → Ch3)
+    local d2 = five_chambers.DOOR2_POS
+    lock_door_at(d2.x, d2.z)
+
+    -- Door 3 (Ch3 communal → Ch4 corridor)
+    lock_door_at(five_chambers.DOOR3_X, five_chambers.CH3_NORTH_WALL_Z)
+
+    -- Door 4 (Ch4 → Ch5)
+    local d4 = five_chambers.DOOR4_POS
+    lock_door_at(d4.x, d4.z)
+
+    -- Cell doors (Ch3 front wall, one per agent)
+    local front_z = five_chambers.CH3_FRONT_WALL_Z
+    for i = 0, five_chambers.NUM_AGENTS - 1 do
+        lock_door_at(five_chambers.cell_x_center(i), front_z)
+    end
+end
+
 function five_chambers.init_doors()
     five_chambers.door_state.door2_open      = false
     five_chambers.door_state.door2_countdown = -1
@@ -29,6 +78,16 @@ function five_chambers.init_doors()
     for i = 0, five_chambers.NUM_AGENTS - 1 do
         five_chambers.door_state.cell_doors[i] = false
         five_chambers.ch2_transitioned[i]      = false
+    end
+
+    -- DEBUG_SINGLE: skip the anvil-coop mechanic and leave Door 2 open from
+    -- the start so a solo human player can walk Ch2 → Ch3 directly. The
+    -- Ch2→Ch3 teleport globalstep then catches them at z >= DOOR2_POS.z and
+    -- drops them into cell 0, so the switch puzzle still gets exercised.
+    if five_chambers.DEBUG_SINGLE then
+        five_chambers.door_state.door2_open = true
+        local d2 = five_chambers.DOOR2_POS
+        five_chambers.open_door_at(d2.x, d2.z)
     end
 end
 
@@ -68,12 +127,13 @@ minetest.register_globalstep(function(dtime)
     five_chambers.tick_door2()
 end)
 
--- Reinstates Door 2 bedrock after all agents have been teleported to Ch3.
+-- Reinstates Door 2 (visible locked-door block) after all agents have been
+-- teleported to Ch3.
 function five_chambers.relock_door_2()
     local d2 = five_chambers.DOOR2_POS
     local y  = five_chambers.FLOOR_Y
-    minetest.set_node({x=d2.x, y=y+1, z=d2.z}, {name=five_chambers.WALL_NODE})
-    minetest.set_node({x=d2.x, y=y+2, z=d2.z}, {name=five_chambers.WALL_NODE})
+    minetest.set_node({x=d2.x, y=y+1, z=d2.z}, {name="five_chambers:door_locked"})
+    minetest.set_node({x=d2.x, y=y+2, z=d2.z}, {name="five_chambers:door_locked"})
     minetest.log("action", "[five_chambers] Door 2 relocked.")
 end
 

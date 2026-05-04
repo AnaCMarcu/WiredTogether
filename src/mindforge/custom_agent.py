@@ -284,6 +284,7 @@ class CustomAgent(BaseChatAgent):
             "social_bonds": social_bonds or "N/A",
             "position_text": position_text or "Unknown",
             "player_status_text": player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
+            "current_chamber": current_chamber or "Unknown",
         }
         self.belief_system.task_beliefs = belief_parts["task_beliefs"]
         self.metric.log(f"Agent {self.name} beliefs: {beliefs}")

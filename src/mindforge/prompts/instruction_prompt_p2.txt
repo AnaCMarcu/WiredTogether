@@ -20,6 +20,7 @@ Task: {task}
 Last action: {last_action}
 Reward: {reward_text}
 Position: {position_text}
+Chamber: {current_chamber}   (this is your CURRENT room — trust this, not what the image looks like; bedrock walls and stone blocks appear in every chamber)
 Status: {player_status_text}
 Critique: {critique}
 Error: {error}

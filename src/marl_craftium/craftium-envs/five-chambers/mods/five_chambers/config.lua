@@ -4,6 +4,23 @@
 
 five_chambers.NUM_AGENTS = 3
 
+-- DEBUG_SINGLE: solo human walkthrough mode. When true:
+--   * NUM_AGENTS is forced to 1 — one cell, one switch, one Ch4 spawn group.
+--   * Any connected player is treated as agent_0, so switches, milestones,
+--     Door 2 → cell teleport, Door 3 communal check, etc. all fire for the
+--     standalone-Luanti "singleplayer" name.
+--   * The cell switch's rotational mapping (i+1)%N becomes (0+1)%1 = 0,
+--     i.e. switch 0 opens cell 0's own door — the player lets themselves out.
+-- The flow then is: spawn in Ch1 → Door 1 (always open) → Ch2 anvils →
+-- Door 2 opens after countdown → teleport into cell 0 → press switch →
+-- walk into communal → Door 3 opens (1 agent suffices) → Ch4 → kill mob →
+-- Door 4 opens → Ch5 boss.
+-- Set back to false before training runs.
+five_chambers.DEBUG_SINGLE = false
+if five_chambers.DEBUG_SINGLE then
+    five_chambers.NUM_AGENTS = 1
+end
+
 -- Per-chamber enable flags. Set enabled=false to skip a chamber
 -- entirely; world_gen will leave its space void and open the connecting
 -- door so the sequence still connects.
@@ -70,7 +87,10 @@ five_chambers.CH3_FRONT_WALL_Z = 36
 five_chambers.CH3_COMMUNAL_Z0  = 37
 five_chambers.CH3_COMMUNAL_Z1  = 49
 five_chambers.CH3_NORTH_WALL_Z = 50
-five_chambers.DOOR3_X          = 6
+-- Door 3 sits at the middle of Ch3's north wall. Ch3 width = 4*N+1 (x: 0..4N),
+-- so the centre is at x = 2*N. This keeps the door inside Ch3 for any
+-- NUM_AGENTS up to 5 (Ch4 spans x=1..11, so 2*N must stay <= 11).
+five_chambers.DOOR3_X          = 2 * five_chambers.NUM_AGENTS
 
 -- Chamber 4 (combat, 11×11)
 five_chambers.CH4     = { x0=1, x1=11, z0=52, z1=62 }
@@ -91,3 +111,18 @@ five_chambers.DIGGER_RADIUS = 3
 -- Boss (plan §5)
 five_chambers.BOSS_HP  = 60
 five_chambers.BOSS_DMG = 3
+
+-- DEBUG_SINGLE balance overrides. The production env is tuned for 3 agents
+-- cooperating; a solo human walkthrough has to clear the same content alone
+-- so we soften every coop-gated mechanic:
+--   * Anvils: SOLO=1, DECAY=2 → solo digging is net negative (impossible).
+--     Bumping SOLO to 4 gives net +2 → ~15 ticks per anvil.
+--   * Ch4: zombie spawn count is min(NUM_AGENTS, len(positions)) → 1 solo.
+--   * Boss: lower HP from 60 → 20 so an unarmed player can punch it to death.
+--     (BOSS_DMG isn't wired to the entity yet — VoxeLibre's mobs_mc:zombie
+--     default melee applies; keep the override anyway as a marker.)
+if five_chambers.DEBUG_SINGLE then
+    five_chambers.SOLO_DIG_RATE = 4
+    five_chambers.BOSS_HP       = 20
+    five_chambers.BOSS_DMG      = 1
+end

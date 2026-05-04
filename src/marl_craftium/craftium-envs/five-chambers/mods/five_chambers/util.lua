@@ -32,7 +32,11 @@ end
 
 -- Returns the 0-based agent index from a player name ("agent_0" → 0).
 -- Returns -1 if the name is not a recognised agent.
+-- In DEBUG_SINGLE mode any connected player is treated as agent_0 so the
+-- standalone-Luanti "singleplayer" name still triggers switch / milestone
+-- / door-3 logic during a manual walkthrough.
 function five_chambers.agent_index(name)
+    if five_chambers.DEBUG_SINGLE then return 0 end
     local idx = tonumber(name:match("^agent_(%d+)$"))
     if idx and idx >= 0 and idx < five_chambers.NUM_AGENTS then
         return idx
@@ -46,11 +50,12 @@ function five_chambers.cell_x_center(i)
 end
 
 -- Returns the teleport target position for agent index i (into Cell i).
+-- Drops the agent in the middle of its 3-deep cell (cell_z0..cell_z1).
 function five_chambers.cell_teleport_pos(i)
     return {
         x = five_chambers.cell_x_center(i),
         y = five_chambers.FLOOR_Y + 1,
-        z = 26,
+        z = math.floor((five_chambers.CH3_CELL_Z0 + five_chambers.CH3_CELL_Z1) / 2),
     }
 end
 

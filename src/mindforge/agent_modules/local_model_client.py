@@ -249,13 +249,43 @@ def _build_text_only_content(parts) -> str:
 # ─── JSON schema injection ─────────────────────────────────────────────
 
 def _inject_json_instruction(chat_messages: list, response_format) -> list:
-    """Append a 'reply with JSON only' instruction to the system message (or insert one)."""
+    """Append a 'reply with JSON' instruction PLUS the actual schema fields to
+    the system message. We don't have constrained decoding for the local
+    model, so this is the only way the LLM knows which fields are REQUIRED
+    (e.g. `communication_target`) — without the schema it silently drops
+    fields it considers optional, breaking downstream targeted-comm logic."""
     if response_format is None:
         return chat_messages
     schema_name = getattr(response_format, "__name__", "JSON")
+
+    # Try Pydantic v2 then v1; fall back to a name-only hint.
+    schema_block = ""
+    try:
+        if hasattr(response_format, "model_json_schema"):
+            schema = response_format.model_json_schema()
+        elif hasattr(response_format, "schema"):
+            schema = response_format.schema()
+        else:
+            schema = None
+        if schema:
+            props = schema.get("properties", {}) or {}
+            required = schema.get("required", []) or []
+            field_lines = []
+            for fname, fdef in props.items():
+                ftype = fdef.get("type", "string")
+                req = "REQUIRED" if fname in required else "optional"
+                field_lines.append(f'  "{fname}": <{ftype}>   ({req})')
+            schema_block = (
+                "\n\nSchema fields:\n" + "\n".join(field_lines) +
+                "\nALL fields marked REQUIRED must appear in your JSON output."
+            )
+    except Exception:
+        pass
+
     instruction = (
         f"\n\nYou MUST respond with valid JSON matching the {schema_name} schema. "
-        f"Output ONLY the JSON object, no markdown or extra text."
+        f"Output ONLY the JSON object, no markdown, no commentary, no surrounding text."
+        f"{schema_block}"
     )
     if chat_messages and chat_messages[0]["role"] == "system":
         first = chat_messages[0]

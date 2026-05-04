@@ -50,6 +50,15 @@ minetest.register_node("five_chambers:anvil", {
         local state = five_chambers.anvil_state[key]
         if not state then return end
         state.punchers[puncher:get_player_name()] = five_chambers.step_counter
+
+        -- DEBUG_SINGLE: directly advance HP per click. The tick-based dig
+        -- rate is calibrated for AI agents that punch every 3 Lua ticks
+        -- (one env step); a human's ~1 click/sec is too slow to stack hits
+        -- inside the 6-tick ACTIVE_WINDOW before decay clears progress.
+        -- 10 HP/click × ANVIL_MAX_HP=30 → ~3 clicks per anvil.
+        if five_chambers.DEBUG_SINGLE then
+            state.hp = state.hp + 10
+        end
     end,
 })
 

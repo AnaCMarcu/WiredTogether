@@ -107,6 +107,10 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
     -- Clear all per-episode state.
     five_chambers.step_counter = 0
     five_chambers.reset_milestone_state()
+    -- Re-place door_locked blocks at every door position. Must run BEFORE
+    -- init_doors() so that init_doors's DEBUG_SINGLE branch (which opens
+    -- Door 2) wins over the relock for that one door.
+    five_chambers.relock_all_doors()
     five_chambers.init_doors()
     five_chambers.init_switches()
     five_chambers.init_anvils()
