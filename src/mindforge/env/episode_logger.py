@@ -43,13 +43,16 @@ class EpisodeLogger:
 
         for agent_id in sorted(positions.keys()):
             pos = positions.get(agent_id)
+            # `pos` may be a numpy array of length 3 — use explicit None-check
+            # because `if pos:` raises on multi-element numpy arrays.
+            has_pos = pos is not None and len(pos) >= 3
             self._step_writer.writerow({
                 "step": step,
                 "agent_id": agent_id,
                 "chamber": chambers.get(agent_id, ""),
-                "pos_x": pos[0] if pos else "",
-                "pos_y": pos[1] if pos else "",
-                "pos_z": pos[2] if pos else "",
+                "pos_x": pos[0] if has_pos else "",
+                "pos_y": pos[1] if has_pos else "",
+                "pos_z": pos[2] if has_pos else "",
                 "action": actions.get(agent_id, ""),
                 "reward_task": task_rewards.get(agent_id, 0.0),
                 "reward_comm": comm_rewards.get(agent_id, 0.0),
