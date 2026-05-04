@@ -57,6 +57,62 @@ local function place_node(pos, node)
     vm:write_to_map(true)
 end
 
+-- Build an enclosed corridor segment at (x, z), full height, `width` blocks wide
+-- (centered on x). Floor + ceiling + both side walls are bedrock; the walking
+-- columns (x-half..x+half, y0+1..y1-1, z) are air so the player can pass.
+-- Default width=1 (single-block tube, used for locked doors). For always-open
+-- corridors use width=3 so LLM agents don't have to align perfectly with x.
+local function build_corridor(x, z, y0, y1, wall, width)
+    width = width or 1
+    local half = math.floor(width / 2)
+    local x_lo = x - half
+    local x_hi = x + half
+    -- Floor + ceiling across the full corridor span (including side-wall columns).
+    for cx = x_lo - 1, x_hi + 1 do
+        place_node({x=cx, y=y0, z=z}, {name=wall})
+        place_node({x=cx, y=y1, z=z}, {name=wall})
+    end
+    -- Side walls + air interior.
+    for y = y0+1, y1-1 do
+        place_node({x=x_lo - 1, y=y, z=z}, {name=wall})
+        place_node({x=x_hi + 1, y=y, z=z}, {name=wall})
+        for cx = x_lo, x_hi do
+            place_node({x=cx, y=y, z=z}, {name="air"})
+        end
+    end
+end
+
+-- Carve a `width`-wide, 2-block-tall doorway in a wall plane at (x, z).
+-- Centered on x (so width=3 opens x-1, x, x+1). Floor below stays bedrock.
+local function carve_doorway(x, z, y0, width)
+    width = width or 1
+    local half = math.floor(width / 2)
+    for cx = x - half, x + half do
+        place_node({x=cx, y=y0+1, z=z}, {name="air"})
+        place_node({x=cx, y=y0+2, z=z}, {name="air"})
+        place_node({x=cx, y=y0,   z=z}, {name="mcl_core:bedrock"})
+    end
+end
+
+-- Add evenly-spaced light sources at ceiling level so rooms aren't pitch-dark.
+-- Replaces 4 corner-ish ceiling tiles + 1 centre tile with glowstone (light 14).
+local function add_ceiling_lights(x0, x1, z0, z1, y_ceiling)
+    local light = "mcl_nether:glowstone"
+    local cx = math.floor((x0 + x1) / 2)
+    local cz = math.floor((z0 + z1) / 2)
+    -- Inset by 2 from walls so the light reaches the floor centres of corner regions.
+    local positions = {
+        {x=x0 + 2, z=z0 + 2},
+        {x=x1 - 2, z=z0 + 2},
+        {x=x0 + 2, z=z1 - 2},
+        {x=x1 - 2, z=z1 - 2},
+        {x=cx,     z=cz    },
+    }
+    for _, p in ipairs(positions) do
+        place_node({x=p.x, y=y_ceiling, z=p.z}, {name=light})
+    end
+end
+
 -- Build Chamber 1: 12×12 solo-learning room (plan §2, §2.3).
 -- Floor Y=10, ceiling Y=15, walls bedrock. Interior is dirt_with_grass
 -- floor + air. Door 1 (always open) is a 2-block gap in the north wall
@@ -82,16 +138,14 @@ local function build_chamber_1()
     -- 3. Replace interior floor with grass.
     for x = c.x0+1, c.x1-1 do
         for z = c.z0+1, c.z1-1 do
-            place_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+            place_node({x=x, y=y0, z=z}, {name="mcl_core:bedrock"})
         end
     end
 
-    -- 4. Open Door 1 in north wall (Z=z1=11) at X=door_x, Y=11–12.
-    --    1×2 opening: 1 block wide, 2 blocks tall (player height ~1.75).
-    place_node({x=door_x, y=y0+1, z=c.z1}, {name="air"})  -- y=11
-    place_node({x=door_x, y=y0+2, z=c.z1}, {name="air"})  -- y=12
-    -- Floor at door position: leave as dirt_with_grass for walkability.
-    place_node({x=door_x, y=y0, z=c.z1}, {name="mcl_core:dirt_with_grass"})
+    -- 4. Open Door 1 in north wall (Z=c.z1) at X=door_x.
+    --    3-wide × 2-tall opening so an LLM agent doesn't have to align
+    --    perfectly with door_x to pass through.
+    carve_doorway(door_x, c.z1, y0, 3)
 
     -- 5. Place trees (trunk + simple leaf crown) at plan §2.3 positions.
     --    All positions are interior and verified clear of walls.
@@ -118,6 +172,9 @@ local function build_chamber_1()
         place_node({x=sp.x, y=y0+1, z=sp.z}, {name="mcl_core:stone"})
     end
 
+    -- 7. Ceiling lights so the room isn't pitch-dark.
+    add_ceiling_lights(c.x0, c.x1, c.z0, c.z1, y1)
+
     minetest.log("action", "[five_chambers] Chamber 1 built.")
 end
 
@@ -141,31 +198,32 @@ local function build_chamber_2()
     -- 3. Grass floor.
     for x = c.x0+1, c.x1-1 do
         for z = c.z0+1, c.z1-1 do
-            place_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+            place_node({x=x, y=y0, z=z}, {name="mcl_core:bedrock"})
         end
     end
 
-    -- 4. South entrance (aligns with Door 1 gap at x=DOOR1_X=6, z=CH1.z1=11).
-    --    Ch2 south wall is at z=CH2.z0=13. Open 2-block tall gap at x=6.
+    -- 4. South entrance (aligns with Ch1 north opening at x=DOOR1_X).
     local door_x = five_chambers.DOOR1_X
-    place_node({x=door_x, y=y0+1, z=c.z0}, {name="air"})
-    place_node({x=door_x, y=y0+2, z=c.z0}, {name="air"})
-    place_node({x=door_x, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
+    carve_doorway(door_x, c.z0, y0, 3)
 
-    -- 5. Corridor floor at z=12 (gap between Ch1 z=11 and Ch2 z=13).
-    place_node({x=door_x, y=y0, z=12}, {name="mcl_core:dirt_with_grass"})
+    -- 5. Enclosed 3-wide always-open corridor between Ch1 (z=CH1.z1) and Ch2 (z=c.z0).
+    build_corridor(door_x, c.z0 - 1, y0, y1, wall, 3)
 
-    -- 6. North wall exit at x=door_x, z=CH2.z1=22 (towards Door 2 at z=23).
-    place_node({x=door_x, y=y0+1, z=c.z1}, {name="air"})
-    place_node({x=door_x, y=y0+2, z=c.z1}, {name="air"})
-    place_node({x=door_x, y=y0,   z=c.z1}, {name="mcl_core:dirt_with_grass"})
+    -- 6. North wall exit at x=door_x, z=c.z1 (towards Door 2).
+    carve_doorway(door_x, c.z1, y0, 1)
 
-    -- 7. Door 2: single bedrock block at DOOR2_POS (z=23) — opened later by doors.lua.
+    -- 7. Door 2: enclosed corridor with the y0+1..y0+2 column starting as
+    --    bedrock (= closed). doors.lua replaces those two blocks with air to
+    --    open. Floor / ceiling / side walls / above-door blocks stay bedrock
+    --    so agents can't slip past the door or jump over it.
     local d2 = five_chambers.DOOR2_POS
+    build_corridor(d2.x, d2.z, y0, y1, wall)
+    -- Re-close the door column over the air the corridor builder put there.
     place_node({x=d2.x, y=y0+1, z=d2.z}, {name=wall})
     place_node({x=d2.x, y=y0+2, z=d2.z}, {name=wall})
-    -- Floor tile so agents can stand in front of it.
-    place_node({x=d2.x, y=y0, z=d2.z}, {name="mcl_core:dirt_with_grass"})
+    for y = y0+3, y1-1 do
+        place_node({x=d2.x, y=y, z=d2.z}, {name=wall})  -- block jumping over
+    end
 
     -- 8. Place anvils: Row A (z=z0+2=15) and Row B (z=z0+5=18).
     --    x = x0+1 + i*3 = 3, 6, 9 for N=3.
@@ -174,6 +232,8 @@ local function build_chamber_2()
         place_node({x=ax, y=y0+1, z=c.z0+2}, {name="five_chambers:anvil"})
         place_node({x=ax, y=y0+1, z=c.z0+5}, {name="five_chambers:anvil"})
     end
+
+    add_ceiling_lights(c.x0, c.x1, c.z0, c.z1, y1)
 
     minetest.log("action", "[five_chambers] Chamber 2 built.")
 end
@@ -211,7 +271,7 @@ local function build_chamber_3()
         fill_box(cx0, y0+1, cell_z0, cx1, y1-1, cell_z1, "air")
         for x = cx0, cx1 do
             for z = cell_z0, cell_z1 do
-                place_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+                place_node({x=x, y=y0, z=z}, {name="mcl_core:bedrock"})
             end
         end
     end
@@ -227,13 +287,24 @@ local function build_chamber_3()
     fill_box(x0+1, y0+1, comm_z0, x1-1, y1-1, comm_z1, "air")
     for x = x0+1, x1-1 do
         for z = comm_z0, comm_z1 do
-            place_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+            place_node({x=x, y=y0, z=z}, {name="mcl_core:bedrock"})
         end
     end
 
-    -- 4. Corridor floor at z=39 (gap between Ch3 north wall and Ch4 south wall).
-    place_node({x=five_chambers.DOOR3_X, y=y0, z=z1+1},
-                      {name="mcl_core:dirt_with_grass"})
+    -- 4. North wall opening + enclosed corridor between Ch3 (z=z1) and Ch4.
+    --    Without the opening at z=z1 the communal room is sealed northward.
+    local dx3 = five_chambers.DOOR3_X
+    place_node({x=dx3, y=y0+1, z=z1}, {name="air"})
+    place_node({x=dx3, y=y0+2, z=z1}, {name="air"})
+    build_corridor(dx3, z1 + 1, y0, y1, wall)
+
+    -- 5. Lighting: one glowstone per cell ceiling + spread across communal ceiling.
+    for i = 0, N - 1 do
+        local cx = five_chambers.cell_x_center(i)
+        local mz = math.floor((cell_z0 + cell_z1) / 2)
+        place_node({x=cx, y=y1, z=mz}, {name="mcl_nether:glowstone"})
+    end
+    add_ceiling_lights(x0, x1, comm_z0, comm_z1, y1)
 
     minetest.log("action", "[five_chambers] Chamber 3 built.")
 end
@@ -258,25 +329,33 @@ local function build_chamber_4()
     -- 3. Grass floor.
     for x = c.x0+1, c.x1-1 do
         for z = c.z0+1, c.z1-1 do
-            place_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+            place_node({x=x, y=y0, z=z}, {name="mcl_core:bedrock"})
         end
     end
 
     -- 4. South entrance at x=6, z=40 (aligns with Door 3 corridor at z=39).
     place_node({x=dx, y=y0+1, z=c.z0}, {name="air"})
     place_node({x=dx, y=y0+2, z=c.z0}, {name="air"})
-    place_node({x=dx, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
+    place_node({x=dx, y=y0,   z=c.z0}, {name="mcl_core:bedrock"})
 
     -- 5. North passage at x=6, z=46 (exits toward Door 4 at z=47).
     place_node({x=dx, y=y0+1, z=c.z1}, {name="air"})
     place_node({x=dx, y=y0+2, z=c.z1}, {name="air"})
-    place_node({x=dx, y=y0,   z=c.z1}, {name="mcl_core:dirt_with_grass"})
+    place_node({x=dx, y=y0,   z=c.z1}, {name="mcl_core:bedrock"})
 
-    -- 6. Door 4: bedrock at DOOR4_POS z=47; stays locked until all Ch4 mobs die.
-    local d4 = five_chambers.DOOR4_POS  -- {x=6, z=47}
+    -- 6. Door 4: enclosed corridor with the y0+1..y0+2 column starting as
+    --    bedrock (= closed). doors.lua replaces those two blocks with air to
+    --    open. Floor / ceiling / side walls / above-door blocks stay bedrock
+    --    so agents can't slip past the door or jump over it.
+    local d4 = five_chambers.DOOR4_POS
+    build_corridor(d4.x, d4.z, y0, y1, wall)
     place_node({x=d4.x, y=y0+1, z=d4.z}, {name=wall})
     place_node({x=d4.x, y=y0+2, z=d4.z}, {name=wall})
-    place_node({x=d4.x, y=y0,   z=d4.z}, {name="mcl_core:dirt_with_grass"})
+    for y = y0+3, y1-1 do
+        place_node({x=d4.x, y=y, z=d4.z}, {name=wall})  -- block jumping over
+    end
+
+    add_ceiling_lights(c.x0, c.x1, c.z0, c.z1, y1)
 
     minetest.log("action", "[five_chambers] Chamber 4 built.")
 end
@@ -301,15 +380,17 @@ local function build_chamber_5()
     -- 3. Grass floor.
     for x = c.x0+1, c.x1-1 do
         for z = c.z0+1, c.z1-1 do
-            place_node({x=x, y=y0, z=z}, {name="mcl_core:dirt_with_grass"})
+            place_node({x=x, y=y0, z=z}, {name="mcl_core:bedrock"})
         end
     end
 
     -- 4. South entrance at x=6, z=48 (from Door 4 corridor at z=47).
     place_node({x=dx, y=y0+1, z=c.z0}, {name="air"})
     place_node({x=dx, y=y0+2, z=c.z0}, {name="air"})
-    place_node({x=dx, y=y0,   z=c.z0}, {name="mcl_core:dirt_with_grass"})
+    place_node({x=dx, y=y0,   z=c.z0}, {name="mcl_core:bedrock"})
     -- No exit — episode ends on boss death.
+
+    add_ceiling_lights(c.x0, c.x1, c.z0, c.z1, y1)
 
     minetest.log("action", "[five_chambers] Chamber 5 built.")
 end

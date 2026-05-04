@@ -22,8 +22,8 @@ five_chambers.CEIL_Y    = 15
 five_chambers.WALL_NODE = "mcl_core:bedrock"
 five_chambers.AIR_NODE  = "air"
 
--- Chamber 1 bounds (solo learning, fixed 12×12)
-five_chambers.CH1 = { x0=0, x1=11, z0=0, z1=11 }
+-- Chamber 1 bounds (solo learning, 16×16)
+five_chambers.CH1 = { x0=0, x1=15, z0=0, z1=15 }
 
 -- Ch1 spawn points (plan §2.3; exact corners for N=3)
 five_chambers.CH1_SPAWNS_3 = {
@@ -51,33 +51,33 @@ five_chambers.CH1_SHEEP_POSITIONS = {
 }
 
 -- Door 1: always open (no bedrock placed here); gap in Ch1 north wall
-five_chambers.DOOR1_X = 6
+five_chambers.DOOR1_X = 7
 
--- Chamber 2 bounds (anvil coop, fixed 10×10)
-five_chambers.CH2 = { x0=2, x1=11, z0=13, z1=22 }
+-- Chamber 2 bounds (anvil coop, 14×14)
+five_chambers.CH2 = { x0=0, x1=13, z0=17, z1=30 }
 
 -- Door 2: opens 20 steps after 6th anvil break
-five_chambers.DOOR2_POS    = { x=6, z=23 }
+five_chambers.DOOR2_POS    = { x=7, z=31 }
 five_chambers.DOOR2_DELAY  = 20
 
 -- Chamber 3 (switch puzzle) — width scales with NUM_AGENTS
 -- Width = 4*N+1 blocks; X: 0..(4N)
--- Cells: Z:25–27; communal room: Z:29–37; north wall at Z=38
-five_chambers.CH3_Z0           = 24
-five_chambers.CH3_CELL_Z0      = 25
-five_chambers.CH3_CELL_Z1      = 27
-five_chambers.CH3_FRONT_WALL_Z = 28
-five_chambers.CH3_COMMUNAL_Z0  = 29
-five_chambers.CH3_COMMUNAL_Z1  = 37
-five_chambers.CH3_NORTH_WALL_Z = 38
+-- Cells: Z:33–35; communal room: Z:37–49; north wall at Z=50
+five_chambers.CH3_Z0           = 32
+five_chambers.CH3_CELL_Z0      = 33
+five_chambers.CH3_CELL_Z1      = 35
+five_chambers.CH3_FRONT_WALL_Z = 36
+five_chambers.CH3_COMMUNAL_Z0  = 37
+five_chambers.CH3_COMMUNAL_Z1  = 49
+five_chambers.CH3_NORTH_WALL_Z = 50
 five_chambers.DOOR3_X          = 6
 
--- Chamber 4 (combat, fixed 7×7)
-five_chambers.CH4     = { x0=3, x1=9, z0=40, z1=46 }
-five_chambers.DOOR4_POS = { x=6, z=47 }
+-- Chamber 4 (combat, 11×11)
+five_chambers.CH4     = { x0=1, x1=11, z0=52, z1=62 }
+five_chambers.DOOR4_POS = { x=6, z=63 }
 
--- Chamber 5 (boss, fixed 5×5)
-five_chambers.CH5 = { x0=4, x1=8, z0=48, z1=52 }
+-- Chamber 5 (boss, 9×9)
+five_chambers.CH5 = { x0=2, x1=10, z0=64, z1=72 }
 
 -- Anvil mechanic (plan §4)
 five_chambers.ANVIL_MAX_HP  = 30

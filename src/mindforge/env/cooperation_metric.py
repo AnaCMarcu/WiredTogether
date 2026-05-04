@@ -10,11 +10,11 @@ import math
 import numpy as np
 
 CHAMBER_BOUNDS = {
-    "ch1": lambda p: 0 <= p[2] <= 11,
-    "ch2": lambda p: 13 <= p[2] <= 22,
-    "ch3": lambda p: 24 <= p[2] <= 38,
-    "ch4": lambda p: 40 <= p[2] <= 46,
-    "ch5": lambda p: 48 <= p[2] <= 52,
+    "ch1": lambda p: 0 <= p[2] <= 15,
+    "ch2": lambda p: 17 <= p[2] <= 30,
+    "ch3": lambda p: 32 <= p[2] <= 50,
+    "ch4": lambda p: 52 <= p[2] <= 62,
+    "ch5": lambda p: 64 <= p[2] <= 72,
 }
 
 

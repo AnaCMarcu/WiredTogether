@@ -43,13 +43,21 @@ function five_chambers.emit_milestone(milestone_id, contributors, reward)
         end
     end
 
-    -- Diagnostic line picked up by Python log tailer once [MILESTONE] is in _LOG_TAGS.
+    -- Diagnostic line picked up by Python's log tailer (looks for "[MILESTONE]"
+    -- in stderr.txt). Craftium disables Luanti's mod-security sandbox, so
+    -- io.stderr is available there. Vanilla Luanti enables the sandbox and
+    -- io.stderr is nil — guard the write and also log via minetest.log so
+    -- debug.txt has the line in both environments.
     local contrib_str = table.concat(contributors, ",")
-    io.stderr:write("[MILESTONE] " .. milestone_id
+    local line = "[MILESTONE] " .. milestone_id
         .. " contributors=" .. contrib_str
         .. " reward=" .. tostring(reward)
-        .. " step=" .. tostring(five_chambers.step_counter or 0) .. "\n")
-    io.stderr:flush()
+        .. " step=" .. tostring(five_chambers.step_counter or 0)
+    minetest.log("action", line)
+    if io and io.stderr then
+        io.stderr:write(line .. "\n")
+        io.stderr:flush()
+    end
 end
 
 -- Appends one switch event line to switch_events.jsonl (D5 stub).

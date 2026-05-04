@@ -53,11 +53,11 @@ five_chambers.mob_state = {
     boss_damage      = {},
 }
 
--- Ch4 zombie spawn positions (inside 7×7 interior x=4..8, z=41..45).
+-- Ch4 zombie spawn positions (inside 11×11 interior x=2..10, z=53..61).
 local CH4_SPAWN_POSITIONS = {
-    {x=4, y=11, z=42},
-    {x=6, y=11, z=43},
-    {x=8, y=11, z=44},
+    {x=4, y=11, z=54},
+    {x=6, y=11, z=57},
+    {x=8, y=11, z=60},
 }
 
 -- active_ch1_mobs: list of {obj=ObjectRef, last_puncher=name|nil}
@@ -78,6 +78,14 @@ function five_chambers.spawn_ch1_animals()
         end
         local obj = minetest.add_entity(pos, entity_name)
         if obj then
+            -- Pin the entity so VoxeLibre's mobs_mc despawn logic
+            -- (passive-mob culling, biome/static checks) doesn't remove it.
+            local lua_ent = obj:get_luaentity()
+            if lua_ent then
+                lua_ent.static_save = true
+                lua_ent.persistent = true
+                lua_ent.despawn_immediately = false
+            end
             table.insert(five_chambers.mob_state.active_ch1_mobs,
                          {obj=obj, last_puncher=nil})
         else
