@@ -59,6 +59,7 @@ python multi_agent_craftium.py \
     --warmup-time 300 \
     --rl \
     --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
+    --rl-critic-mode centralized \
     --hebbian \
     --hebbian-gamma 0.2 \
     --hebbian-ltp 0.05 \
