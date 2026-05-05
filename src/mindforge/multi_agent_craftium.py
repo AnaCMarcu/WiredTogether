@@ -493,6 +493,7 @@ def load_checkpoint(
     agents,
     hebbian_graph: "HebbianSocialGraph",
     metric_path: str = "./run_metrics",
+    run_paths=None,
 ) -> dict:
     """Restore run state from *checkpoint_dir*.
 
@@ -504,6 +505,10 @@ def load_checkpoint(
 
     RL weights, optimizer, and Hebbian graph are restored in-place.
     Curriculum state is restored into each agent's auto_curriculum.
+
+    When ``run_paths`` is supplied, the restored metric writes to that
+    consolidated tree (``runs/<run_id>/``). Otherwise ``metric_path`` is
+    used and the legacy ``./run_metrics/<run_id>/`` folder is created.
     """
     run_state_path = os.path.join(checkpoint_dir, "run_state.json")
     if not os.path.exists(run_state_path):
@@ -516,8 +521,11 @@ def load_checkpoint(
     step = run_state["step"]
     run_id = run_state.get("run_id", "resumed")
 
-    # Restore metric
-    metric = CraftiumMetric.restore_from_dict(run_state["metric"], path=metric_path)
+    # Restore metric — use run_paths when provided so resumed runs keep
+    # writing into the same `runs/<run_id>/` tree as the live process.
+    metric = CraftiumMetric.restore_from_dict(
+        run_state["metric"], path=metric_path, run_paths=run_paths,
+    )
 
     # Restore Hebbian graph
     hebbian_path = os.path.join(checkpoint_dir, "hebbian_graph.json")
@@ -686,18 +694,24 @@ async def run(args):
     # ── RL layer config ──
     # Give each run its own lora_save_dir so concurrent or sequential jobs
     # never share or accidentally load each other's adapters.
-    # Layout: rl_checkpoints/<run_id>/<role>
+    # Layout: runs/<run_id>/rl_live/<role>/agent_*/
     # On resume: peek at the checkpoint run_state.json NOW (before build_agents)
     # so the RLLayer loads the correct existing adapter instead of init-ing a
     # fresh one that would immediately be overwritten by load_checkpoint().
     _rl_run_id = run_id
+    _rl_run_paths = run_paths
     if args.resume:
         _ckpt_state_path = os.path.join(args.resume, "run_state.json")
         if os.path.exists(_ckpt_state_path):
             with open(_ckpt_state_path) as _f:
                 _rl_run_id = _json.load(_f).get("run_id", run_id)
             print(f"[RL] Resume: using adapter dir from original run_id={_rl_run_id!r}")
-    rl_save_dir = os.path.join("rl_checkpoints", _rl_run_id)
+            # Resume-time: use the original run's rl_live dir, not this run's.
+            _rl_run_paths = RunPaths(
+                root=run_paths.root.parent / _rl_run_id,
+                run_id=_rl_run_id,
+            )
+    rl_save_dir = str(_rl_run_paths.root / "rl_live")
     rl_config = RLConfig(
         enabled=args.rl,
         mode=args.rl_mode,
@@ -839,13 +853,17 @@ async def run(args):
             checkpoint_dir=args.resume,
             agents=agents,
             hebbian_graph=hebbian_graph,
+            run_paths=run_paths,
         )
         resume_episode = restored["episode"]
         resume_step = restored["step"]
         run_id = restored["run_id"]
         metric = restored["metric"]
-        # Patch rl_config so adapters are loaded from the original run's directory
-        rl_config.lora_save_dir = os.path.join("rl_checkpoints", run_id)
+        # Patch rl_config so adapters are loaded from the original run's
+        # rl_live directory under runs/<orig_run_id>/.
+        rl_config.lora_save_dir = str(
+            RunPaths.create(run_id=run_id, root="runs").root / "rl_live"
+        )
         print(f"[CKPT] Resuming from episode {resume_episode} step {resume_step}")
 
     # ── Phase state ──
@@ -1260,6 +1278,15 @@ async def run(args):
                 actions=_actions_this_step,
                 messages=_chat_this_step,
                 task_rewards=_task_rewards_this_step,
+                # Hand the resolved sender→receiver routing to the metric so
+                # its per-episode pair_messages matrix is populated. The
+                # run-level matrix in comm_metrics is recomputed from
+                # messages.jsonl post-hoc, but the per-episode summary
+                # otherwise stays all-zeros without this.
+                infos={"routed_messages": [
+                    {"sender": _s, "receiver": _r}
+                    for (_s, _r) in comm_events
+                ]},
             )
             ep_logger.log_step(
                 step,
@@ -1507,29 +1534,42 @@ async def run(args):
                         metric.record_rl_update(-1, _critic_info)
 
             # ── Phase 3b: Five-chambers milestone events ──
+            # Map kill-style milestones to a target-string so the cooperation
+            # metric can credit pair_joint_kill / pair_boss_overlap. m21 fires
+            # for the first Ch4 mob kill per agent, m22 fires once when all
+            # Ch4 mobs are dead, m27 fires on boss death.
+            _KILL_TARGETS = {
+                "m21_first_mob_kill":  "ch4_zombie",
+                "m22_all_mobs_killed": "ch4_zombie",
+                "m27_boss_defeated":   "boss",
+            }
             for _ev in environment.poll_milestone_events():
                 metric.record_milestone_event(_ev)
-                coop_metric.observe_milestone(
-                    _ev.get("step", step),
-                    _ev.get("milestone", ""),
-                    _ev.get("contributors", []),
-                )
+                _mid = _ev.get("milestone", "")
+                _ev_step = _ev.get("step", step)
+                _contribs_ev = _ev.get("contributors", [])
+                coop_metric.observe_milestone(_ev_step, _mid, _contribs_ev)
+                if _mid in _KILL_TARGETS:
+                    # Credit the (first-listed) contributor as the killer; the
+                    # joint-kill matrix is computed from recent damage events
+                    # so the rest of the pair info is recovered there.
+                    _killer = _contribs_ev[0] if _contribs_ev else None
+                    coop_metric.observe_kill(_ev_step, _killer, _KILL_TARGETS[_mid])
                 ep_logger.log_event({
-                    "step": _ev.get("step", step),
+                    "step": _ev_step,
                     "type": "milestone",
-                    "id": _ev.get("milestone", ""),
-                    "contributors": _ev.get("contributors", []),
+                    "id": _mid,
+                    "contributors": _contribs_ev,
                     "reward": _ev.get("reward", 0),
                 })
                 # Surface milestone fires in the SLURM .out file. The Lua side
                 # already writes "[SRV] [MILESTONE] ..." into stderr (tailed
                 # by craftium), but parsing those lines is brittle — this is
                 # the authoritative Python-side line, one per polled event.
-                _contribs = _ev.get("contributors", [])
-                _contrib_str = ",".join(_contribs) if _contribs else "<none>"
+                _contrib_str = ",".join(_contribs_ev) if _contribs_ev else "<none>"
                 print(
                     f"[MILESTONE] ep={episode+1} step={step} "
-                    f"id={_ev.get('milestone', '?')} "
+                    f"id={_mid or '?'} "
                     f"agents=[{_contrib_str}] "
                     f"reward={_ev.get('reward', 0)}",
                     flush=True,

@@ -64,6 +64,11 @@ class EpisodeLogger:
                 "hp": hp.get(agent_id, ""),
                 "message": messages.get(agent_id, ""),
             })
+        # Flush so the file on disk reflects what's been logged. SLURM
+        # preemption / SIGTERM / OOM can kill the process between steps;
+        # without this, the partially-buffered rows for the current step
+        # are lost. The cost is one fsync per env step — negligible.
+        self._step_csv.flush()
 
     def log_event(self, event: dict):
         """Append one JSON event to event_log.jsonl."""

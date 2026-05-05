@@ -6,7 +6,8 @@
       "WebFetch(domain:arxiv.org)",
       "WebFetch(domain:papers.neurips.cc)",
       "Bash(grep -E \"\\\\.\\(lua|py\\)$\")",
-      "WebFetch(domain:ar5iv.labs.arxiv.org)"
+      "WebFetch(domain:ar5iv.labs.arxiv.org)",
+      "Bash(python -c ' *)"
     ]
   }
 }

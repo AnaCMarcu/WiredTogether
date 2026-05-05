@@ -151,6 +151,18 @@ class CraftiumMetric:
         run_id=None,
         run_paths=None,
     ):
+        """Build a CraftiumMetric.
+
+        Parameters
+        ----------
+        run_paths : RunPaths or None
+            Preferred. When supplied, every artifact lands under
+            ``run_paths.root`` (i.e. ``runs/<run_id>/``).
+        path : str
+            Legacy fallback. Used only when ``run_paths`` is None — produces
+            the old ``./run_metrics/<run_id>/`` layout. Kept for tooling that
+            constructs CraftiumMetric outside the main loop.
+        """
         self.num_agents = num_agents
         self.communication = communication
         self.run_id = run_id
@@ -684,13 +696,27 @@ class CraftiumMetric:
     # ─── Checkpoint restore ────────────────────────────────────────────
 
     @classmethod
-    def restore_from_dict(cls, d: dict, path: str = "./run_metrics") -> "CraftiumMetric":
+    def restore_from_dict(
+        cls,
+        d: dict,
+        path: str = "./run_metrics",
+        run_paths=None,
+    ) -> "CraftiumMetric":
+        """Rebuild a CraftiumMetric from a dict (typically loaded from
+        run_state.json on resume).
+
+        Pass ``run_paths`` to land output under the consolidated
+        ``runs/<run_id>/`` tree. The legacy ``path=`` argument is kept for
+        back-compat tooling that constructs metrics outside the main loop;
+        when ``run_paths`` is supplied, ``path`` is ignored.
+        """
         num_agents = d["num_agents"]
         metric = cls(
             num_agents=num_agents,
             communication=d.get("communication", True),
             path=path,
             run_id=d.get("run_id"),
+            run_paths=run_paths,
         )
 
         metric.timestep = d.get("timestep", 0)
