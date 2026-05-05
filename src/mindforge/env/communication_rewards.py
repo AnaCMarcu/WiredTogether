@@ -14,20 +14,24 @@ CHAMBER_BOUNDS = {
     "ch5": lambda p: 64 <= p[2] <= 72,
 }
 
-BASE_MSG_REWARD = 2.0
-BASE_MSG_CAP = 10  # Max rewarded messages per agent per episode
+BASE_MSG_REWARD = 0.5
+BASE_MSG_CAP = 10  # Max rewarded messages per agent per episode (so 5 reward total).
 MIN_MSG_LEN = 5
 RATE_LIMIT_STEPS = 2  # Min steps between valid messages per agent
 
+# Tier-2 chamber milestones: (min_messages_in_chamber, reward, milestone_id).
+# Per-agent per-episode cap = 60 reward total (vs. ≤80 from a strong Ch1
+# task pass). Comm rewards are now a meaningful but non-dominant signal.
+# Threshold raised from 2 → 4 messages so a single sentence can't farm
+# the milestone — agents must use chat sustainably.
 CHAMBER_COMM_THRESHOLDS = {
-    # Ch1 has the highest milestone reward to bootstrap the communication
-    # habit early — even though Ch1 is solo, talking about what you observe
-    # is what we want agents to learn first.
-    "ch1": (2, 40.0, "m_comm_ch1"),
-    "ch2": (3, 20.0, "m_comm_ch2"),
-    "ch3": (2, 30.0, "m_comm_ch3"),
-    "ch4": (2, 15.0, "m_comm_ch4"),
-    "ch5": (2, 20.0, "m_comm_ch5"),
+    "ch1": (4, 10.0, "m_comm_ch1"),
+    "ch2": (4, 10.0, "m_comm_ch2"),
+    # Ch3 IS the cooperative-comm puzzle — keep its milestone the highest
+    # so the policy still gets a stronger signal where comm matters most.
+    "ch3": (4, 20.0, "m_comm_ch3"),
+    "ch4": (4, 10.0, "m_comm_ch4"),
+    "ch5": (4, 10.0, "m_comm_ch5"),
 }
 
 

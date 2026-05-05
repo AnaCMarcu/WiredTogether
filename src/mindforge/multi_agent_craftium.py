@@ -12,7 +12,6 @@ Usage:
 
 import argparse
 import asyncio
-import math
 import os
 import random
 import sys
@@ -809,11 +808,8 @@ async def run(args):
         print(f"[FEATURES] Hebbian:          ENABLED  ltp={hebbian_config.ltp_lr}  "
               f"ltd={hebbian_config.ltd_lr}  gamma={hebbian_config.reward_diffusion_gamma}  "
               f"radius={hebbian_config.interaction_radius}  decay={hebbian_config.decay}")
-        print(f"[FEATURES] Proximity bonus:  ENABLED  +0.3/pair/step within "
-              f"{hebbian_config.interaction_radius} blocks")
     else:
         print(f"[FEATURES] Hebbian:          OFF")
-        print(f"[FEATURES] Proximity bonus:  OFF  (requires --hebbian)")
     print(f"[FEATURES] Dig reward fixes: stage-gated dig_stage_res + diminishing returns active (Lua)")
     print(f"{_feat_sep}\n")
     # ─────────────────────────────────────────────────────────────────────────
@@ -999,8 +995,6 @@ async def run(args):
                     print(f"  Saved GIF checkpoint: {gif_path}")
                     _frames_to_mp4(agent_frames, gif_path.replace(".gif", ".mp4"))
 
-        _prox_window_count = 0  # proximity bonus events since last log print
-
         for step in range(max_steps):
             global_step += 1
             logging.info(f"ep={episode+1} step={step+1}/{max_steps} global_step={global_step}")
@@ -1020,14 +1014,12 @@ async def run(args):
                     for i in range(num_agents)
                 )
                 phase_tag = f" | phase={current_phase}" if args.survival_mode else ""
-                prox_tag  = f" | prox_events={_prox_window_count}" if hebbian_config.enabled else ""
                 print(
                     f"[{run_id}] ep={episode+1} step={step+1}/{max_steps} | "
                     f"chambers: {chambers_str} | "
                     f"returns: {returns_str} | "
-                    f"tasks: {tasks_str}{phase_tag}{prox_tag}"
+                    f"tasks: {tasks_str}{phase_tag}"
                 )
-                _prox_window_count = 0
 
             # ── Phase transition check ────────────────────────────────────
             if current_phase == "exploration" and _should_transition_to_survival(
@@ -1407,25 +1399,11 @@ async def run(args):
                     step_advantages.append(None)
             _any_advantage = any(a is not None for a in step_advantages)
 
-            # ── Proximity collaboration bonus ─────────────────────────────────
-            # Small per-step bonus for being within interaction_radius of a
-            # teammate.  Gives a direct reward signal for co-location that
-            # doesn't rely on Hebbian bonds already being built up first.
-            # Only active when Hebbian is enabled (shares the radius config).
-            if hebbian_config.enabled:
-                _PROX_BONUS = 0.3
-                for _pi in range(num_agents):
-                    for _pj in range(_pi + 1, num_agents):
-                        _pos_i, _pos_j = positions[_pi], positions[_pj]
-                        if _pos_i is not None and _pos_j is not None:
-                            _dist = math.sqrt(sum(
-                                (_pos_i[k] - _pos_j[k]) ** 2
-                                for k in range(min(len(_pos_i), len(_pos_j), 3))
-                            ))
-                            if _dist < hebbian_config.interaction_radius:
-                                step_rewards_raw[_pi] += _PROX_BONUS
-                                step_rewards_raw[_pj] += _PROX_BONUS
-                                _prox_window_count += 1
+            # Proximity collaboration bonus REMOVED — was +0.3 per pair per
+            # step within interaction_radius, inflating returns by ~60 over
+            # 100 steps when the team stayed close. Proximity still influences
+            # learning indirectly through Hebbian co-activity (cij), which
+            # gates LTP without paying out raw reward.
 
             hebbian_graph.update(
                 positions=positions,

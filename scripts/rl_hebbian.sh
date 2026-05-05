@@ -69,6 +69,6 @@ python multi_agent_craftium.py \
     --hebbian-beta 3.0 \
     --hebbian-init-weight 0.1 \
     --team-mode homogeneous-agent \
-    --experiment-id five_chambers_hebbian_ep_reset
+    --experiment-id hebbian_rewards
 
 echo "Done"
