@@ -162,6 +162,19 @@ class SkillManager:
         return response.get("name", "unknown"), response.get("description", "")
 
     async def get_skills(self, query: str):
+        # Lazy-init the underlying ChromaDB collection. The autogen
+        # ChromaDBVectorMemory wrapper only opens its `_collection` on
+        # first add()/_ensure_initialized() call, so a fresh agent that
+        # has never persisted a skill will hit `_collection = None` if we
+        # try to count() directly. Mirror the pattern used in
+        # _restore_skills_from_db / _persist_skill.
+        try:
+            self.vectordb._ensure_initialized()
+        except Exception as e:
+            logging.warning("SkillManager: vectordb init failed: %s", e)
+            return None
+        if self.vectordb._collection is None:
+            return None
         if self.vectordb._collection.count() == 0:
             return None
         k = min(self.vectordb._collection.count(), self.vectordb._config.k)

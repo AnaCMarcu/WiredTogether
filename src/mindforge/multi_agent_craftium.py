@@ -246,11 +246,15 @@ def build_role_configs(
 
 def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
                  rl_config=None, belief_interval=5, critic_interval=20,
-                 centralized_critic=None):
+                 centralized_critic=None, is_resume: bool = False):
     """Initialize all Mindforge agents.
 
     ``centralized_critic`` (when not None) is shared by all agents' RLLayers
     and turns the value-loss off in their PPO updates.
+
+    ``is_resume`` controls whether per-agent persistent stores (skill DB) are
+    wiped at construction. Fresh runs reset; chained-checkpoint resumes
+    preserve previously-learned skills.
     """
     agents = []
     for i, role_cfg in enumerate(role_configs):
@@ -281,6 +285,10 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
                 override_skill_prompt=prompts["skill_description"],
                 override_skill_info_prompt=prompts["skill_info"],
                 agent_name=role_cfg["agent_name"],
+                # On resume from a checkpoint, preserve the per-agent
+                # skill DB so skills learned in earlier chained runs
+                # remain available. Fresh runs wipe (default).
+                reset=not is_resume,
             ),
             episode_manager=EpisodicMemoryManager(
                 agent_name=role_cfg["agent_name"],
@@ -755,7 +763,8 @@ async def run(args):
                          rl_config=rl_config,
                          belief_interval=args.belief_interval,
                          critic_interval=args.critic_interval,
-                         centralized_critic=centralized_critic)
+                         centralized_critic=centralized_critic,
+                         is_resume=bool(args.resume))
 
     # ── Hebbian social plasticity ──
     hebbian_config = HebbianConfig(
