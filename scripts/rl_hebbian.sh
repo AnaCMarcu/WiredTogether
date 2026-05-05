@@ -68,7 +68,6 @@ python multi_agent_craftium.py \
     --hebbian-decay 0.001 \
     --hebbian-beta 3.0 \
     --hebbian-init-weight 0.1 \
-    --targeted-communication \
     --team-mode homogeneous-agent \
     --experiment-id five_chambers_hebbian_v1
 

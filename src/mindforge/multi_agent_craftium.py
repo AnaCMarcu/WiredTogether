@@ -1528,7 +1528,7 @@ async def run(args):
                 _contribs = _ev.get("contributors", [])
                 _contrib_str = ",".join(_contribs) if _contribs else "<none>"
                 print(
-                    f"[MILESTONE] ep={ep+1} step={step} "
+                    f"[MILESTONE] ep={episode+1} step={step} "
                     f"id={_ev.get('milestone', '?')} "
                     f"agents=[{_contrib_str}] "
                     f"reward={_ev.get('reward', 0)}",

@@ -72,7 +72,6 @@ python multi_agent_craftium.py \
     --hebbian-ltd 0.005 \
     --hebbian-radius 5.0 \
     --hebbian-init-weight 0.1 \
-    --targeted-communication \
     --team-mode homogeneous-agent \
     --experiment-id "$EXPERIMENT_ID" \
     --checkpoint-dir "$CKPT_ROOT" \
