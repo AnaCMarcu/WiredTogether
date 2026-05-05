@@ -117,7 +117,8 @@ TARGETED COMMUNICATION (REQUIRED EVERY STEP):
 - Make the message ACTIONABLE for that specific recipient — share what
   you observed, what scheme you just confirmed, what you need from THEM,
   or what you commit to do. Vary messages across teammates over time;
-  sending the same message to the same teammate yields no new reward.
+  identical repeats to the same teammate are filtered as spam and don't
+  reach them.
 
 RESPONSE FORMAT — always respond with EXACTLY this JSON, no extra text:
 {{"thoughts": "<spatial reasoning + your PREDICTED observation for this action ('I expect to see X next step') + brief check of last step's prediction vs reality>", "action": "<one action name>", "communication": "<short message addressed to the specific teammate in communication_target — share an observation, a request, or a commitment relevant to THAT teammate>", "communication_target": "<a teammate's name in the form agent_N where N is any other agent's id, never yourself, never 'all'>"}}

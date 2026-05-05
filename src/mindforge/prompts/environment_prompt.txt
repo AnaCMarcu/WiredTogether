@@ -124,9 +124,10 @@ COMMUNICATION — TARGETED 1-TO-1 ONLY (encouraged from Ch1 onwards):
 - Choose the recipient deliberately: pick the teammate whose situation,
   location, or task is most relevant to what you want to say. Sending the
   same generic message to everyone is wasted communication.
-- Reward rules: short throwaway messages (under 5 chars) or repeated
-  identical messages to the same recipient do NOT count. Address different
-  teammates with relevant, specific messages to maximise reward.
+- Validity rules: short throwaway messages (under 5 chars) or repeated
+  identical messages to the same recipient are filtered out — they don't
+  reach the recipient. Address different teammates with relevant, specific
+  messages so they can act on what you tell them.
 - Talk about: what you're doing, what you see, what you need from THIS
   teammate specifically, what scheme you just enacted and what you observed.
 - Chamber 3: targeted communication is the ONLY way to coordinate, since
