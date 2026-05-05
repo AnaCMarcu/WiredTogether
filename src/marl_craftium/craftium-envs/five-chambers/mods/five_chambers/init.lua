@@ -107,6 +107,13 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
     -- Clear all per-episode state.
     five_chambers.step_counter = 0
     five_chambers.reset_milestone_state()
+    -- Rebuild the world geometry: re-places trees, stone blocks, ceiling
+    -- glowstones, and the anvils (which got DESTROYED on break in the
+    -- previous episode). VoxelManip writes directly so re-placing nodes
+    -- where they originally were is safe and idempotent. Without this,
+    -- ep 2+ would have an empty Ch1 (trees/stones dug) and an anvil-less
+    -- Ch2, blocking progression to Ch3.
+    five_chambers.build_all_chambers()
     -- Re-place door_locked blocks at every door position. Must run BEFORE
     -- init_doors() so that init_doors's DEBUG_SINGLE branch (which opens
     -- Door 2) wins over the relock for that one door.
@@ -115,9 +122,16 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
     five_chambers.init_switches()
     five_chambers.init_anvils()
     five_chambers.reset_mob_state()
+    -- Respawn the Ch1 animals (chickens + sheep) too — the previous
+    -- episode may have killed them, and reset_mob_state only clears
+    -- the bookkeeping table, not the entities.
+    five_chambers.spawn_ch1_animals()
     five_chambers.clear_state_files()
 
-    -- Teleport all connected agents back to Ch1 spawns.
+    -- Teleport all connected agents back to Ch1 spawns AND fully wipe
+    -- per-player state so each episode starts with identical conditions.
+    -- (Reproducibility: variance across episodes should come from the
+    --  policy, not from ep N's leftover inventory / hunger drift.)
     for _, p in ipairs(minetest.get_connected_players()) do
         local name = p:get_player_name()
         local i    = five_chambers.agent_index(name)
@@ -126,6 +140,37 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
             or  {x=5, y=five_chambers.FLOOR_Y + 1, z=5}
         p:set_pos(pos)
         p:set_hp(20, {type="set_hp", from="mod"})
+
+        -- Wipe inventory: main hotbar, armor slots, craft grid, craft preview.
+        local inv = p:get_inventory()
+        if inv then
+            for _, list_name in ipairs({"main", "craft", "craftpreview", "armor"}) do
+                if inv:get_size(list_name) > 0 then
+                    inv:set_list(list_name, {})
+                end
+            end
+        end
+        -- Reset wielded slot to slot 1 (in case the previous episode left
+        -- the agent holding gear that no longer exists).
+        if p.set_wield_index then
+            pcall(p.set_wield_index, p, 1)
+        end
+        -- Reset breath to max (VoxeLibre water/oxygen).
+        local props = p:get_properties()
+        local breath_max = (props and props.breath_max) or 10
+        pcall(p.set_breath, p, breath_max)
+        -- Reset hunger + saturation (VoxeLibre's mcl_hunger).
+        if mcl_hunger then
+            if mcl_hunger.set_hunger    then pcall(mcl_hunger.set_hunger,    p, 20) end
+            if mcl_hunger.set_saturation then pcall(mcl_hunger.set_saturation, p, 5) end
+            if mcl_hunger.set_exhaustion then pcall(mcl_hunger.set_exhaustion, p, 0) end
+        end
+
+        -- Re-record clean baselines for milestone tracking. Order matters:
+        -- prev_inv_total was set in reset_milestone_state() based on the
+        -- pre-wipe inventory; now that we've cleared the inventory it
+        -- must be 0 so M3 (pick up 3 items) counts only NEW pickups.
         five_chambers.record_spawn_pos(name, pos)
+        five_chambers.prev_inv_total[name] = 0
     end
 end)
