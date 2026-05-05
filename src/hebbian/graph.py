@@ -189,16 +189,20 @@ class HebbianSocialGraph:
     ) -> np.ndarray:
         """Compute the per-pair modulatory signal matrix m(t) ∈ R^{N×N}.
 
-        Each entry m_ij uses only the advantage signals of agents i and j,
-        not the team mean.  This gives proper credit assignment: the bond
-        between i and j only strengthens when *both* involved agents had a
-        positive outcome, not because a third agent happened to succeed.
+        ASYMMETRIC (egocentric): the bond i→j is updated using agent i's
+        OWN signal, not the pair mean. This produces a directed social
+        graph where W[i,j] represents "agent i's attention/trust toward j",
+        and W[i,j] ≠ W[j,i] in general.
 
-        Implements the asymmetric LTP/LTD rule (Eq. 4+5) per pair:
-            At_ij  = (A_i + A_j) / 2
-            m_ltp  = ltp_lr  * tanh(β * max(At_ij,  0))
-            m_ltd  = ltd_lr  * tanh(β * max(-At_ij, 0))
-            m_ij   = m_ltp - m_ltd
+        Semantics: when agent i succeeds, all of i's outgoing bonds toward
+        co-active partners strengthen — i learns "the agents I was with
+        when I did well are valuable". Differentiation across partners
+        comes from cij (only currently-co-active pairs get the LTP).
+
+        Update rule per direction:
+            m_ij_ltp = ltp_lr  * tanh(β * max( A_i, 0))
+            m_ij_ltd = ltd_lr  * tanh(β * max(-A_i - ltd_threshold, 0))
+            m_ij     = m_ij_ltp - m_ij_ltd
 
         Parameters
         ----------
@@ -209,7 +213,8 @@ class HebbianSocialGraph:
 
         Returns
         -------
-        np.ndarray shape (N, N) : per-pair modulator matrix, diagonal = 0
+        np.ndarray shape (N, N) : per-pair modulator matrix, diagonal = 0.
+            Asymmetric: m[i,j] depends only on agent i's signal.
         """
         N = self.config.num_agents
         cfg = self.config
@@ -224,23 +229,25 @@ class HebbianSocialGraph:
                     _sanitize_reward(step_rewards[i]) / (self._max_reward_seen + _EPS)
                 )
 
-        # Per-pair modulator matrix
-        m = np.zeros((N, N), dtype=np.float32)
+        # Per-direction LTP/LTD scalars from each agent's own signal.
+        # LTD only fires when the agent's signal is clearly negative
+        # (beyond ltd_threshold) — exploration noise (A ≈ −V(s)) stays
+        # below the threshold and does NOT depress bonds.
+        ltp_per_agent = np.zeros(N, dtype=np.float32)
+        ltd_per_agent = np.zeros(N, dtype=np.float32)
         for i in range(N):
-            for j in range(N):
-                if i == j:
-                    continue
-                At_ij = (agent_signals[i] + agent_signals[j]) / 2.0
-                m_ltp = cfg.ltp_lr * math.tanh(cfg.modulation_beta * max(At_ij, 0.0))
-                # LTD only fires when the average advantage is clearly negative
-                # (beyond ltd_threshold). This prevents zero-reward exploration
-                # steps (advantage ≈ −V(s), small negative) from continuously
-                # depressing bonds that were never actively failing.
-                m_ltd = cfg.ltd_lr * math.tanh(
-                    cfg.modulation_beta * max(-At_ij - cfg.ltd_threshold, 0.0)
-                )
-                m[i, j] = m_ltp - m_ltd
+            ltp_per_agent[i] = cfg.ltp_lr * math.tanh(
+                cfg.modulation_beta * max(agent_signals[i], 0.0)
+            )
+            ltd_per_agent[i] = cfg.ltd_lr * math.tanh(
+                cfg.modulation_beta * max(-agent_signals[i] - cfg.ltd_threshold, 0.0)
+            )
 
+        m_per_agent = ltp_per_agent - ltd_per_agent  # (N,)
+        # Broadcast to all outgoing bonds of each agent: m[i, :] = m_per_agent[i].
+        # Diagonal stays 0 (it's not used; W diagonal is always zero).
+        m = np.tile(m_per_agent.reshape(N, 1), (1, N))
+        np.fill_diagonal(m, 0.0)
         return m
 
     # ──────────────────────────────────────────────
@@ -254,8 +261,17 @@ class HebbianSocialGraph:
 
         Called each step before computing sustained LTD so the history
         is current.
+
+        Treats only **clearly** negative team advantages as failures —
+        gated by `ltd_threshold`, mirroring the per-step LTD rule. Without
+        this gate, exploration noise (At ≈ −V(s), small negative on most
+        zero-reward steps) saturates the failure window in ~50 steps and
+        sustained LTD halves every co-active bond every ~350 steps,
+        regardless of whether the team is genuinely failing. That's the
+        bug behind the "weights climb to ~0.5, then crash to 0" pattern.
         """
-        if At < 0.0:
+        cfg = self.config
+        if At < -cfg.ltd_threshold:
             snapshot = (cij > 0.0).astype(np.float32)
             # If deque is full, subtract the oldest snapshot
             if len(self._failure_window_buffer) == self._failure_window_buffer.maxlen:

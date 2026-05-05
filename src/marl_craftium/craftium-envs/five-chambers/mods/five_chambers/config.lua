@@ -112,6 +112,15 @@ five_chambers.DIGGER_RADIUS = 3
 five_chambers.BOSS_HP  = 60
 five_chambers.BOSS_DMG = 3
 
+-- Minimum cumulative damage (HP) an agent must have dealt to a target type
+-- (Ch4 zombies for m22/m23, the Ch5 boss for m27/m28) to be considered a
+-- contributor and receive milestone credit. Below this threshold the agent
+-- is excluded from the contributor list — i.e. earns 0 for that milestone.
+-- Free-rider deterrent: with default zombie HP=20 and boss HP=60, a value
+-- of 5 means the agent must land roughly a quarter of one zombie's HP or
+-- about a twelfth of the boss's HP to qualify.
+five_chambers.MIN_DAMAGE_FOR_CREDIT = 5
+
 -- DEBUG_SINGLE balance overrides. The production env is tuned for 3 agents
 -- cooperating; a solo human walkthrough has to clear the same content alone
 -- so we soften every coop-gated mechanic:

@@ -21,6 +21,7 @@ Last action: {last_action}
 Reward: {reward_text}
 Position: {position_text}
 Chamber: {current_chamber}   (this is your CURRENT room — trust this, not what the image looks like; bedrock walls and stone blocks appear in every chamber)
+Visited chambers so far this episode: {visited_chambers}   (you have ONLY been in these — never claim to be in a chamber not in this list, regardless of what the image looks like)
 Status: {player_status_text}
 Critique: {critique}
 Error: {error}

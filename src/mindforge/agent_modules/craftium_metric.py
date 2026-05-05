@@ -477,6 +477,7 @@ class CraftiumMetric:
         self._plot_cumulative_returns()
         self._plot_milestones()
         self._plot_track_rewards()
+        self._plot_reward_decomposition()
         self._write_steps_to_milestone_txt()
         self._plot_communication_frequency()
         self._plot_hebbian_bonds()
@@ -521,12 +522,51 @@ class CraftiumMetric:
             ax.bar(x, vals, bottom=bottom, label=track, color=colors[idx])
             bottom += vals
         ax.set_xlabel("Agent")
-        ax.set_ylabel("Total Milestone Reward")
-        ax.set_title("Reward by Chamber Track per Agent")
+        # Spell out the scope so this chart isn't mistaken for total return:
+        # it sums only milestone-fire rewards. Per-block dig progress
+        # (dig_stage_res) and proximity/Hebbian shaping go to a separate
+        # chart, _plot_reward_decomposition().
+        ax.set_ylabel("Milestone-fire reward only (no dig_stage_res / shaping)")
+        ax.set_title("Reward by Chamber Track per Agent (milestones only)")
         ax.set_xticks(x)
         ax.set_xticklabels([f"Agent {i}" for i in range(self.num_agents)])
         ax.legend(loc="upper right", fontsize=8)
         fig.savefig(os.path.join(self.target_folder, "track_rewards.png"), dpi=150)
+        plt.close(fig)
+
+    def _plot_reward_decomposition(self):
+        """Stacked bar of per-agent cumulative return BY REWARD SOURCE.
+
+        Reads `reward_history_decomposed` (populated each step by
+        record_reward_decomposed in the main loop). Captures everything
+        the env actually delivered, including sub-threshold dig progress
+        that doesn't trigger a milestone — which is what the
+        track_rewards chart misses.
+        """
+        if not any(self.reward_history_decomposed):
+            return
+        sources = ["task", "comm_base", "comm_milestone", "proximity", "hebbian_diffuse"]
+        # Sum each source per agent.
+        sums = np.zeros((self.num_agents, len(sources)))
+        for i in range(self.num_agents):
+            for rec in self.reward_history_decomposed[i]:
+                for k, src in enumerate(sources):
+                    sums[i, k] += float(rec.get(src, 0.0))
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        x = np.arange(self.num_agents)
+        bottom = np.zeros(self.num_agents)
+        colors = ["#2ca02c", "#1f77b4", "#17becf", "#ff7f0e", "#9467bd"]
+        for k, src in enumerate(sources):
+            ax.bar(x, sums[:, k], bottom=bottom, label=src, color=colors[k])
+            bottom += sums[:, k]
+        ax.set_xlabel("Agent")
+        ax.set_ylabel("Cumulative reward (per source)")
+        ax.set_title("Reward decomposition by source (full env-delivered total)")
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"Agent {i}" for i in range(self.num_agents)])
+        ax.legend(loc="upper right", fontsize=8)
+        fig.savefig(os.path.join(self.target_folder, "reward_decomposition.png"), dpi=150)
         plt.close(fig)
 
     def _write_steps_to_milestone_txt(self):

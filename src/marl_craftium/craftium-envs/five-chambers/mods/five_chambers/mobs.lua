@@ -26,7 +26,11 @@ local function patch_entity_for_kill_tracking(entity_name)
             local pname = puncher:get_player_name()
             self._fc_last_puncher = pname
             if not self._fc_contributors then self._fc_contributors = {} end
-            self._fc_contributors[pname] = true
+            -- Accumulate per-agent damage on this entity (not just presence).
+            -- Used downstream to filter contributor lists by
+            -- MIN_DAMAGE_FOR_CREDIT so free-riders earn no milestone credit.
+            local dmg = tonumber(damage) or 0
+            self._fc_contributors[pname] = (self._fc_contributors[pname] or 0) + dmg
         end
         if orig then return orig(self, puncher, tflp, tool_caps, dir, damage) end
     end
@@ -46,7 +50,7 @@ five_chambers.mob_state = {
     active_ch1_mobs  = {},
     ch4_mobs         = {},
     ch4_triggered    = false,
-    ch4_contributors = {},   -- {[agent_name]=true} union across all Ch4 mobs
+    ch4_contributors = {},   -- {[agent_name]=cumulative_damage_HP} across Ch4 mobs
     ch5_boss         = nil,
     ch5_triggered    = false,
     ch4_kills        = {},
@@ -238,8 +242,9 @@ minetest.register_globalstep(function(dtime)
                     ent._fc_last_puncher = nil
                 end
                 if ent._fc_contributors then
-                    for pname in pairs(ent._fc_contributors) do
-                        entry.contributors[pname] = true
+                    -- entity-level contributors are now {[name]=damage_amount}
+                    for pname, dmg in pairs(ent._fc_contributors) do
+                        entry.contributors[pname] = (entry.contributors[pname] or 0) + dmg
                     end
                     ent._fc_contributors = {}
                 end
@@ -256,9 +261,10 @@ minetest.register_globalstep(function(dtime)
                     (five_chambers.mob_state.ch4_kills[killer] or 0) + 1
                 five_chambers.fire_milestone("m21_first_mob_kill", {killer})
             end
-            -- Accumulate contributors across all Ch4 mobs for M22.
-            for pname in pairs(entry.contributors) do
-                five_chambers.mob_state.ch4_contributors[pname] = true
+            -- Accumulate cumulative damage per agent across all Ch4 mobs.
+            for pname, dmg in pairs(entry.contributors) do
+                five_chambers.mob_state.ch4_contributors[pname] =
+                    (five_chambers.mob_state.ch4_contributors[pname] or 0) + dmg
             end
         else
             table.insert(still_alive, entry)
@@ -269,19 +275,28 @@ minetest.register_globalstep(function(dtime)
 
     -- All Ch4 mobs cleared: fire M22, M23, open Door 4.
     if #still_alive == 0 then
+        local min_dmg = five_chambers.MIN_DAMAGE_FOR_CREDIT or 0
+        -- M22 contributors: only agents whose cumulative damage on Ch4 mobs
+        -- meets the threshold. Free-riders (1-tap-and-flee) get filtered out.
         local contrib_list = {}
-        for pname in pairs(five_chambers.mob_state.ch4_contributors) do
-            table.insert(contrib_list, pname)
+        for pname, dmg in pairs(five_chambers.mob_state.ch4_contributors) do
+            if dmg >= min_dmg then
+                table.insert(contrib_list, pname)
+            end
         end
         if #contrib_list > 0 then
             five_chambers.fire_milestone("m22_all_mobs_killed", contrib_list)
 
-            -- M23: bonus if all agents are alive.
+            -- M23: bonus if all qualifying agents are alive AND contributed.
+            -- Aliveness alone no longer suffices — the agent must have
+            -- damaged a Ch4 mob beyond MIN_DAMAGE_FOR_CREDIT.
             local alive_list = {}
             for _, player in ipairs(minetest.get_connected_players()) do
                 local name = player:get_player_name()
+                local agent_dmg = five_chambers.mob_state.ch4_contributors[name] or 0
                 if five_chambers.agent_index(name) >= 0
-                   and player:get_hp() > 0 then
+                   and player:get_hp() > 0
+                   and agent_dmg >= min_dmg then
                     table.insert(alive_list, name)
                 end
             end
@@ -302,20 +317,30 @@ local function fire_boss_death()
     local boss = five_chambers.mob_state.ch5_boss
     if not boss then return end
 
+    local min_dmg = five_chambers.MIN_DAMAGE_FOR_CREDIT or 0
+
+    -- M27 contributors: only agents whose cumulative damage on the boss meets
+    -- the threshold. Agents who only landed a single 1-HP poke get filtered.
     local contrib_list = {}
-    for pname in pairs(boss.contributors) do
-        table.insert(contrib_list, pname)
+    for pname, dmg in pairs(boss.contributors) do
+        if dmg >= min_dmg then
+            table.insert(contrib_list, pname)
+        end
     end
 
     if #contrib_list > 0 then
         five_chambers.fire_milestone("m27_boss_defeated", contrib_list)
     end
 
-    -- M28: bonus if every agent is still alive.
+    -- M28: bonus if every agent is still alive AND contributed real damage.
+    -- Aliveness alone no longer suffices.
     local alive_list = {}
     for _, player in ipairs(minetest.get_connected_players()) do
         local name = player:get_player_name()
-        if five_chambers.agent_index(name) >= 0 and player:get_hp() > 0 then
+        local agent_dmg = boss.contributors[name] or 0
+        if five_chambers.agent_index(name) >= 0
+           and player:get_hp() > 0
+           and agent_dmg >= min_dmg then
             table.insert(alive_list, name)
         end
     end
@@ -355,7 +380,7 @@ function five_chambers.spawn_boss()
 
     five_chambers.mob_state.ch5_boss = {
         obj           = obj,
-        contributors  = {},   -- {[agent_name]=true}
+        contributors  = {},   -- {[agent_name]=cumulative_damage_HP}
         dmg_fired     = false,
         half_hp_fired = false,
     }
@@ -406,34 +431,45 @@ minetest.register_globalstep(function(dtime)
         return
     end
 
-    -- Sync contributors from entity punch tracking.
+    -- Sync cumulative per-agent damage from entity punch tracking.
     if ent._fc_contributors then
-        for pname in pairs(ent._fc_contributors) do
-            boss.contributors[pname] = true
+        for pname, dmg in pairs(ent._fc_contributors) do
+            boss.contributors[pname] = (boss.contributors[pname] or 0) + dmg
         end
         ent._fc_contributors = {}
     end
 
     local hp = ent.health or ent.hp or obj:get_hp()
+    local min_dmg = five_chambers.MIN_DAMAGE_FOR_CREDIT or 0
 
-    -- M25: first damage landed.
-    if not boss.dmg_fired and next(boss.contributors) then
-        boss.dmg_fired = true
+    -- M25: first qualifying damage landed (≥ MIN_DAMAGE_FOR_CREDIT).
+    -- Light pokes that don't pass the threshold no longer trip M25 — only
+    -- agents that have invested real effort get the "first damage" credit.
+    if not boss.dmg_fired then
         local contrib_list = {}
-        for pname in pairs(boss.contributors) do
-            table.insert(contrib_list, pname)
+        for pname, dmg in pairs(boss.contributors) do
+            if dmg >= min_dmg then
+                table.insert(contrib_list, pname)
+            end
         end
-        five_chambers.fire_milestone("m25_first_boss_dmg", contrib_list)
+        if #contrib_list > 0 then
+            boss.dmg_fired = true
+            five_chambers.fire_milestone("m25_first_boss_dmg", contrib_list)
+        end
     end
 
-    -- M26: boss below half HP.
+    -- M26: boss below half HP — credit only qualifying contributors.
     if not boss.half_hp_fired and hp and hp <= five_chambers.BOSS_HP / 2 then
         boss.half_hp_fired = true
         local contrib_list = {}
-        for pname in pairs(boss.contributors) do
-            table.insert(contrib_list, pname)
+        for pname, dmg in pairs(boss.contributors) do
+            if dmg >= min_dmg then
+                table.insert(contrib_list, pname)
+            end
         end
-        five_chambers.fire_milestone("m26_boss_half_hp", contrib_list)
+        if #contrib_list > 0 then
+            five_chambers.fire_milestone("m26_boss_half_hp", contrib_list)
+        end
     end
 
     -- Boss dead (VoxeLibre mob HP reaches 0 before removal).

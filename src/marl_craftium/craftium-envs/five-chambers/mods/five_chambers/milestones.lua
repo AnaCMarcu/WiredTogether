@@ -4,7 +4,17 @@
 
 -- Milestone definitions: id → { track, reward, once }
 -- once=true  → fires at most once per agent per episode
--- once=false → can fire multiple times (e.g. team milestones where all agents get credit)
+-- once=true (every entry below): each agent can be credited for a milestone
+-- AT MOST ONCE PER EPISODE. Per-agent dedup happens in fire_milestone() via
+-- milestone_fired[name][milestone_id]; that table resets in
+-- reset_milestone_state() so the next episode is a fresh slate.
+--
+-- Why all-once: free-rider deterrent + anti-farming. Without once=true, an
+-- agent could (a) repeatedly break the same Ch2 anvil for unlimited 40 HP
+-- of reward, (b) walk in/out of the Ch3 communal room to farm M19, or (c)
+-- collect M22/M23/M25-M28 each time the trigger condition is re-evaluated.
+-- With once=true, agents are incentivised to make new contributions rather
+-- than re-trigger old ones.
 five_chambers.MILESTONE_DEFS = {
     -- Ch1 solo learning
     m1_move_5            = { track="ch1_solo",  reward=10,  once=true },
@@ -15,30 +25,30 @@ five_chambers.MILESTONE_DEFS = {
     m6_kill_2_animals    = { track="ch1_solo",  reward=80,  once=true },
     m7_dig_3_stone       = { track="ch1_solo",  reward=60,  once=true },
     -- Ch2 anvil cooperation
-    m8_anvil_A1          = { track="ch2_anvils", reward=40, once=false },
-    m9_anvil_A2          = { track="ch2_anvils", reward=40, once=false },
-    m10_anvil_A3         = { track="ch2_anvils", reward=40, once=false },
-    m11_anvil_B1         = { track="ch2_anvils", reward=40, once=false },
-    m12_anvil_B2         = { track="ch2_anvils", reward=40, once=false },
-    m13_anvil_B3         = { track="ch2_anvils", reward=40, once=false },
+    m8_anvil_A1          = { track="ch2_anvils", reward=40, once=true },
+    m9_anvil_A2          = { track="ch2_anvils", reward=40, once=true },
+    m10_anvil_A3         = { track="ch2_anvils", reward=40, once=true },
+    m11_anvil_B1         = { track="ch2_anvils", reward=40, once=true },
+    m12_anvil_B2         = { track="ch2_anvils", reward=40, once=true },
+    m13_anvil_B3         = { track="ch2_anvils", reward=40, once=true },
     m14_sword_equipped   = { track="ch2_gear",  reward=50,  once=true },
     m15_chestplate_equipped = { track="ch2_gear", reward=30, once=true },
     -- Ch3 switch puzzle
     m16_enter_cell       = { track="ch3_switch", reward=20, once=true },
     m17_switch_pressed   = { track="ch3_switch", reward=40, once=true },
     m18_door_opened      = { track="ch3_switch", reward=60, once=true },
-    m19_all_in_communal  = { track="ch3_switch", reward=100, once=false },
+    m19_all_in_communal  = { track="ch3_switch", reward=100, once=true },
     -- Ch4 combat
     m20_enter_ch4        = { track="ch4_combat", reward=30, once=true },
     m21_first_mob_kill   = { track="ch4_combat", reward=60, once=true },
-    m22_all_mobs_killed  = { track="ch4_combat", reward=150, once=false },
-    m23_all_alive_ch4    = { track="ch4_combat", reward=100, once=false },
+    m22_all_mobs_killed  = { track="ch4_combat", reward=150, once=true },
+    m23_all_alive_ch4    = { track="ch4_combat", reward=100, once=true },
     -- Ch5 boss
     m24_enter_ch5        = { track="ch5_boss", reward=50,  once=true },
-    m25_first_boss_dmg   = { track="ch5_boss", reward=80,  once=false },
-    m26_boss_half_hp     = { track="ch5_boss", reward=120, once=false },
-    m27_boss_defeated    = { track="ch5_boss", reward=300, once=false },
-    m28_all_alive_bonus  = { track="ch5_boss", reward=250, once=false },
+    m25_first_boss_dmg   = { track="ch5_boss", reward=80,  once=true },
+    m26_boss_half_hp     = { track="ch5_boss", reward=120, once=true },
+    m27_boss_defeated    = { track="ch5_boss", reward=300, once=true },
+    m28_all_alive_bonus  = { track="ch5_boss", reward=250, once=true },
 }
 
 -- Per-episode state (reset by reset_milestone_state()).

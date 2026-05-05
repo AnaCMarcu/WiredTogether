@@ -46,7 +46,11 @@ class HebbianConfig:
     base_ltp: float = 0.002
 
     # ── Decay — passive bond flexibility ──
-    decay: float = 0.005  # λ
+    # Half-life of an unsupported bond ≈ ln(2) / decay steps.
+    # 0.001 → ~700 steps; 0.005 → ~138 steps. Bonds need to persist through
+    # Ch3 isolation (agents physically separated for a long stretch) so
+    # they can resume diffusing rewards once everyone regroups in communal.
+    decay: float = 0.001  # λ
 
     # ── Modulation sensitivity ──
     modulation_beta: float = 1.0  # β

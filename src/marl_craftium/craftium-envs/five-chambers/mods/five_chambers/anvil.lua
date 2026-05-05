@@ -135,6 +135,16 @@ minetest.register_globalstep(function(dtime)
                         "[five_chambers] All anvils broken — Door 2 countdown started.")
                 end
             end
+
+            -- Destroy the anvil so it cannot be broken again this episode.
+            -- Replaces the node with air (the floor below at y0 stays intact)
+            -- and drops the entry from anvil_state so the globalstep loop
+            -- stops ticking it. Lua's `pairs` allows clearing the current
+            -- key during iteration, so this is safe inside the for loop.
+            minetest.set_node(state.pos, {name = "air"})
+            five_chambers.anvil_state[key] = nil
+            minetest.log("action",
+                "[five_chambers] Anvil " .. key .. " destroyed after break.")
         end
     end
 end)

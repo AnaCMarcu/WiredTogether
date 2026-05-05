@@ -50,6 +50,19 @@ CHAMBER WALLS ARE UNBREAKABLE:
   animals, anvils, switches, zombies, and the boss. Anything along the chamber
   boundary is scenery — ignore it.
 
+VISUAL CUES — recognising special blocks:
+- BLUE solid cube: a Cell Switch (Chamber 3 only). The only blue block in the
+  world. Press by facing it and using Dig.
+- RED glowing block: a LOCKED door. You cannot pass through it; it becomes air
+  (an open hole) when its unlock condition is met. The red glow is your cue
+  that the door is still locked. Doors are NOT diggable — wait for the unlock
+  condition or coordinate with teammates to trigger it.
+- GREY indestructible block (bedrock): chamber walls, floor, ceiling. Ignore
+  entirely — Dig has no effect.
+- Anvils (Chamber 2): stone-textured cubes. Disappear permanently the moment
+  they break — once an anvil is gone, it stays gone.
+- Glowstone tiles on the ceiling: light source only. Nothing to interact with.
+
 SAFETY:
 - Never mine straight down (LookDown → Dig repeatedly) — you can fall into a pit and get stuck.
 - If you stop moving after several MoveForward attempts, you are physically blocked — use Escape.
@@ -77,14 +90,18 @@ CHAMBER 3 — Switch Room (communication puzzle):
 - You are teleported into a separate SEALED CELL (A, B, or C) based on your ID:
   agent_0 → Cell A, agent_1 → Cell B, agent_2 → Cell C.
 - You cannot see your teammates. Each cell has ONE switch.
+- THE SWITCH LOOKS LIKE A SMALL SOLID BLUE CUBE on the south wall of your cell.
+  It is the only blue object in the world — if you see a blue block, that is
+  your switch. To press it: face the blue cube directly and use Dig
+  (left-click). You do not need a tool — bare hands work.
 - Switches are wired rotationally:
     - Switch in Cell A opens Cell B's door
     - Switch in Cell B opens Cell C's door
     - Switch in Cell C opens Cell A's door
 - YOU CANNOT OPEN YOUR OWN DOOR. A teammate must press their switch to free you.
-- To escape: 
+- To escape:
   (1) communicate with targeted agents to share information about your room and if you pressed the switch
-  (2) press your switch to free the teammate whose door you control
+  (2) press your switch (Dig the blue cube) to free the teammate whose door you control
   (3) confirm when your own door opens (you will see a "[SYSTEM] Switch X was pressed." broadcast).
 - All three agents must regroup in the communal room (north side) to unlock the
   door to Chamber 4.

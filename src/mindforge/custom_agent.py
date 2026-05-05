@@ -93,6 +93,7 @@ class CustomAgent(BaseChatAgent):
         position_text=None,
         player_status_text=None,
         current_chamber=None,
+        visited_chambers=None,
         completed_milestones=None,
     ):
 
@@ -285,6 +286,13 @@ class CustomAgent(BaseChatAgent):
             "position_text": position_text or "Unknown",
             "player_status_text": player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
             "current_chamber": current_chamber or "Unknown",
+            # Hard ground-truth list of chambers the agent has actually been
+            # in this episode. The prompt instructs the LLM not to claim it
+            # is in any chamber outside this list — pure-grounding to fight
+            # the "I am in Chamber 3" hallucination when actually in Ch1.
+            "visited_chambers": (
+                ", ".join(visited_chambers) if visited_chambers else "(none yet)"
+            ),
         }
         self.belief_system.task_beliefs = belief_parts["task_beliefs"]
         self.metric.log(f"Agent {self.name} beliefs: {beliefs}")

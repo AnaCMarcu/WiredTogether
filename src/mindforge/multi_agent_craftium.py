@@ -323,6 +323,7 @@ async def agent_do_action(
     position_text=None,
     player_status_text=None,
     current_chamber=None,
+    visited_chambers=None,
     completed_milestones=None,
 ):
     """Have one agent observe and choose an action.
@@ -358,6 +359,7 @@ async def agent_do_action(
         position_text=position_text,
         player_status_text=player_status_text,
         current_chamber=current_chamber,
+        visited_chambers=visited_chambers,
         completed_milestones=completed_milestones,
     )
 
@@ -376,6 +378,7 @@ async def agent_do_action(
                 position_text=position_text,
                 player_status_text=player_status_text,
                 current_chamber=current_chamber,
+                visited_chambers=visited_chambers,
                 completed_milestones=completed_milestones,
             )
         else:
@@ -952,6 +955,10 @@ async def run(args):
         comm_tracker = CommunicationTracker(agent_ids=list(range(num_agents)))
         coop_metric = CooperationMetric(agent_ids=list(range(num_agents)))
         ep_logger = EpisodeLogger(run_dir=metric.target_folder, episode=episode + 1)
+        # Track chambers each agent has been in during this episode. Surfaced
+        # in the prompt as a hard ground-truth list so the LLM can't claim
+        # to be in a chamber it has never visited (frequent hallucination).
+        _visited_chambers = [set() for _ in range(num_agents)]
 
         # ── Macro credit assignment: accumulate rewards across macro ticks ──
         # When the RL policy selects a macro, store_reward() is deferred until
@@ -998,10 +1005,16 @@ async def run(args):
                     f"agent_{i}={agents[i].auto_curriculum.current_task or 'None'!r}"
                     for i in range(num_agents)
                 )
+                # Per-agent chamber so the SLURM .out shows where everyone is.
+                chambers_str = "  ".join(
+                    f"agent_{i}={environment.get_chamber(i) or '?'}"
+                    for i in range(num_agents)
+                )
                 phase_tag = f" | phase={current_phase}" if args.survival_mode else ""
                 prox_tag  = f" | prox_events={_prox_window_count}" if hebbian_config.enabled else ""
                 print(
                     f"[{run_id}] ep={episode+1} step={step+1}/{max_steps} | "
+                    f"chambers: {chambers_str} | "
                     f"returns: {returns_str} | "
                     f"tasks: {tasks_str}{phase_tag}{prox_tag}"
                 )
@@ -1080,6 +1093,14 @@ async def run(args):
                         parts.append(f"agent_{j} ({role_j}): {raw_w:.2f}")
                     _bond_strings[i] = "Social bonds: " + ", ".join(parts)
 
+            # Update each agent's visited-chambers set BEFORE the action loop,
+            # so the prompt the LLM sees this step reflects its full history
+            # (current chamber included).
+            for _i in range(num_agents):
+                _ch = environment.get_chamber(_i)
+                if _ch:
+                    _visited_chambers[_i].add(_ch)
+
             for agent_id, agent in enumerate(agents):
                 agent_name = f"agent_{agent_id}"
 
@@ -1089,7 +1110,15 @@ async def run(args):
                 # ── Macro skip: advance macro queue without calling the LLM ──
                 if environment.is_macro_running(agent_id):
                     environment.step("NoOp", agentId=agent_id)
-                    step_rewards_raw[agent_id] = environment.get_step_reward(agent_id)
+                    # Drain rewards for ALL agents — multi-contributor milestones
+                    # (m22 all_mobs_killed, m19 all_in_communal, etc.) credit
+                    # multiple agents in one env tick. The wrapper's
+                    # `_step_rewards` is overwritten on the NEXT step, so other
+                    # agents' shares would be silently lost if we read only
+                    # this agent's slot. See the bug-fix note at the second
+                    # drain site below.
+                    for _i in range(num_agents):
+                        step_rewards_raw[_i] += environment.get_step_reward(_i)
                     step_contents[agent_id] = None
                     _was_macro_running[agent_id] = True
                     continue
@@ -1129,12 +1158,14 @@ async def run(args):
                     position_text=environment.get_position_text(agent_id),
                     player_status_text=environment.get_player_status_text(agent_id),
                     current_chamber=environment.get_chamber(agent_id),
+                    visited_chambers=sorted(_visited_chambers[agent_id]),
                     completed_milestones=metric._agent_milestones.get(
                         f"agent_{agent_id}", set()
                     ),
                 )
                 agents_error_count[agent_id] = error_count
-                step_rewards_raw[agent_id] = environment.get_step_reward(agent_id)
+                for _i in range(num_agents):
+                    step_rewards_raw[_i] += environment.get_step_reward(_i)
                 step_contents[agent_id] = content
 
                 # Handle communication (collect comm_events for Hebbian)
@@ -1146,7 +1177,14 @@ async def run(args):
                 ):
                     msg_text = content["communication"]
                     comm_target = content.get("communication_target") or "all"
-                    message = TextMessage(content=msg_text, source=agent.name)
+                    # Annotate the wire message with the sender's chamber at
+                    # send time. The receiver sees "[in ch3] <text>" so it can
+                    # ground claims like "I'm pressing switch B" against the
+                    # actual chamber, instead of inferring location from
+                    # screenshot artifacts (a frequent hallucination source).
+                    _sender_chamber = environment.get_chamber(agent_id) or "?"
+                    _wire_content = f"[in {_sender_chamber}] {msg_text}"
+                    message = TextMessage(content=_wire_content, source=agent.name)
                     metric.record_communication(agent.name, msg_text, target=comm_target)
                     step_comm_count += 1
 
@@ -1270,6 +1308,14 @@ async def run(args):
                 _msg["rewarded_base"] = max(0.0, _comm_total - _ms)
                 _msg["rewarded_milestone"] = _ms
                 _msg["chamber"] = environment.get_chamber(_sid)
+                # Receiver's chamber at receive time. Asymmetric with sender's
+                # chamber whenever agents are in different rooms — useful for
+                # post-hoc analysis of cross-chamber communication.
+                try:
+                    _rid = int(str(_msg.get("receiver", "")).split("_")[-1])
+                    _msg["receiver_chamber"] = environment.get_chamber(_rid)
+                except (ValueError, IndexError):
+                    _msg["receiver_chamber"] = None
                 ep_logger.log_message(_msg)
 
             coop_metric.observe_step(
@@ -1567,10 +1613,22 @@ async def run(args):
                 # by craftium), but parsing those lines is brittle — this is
                 # the authoritative Python-side line, one per polled event.
                 _contrib_str = ",".join(_contribs_ev) if _contribs_ev else "<none>"
+                # Per-contributor chamber at fire time, so the milestone line
+                # shows where each agent was when the event occurred.
+                _contrib_chambers = []
+                for _name in _contribs_ev:
+                    try:
+                        _aid = int(str(_name).split("_")[-1])
+                        _contrib_chambers.append(
+                            f"{_name}@{environment.get_chamber(_aid) or '?'}"
+                        )
+                    except (ValueError, IndexError):
+                        _contrib_chambers.append(_name)
+                _chamber_str = ",".join(_contrib_chambers) if _contrib_chambers else "<none>"
                 print(
                     f"[MILESTONE] ep={episode+1} step={step} "
                     f"id={_mid or '?'} "
-                    f"agents=[{_contrib_str}] "
+                    f"agents=[{_chamber_str}] "
                     f"reward={_ev.get('reward', 0)}",
                     flush=True,
                 )
@@ -1667,15 +1725,20 @@ async def run(args):
         }
         ep_logger.finalize(_ep_summary)
 
-        # Append Hebbian snapshot to run-level JSONL stream
+        # Append Hebbian snapshot to run-level JSONL stream.
+        # _hebb_W is a numpy.ndarray with float32 cells, which json.dumps
+        # can't handle natively — convert to nested Python lists.
+        _hebb_W_serialisable = (
+            _hebb_W.tolist() if hasattr(_hebb_W, "tolist") else _hebb_W
+        )
         _hebb_snapshot_path = os.path.join(metric.target_folder, "hebbian_snapshots.jsonl")
         with open(_hebb_snapshot_path, "a", encoding="utf-8") as _hf:
             _hf.write(_json.dumps({
                 "episode": episode + 1,
                 "final_step": _coop_summary["final_step"],
-                "W": _hebb_W,
-                "cooperation_score": _coop_summary.get("cooperation_score", 0.0),
-                "reward_total": sum(metric.cumulative_returns),
+                "W": _hebb_W_serialisable,
+                "cooperation_score": float(_coop_summary.get("cooperation_score", 0.0)),
+                "reward_total": float(sum(metric.cumulative_returns)),
             }) + "\n")
 
         # ── End-of-episode checkpoint ──
