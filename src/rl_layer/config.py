@@ -63,7 +63,13 @@ class RLConfig:
 
     # ── Rollout / update schedule ──
     buffer_size: int = 2048
-    update_interval: int = 256  # was 64 — more diverse experience per update; avoids 50× transition reuse
+    # Update cadence. Lower = more responsive to recent experience (good for
+    # sparse-reward early training where any milestone fire should propagate
+    # gradient fast); higher = more diverse experience per update (better
+    # variance reduction in steady-state). 128 is a compromise: 2x more
+    # updates than the previous 256 setting, but still 2x the original 64
+    # that was causing 50× transition reuse.
+    update_interval: int = 128
 
     # ── Token-level self-improvement ──
     auto_token_opt: bool = False  # let agent decide when to do token-level PPO
@@ -87,3 +93,11 @@ class RLConfig:
         # ── Macro actions (multi-step, rewards accumulated across ticks) ──
         "TurnAround", "ScanArea", "ApproachTarget", "Escape",
     )
+
+    # Mask Slot*-prefixed actions out of the policy distribution.
+    # Inventory-select actions are mostly redundant: env.step has auto-equip
+    # logic that picks the best tool before Dig. Letting the policy waste
+    # exploration on Slot1-Slot8 (8 / 26 = 30% of the action space) was the
+    # primary cause of policy collapse onto Slot5 spam. With masking, the
+    # categorical distribution renormalises over the remaining 18 actions.
+    mask_slot_actions: bool = True

@@ -52,30 +52,45 @@ five_chambers.MILESTONE_DEFS = {
 }
 
 -- Per-episode state (reset by reset_milestone_state()).
-five_chambers.milestone_fired = {}  -- [name][milestone_id] = true
-five_chambers.dig_counts      = {}  -- [name] = {any=N, wood=N, stone=N}
-five_chambers.pickup_counts   = {}  -- [name] = N
-five_chambers.kill_counts     = {}  -- [name] = N  (Ch1 animal kills)
-five_chambers.spawn_pos       = {}  -- [name] = {x, z} initial position for M1
-five_chambers.prev_inv_total  = {}  -- [name] = N  for inventory-diff pickup tracking
+five_chambers.milestone_fired    = {}  -- [name][milestone_id] = true
+five_chambers.dig_counts         = {}  -- [name] = {any=N, wood=N, stone=N}
+five_chambers.pickup_counts      = {}  -- [name] = N (only dig-attributed pickups)
+five_chambers.kill_counts        = {}  -- [name] = N  (Ch1 animal kills)
+five_chambers.spawn_pos          = {}  -- [name] = {x, z} initial position for M1
+five_chambers.prev_inv_total     = {}  -- [name] = N  for inventory-diff pickup tracking
+five_chambers.pending_dig_drops  = {}  -- [name] = FIFO list of step_counter ticks
+                                       --          recording when this agent dug a
+                                       --          node with non-empty drops. An
+                                       --          inventory increase only counts
+                                       --          toward M3 if there is a pending
+                                       --          credit, so passive sources
+                                       --          (chicken eggs, etc.) are ignored.
+
+-- Window (in step_counter ticks) during which a pending dig credit stays valid.
+-- ~150 Lua ticks ≈ 50 env steps. If the dropped item falls somewhere unreachable
+-- (lava, void) the credit silently expires instead of being collected by an
+-- unrelated future pickup.
+five_chambers.PENDING_DIG_TTL = 150
 
 -- Initialise or re-initialise per-player tracking for one agent.
 function five_chambers.init_player_milestone_state(name)
-    five_chambers.milestone_fired[name] = {}
-    five_chambers.dig_counts[name]      = {any=0, wood=0, stone=0}
-    five_chambers.pickup_counts[name]   = 0
-    five_chambers.kill_counts[name]     = 0
-    five_chambers.prev_inv_total[name]  = 0
-    five_chambers.spawn_pos[name]       = nil  -- filled on joinplayer
+    five_chambers.milestone_fired[name]    = {}
+    five_chambers.dig_counts[name]         = {any=0, wood=0, stone=0}
+    five_chambers.pickup_counts[name]      = 0
+    five_chambers.kill_counts[name]        = 0
+    five_chambers.prev_inv_total[name]     = 0
+    five_chambers.pending_dig_drops[name]  = {}
+    five_chambers.spawn_pos[name]          = nil  -- filled on joinplayer
 end
 
 -- Reset all milestone tracking. Called at episode start (reset handler in init.lua).
 function five_chambers.reset_milestone_state()
-    five_chambers.milestone_fired = {}
-    five_chambers.dig_counts      = {}
-    five_chambers.pickup_counts   = {}
-    five_chambers.kill_counts     = {}
-    five_chambers.prev_inv_total  = {}
+    five_chambers.milestone_fired    = {}
+    five_chambers.dig_counts         = {}
+    five_chambers.pickup_counts      = {}
+    five_chambers.kill_counts        = {}
+    five_chambers.prev_inv_total     = {}
+    five_chambers.pending_dig_drops  = {}
     -- Re-record current position as spawn reference so M1 resets correctly each episode.
     five_chambers.step_counter = 0
 
@@ -168,6 +183,9 @@ minetest.register_on_dignode(function(pos, oldnode, digger)
     if not five_chambers.dig_counts[name] then
         five_chambers.dig_counts[name] = {any=0, wood=0, stone=0}
     end
+    if not five_chambers.pending_dig_drops[name] then
+        five_chambers.pending_dig_drops[name] = {}
+    end
 
     local node_name = oldnode.name
     local counts    = five_chambers.dig_counts[name]
@@ -183,6 +201,17 @@ minetest.register_on_dignode(function(pos, oldnode, digger)
     if counts.any   >= 3 then five_chambers.fire_milestone("m2_dig_3_any",   {name}) end
     if counts.wood  >= 5 then five_chambers.fire_milestone("m4_dig_5_wood",  {name}) end
     if counts.stone >= 3 then five_chambers.fire_milestone("m7_dig_3_stone", {name}) end
+
+    -- M3 attribution: only push a pickup credit if the dug node actually
+    -- drops an item. Without this filter, digging a no-drop node would let a
+    -- subsequent passive drop (e.g. a chicken egg) consume the credit.
+    local drops = minetest.get_node_drops(node_name, "")
+    if drops and #drops > 0 then
+        table.insert(
+            five_chambers.pending_dig_drops[name],
+            five_chambers.step_counter
+        )
+    end
 end)
 
 -- ── Globalstep: M14/M15 gear equip (Ch2) ────────────────────────
@@ -219,7 +248,9 @@ minetest.register_globalstep(function(dtime)
             end
         end
 
-        -- M3: inventory total increased since last check → items were picked up.
+        -- M3: inventory total increased AND there is a pending dig credit
+        -- from this same agent. Inventory growth without a recent dig
+        -- (e.g. walking over a chicken egg) does NOT count toward M3.
         local inv = player:get_inventory()
         if inv then
             local total = 0
@@ -229,10 +260,25 @@ minetest.register_globalstep(function(dtime)
             local prev  = five_chambers.prev_inv_total[name] or 0
             local delta = total - prev
             if delta > 0 then
-                five_chambers.pickup_counts[name] =
-                    (five_chambers.pickup_counts[name] or 0) + delta
-                if five_chambers.pickup_counts[name] >= 3 then
-                    five_chambers.fire_milestone("m3_pickup_3", {name})
+                local pending = five_chambers.pending_dig_drops[name] or {}
+                -- Expire stale credits whose drop was never collected.
+                local cutoff = (five_chambers.step_counter or 0)
+                               - five_chambers.PENDING_DIG_TTL
+                while #pending > 0 and pending[1] < cutoff do
+                    table.remove(pending, 1)
+                end
+                -- Consume up to `delta` credits from the FIFO queue.
+                local credits = math.min(delta, #pending)
+                for _ = 1, credits do
+                    table.remove(pending, 1)
+                end
+                five_chambers.pending_dig_drops[name] = pending
+                if credits > 0 then
+                    five_chambers.pickup_counts[name] =
+                        (five_chambers.pickup_counts[name] or 0) + credits
+                    if five_chambers.pickup_counts[name] >= 3 then
+                        five_chambers.fire_milestone("m3_pickup_3", {name})
+                    end
                 end
             end
             five_chambers.prev_inv_total[name] = total

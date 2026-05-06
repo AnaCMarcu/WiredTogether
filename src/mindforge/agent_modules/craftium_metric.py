@@ -306,14 +306,26 @@ class CraftiumMetric:
 
     def record_rl_update(self, agent_id: int, info: dict):
         self.rl_updates.append((self.timestep, agent_id, info))
-        logging.info(
-            "[RL] Agent %d MAPPO update at step %d: "
-            "policy_loss=%.4f, value_loss=%.4f, entropy=%.4f",
-            agent_id, self.timestep,
-            info.get("policy_loss", 0),
-            info.get("value_loss", 0),
-            info.get("entropy", 0),
-        )
+        if "critic_loss" in info:
+            # Centralized-critic update — distinct from per-agent action updates.
+            logging.info(
+                "[RL] Centralized critic update #%d at step %d: "
+                "critic_loss=%.4f, returns_mean=%.4f, returns_std=%.4f, buf=%d",
+                info.get("critic_update_count", 0), self.timestep,
+                info.get("critic_loss", 0),
+                info.get("critic_returns_mean", 0),
+                info.get("critic_returns_std", 0),
+                info.get("critic_buffer_size", 0),
+            )
+        else:
+            logging.info(
+                "[RL] Agent %d MAPPO update at step %d: "
+                "policy_loss=%.4f, value_loss=%.4f, entropy=%.4f",
+                agent_id, self.timestep,
+                info.get("policy_loss", 0),
+                info.get("value_loss", 0),
+                info.get("entropy", 0),
+            )
 
     def record_rl_token_opt(self, agent_id: int, info: dict):
         decision = info.get("decision", "unknown")
@@ -481,6 +493,7 @@ class CraftiumMetric:
         self._write_steps_to_milestone_txt()
         self._plot_communication_frequency()
         self._plot_hebbian_bonds()
+        self._plot_rl_losses()
 
     def _plot_cumulative_returns(self):
         ts = self.ts_data["timesteps"]
@@ -582,6 +595,77 @@ class CraftiumMetric:
                 lines.append(f"{track:<12} {mid:<28} {step_str:>8}")
         with open(os.path.join(self.target_folder, "steps_to_milestone.txt"), "w") as f:
             f.write("\n".join(lines))
+
+    def _plot_rl_losses(self):
+        """Plot RL losses over training: per-agent policy loss + entropy
+        and (when present) the centralized critic loss + return statistics.
+        """
+        if not self.rl_updates:
+            return
+
+        action_updates = [u for u in self.rl_updates if "critic_loss" not in u[2]]
+        critic_updates = [u for u in self.rl_updates if "critic_loss" in u[2]]
+        if not action_updates and not critic_updates:
+            return
+
+        n_subplots = 2 if critic_updates else 1
+        fig, axes = plt.subplots(n_subplots, 1, figsize=(10, 4 * n_subplots),
+                                 squeeze=False)
+
+        # ── Subplot 1: per-agent policy loss + entropy ──
+        ax = axes[0, 0]
+        if action_updates:
+            per_agent = {}
+            for ts, aid, info in action_updates:
+                per_agent.setdefault(aid, {"ts": [], "policy": [], "entropy": []})
+                per_agent[aid]["ts"].append(ts)
+                per_agent[aid]["policy"].append(info.get("policy_loss", 0.0))
+                per_agent[aid]["entropy"].append(info.get("entropy", 0.0))
+            colors = plt.cm.tab10(np.linspace(0, 1, max(len(per_agent), 1)))
+            for (aid, d), c in zip(sorted(per_agent.items()), colors):
+                ax.plot(d["ts"], d["policy"], color=c,
+                        label=f"agent {aid} policy_loss")
+                ax.plot(d["ts"], d["entropy"], color=c, linestyle="--", alpha=0.5,
+                        label=f"agent {aid} entropy")
+            ax.axhline(0, color="gray", linewidth=0.5)
+            ax.set_xlabel("Timestep")
+            ax.set_ylabel("Loss")
+            ax.set_title("Per-agent action update — policy loss & entropy")
+            ax.legend(fontsize=7, loc="best")
+        else:
+            ax.set_visible(False)
+
+        # ── Subplot 2: centralized critic loss + returns mean ± std ──
+        if critic_updates:
+            ax = axes[1, 0]
+            ts_c   = [u[0] for u in critic_updates]
+            loss_c = [u[2].get("critic_loss", 0.0)         for u in critic_updates]
+            ret_m  = [u[2].get("critic_returns_mean", 0.0) for u in critic_updates]
+            ret_s  = [u[2].get("critic_returns_std", 0.0)  for u in critic_updates]
+
+            ax.plot(ts_c, loss_c, color="#d62728", label="critic_loss")
+            ax.set_xlabel("Timestep")
+            ax.set_ylabel("Critic loss", color="#d62728")
+            ax.tick_params(axis="y", labelcolor="#d62728")
+
+            ax2 = ax.twinx()
+            ax2.plot(ts_c, ret_m, color="#1f77b4", label="returns mean")
+            ret_m_arr = np.asarray(ret_m, dtype=float)
+            ret_s_arr = np.asarray(ret_s, dtype=float)
+            ax2.fill_between(
+                ts_c, ret_m_arr - ret_s_arr, ret_m_arr + ret_s_arr,
+                color="#1f77b4", alpha=0.2, label="returns ±1σ"
+            )
+            ax2.set_ylabel("Team return", color="#1f77b4")
+            ax2.tick_params(axis="y", labelcolor="#1f77b4")
+            ax.set_title("Centralized critic — loss & GAE return target")
+            lines1, labels1 = ax.get_legend_handles_labels()
+            lines2, labels2 = ax2.get_legend_handles_labels()
+            ax.legend(lines1 + lines2, labels1 + labels2, fontsize=8, loc="best")
+
+        fig.tight_layout()
+        fig.savefig(os.path.join(self.target_folder, "rl_losses.png"), dpi=150)
+        plt.close(fig)
 
     def _plot_communication_frequency(self):
         if not self.comm_counts_per_step:
@@ -703,12 +787,30 @@ class CraftiumMetric:
     def _summary_rl(self):
         if not (self.rl_updates or self.rl_token_opts):
             return []
-        lines = ["--- RL Layer ---", f"  MAPPO updates: {len(self.rl_updates)}"]
-        if self.rl_updates:
-            last = self.rl_updates[-1][2]
+
+        # Split per-agent action updates from centralized-critic updates so the
+        # two losses (which are not comparable) are reported separately.
+        action_updates = [u for u in self.rl_updates if "critic_loss" not in u[2]]
+        critic_updates = [u for u in self.rl_updates if "critic_loss" in u[2]]
+
+        lines = [
+            "--- RL Layer ---",
+            f"  Total updates: {len(self.rl_updates)} "
+            f"(action={len(action_updates)}, critic={len(critic_updates)})",
+        ]
+        if action_updates:
+            last = action_updates[-1][2]
             lines.append(
-                f"    Last: policy_loss={last.get('policy_loss', 0):.4f}, "
-                f"value_loss={last.get('value_loss', 0):.4f}"
+                f"    Last action: policy_loss={last.get('policy_loss', 0):.4f}, "
+                f"value_loss={last.get('value_loss', 0):.4f}, "
+                f"entropy={last.get('entropy', 0):.4f}"
+            )
+        if critic_updates:
+            last = critic_updates[-1][2]
+            lines.append(
+                f"    Last critic: critic_loss={last.get('critic_loss', 0):.4f}, "
+                f"returns_mean={last.get('critic_returns_mean', 0):.4f}, "
+                f"returns_std={last.get('critic_returns_std', 0):.4f}"
             )
         train_count = sum(1 for _, _, d, _, _ in self.rl_token_opts if d == "train")
         skip_count  = sum(1 for _, _, d, _, _ in self.rl_token_opts if d != "train")

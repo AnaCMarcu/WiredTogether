@@ -74,6 +74,7 @@ def run_ppo_update(
                     device=rl._device,
                     max_length=rl.config.rl_prompt_max_tokens,
                     value_loss_enabled=not rl._use_centralized,
+                    action_mask=getattr(rl, "_action_mask", None),
                 )
             rl.optimizer.zero_grad()
             scaler.scale(loss).backward()

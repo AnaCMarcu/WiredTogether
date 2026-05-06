@@ -150,6 +150,22 @@ class RLLayer:
         self._action_to_idx = {a: i for i, a in enumerate(config.actions)}
         self._idx_to_action = {i: a for i, a in enumerate(config.actions)}
 
+        # ── Action mask: True = allowed, False = masked out ──
+        # When mask_slot_actions is set, every action whose name starts with
+        # "Slot" is masked from the policy. The env auto-equips the correct
+        # tool before Dig, so explicit slot selects waste exploration.
+        if getattr(config, "mask_slot_actions", False):
+            mask = torch.ones(len(config.actions), dtype=torch.bool, device=self._device)
+            for idx, name in enumerate(config.actions):
+                if name.startswith("Slot"):
+                    mask[idx] = False
+            self._action_mask = mask  # (A,)
+            n_masked = int((~mask).sum().item())
+            logger.info("RLLayer: masking %d slot actions out of %d total",
+                        n_masked, len(config.actions))
+        else:
+            self._action_mask = None
+
         # ── Reward normaliser ──
         self._reward_rms = RunningMeanStd() if config.normalize_rewards else None
 
@@ -197,6 +213,12 @@ class RLLayer:
                 value = self.value_head(pooled).squeeze(-1)  # (1,)
                 value_scalar = value.item()
 
+            # Apply the action mask (masked logits → -inf so they're
+            # never sampled). Categorical renormalises automatically.
+            if self._action_mask is not None:
+                action_logits = action_logits.masked_fill(
+                    ~self._action_mask.unsqueeze(0), float("-inf")
+                )
             dist = torch.distributions.Categorical(logits=action_logits)
             action_idx = dist.sample()  # (1,)
             log_prob = dist.log_prob(action_idx)
@@ -212,16 +234,21 @@ class RLLayer:
         )
         self.step_count += 1
 
-        # Extract task line from prompt for communication (first line: "Task: ...")
-        task_line = prompt_text.split("\n", 1)[0] if prompt_text else ""
-        communication = f"[RL step {self.step_count}] {task_line} → {action_name}"
-
         logger.info("RLLayer step=%d action=%s prompt:\n%s", self.step_count, action_name, prompt_text)
 
+        # Communication is intentionally empty: the RL action head doesn't
+        # observe the chat channel and the previously-hardcoded
+        # "[RL step N] {task} → {action}" string was confabulated text not
+        # grounded in observation, action token, or state. Routing the
+        # main loop's `if content["communication"] not in ("","None")`
+        # guard skips this agent's send when comm is empty — clean. Real
+        # comm needs to come from a separate LLM call (see
+        # action_selection.generate_communication) that hasn't been wired
+        # into the per-step path yet.
         return {
             "action": action_name,
             "thoughts": f"RL policy (step {self.step_count}): selected {action_name}",
-            "communication": communication,
+            "communication": "",
         }
 
     def get_pending_value(self) -> Optional[float]:

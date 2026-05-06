@@ -219,7 +219,11 @@ class HebbianSocialGraph:
         N = self.config.num_agents
         cfg = self.config
 
-        # Build per-agent signal: prefer advantage, fall back to reward/max
+        # Build per-agent signal: prefer advantage, fall back to reward/max.
+        # Clip to [-1, 1] so a stuck policy with strongly-negative
+        # advantage (A ≈ -V(s) when reward=0 and V(s) > 0) doesn't drive
+        # m_ltd into saturation every step. Without clipping, agent's
+        # outgoing bonds collapse to 0 within ~30 co-active steps.
         agent_signals = np.zeros(N, dtype=np.float32)
         for i in range(N):
             if advantages is not None and i < len(advantages) and advantages[i] is not None:
@@ -228,6 +232,7 @@ class HebbianSocialGraph:
                 agent_signals[i] = (
                     _sanitize_reward(step_rewards[i]) / (self._max_reward_seen + _EPS)
                 )
+        np.clip(agent_signals, -1.0, 1.0, out=agent_signals)
 
         # Per-direction LTP/LTD scalars from each agent's own signal.
         # LTD only fires when the agent's signal is clearly negative

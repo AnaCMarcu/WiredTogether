@@ -964,6 +964,11 @@ async def run(args):
         # in the prompt as a hard ground-truth list so the LLM can't claim
         # to be in a chamber it has never visited (frequent hallucination).
         _visited_chambers = [set() for _ in range(num_agents)]
+        # Per-agent action repetition counter (episode-scoped). When an
+        # agent picks the same action 3+ steps in a row, apply a small
+        # penalty to break the policy-collapse loop (Slot5 / LookDown
+        # spam observed in early training).
+        _action_repeat = [{"action": None, "count": 0} for _ in range(num_agents)]
 
         # ── Macro credit assignment: accumulate rewards across macro ticks ──
         # When the RL policy selects a macro, store_reward() is deferred until
@@ -971,6 +976,15 @@ async def run(args):
         _macro_acc_reward = {i: 0.0 for i in range(num_agents)}   # accumulated reward
         _macro_acc_active = {i: False for i in range(num_agents)}  # deferred store_reward
         _was_macro_running = {i: False for i in range(num_agents)} # previous-step macro state
+
+        # Previous-step memory used to encode the PRE-step joint state for the
+        # centralised critic. The joint state V_global is now evaluated at the
+        # TOP of each step (i.e. at s_t, before any agent acts) so that the
+        # value attached to each agent's pending transition is V(s_t), not
+        # V(s_{t+1}). The encoder takes "last action" / "last comm" semantic
+        # features — those refer to step t-1 from the perspective of s_t.
+        _prev_step_actions = {i: "NoOp" for i in range(num_agents)}
+        _prev_step_comms   = {i: "" for i in range(num_agents)}
         frames_list = []
 
         def _save_gif_checkpoint(step_num):
@@ -1102,6 +1116,47 @@ async def run(args):
                 if _ch:
                     _visited_chambers[_i].add(_ch)
 
+            # ── Phase 0: encode the PRE-step joint state (s_t) ──
+            # Computed BEFORE any agent acts so V_global represents V(s_t),
+            # not V(s_{t+1}). Each agent's pending transition gets this V_global
+            # attached right after its select_action runs (inside the per-agent
+            # loop below). The centralised critic's store_step at the end of
+            # the step also references these pre-step values, so its training
+            # buffer is aligned on s_t too.
+            joint_state_t = None
+            v_global_t = 0.0
+            if centralized_critic is not None:
+                _pre_positions = {}
+                _pre_chambers  = {}
+                _pre_hps       = {}
+                _pre_inv       = {}
+                for _i in range(num_agents):
+                    _pre_positions[_i] = environment.get_agent_position(_i)
+                    _pre_chambers[_i]  = environment.get_chamber(_i)
+                    _status = environment.get_player_status_text(_i) or ""
+                    _hp = 20.0
+                    if "Health:" in _status:
+                        try:
+                            _hp = float(_status.split("Health:")[1].split("/")[0].strip())
+                        except (ValueError, IndexError):
+                            _hp = 20.0
+                    _pre_hps[_i] = _hp
+                    _pre_inv[_i] = environment.pickedup_object(agentId=_i) or ""
+                # raw_rewards at s_t = 0 by definition (rewards are earned by
+                # the transition out of s_t, not in s_t itself). Pass an empty
+                # dict so the encoder fills zeros.
+                joint_state_t = centralized_critic.encode_joint(
+                    positions=_pre_positions,
+                    chambers=_pre_chambers,
+                    hps=_pre_hps,
+                    inventories=_pre_inv,
+                    milestones_by_agent=metric._agent_milestones,
+                    raw_rewards={i: 0.0 for i in range(num_agents)},
+                    last_actions=_prev_step_actions,
+                    last_comms=_prev_step_comms,
+                )
+                v_global_t = centralized_critic.evaluate(joint_state_t)
+
             for agent_id, agent in enumerate(agents):
                 agent_name = f"agent_{agent_id}"
 
@@ -1169,6 +1224,21 @@ async def run(args):
                     step_rewards_raw[_i] += environment.get_step_reward(_i)
                 step_contents[agent_id] = content
 
+                # Attach the PRE-step V_global(s_t) to the transition that
+                # select_action just opened. This is the fix for the
+                # off-by-one credit-assignment bug — old_value_global is now
+                # V(s_t), not V(s_{t+1}). Safe no-op if no transition is
+                # pending (e.g. agent terminated before its action). For
+                # macro-continuation ticks this branch does not run because
+                # the macro-skip path early-continues before agent_do_action.
+                if (
+                    centralized_critic is not None
+                    and joint_state_t is not None
+                    and agent.rl_layer is not None
+                    and agent.rl_layer.enabled
+                ):
+                    agent.rl_layer.set_pending_value_global(v_global_t, joint_state_t)
+
                 # Handle communication (collect comm_events for Hebbian)
                 if (
                     content
@@ -1197,22 +1267,24 @@ async def run(args):
                     if sender_idx < 0:
                         continue  # malformed agent name; drop the message
 
-                    # Resolve recipient from communication_target. The LLM is
-                    # required to pick a specific agent (no broadcasts).
-                    is_valid_target = (
-                        comm_target
-                        and comm_target != "all"
-                        and comm_target.startswith("agent_")
-                    )
+                    # Resolve recipient from communication_target. Tolerant
+                    # parser: accept "agent_N", "agentN", "Agent_N" — the LLM
+                    # sometimes drops the underscore or capitalises. Self-
+                    # targets are caught here and rerouted via the fallback
+                    # below (Hebbian-strongest or random).
+                    import re as _re
                     recv_idx = -1
                     routing_source = "model"
-                    if is_valid_target:
-                        try:
-                            cand = int(comm_target.split("_")[1])
-                            if 0 <= cand < num_agents and cand != sender_idx:
-                                recv_idx = cand
-                        except (IndexError, ValueError):
-                            recv_idx = -1
+                    if comm_target and comm_target != "all":
+                        _m = _re.match(r"^\s*agent_?(\d+)\s*$",
+                                       str(comm_target).lower())
+                        if _m:
+                            try:
+                                cand = int(_m.group(1))
+                                if 0 <= cand < num_agents and cand != sender_idx:
+                                    recv_idx = cand
+                            except (IndexError, ValueError):
+                                recv_idx = -1
 
                     if recv_idx < 0:
                         # Model returned "all" or a malformed/self target despite
@@ -1271,6 +1343,32 @@ async def run(args):
                 _actions_this_step[_i] = (_c.get("action", "NoOp") if _c else "NoOp")
                 _env_pos = environment.get_agent_position(_i)
                 _agent_pos_map[_i] = _env_pos if _env_pos is not None else positions[_i]
+
+            # ── Action-repetition penalty ────────────────────────────────
+            # Detect policy-collapse loops (e.g. Slot5 spammed for 30+ steps,
+            # LookDown stuck) and apply a small per-step disincentive.
+            # Penalty starts firing on the 3rd identical-action step and
+            # scales lightly so it nudges the policy without overwhelming
+            # task signal. Sustained Dig isn't penalised — env-internal
+            # sustained-tick repetition happens INSIDE one outer step,
+            # not across outer steps; the agent only emits "Dig" once per
+            # outer step regardless of inner ticks.
+            _REPEAT_PENALTY_THRESHOLD = 3
+            _REPEAT_PENALTY_PER_STEP = 0.5
+            _REPEAT_PENALTY_CAP = 5.0
+            for _i in range(num_agents):
+                _act = _actions_this_step[_i]
+                _state = _action_repeat[_i]
+                if _act == _state["action"]:
+                    _state["count"] += 1
+                else:
+                    _state["action"] = _act
+                    _state["count"] = 1
+                if _state["count"] >= _REPEAT_PENALTY_THRESHOLD:
+                    excess = _state["count"] - (_REPEAT_PENALTY_THRESHOLD - 1)
+                    pen = -min(_REPEAT_PENALTY_CAP,
+                               _REPEAT_PENALTY_PER_STEP * excess)
+                    step_rewards_raw[_i] += pen
 
             _comm_rewards_this_step: dict = {}
             _comm_milestones: list = []
@@ -1345,42 +1443,14 @@ async def run(args):
                 infos={"chambers": {i: environment.get_chamber(i) for i in range(num_agents)}},
             )
 
-            # ── Phase 1c: Centralised critic — encode joint state, evaluate V_global ──
-            # Runs once per step, after all agents have acted but before Hebbian
-            # diffusion. Each agent's pending transition is updated with the
-            # SAME V_global and joint_state so the centralised critic sees the
-            # same target across the team.
-            joint_state_t = None
-            v_global_t = 0.0
-            if centralized_critic is not None:
-                _hps = {}
-                _inv = {}
-                _chambers = {}
-                for _i in range(num_agents):
-                    _status = environment.get_player_status_text(_i) or ""
-                    _hp = 20.0
-                    if "Health:" in _status:
-                        try:
-                            _hp = float(_status.split("Health:")[1].split("/")[0].strip())
-                        except (ValueError, IndexError):
-                            _hp = 20.0
-                    _hps[_i] = _hp
-                    _inv[_i] = environment.pickedup_object(agentId=_i) or ""
-                    _chambers[_i] = environment.get_chamber(_i)
-                joint_state_t = centralized_critic.encode_joint(
-                    positions=_agent_pos_map,
-                    chambers=_chambers,
-                    hps=_hps,
-                    inventories=_inv,
-                    milestones_by_agent=metric._agent_milestones,
-                    raw_rewards=_task_rewards_this_step,
-                    last_actions=_actions_this_step,
-                    last_comms=_chat_this_step,
-                )
-                v_global_t = centralized_critic.evaluate(joint_state_t)
-                for _agent in agents:
-                    if _agent.rl_layer is not None and _agent.rl_layer.enabled:
-                        _agent.rl_layer.set_pending_value_global(v_global_t, joint_state_t)
+            # ── (Phase 1c removed) ──
+            # The centralised critic's joint_state_t / v_global_t are now
+            # computed in Phase 0 (top of step, BEFORE any agent acts) so
+            # V_global represents V(s_t) and is attached to each agent's
+            # pending transition right after select_action. This fixes the
+            # off-by-one credit-assignment bug where old_value_global used
+            # to be V(s_{t+1}). The centralised critic's own buffer is
+            # populated from the same pre-step values in Phase 3a below.
 
             # ── Phase 2: Hebbian update + reward diffusion ──
 
@@ -1652,6 +1722,15 @@ async def run(args):
                 )
 
             metric.store_timestep(step_comm_count=step_comm_count)
+
+            # ── Snapshot per-agent action/comm strings as previous-step
+            # memory for next step's pre-step joint state encoding. The
+            # centralised critic uses these as semantic features (last
+            # action, last comm) that condition V(s_{t+1}).
+            if centralized_critic is not None:
+                for _i in range(num_agents):
+                    _prev_step_actions[_i] = _actions_this_step.get(_i, "NoOp")
+                    _prev_step_comms[_i]   = _chat_this_step.get(_i, "")
 
             # ── Periodic checkpoint (within episode) ──
             if checkpoint_interval > 0 and (step + 1) % checkpoint_interval == 0:

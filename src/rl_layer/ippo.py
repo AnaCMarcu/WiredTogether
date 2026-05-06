@@ -13,7 +13,7 @@ Token-level:   optimises the full token-level log-likelihood of the generated
 response (only triggered by the agent's learning-belief mechanism).
 """
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -43,6 +43,7 @@ def action_level_ppo_step(
     device: torch.device,
     max_length: int = 512,
     value_loss_enabled: bool = True,
+    action_mask: Optional[torch.Tensor] = None,  # (A,) bool, True = allowed
 ) -> Tuple[torch.Tensor, dict]:
     """Single PPO mini-batch update.  Returns scalar loss + info dict.
 
@@ -84,6 +85,13 @@ def action_level_ppo_step(
 
     # Action head → policy distribution over discrete actions
     action_logits = action_head(pooled)  # (B, n_actions)
+    # Apply the same action mask used at sampling time so that log-prob /
+    # entropy computation is consistent with the policy that produced the
+    # behaviour. Without this the ratio = exp(new − old) would be biased.
+    if action_mask is not None:
+        action_logits = action_logits.masked_fill(
+            ~action_mask.unsqueeze(0), float("-inf")
+        )
     action_dist = torch.distributions.Categorical(logits=action_logits)
     new_log_probs = action_dist.log_prob(action_idxs)
     entropy = action_dist.entropy().mean()
