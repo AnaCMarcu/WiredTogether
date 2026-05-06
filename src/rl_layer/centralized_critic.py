@@ -308,10 +308,13 @@ class CentralizedCritic:
                 if idx.numel() == 0:
                     continue
                 v_pred = self.net(joint[idx])
+                # Use the critic-specific clip (calibrated for raw returns),
+                # not the per-agent value_clip_eps (calibrated for normalised
+                # returns). See RLConfig.critic_value_clip_eps for rationale.
                 v_clipped = old_v[idx] + torch.clamp(
                     v_pred - old_v[idx],
-                    -self.config.value_clip_eps,
-                    self.config.value_clip_eps,
+                    -self.config.critic_value_clip_eps,
+                    self.config.critic_value_clip_eps,
                 )
                 l1 = F.mse_loss(v_pred, ret[idx], reduction="none")
                 l2 = F.mse_loss(v_clipped, ret[idx], reduction="none")

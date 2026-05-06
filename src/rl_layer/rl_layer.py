@@ -288,18 +288,34 @@ class RLLayer:
                      reward_task: float = 0.0, reward_comm: float = 0.0) -> None:
         """Feed the environment reward back into the buffer.
 
-        Applies two transforms before storage:
+        Applies up to two transforms before storage:
         1. Death penalty: subtracts ``config.death_penalty`` on termination so
            the value head learns that dying is worse than running out of steps.
         2. Reward normalisation: scales by running 1/std so the 0.1–2048 range
            the environment produces maps to roughly unit variance, stabilising
            value function learning.
+
+        The reward normalisation is **disabled** when a centralised critic is
+        active (MAPPO mode). The centralised critic is trained against the
+        raw team-mean reward (multi_agent_craftium.py Phase 3a), so V_global
+        learns on the raw scale. If we normalised the per-agent reward here,
+        GAE on this buffer would mix scales:
+            δ_t = r_normalised + γ · V_global_raw − V_global_raw
+        and the V_global terms would drown out the reward signal. With
+        normalisation off in this mode, both streams are raw and GAE is
+        consistent. Per-rollout advantage normalisation in compute_gae() still
+        makes the policy gradient see unit-variance advantages.
+
+        In ``critic_mode='independent'`` (legacy IPPO), normalisation stays on
+        because the per-agent value head IS trained against ``tr.returns``, and
+        keeping returns near unit variance avoids the value-clip / value-coef
+        coupling problems that motivated normalisation in the first place.
         """
         if not self.config.enabled:
             return
         if done and self.config.death_penalty != 0.0:
             reward += self.config.death_penalty
-        if self._reward_rms is not None:
+        if self._reward_rms is not None and not self._use_centralized:
             self._reward_rms.update(reward)
             reward = self._reward_rms.normalize(reward)
         self.buffer.store_reward(reward, done,

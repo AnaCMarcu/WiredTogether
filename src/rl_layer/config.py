@@ -30,6 +30,15 @@ class RLConfig:
     critic_mode: str = "centralized"
     critic_hidden: int = 256
     critic_lr: float = 3e-4
+    # Centralised-critic value clip. The per-agent value_clip_eps below is
+    # calibrated for normalised returns (~[-3,+3]). The centralised critic
+    # trains on RAW team returns whose scale is set by the milestone reward
+    # ladder (cumulative return reaches ~100 in successful episodes, ~10 in
+    # failed ones), so a tighter clip here would freeze V_global early and
+    # slow critic convergence to the point of being useless. 10.0 lets V
+    # shift up to ~10 reward units per minibatch update, enough to track
+    # milestone-fire spikes without going unstable.
+    critic_value_clip_eps: float = 10.0
 
     # ── Memory management ──
     # RL prompts can be very long (beliefs + skills + episodes).  Truncating at
