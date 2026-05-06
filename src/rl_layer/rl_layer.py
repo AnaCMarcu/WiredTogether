@@ -236,15 +236,16 @@ class RLLayer:
 
         logger.info("RLLayer step=%d action=%s prompt:\n%s", self.step_count, action_name, prompt_text)
 
-        # Communication is intentionally empty: the RL action head doesn't
-        # observe the chat channel and the previously-hardcoded
-        # "[RL step N] {task} → {action}" string was confabulated text not
-        # grounded in observation, action token, or state. Routing the
-        # main loop's `if content["communication"] not in ("","None")`
-        # guard skips this agent's send when comm is empty — clean. Real
-        # comm needs to come from a separate LLM call (see
-        # action_selection.generate_communication) that hasn't been wired
-        # into the per-step path yet.
+        # Communication is left empty here as a placeholder. The RL action
+        # head doesn't pick words — it only picks discrete actions. The
+        # natural-language message is produced by a SEPARATE LLM call in
+        # custom_agent.on_messages → action_selection.generate_communication
+        # (uses prompts/rl_communication_prompt.txt and is conditioned on
+        # the chosen action + task + frame), which then overwrites
+        # content["communication"] and content["communication_target"]
+        # before the main loop reads them. So this empty string is never
+        # what the env sees in production — it's just a structural
+        # placeholder for the schema.
         return {
             "action": action_name,
             "thoughts": f"RL policy (step {self.step_count}): selected {action_name}",
