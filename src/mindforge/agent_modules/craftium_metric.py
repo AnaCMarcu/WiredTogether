@@ -308,23 +308,41 @@ class CraftiumMetric:
         self.rl_updates.append((self.timestep, agent_id, info))
         if "critic_loss" in info:
             # Centralized-critic update — distinct from per-agent action updates.
+            # explained_variance is the headline metric: <0.1 means the critic
+            # is predicting the mean and advantages will be near-noise.
             logging.info(
                 "[RL] Centralized critic update #%d at step %d: "
-                "critic_loss=%.4f, returns_mean=%.4f, returns_std=%.4f, buf=%d",
+                "loss=%.4f  ev=%.3f  ret(μ=%.2f σ=%.2f range=[%.1f,%.1f])  "
+                "v_old(μ=%.2f σ=%.2f)  buf=%d",
                 info.get("critic_update_count", 0), self.timestep,
                 info.get("critic_loss", 0),
+                info.get("critic_explained_variance", 0),
                 info.get("critic_returns_mean", 0),
                 info.get("critic_returns_std", 0),
+                info.get("critic_returns_min", 0),
+                info.get("critic_returns_max", 0),
+                info.get("critic_values_mean", 0),
+                info.get("critic_values_std", 0),
                 info.get("critic_buffer_size", 0),
             )
         else:
+            # adv_std and frac_pos_advantage diagnose advantage degeneration.
+            # ratio_max > 2 means data is off-policy.
             logging.info(
                 "[RL] Agent %d MAPPO update at step %d: "
-                "policy_loss=%.4f, value_loss=%.4f, entropy=%.4f",
+                "policy=%.4f  entropy=%.4f  kl=%.4f  clip_frac=%.3f  "
+                "ratio_max=%.2f  adv(μ=%.3f σ=%.3f range=[%.2f,%.2f] frac+=%.2f)",
                 agent_id, self.timestep,
                 info.get("policy_loss", 0),
-                info.get("value_loss", 0),
                 info.get("entropy", 0),
+                info.get("approx_kl", 0),
+                info.get("clip_frac", 0),
+                info.get("ratio_max", 1.0),
+                info.get("adv_mean", 0),
+                info.get("adv_std", 0),
+                info.get("adv_min", 0),
+                info.get("adv_max", 0),
+                info.get("frac_pos_advantage", 0.5),
             )
 
     def record_rl_token_opt(self, agent_id: int, info: dict):

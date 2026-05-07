@@ -298,9 +298,30 @@ class CentralizedCritic:
             self._buffer.values, dtype=torch.float32, device=self._device
         )
 
+        # ── Diagnostic snapshots taken BEFORE the update ─────────────
+        # Explained variance of the OLD value predictions vs the GAE return
+        # targets. The single most informative critic-health metric:
+        #   ev > 0.4  : critic has real signal
+        #   0.1 - 0.4 : weak value learning
+        #   < 0.1     : critic effectively predicts the mean — advantages
+        #               will be near-noise and policy gradient near-zero.
+        # See "MAPPO critic predicting mean" audit, section 1.
+        with torch.no_grad():
+            ret_var = torch.var(ret).item()
+            if ret_var > 1e-8:
+                ev = 1.0 - (torch.var(ret - old_v).item() / ret_var)
+            else:
+                ev = 0.0  # constant returns — EV undefined, treat as no signal
+
         self.net.train()
         info = {}
         n = joint.size(0)
+        # Accumulate loss across mini-batches and epochs so the reported
+        # value is the average of the round, not whatever the last MB
+        # happened to be. Without this, info["critic_loss"] swung between
+        # 0 and 6000+ purely based on which MB landed last.
+        loss_sum = 0.0
+        n_minibatches = 0
         for _ in range(self.config.ppo_epochs):
             perm = torch.randperm(n, device=self._device)
             for start in range(0, n, self.config.mini_batch_size):
@@ -318,19 +339,30 @@ class CentralizedCritic:
                 )
                 l1 = F.mse_loss(v_pred, ret[idx], reduction="none")
                 l2 = F.mse_loss(v_clipped, ret[idx], reduction="none")
-                loss = torch.min(l1, l2).mean()
+                # PPO2 value clipping uses MAX (penalises v_pred for moving
+                # past clip ε from old_v). Previously this was `min`, which
+                # made the clip a no-op — the optimizer always took the
+                # smaller of (unclipped, clipped) loss.
+                loss = torch.max(l1, l2).mean()
                 self.optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.net.parameters(),
                                          self.config.max_grad_norm)
                 self.optimizer.step()
-                info["critic_loss"] = float(loss.item())
+                loss_sum += float(loss.item())
+                n_minibatches += 1
 
         self._update_count += 1
+        info["critic_loss"] = loss_sum / max(n_minibatches, 1)
         info["critic_update_count"] = self._update_count
         info["critic_buffer_size"] = n
-        info["critic_returns_mean"] = float(ret.mean().item())
-        info["critic_returns_std"] = float(ret.std().item())
+        info["critic_returns_mean"]  = float(ret.mean().item())
+        info["critic_returns_std"]   = float(ret.std().item())
+        info["critic_returns_min"]   = float(ret.min().item())
+        info["critic_returns_max"]   = float(ret.max().item())
+        info["critic_values_mean"]   = float(old_v.mean().item())
+        info["critic_values_std"]    = float(old_v.std().item())
+        info["critic_explained_variance"] = float(ev)
         self._buffer.clear()
         return info
 

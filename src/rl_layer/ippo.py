@@ -102,11 +102,33 @@ def action_level_ppo_step(
     surr2 = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * advantages
     policy_loss = -torch.min(surr1, surr2).mean()
 
+    # Diagnostics for the audit (section 5): ratio distribution + advantage
+    # sign balance. After per-rollout normalisation in compute_gae() the
+    # advantage mean should be ~0; if frac_pos drifts far from 0.5 the
+    # advantages are degenerate. ratio_max > 2.0 means the data is heavily
+    # off-policy by the time we update.
+    with torch.no_grad():
+        _ratio_diff = (ratio - 1.0).abs()
+        ratio_max  = float(ratio.max().item())
+        ratio_mean = float(ratio.mean().item())
+        adv_mean   = float(advantages.mean().item())
+        adv_std    = float(advantages.std().item())
+        adv_min    = float(advantages.min().item())
+        adv_max    = float(advantages.max().item())
+        frac_pos_advantage = float((advantages > 0).float().mean().item())
+
     info = {
         "policy_loss": policy_loss.item(),
         "entropy": entropy.item(),
         "approx_kl": (old_log_probs - new_log_probs).mean().item(),
-        "clip_frac": ((ratio - 1.0).abs() > clip_eps).float().mean().item(),
+        "clip_frac": (_ratio_diff > clip_eps).float().mean().item(),
+        "ratio_max":  ratio_max,
+        "ratio_mean": ratio_mean,
+        "adv_mean":   adv_mean,
+        "adv_std":    adv_std,
+        "adv_min":    adv_min,
+        "adv_max":    adv_max,
+        "frac_pos_advantage": frac_pos_advantage,
     }
 
     if value_loss_enabled:
@@ -120,7 +142,9 @@ def action_level_ppo_step(
         )
         v_loss1 = F.mse_loss(new_values, returns, reduction="none")
         v_loss2 = F.mse_loss(value_clipped, returns, reduction="none")
-        value_loss = torch.min(v_loss1, v_loss2).mean()
+        # PPO2 value clipping uses MAX, not min (see centralized_critic.py
+        # for the rationale). Active in independent-critic mode only.
+        value_loss = torch.max(v_loss1, v_loss2).mean()
         loss = policy_loss + value_coef * value_loss - entropy_coef * entropy
         info["value_loss"] = value_loss.item()
     else:
