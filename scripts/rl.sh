@@ -109,6 +109,7 @@ python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK
 python multi_agent_craftium.py --num-agents 3 --episodes 5 \
     --warmup-time 300 --rl --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
     --rl-critic-mode centralized \
+    --ch1-timeout-steps 400 \
     --team-mode homogeneous-agent \
     --experiment-id five_chambers_rl_v1
 

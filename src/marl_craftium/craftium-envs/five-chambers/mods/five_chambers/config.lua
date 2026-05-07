@@ -75,9 +75,14 @@ five_chambers.CH1_SHEEP_POSITIONS = {
 -- window for solo skills, then the team is moved on regardless of
 -- whether any Ch1 milestone fired.
 five_chambers.DOOR1_X = 7
--- Lua tick rate is 20Hz; one env step = 3 Lua ticks. 3000 ticks =
--- 1000 env steps ≈ 150 seconds of wall time at full env throughput.
-five_chambers.CH1_TIMEOUT_TICKS = 3000
+-- Lua tick rate is 20Hz; one env step = 3 Lua ticks. 1200 ticks =
+-- 400 env steps ≈ 60 seconds of wall time at full env throughput.
+-- The value is overridable from Python via the CH1_TIMEOUT_TICKS env
+-- var (set by --ch1-timeout-steps in multi_agent_craftium.py). Lua's
+-- mod-security sandbox is disabled in Craftium builds so os.getenv is
+-- available; we still guard the conversion in case the var is unset.
+local _env_ticks = tonumber(os and os.getenv and os.getenv("CH1_TIMEOUT_TICKS") or "")
+five_chambers.CH1_TIMEOUT_TICKS = _env_ticks or 1200
 -- Where agents land when the Ch1 timeout fires. Spread along z=CH2.z0+2,
 -- centred on DOOR1_X so they appear just inside Ch2's south wall.
 five_chambers.CH2_FALLBACK_SPAWNS_3 = {

@@ -55,11 +55,13 @@ python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK
 
 python multi_agent_craftium.py \
     --num-agents 3 \
-    --episodes 5 \
+    --episodes 1 \
+    --max-steps 8000 \
     --warmup-time 300 \
     --rl \
     --rl-model-path /scratch/acmarcu/models/Qwen3.5-2B \
     --rl-critic-mode centralized \
+    --ch1-timeout-steps 1500 \
     --hebbian \
     --hebbian-gamma 0.2 \
     --hebbian-ltp 0.05 \

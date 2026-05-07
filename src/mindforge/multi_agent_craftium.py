@@ -83,6 +83,11 @@ def parse_args():
     parser.add_argument("--warmup-time", type=int, default=60,
                         help="Minimum seconds before checking if media loaded (default 60). "
                              "Smart detection exits early once all clients show game world.")
+    parser.add_argument("--ch1-timeout-steps", type=int, default=400,
+                        help="Number of env steps agents are kept in Chamber 1 before "
+                             "the Ch1 timeout fires and teleports them to Chamber 2. "
+                             "Default 400. Internally converted to 3× Lua ticks and "
+                             "passed to the Lua mod via the CH1_TIMEOUT_TICKS env var.")
     # ── Reproducibility ──
     parser.add_argument("--seed", type=int, default=None,
                         help="Random seed for reproducibility. Seeds torch, numpy, random, "
@@ -692,6 +697,14 @@ async def run(args):
     # Attach team composition metadata for summary/checkpoint
     metric.team_mode = args.team_mode
     metric.homogeneous_role = args.homogeneous_role
+
+    # Pass the Ch1 timeout to the Lua mod via an env var. The Lua side
+    # config.lua reads CH1_TIMEOUT_TICKS at mod load and falls back to
+    # its hard-coded default if the var is unset. We multiply by 3
+    # because one env step = 3 Lua ticks.
+    os.environ["CH1_TIMEOUT_TICKS"] = str(args.ch1_timeout_steps * 3)
+    print(f"[FEATURES] Ch1 timeout:        {args.ch1_timeout_steps} env steps "
+          f"({args.ch1_timeout_steps * 3} Lua ticks)")
 
     environment = CraftiumEnvironmentInterface(
         num_agents=num_agents,
