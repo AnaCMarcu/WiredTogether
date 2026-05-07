@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=rl_hebbian
+#SBATCH --job-name=hebbian_long
 #SBATCH --partition=gpu-a100
 #SBATCH --time=20:00:00
 #SBATCH --ntasks=1
@@ -71,6 +71,6 @@ python multi_agent_craftium.py \
     --hebbian-beta 3.0 \
     --hebbian-init-weight 0.1 \
     --team-mode homogeneous-agent \
-    --experiment-id hebbian_rewards
+    --experiment-id hebbian_long
 
 echo "Done"
