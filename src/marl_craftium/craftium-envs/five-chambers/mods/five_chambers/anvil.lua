@@ -40,9 +40,16 @@ end
 -- ── Node registration (module-level, runs when anvil.lua is dofile'd) ──
 
 minetest.register_node("five_chambers:anvil", {
-    description = "Heavy Anvil",
-    -- Use stone texture as a visual placeholder; anvil uses custom HP logic.
-    tiles  = {"default_stone.png"},
+    description = "Heavy Anvil (Purple)",
+    -- Vivid purple tint over a stone base so agents can recognise the
+    -- coop-anvil at a glance and tell it apart from regular stone, the
+    -- red locked-door blocks, and the bedrock walls. The colour is
+    -- referenced by name in the agent prompts ("purple anvils").
+    tiles  = {
+        "default_stone.png^[colorize:#7a00ff:200",  -- top
+        "default_stone.png^[colorize:#7a00ff:200",  -- bottom
+        "default_stone.png^[colorize:#9a3aff:220",  -- sides (slightly brighter)
+    },
     groups = {unbreakable = 1},
     on_punch = function(pos, node, puncher, pointed_thing)
         if not puncher or not puncher:is_player() then return end

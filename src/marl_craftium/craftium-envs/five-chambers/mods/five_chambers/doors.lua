@@ -24,6 +24,8 @@ minetest.register_node("five_chambers:door_locked", {
 })
 
 five_chambers.door_state = {
+    door1_open = false,
+    door1_force_teleported = false,  -- did the Ch1 timeout already fire?
     door2_open = false,
     door2_countdown = -1,
     door3_open = false,
@@ -48,7 +50,35 @@ end
 -- handler so that doors opened during episode N are re-locked before
 -- episode N+1 begins. Without this, only door_state flags reset but the
 -- physical air gap from the previous open_door_at() persists.
+-- Door 1 spans 3 X-blocks centred on DOOR1_X at z = CH1.z1. Helpers below
+-- iterate over those three columns so the open/relock semantics match the
+-- 1-wide doors used elsewhere.
+local function _door1_columns()
+    local dx = five_chambers.DOOR1_X
+    local z  = five_chambers.CH1.z1
+    return {
+        {x = dx - 1, z = z},
+        {x = dx,     z = z},
+        {x = dx + 1, z = z},
+    }
+end
+
+local function lock_door1()
+    for _, p in ipairs(_door1_columns()) do
+        lock_door_at(p.x, p.z)
+    end
+end
+
+local function open_door1_blocks()
+    for _, p in ipairs(_door1_columns()) do
+        five_chambers.open_door_at(p.x, p.z)
+    end
+end
+
 function five_chambers.relock_all_doors()
+    -- Door 1 (Ch1 → Ch2)
+    lock_door1()
+
     -- Door 2 (Ch2 → Ch3)
     local d2 = five_chambers.DOOR2_POS
     lock_door_at(d2.x, d2.z)
@@ -68,13 +98,15 @@ function five_chambers.relock_all_doors()
 end
 
 function five_chambers.init_doors()
-    five_chambers.door_state.door2_open      = false
-    five_chambers.door_state.door2_countdown = -1
-    five_chambers.door_state.door3_open      = false
-    five_chambers.door_state.door4_open      = false
-    five_chambers.door_state.cell_doors      = {}
-    five_chambers.ch2_transitioned           = {}
-    five_chambers.ch2_transitioned_count     = 0
+    five_chambers.door_state.door1_open             = false
+    five_chambers.door_state.door1_force_teleported = false
+    five_chambers.door_state.door2_open             = false
+    five_chambers.door_state.door2_countdown        = -1
+    five_chambers.door_state.door3_open             = false
+    five_chambers.door_state.door4_open             = false
+    five_chambers.door_state.cell_doors             = {}
+    five_chambers.ch2_transitioned                  = {}
+    five_chambers.ch2_transitioned_count            = 0
     for i = 0, five_chambers.NUM_AGENTS - 1 do
         five_chambers.door_state.cell_doors[i] = false
         five_chambers.ch2_transitioned[i]      = false
@@ -97,6 +129,16 @@ function five_chambers.open_door_at(x, z)
     local y = five_chambers.FLOOR_Y
     minetest.set_node({x=x, y=y+1, z=z}, {name="air"})
     minetest.set_node({x=x, y=y+2, z=z}, {name="air"})
+end
+
+-- Opens Door 1 (Ch1 → Ch2). Idempotent. Called by milestones.lua when a
+-- "real" Ch1 milestone fires (M2/M3/M4/M5/M6/M7) and by the Ch1 timeout
+-- globalstep below as a fallback.
+function five_chambers.open_door1()
+    if five_chambers.door_state.door1_open then return end
+    five_chambers.door_state.door1_open = true
+    open_door1_blocks()
+    minetest.log("action", "[five_chambers] Door 1 opened.")
 end
 
 -- Called when all anvils have been broken at least once; starts the countdown.
@@ -219,6 +261,44 @@ minetest.register_globalstep(function(dtime)
                     five_chambers.door_state.door2_open = false
                 end
             end
+        end
+    end
+end)
+
+-- ── Ch1 timeout teleport ─────────────────────────────────────────
+-- Door 1 stays locked for the entire Ch1 phase. After CH1_TIMEOUT_TICKS
+-- Lua ticks (1000 env steps with the default config), this globalstep
+-- opens the door and teleports every connected agent to its Ch2 fallback
+-- spawn. Fires at most once per episode (gated by door1_force_teleported).
+-- This is a pure time-based progression gate — milestones don't open it.
+
+minetest.register_globalstep(function(dtime)
+    if not five_chambers.CHAMBERS[2].enabled then return end
+    if five_chambers.door_state.door1_force_teleported then return end
+    if five_chambers.step_counter % 3 ~= 0 then return end
+    if five_chambers.step_counter < (five_chambers.CH1_TIMEOUT_TICKS or 3000) then
+        return
+    end
+
+    -- Door 1 stays locked. Agents are teleported across, not through —
+    -- leaving it visibly closed is consistent with "Ch1 is over, no
+    -- going back" and stops agents wasting actions trying to dig through.
+    five_chambers.door_state.door1_force_teleported = true
+    minetest.log("action",
+        "[five_chambers] Ch1 timeout fired at tick "
+        .. tostring(five_chambers.step_counter)
+        .. " — teleporting agents to Ch2.")
+    if io and io.stderr then
+        io.stderr:write("[CH1_TIMEOUT] tick="
+            .. tostring(five_chambers.step_counter)
+            .. " forced teleport to Ch2\n")
+        io.stderr:flush()
+    end
+    for _, player in ipairs(minetest.get_connected_players()) do
+        local name = player:get_player_name()
+        local idx  = five_chambers.agent_index(name)
+        if idx >= 0 then
+            player:set_pos(five_chambers.ch2_fallback_spawn_pos(idx))
         end
     end
 end)

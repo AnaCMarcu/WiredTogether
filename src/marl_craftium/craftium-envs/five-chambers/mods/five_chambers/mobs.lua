@@ -41,6 +41,25 @@ function five_chambers.patch_mobs_for_kill_tracking()
     patch_entity_for_kill_tracking("mobs_mc:chicken")
     patch_entity_for_kill_tracking("mobs_mc:sheep")
     patch_entity_for_kill_tracking("mobs_mc:zombie")  -- Ch4 combat mobs
+
+    -- Disable chicken egg laying. VoxeLibre's mobs_mc:chicken.do_custom
+    -- runs an egg_timer that drops an `mcl_throwing:egg` item every
+    -- ~10s × 1% chance. With 5 chickens in Ch1 the floor accumulates
+    -- free eggs that agents auto-pick up by walking near them — a
+    -- distraction that has nothing to do with the digging / killing
+    -- tasks the agents are supposed to learn. We replace do_custom
+    -- with a no-op so chickens still walk around and can be killed
+    -- (M5/M6) but never produce items passively.
+    local chicken_def = minetest.registered_entities["mobs_mc:chicken"]
+    if chicken_def then
+        chicken_def.do_custom = function(self, dtime) end
+        minetest.log("action",
+            "[five_chambers] Patched mobs_mc:chicken — egg laying disabled.")
+    else
+        minetest.log("warning",
+            "[five_chambers] mobs_mc:chicken not registered; "
+            .. "egg-laying patch skipped.")
+    end
 end
 
 -- ── Spawn Ch1 animals ────────────────────────────────────────────

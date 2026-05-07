@@ -67,8 +67,24 @@ five_chambers.CH1_SHEEP_POSITIONS = {
     {x=6,z=5},{x=3,z=9},{x=8,z=3},
 }
 
--- Door 1: always open (no bedrock placed here); gap in Ch1 north wall
+-- Door 1 (Ch1 → Ch2): visible 3-wide locked door in Ch1's north wall.
+-- Stays closed for the entire Ch1 phase. Agents cannot walk into Ch2 on
+-- their own — instead, after CH1_TIMEOUT_TICKS Lua ticks the door is
+-- force-opened and every agent is teleported to a Ch2 spawn. This is a
+-- pure time-based gate, not a milestone gate: Ch1 is a fixed practice
+-- window for solo skills, then the team is moved on regardless of
+-- whether any Ch1 milestone fired.
 five_chambers.DOOR1_X = 7
+-- Lua tick rate is 20Hz; one env step = 3 Lua ticks. 3000 ticks =
+-- 1000 env steps ≈ 150 seconds of wall time at full env throughput.
+five_chambers.CH1_TIMEOUT_TICKS = 3000
+-- Where agents land when the Ch1 timeout fires. Spread along z=CH2.z0+2,
+-- centred on DOOR1_X so they appear just inside Ch2's south wall.
+five_chambers.CH2_FALLBACK_SPAWNS_3 = {
+    [0] = {x=3,  y=11, z=19},
+    [1] = {x=7,  y=11, z=19},
+    [2] = {x=11, y=11, z=19},
+}
 
 -- Chamber 2 bounds (anvil coop, 14×14)
 five_chambers.CH2 = { x0=0, x1=13, z0=17, z1=30 }

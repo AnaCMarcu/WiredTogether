@@ -142,10 +142,17 @@ local function build_chamber_1()
         end
     end
 
-    -- 4. Open Door 1 in north wall (Z=c.z1) at X=door_x.
-    --    3-wide × 2-tall opening so an LLM agent doesn't have to align
-    --    perfectly with door_x to pass through.
+    -- 4. Door 1 in north wall (Z=c.z1) at X=door_x.
+    --    3-wide × 2-tall opening, then place visible locked-door blocks
+    --    across the y0+1..y0+2 columns. doors.lua opens the door (swaps
+    --    the 6 blocks back to air) when a Ch1 milestone fires or the
+    --    Ch1 timeout triggers. Floor / ceiling / blocks above stay
+    --    bedrock so agents can't bypass it.
     carve_doorway(door_x, c.z1, y0, 3)
+    for dx = -1, 1 do
+        place_node({x=door_x + dx, y=y0+1, z=c.z1}, {name="five_chambers:door_locked"})
+        place_node({x=door_x + dx, y=y0+2, z=c.z1}, {name="five_chambers:door_locked"})
+    end
 
     -- 5. Place trees (trunk + simple leaf crown) at plan §2.3 positions.
     --    All positions are interior and verified clear of walls.

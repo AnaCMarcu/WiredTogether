@@ -59,8 +59,10 @@ VISUAL CUES — recognising special blocks:
   condition or coordinate with teammates to trigger it.
 - GREY indestructible block (bedrock): chamber walls, floor, ceiling. Ignore
   entirely — Dig has no effect.
-- Anvils (Chamber 2): stone-textured cubes. Disappear permanently the moment
-  they break — once an anvil is gone, it stays gone.
+- Anvils (Chamber 2): bright PURPLE cubes — visually distinct from grey
+  bedrock walls and grey stone blocks. Six of them sit in two rows of three.
+  Disappear permanently the moment they break — once an anvil is gone, it
+  stays gone.
 - Glowstone tiles on the ceiling: light source only. Nothing to interact with.
 
 SAFETY:
@@ -70,12 +72,18 @@ SAFETY:
 CHAMBER 1 — Solo learning:
 - Practice basic skills. Each reward is individual (not shared).
 - Tasks: move around, dig trees/stone, collect dropped items, kill chickens/sheep.
-- Door to Chamber 2 is always open — move north (positive Z) when ready.
+- Chamber 1 is a FIXED-DURATION practice window. The RED locked door in
+  the north wall stays closed for the entire Ch1 phase — you cannot walk
+  through to Chamber 2. After 1000 steps the door automatically opens and
+  every agent is teleported into Chamber 2. Use the time you have to fire
+  as many Ch1 milestones as possible — anything you didn't complete by
+  then is forfeit.
 - Milestones: M1 move >5 blocks (10), M2 dig 3 blocks (30), M3 pick up 3 items (30),
   M4 dig 5 wood (50), M5 kill 1 animal (50), M6 kill 2 animals (80), M7 dig 3 stone (60).
 
-CHAMBER 2 — Cooperative gear production (6 heavy anvils):
-- 6 obsidian-colored anvils require MULTIPLE AGENTS to break.
+CHAMBER 2 — Cooperative gear production (6 heavy purple anvils):
+- 6 PURPLE anvils require MULTIPLE AGENTS to break. They are the only
+  purple blocks in the environment, so any purple cube you see is an anvil.
 - Solo digging an anvil is IMPOSSIBLE (the block decays faster than one agent
   can chip it). Two agents digging simultaneously (within 3 blocks of each other,
   both using Dig) make progress; three agents are even faster.
