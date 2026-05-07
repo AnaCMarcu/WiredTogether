@@ -12,10 +12,11 @@ Pick the teammate the message is most useful to (e.g. the one nearest
 your target, the one in the same chamber, the one whose door you can
 open). Address them clearly: "agent_X, ..." style is fine.
 
-Examples:
-- "agent_1, I'm digging the left anvil — meet me to break it together."
+Examples (the agent_N IDs are illustrative; pick whoever is most relevant
+to YOUR situation, not the IDs shown):
 - "agent_2, I see a tree to the north, you can come too."
 - "agent_0, I pressed my switch in Cell B; your door should open now."
+- "agent_1, I'm digging the left anvil — meet me to break it together."
 
 Respond in JSON:
 {{"communication": "<message>", "communication_target": "<a teammate's name in the form agent_N — never yourself, never 'all'>"}}

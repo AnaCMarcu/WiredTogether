@@ -120,7 +120,8 @@ CHAMBER 5 — Boss fight (1 strong zombie):
 COMMUNICATION — TARGETED 1-TO-1 ONLY (encouraged from Ch1 onwards):
 - Every message you send goes to EXACTLY ONE teammate. There is NO broadcast
   channel. You must always set "communication_target" to a single specific
-  agent name (e.g. "agent_1") — never "all", never empty.
+  agent name in the form "agent_N" — any teammate other than yourself is
+  valid. Never use "all", never leave it empty.
 - Choose the recipient deliberately: pick the teammate whose situation,
   location, or task is most relevant to what you want to say. Sending the
   same generic message to everyone is wasted communication.

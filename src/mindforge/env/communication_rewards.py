@@ -15,7 +15,12 @@ CHAMBER_BOUNDS = {
 }
 
 BASE_MSG_REWARD = 0.5
-BASE_MSG_CAP = 10  # Max rewarded messages per agent per episode (so 5 reward total).
+BASE_MSG_CAP = 50  # Max rewarded messages per agent per episode (so 25 reward total).
+                   # Was 10 (cap of 5 reward), which was easily dwarfed by the
+                   # action-repetition penalty (-2/step now, see PHASE 1b in
+                   # multi_agent_craftium.py). Raising the cap so legitimate
+                   # comm gives a meaningful positive baseline before any
+                   # milestone fires.
 MIN_MSG_LEN = 5
 RATE_LIMIT_STEPS = 2  # Min steps between valid messages per agent
 

@@ -1353,10 +1353,29 @@ async def run(args):
             # sustained-tick repetition happens INSIDE one outer step,
             # not across outer steps; the agent only emits "Dig" once per
             # outer step regardless of inner ticks.
+            #
+            # Skip ticks where the agent didn't make a fresh decision
+            # (step_contents[i] is None during macro-continuation skips,
+            # see [Phase 1a] line ~1117). Without this guard, a single
+            # Escape (23 ticks) or ScanArea (18 ticks) macro selection
+            # would accumulate ~−5 × N_ticks ≈ −90 of penalty because
+            # _actions_this_step defaults to "NoOp" for those ticks and
+            # the counter would log 18+ NoOp repeats. That made macros
+            # net-negative-EV and quickly drove cumulative returns into
+            # the thousands of negatives.
             _REPEAT_PENALTY_THRESHOLD = 3
             _REPEAT_PENALTY_PER_STEP = 0.5
-            _REPEAT_PENALTY_CAP = 5.0
+            _REPEAT_PENALTY_CAP = 2.0   # was 5.0 — ±5/step easily overwhelmed
+                                        # comm + small task signal; ±2/step
+                                        # still nudges the policy out of
+                                        # collapsed loops without dominating
+                                        # the per-step reward.
             for _i in range(num_agents):
+                if step_contents[_i] is None:
+                    # Macro continuation tick — leave repetition state
+                    # untouched and don't levy a penalty. Counter resumes
+                    # tracking when the agent next makes a real choice.
+                    continue
                 _act = _actions_this_step[_i]
                 _state = _action_repeat[_i]
                 if _act == _state["action"]:
