@@ -44,6 +44,7 @@ class ActionSelection:
         episode_summary,
         picked_object,
         beliefs,
+        teammate_names: str = "",
     ):
         content = await llm_call(
             self.action_model_client,
@@ -52,6 +53,8 @@ class ActionSelection:
             frame=last_frame,
             cancellation_token=cancellation_token,
             log_prefix=f"Agent {agent_name} on_messages: ",
+            agent_name=agent_name,
+            teammate_names=teammate_names,
             task=task,
             last_action=last_action,
             critique=critique,
@@ -73,12 +76,22 @@ class ActionSelection:
         cancellation_token,
         agent_name,
         num_agents: int = 1,
+        teammate_names: str = "",
     ):
         """Generate a targeted natural-language message for an RL-selected action."""
         # TargetedCommunicationResponse has communication_target: str (required, not
         # Optional). The schema enforcer guarantees a recipient even when the prompt
         # alone wouldn't (Optional fields can be silently skipped by the model).
         comm_client = create_model_client(response_format=TargetedCommunicationResponse)
+        # Derive teammate_names from num_agents if the caller didn't pass it.
+        if not teammate_names:
+            try:
+                self_idx = int(str(agent_name).split("_")[-1])
+            except (ValueError, IndexError):
+                self_idx = -1
+            teammate_names = ", ".join(
+                f"agent_{j}" for j in range(num_agents) if j != self_idx
+            )
         content = await llm_call(
             comm_client,
             system_prompt=self.system_prompt,
@@ -86,6 +99,8 @@ class ActionSelection:
             frame=last_frame,
             cancellation_token=cancellation_token,
             log_prefix=f"Agent {agent_name} rl_comm: ",
+            agent_name=agent_name,
+            teammate_names=teammate_names,
             task=task,
             last_action=last_action,
             action=action,

@@ -90,7 +90,8 @@ local CH4_SPAWN_POSITIONS = {
 
 function five_chambers.spawn_ch1_animals()
 
-    local y = five_chambers.FLOOR_Y + 1  -- stand on the grass floor
+    -- Stand on the dirt layer (CH1_DIRT_Y), not on the bedrock subfloor.
+    local y = (five_chambers.CH1_DIRT_Y or (five_chambers.FLOOR_Y + 1)) + 1
 
     local function try_spawn(entity_name, pos)
         -- Ensure the spawn position is air before adding entity.

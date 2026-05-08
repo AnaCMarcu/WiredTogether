@@ -327,6 +327,17 @@ class CustomAgent(BaseChatAgent):
             self.metric.log(f"Agent {self.name} RL prompt: {rl_prompt[:500]}")
             rl_content = self.rl_layer.select_action(rl_prompt)
 
+        # Resolve "who am I, who are my teammates" so the prompt can tell the
+        # LLM both — without this, communication_target degenerates to self-
+        # targets and ID typos (agent0 vs agent_0).
+        try:
+            _self_idx = int(str(self.name).split("_")[-1])
+        except (ValueError, IndexError):
+            _self_idx = -1
+        teammate_names = ", ".join(
+            f"agent_{j}" for j in range(self.num_agents) if j != _self_idx
+        )
+
         if rl_content is not None:
             comm, comm_target = await self.action_selection.generate_communication(
                 action=rl_content["action"],
@@ -337,6 +348,7 @@ class CustomAgent(BaseChatAgent):
                 cancellation_token=cancellation_token,
                 agent_name=self.name,
                 num_agents=self.num_agents,
+                teammate_names=teammate_names,
             )
             rl_content["communication"] = comm
             rl_content["communication_target"] = comm_target
@@ -355,6 +367,7 @@ class CustomAgent(BaseChatAgent):
                 episode_summary=episode_summary,
                 picked_object=picked_object,
                 beliefs=beliefs,
+                teammate_names=teammate_names,
             )
 
         self.metric.log(f"Agent {self.name} response: {content}")

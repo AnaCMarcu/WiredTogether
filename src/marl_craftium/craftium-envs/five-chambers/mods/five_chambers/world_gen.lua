@@ -113,70 +113,83 @@ local function add_ceiling_lights(x0, x1, z0, z1, y_ceiling)
     end
 end
 
--- Build Chamber 1: 12×12 solo-learning room (plan §2, §2.3).
--- Floor Y=10, ceiling Y=15, walls bedrock. Interior is dirt_with_grass
--- floor + air. Door 1 (always open) is a 2-block gap in the north wall
--- at X=DOOR1_X, Y=11–12.
+-- Build Chamber 1: 16×16 solo-learning room (plan §2, §2.3).
+-- Vertical layout (one block taller than chambers 2-5):
+--   y = FLOOR_Y         : bedrock subfloor (unbreakable)
+--   y = CH1_DIRT_Y      : dirt layer (diggable; new in this build — gives
+--                         agents an unconditional dig target so M2 / M3
+--                         don't depend on whether they find a tree/stone)
+--   y = CH1_DIRT_Y+1.. CH1_CEIL_Y-1 : air interior (4 blocks of headroom)
+--   y = CH1_CEIL_Y      : bedrock ceiling
+-- Trees, stones, mobs, and the Door 1 visible blocks are all shifted up
+-- by 1 vs the original (bedrock-only-floor) layout to sit on the dirt.
 local function build_chamber_1()
     if not five_chambers.CHAMBERS[1].enabled then return end
 
-    local c  = five_chambers.CH1
-    local y0 = five_chambers.FLOOR_Y      -- 10
-    local y1 = five_chambers.CEIL_Y       -- 15
-    local wall = five_chambers.WALL_NODE
-    local door_x = five_chambers.DOOR1_X  -- 6
+    local c       = five_chambers.CH1
+    local y0      = five_chambers.FLOOR_Y       -- 10 (bedrock subfloor)
+    local y_dirt  = five_chambers.CH1_DIRT_Y    -- 11 (dirt layer)
+    local y_stand = y_dirt + 1                  -- 12 (agents stand here)
+    local y1      = five_chambers.CH1_CEIL_Y    -- 16 (Ch1 ceiling)
+    local wall    = five_chambers.WALL_NODE
+    local door_x  = five_chambers.DOOR1_X       -- 7
 
     -- Force-load map chunks so set_node calls succeed on first run.
     minetest.load_area({x=c.x0, y=y0-1, z=c.z0}, {x=c.x1, y=y1+1, z=c.z1+2})
 
-    -- 1. Fill entire volume with bedrock (shell + interior overwrite).
+    -- 1. Fill entire volume with bedrock (shell + interior overwrite),
+    --    extending up to the Ch1-specific ceiling.
     fill_box(c.x0, y0, c.z0, c.x1, y1, c.z1, wall)
 
-    -- 2. Carve interior to air (Y:11–14, X:1–10, Z:1–10).
+    -- 2. Carve interior to air. The dirt layer overwrites part of this in
+    --    step 3; doing the full carve first keeps the code uniform.
     fill_box(c.x0+1, y0+1, c.z0+1, c.x1-1, y1-1, c.z1-1, "air")
 
-    -- 3. Replace interior floor with grass.
+    -- 3. Bedrock subfloor (unbreakable) at y=FLOOR_Y, dirt floor on top.
     for x = c.x0+1, c.x1-1 do
         for z = c.z0+1, c.z1-1 do
-            place_node({x=x, y=y0, z=z}, {name="mcl_core:bedrock"})
+            place_node({x=x, y=y0,     z=z}, {name="mcl_core:bedrock"})
+            place_node({x=x, y=y_dirt, z=z}, {name="mcl_core:dirt"})
         end
     end
 
     -- 4. Door 1 in north wall (Z=c.z1) at X=door_x.
-    --    3-wide × 2-tall opening, then place visible locked-door blocks
-    --    across the y0+1..y0+2 columns. doors.lua opens the door (swaps
-    --    the 6 blocks back to air) when a Ch1 milestone fires or the
-    --    Ch1 timeout triggers. Floor / ceiling / blocks above stay
-    --    bedrock so agents can't bypass it.
-    carve_doorway(door_x, c.z1, y0, 3)
+    --    The opening is at y_stand..y_stand+1 because the Ch1 floor is
+    --    one block higher than other chambers (dirt layer). doors.lua
+    --    must use the same y range when opening / relocking — see
+    --    _door1_y_pair() in doors.lua.
+    carve_doorway(door_x, c.z1, y_dirt, 3)  -- carves at y=y_dirt+1..+2 = 12..13
     for dx = -1, 1 do
-        place_node({x=door_x + dx, y=y0+1, z=c.z1}, {name="five_chambers:door_locked"})
-        place_node({x=door_x + dx, y=y0+2, z=c.z1}, {name="five_chambers:door_locked"})
+        place_node({x=door_x + dx, y=y_stand,     z=c.z1},
+            {name="five_chambers:door_locked"})
+        place_node({x=door_x + dx, y=y_stand + 1, z=c.z1},
+            {name="five_chambers:door_locked"})
     end
 
     -- 5. Place trees (trunk + simple leaf crown) at plan §2.3 positions.
-    --    All positions are interior and verified clear of walls.
+    --    Trunks sit on the dirt layer.
     for _, tp in ipairs(five_chambers.CH1_TREE_POSITIONS) do
         local tx, tz = tp.x, tp.z
-        -- Two-block trunk
-        place_node({x=tx, y=y0+1, z=tz}, {name="mcl_core:tree"})
-        place_node({x=tx, y=y0+2, z=tz}, {name="mcl_core:tree"})
-        -- Simple cross-shaped leaf crown at Y=13 — clipped to interior.
+        -- Two-block trunk on top of dirt.
+        place_node({x=tx, y=y_stand,     z=tz}, {name="mcl_core:tree"})
+        place_node({x=tx, y=y_stand + 1, z=tz}, {name="mcl_core:tree"})
+        -- Cross-shaped leaf crown one block above the trunk top, clipped
+        -- to the interior so leaves don't overwrite the wall.
         local leaf_offsets = {{0,0},{-1,0},{1,0},{0,-1},{0,1}}
         for _, off in ipairs(leaf_offsets) do
             local lx = tx + off[1]
             local lz = tz + off[2]
             if lx >= c.x0+1 and lx <= c.x1-1
                and lz >= c.z0+1 and lz <= c.z1-1 then
-                place_node({x=lx, y=y0+3, z=lz},
+                place_node({x=lx, y=y_stand + 2, z=lz},
                     {name="mcl_core:leaves"})
             end
         end
     end
 
-    -- 6. Place stone blocks (single solid block at Y=11).
+    -- 6. Stone blocks sit on the dirt layer (y_stand).
     for _, sp in ipairs(five_chambers.CH1_STONE_POSITIONS) do
-        place_node({x=sp.x, y=y0+1, z=sp.z}, {name="mcl_core:stone"})
+        place_node({x=sp.x, y=y_stand, z=sp.z}, {name="mcl_core:stone"})
     end
 
     -- 7. Ceiling lights so the room isn't pitch-dark.

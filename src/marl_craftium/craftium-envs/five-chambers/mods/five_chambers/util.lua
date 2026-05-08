@@ -61,14 +61,19 @@ end
 
 -- Returns the Ch1 spawn position for agent index i.
 -- Uses the plan-specified corner spawns for N=3; distributes linearly otherwise.
+-- Y is CH1_DIRT_Y + 1 — agents stand on the dirt layer, not the bedrock subfloor.
 function five_chambers.ch1_spawn_pos(i)
     local N = five_chambers.NUM_AGENTS
     if N == 3 and five_chambers.CH1_SPAWNS_3 and five_chambers.CH1_SPAWNS_3[i] then
         return five_chambers.CH1_SPAWNS_3[i]
     end
-    -- Generic: spread along Z=5, X:1-10
+    -- Generic: spread along Z=5, X:1-10, on top of the dirt layer.
     local frac = (N == 1) and 0.5 or (i / (N - 1))
-    return { x = math.floor(1 + frac * 9 + 0.5), y = 11, z = 5 }
+    return {
+        x = math.floor(1 + frac * 9 + 0.5),
+        y = (five_chambers.CH1_DIRT_Y or 11) + 1,
+        z = 5,
+    }
 end
 
 -- Returns the Ch2 fallback spawn position for agent index i.

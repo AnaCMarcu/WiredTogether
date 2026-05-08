@@ -66,13 +66,21 @@ class CommunicationTracker:
             return False
         return True
 
-    def process_step(self, step, agent_messages, agent_positions):
+    def process_step(self, step, agent_messages, agent_positions,
+                     bad_target_speakers=None):
         """Returns (rewards, milestones_fired, valid_speakers) for this step.
 
         - rewards: {agent_id: extra_reward}
         - milestones_fired: list of (agent_id, milestone_id, reward)
         - valid_speakers: set of agent_ids whose message passed validity checks
+        - bad_target_speakers: set of agent_ids whose model output was a self-
+          target / "all" / unparseable. Routing rescues these so the receiver
+          still gets the message, but the sender does NOT earn the base
+          message reward — otherwise self-talking is positively reinforced.
+          They still count toward chamber-comm milestones, since the message
+          itself reached a real teammate via fallback routing.
         """
+        bad_target_speakers = bad_target_speakers or set()
         rewards = defaultdict(float)
         milestones_fired = []
         valid_speakers = set()
@@ -83,7 +91,8 @@ class CommunicationTracker:
 
             valid_speakers.add(agent_id)
 
-            if self.total_valid_msgs[agent_id] < BASE_MSG_CAP:
+            if (agent_id not in bad_target_speakers
+                    and self.total_valid_msgs[agent_id] < BASE_MSG_CAP):
                 rewards[agent_id] += BASE_MSG_REWARD
                 self.total_valid_msgs[agent_id] += 1
 

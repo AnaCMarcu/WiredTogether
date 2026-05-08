@@ -152,6 +152,15 @@ class CraftiumEnvironmentInterface:
         # Capped at [-_PITCH_CAP, +_PITCH_CAP] to prevent staring at sky/ground.
         self._pitch = {}  # agent_name -> int
 
+        # Per-agent count of "futile" actions since the last consume_futile()
+        # call. Currently incremented when LookUp/LookDown is redirected to
+        # NoOp because pitch is at the cap (the policy is asking the camera
+        # to tilt past where it can go — pure waste). The trainer reads and
+        # zeros this each outer step to apply a small reward penalty, which
+        # gives PPO a per-action validity signal that the team-level reward
+        # path lacks (see Phase 1b in multi_agent_craftium.py).
+        self._futile_actions = {}  # agent_name -> int
+
         # Server log tailer — surfaces [TOOLS]/[INVENTORY]/[TRACK STATUS] lines from Lua
         self._server_log_offset = 0   # byte offset into stderr.txt, tracks what we've already read
         self._server_log_path = None  # resolved lazily after first reset()
@@ -177,6 +186,7 @@ class CraftiumEnvironmentInterface:
         self._escape_queue = {}
         self._macro_queue = {}
         self._pitch = {}
+        self._futile_actions = {}
         self.reset_log_offset()
         return self._observations
 
@@ -292,11 +302,18 @@ class CraftiumEnvironmentInterface:
             self._pitch[agent_name] = 0
 
         # Camera pitch cap: prevent runaway LookUp (staring at sky) / LookDown (ground only).
+        # Each cap-hit redirect counts as a "futile action" — the trainer reads
+        # consume_futile() to apply a small per-step penalty, since the team-
+        # level reward path doesn't otherwise signal that the policy asked the
+        # camera to tilt past its physical limit.
         pitch = self._pitch.get(agent_name, 0)
         if action_str == "LookDown":
             if pitch >= self._PITCH_MAX_DOWN:
                 _logging.debug(f"Agent {agentId} pitch cap hit (down={pitch}), redirecting LookDown → NoOp")
                 action_str = "NoOp"
+                self._futile_actions[agent_name] = (
+                    self._futile_actions.get(agent_name, 0) + 1
+                )
             else:
                 self._pitch[agent_name] = pitch + 1
         elif action_str == "LookUp":
@@ -304,6 +321,9 @@ class CraftiumEnvironmentInterface:
                 _logging.debug(f"Agent {agentId} pitch cap hit (up={-pitch}), redirecting LookUp → NoOp")
                 action_str = "NoOp"
                 # pitch stays at its current capped value — no increment
+                self._futile_actions[agent_name] = (
+                    self._futile_actions.get(agent_name, 0) + 1
+                )
             else:
                 self._pitch[agent_name] = pitch - 1
 
@@ -432,6 +452,17 @@ class CraftiumEnvironmentInterface:
         agent_name = f"agent_{agentId}"
         return self._step_rewards.get(agent_name, 0.0)
 
+    def consume_futile(self, agentId: int) -> int:
+        """Pop and return the count of pitch-cap-redirected actions since
+        the last call. The trainer multiplies this by a small penalty per
+        outer step so the policy gets an action-validity signal that the
+        team-reward path lacks.
+        """
+        agent_name = f"agent_{agentId}"
+        n = self._futile_actions.get(agent_name, 0)
+        self._futile_actions[agent_name] = 0
+        return n
+
     def pickedup_object(self, agentId: int = 0):
         """Return a formatted inventory string read from a file written by the Lua mod.
 
@@ -508,6 +539,37 @@ class CraftiumEnvironmentInterface:
                 os.path.abspath(srv_run_dir), "worlds", "world"
             )
         return self._world_path
+
+    def force_ch1_teleport(self) -> bool:
+        """Signal the Lua side to force-fire the Ch1→Ch2 teleport now.
+
+        Writes ``{world_path}/ch1_force_teleport.txt`` atomically. The doors.lua
+        globalstep polls for this file; when present, it teleports every
+        connected agent to its Ch2 fallback spawn and deletes the flag.
+
+        We added this Python-driven trigger because the Lua-side
+        ``step_counter`` based timeout was observed to never fire under our
+        run config (agents stayed in Ch1 indefinitely). Counting env steps
+        in Python is robust against any tick-rate mismatch.
+
+        Returns True if the file was written, False if the world path was
+        not yet resolved (e.g., called before reset()).
+        """
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            return False
+        tmp = os.path.join(world_path, "ch1_force_teleport.tmp")
+        dst = os.path.join(world_path, "ch1_force_teleport.txt")
+        try:
+            with open(tmp, "w") as f:
+                f.write("1")
+            os.replace(tmp, dst)
+            return True
+        except OSError as e:
+            import logging as _log
+            _log.warning("[CH1_TIMEOUT] force_ch1_teleport failed: %s", e)
+            return False
 
     def _write_phase_file(self, phase: str) -> None:
         """Atomically write *phase* to {world_path}/phase.txt.
@@ -716,9 +778,15 @@ class CraftiumEnvironmentInterface:
                     try:
                         ev = json.loads(line)
                         new_events.append(ev)
-                        # Inject milestone reward into _rewards so get_step_reward()
-                        # carries it into the RL buffer on the next step.
-                        # (craftium.reward() is not available in the Lua mod context.)
+                        # Mirror milestone reward into the cumulative `_rewards`
+                        # bucket so it surfaces in get_reward_summary() (the LLM
+                        # prompt's reward line). This is LLM-visibility only —
+                        # it does NOT feed RL credit (get_step_reward() reads
+                        # the separate `_step_rewards` field, and `_rewards`
+                        # gets reset to 0 on each prompt read). RL credit is
+                        # delivered at the call site in multi_agent_craftium.py
+                        # by draining the returned events into step_rewards_raw
+                        # before Hebbian diffusion / record_reward.
                         for agent_name in ev.get("contributors", []):
                             self._rewards[agent_name] = (
                                 self._rewards.get(agent_name, 0.0) + ev.get("reward", 0)

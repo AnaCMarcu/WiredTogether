@@ -33,20 +33,34 @@ five_chambers.CHAMBERS = {
 }
 
 -- World geometry (plan §2)
--- Floor block is at FLOOR_Y; agents stand at FLOOR_Y+1.
+-- Floor block is at FLOOR_Y; agents stand at FLOOR_Y+1 in chambers 2-5.
+-- Chamber 1 has an extra dirt layer on top of the bedrock subfloor for
+-- digging practice, so agents stand at FLOOR_Y+2 in Ch1 (one block higher
+-- than elsewhere). The Ch1 ceiling is correspondingly one block higher
+-- than the other chambers' ceiling so headroom stays the same.
 five_chambers.FLOOR_Y   = 10
 five_chambers.CEIL_Y    = 15
 five_chambers.WALL_NODE = "mcl_core:bedrock"
 five_chambers.AIR_NODE  = "air"
 
+-- ── Chamber 1 vertical layout overrides ──
+-- y = FLOOR_Y         : bedrock subfloor (unbreakable)
+-- y = CH1_DIRT_Y      : dirt layer (diggable; agents' visible floor)
+-- y = CH1_DIRT_Y + 1  : agents' feet (FLOOR_Y + 2)
+-- y = CH1_CEIL_Y      : bedrock ceiling
+five_chambers.CH1_DIRT_Y = 11   -- FLOOR_Y + 1
+five_chambers.CH1_CEIL_Y = 16   -- CEIL_Y + 1 (one block taller than ch2-5)
+
 -- Chamber 1 bounds (solo learning, 16×16)
 five_chambers.CH1 = { x0=0, x1=15, z0=0, z1=15 }
 
--- Ch1 spawn points (plan §2.3; exact corners for N=3)
+-- Ch1 spawn points (plan §2.3; exact corners for N=3).
+-- y=12 = CH1_DIRT_Y + 1 — agents stand on the dirt layer, not on the
+-- bedrock subfloor. ch1_spawn_pos() in util.lua is the canonical lookup.
 five_chambers.CH1_SPAWNS_3 = {
-    [0] = {x=1,  y=11, z=1},
-    [1] = {x=10, y=11, z=1},
-    [2] = {x=5,  y=11, z=10},
+    [0] = {x=1,  y=12, z=1},
+    [1] = {x=10, y=12, z=1},
+    [2] = {x=5,  y=12, z=10},
 }
 
 -- Ch1 resource positions (plan §2.3) — all at Y=FLOOR_Y+1=11

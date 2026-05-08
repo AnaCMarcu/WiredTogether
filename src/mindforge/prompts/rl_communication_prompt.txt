@@ -1,3 +1,5 @@
+YOU ARE: {agent_name}. Your teammates are: {teammate_names}. The "communication_target" you write must be EXACTLY one of {teammate_names} — never "{agent_name}", never "all", never empty.
+
 Task: {task}
 Last action: {last_action}
 Chosen action this step: {action}

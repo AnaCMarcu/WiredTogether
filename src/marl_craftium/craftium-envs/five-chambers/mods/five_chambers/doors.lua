@@ -63,15 +63,29 @@ local function _door1_columns()
     }
 end
 
+-- Ch1's floor is one block higher than chambers 2-5 (dirt layer on top of
+-- bedrock subfloor), so Door 1's opening sits one block higher than the
+-- other doors. lock_door_at / open_door_at bake in y=FLOOR_Y+1,+2 — we
+-- can't reuse them. The door blocks live at y=FLOOR_Y+2,+3 (which equals
+-- CH1_DIRT_Y+1, CH1_DIRT_Y+2 — agent height in Ch1).
+local function _door1_y_pair()
+    local y_dirt = five_chambers.CH1_DIRT_Y or (five_chambers.FLOOR_Y + 1)
+    return y_dirt + 1, y_dirt + 2
+end
+
 local function lock_door1()
+    local y_lo, y_hi = _door1_y_pair()
     for _, p in ipairs(_door1_columns()) do
-        lock_door_at(p.x, p.z)
+        minetest.set_node({x=p.x, y=y_lo, z=p.z}, {name="five_chambers:door_locked"})
+        minetest.set_node({x=p.x, y=y_hi, z=p.z}, {name="five_chambers:door_locked"})
     end
 end
 
 local function open_door1_blocks()
+    local y_lo, y_hi = _door1_y_pair()
     for _, p in ipairs(_door1_columns()) do
-        five_chambers.open_door_at(p.x, p.z)
+        minetest.set_node({x=p.x, y=y_lo, z=p.z}, {name="air"})
+        minetest.set_node({x=p.x, y=y_hi, z=p.z}, {name="air"})
     end
 end
 
@@ -266,17 +280,61 @@ minetest.register_globalstep(function(dtime)
 end)
 
 -- ── Ch1 timeout teleport ─────────────────────────────────────────
--- Door 1 stays locked for the entire Ch1 phase. After CH1_TIMEOUT_TICKS
--- Lua ticks (1000 env steps with the default config), this globalstep
--- opens the door and teleports every connected agent to its Ch2 fallback
--- spawn. Fires at most once per episode (gated by door1_force_teleported).
--- This is a pure time-based progression gate — milestones don't open it.
+-- Door 1 stays locked for the entire Ch1 phase. The teleport is fired
+-- by EITHER (a) Python writing the ch1_force_teleport.txt flag once it has
+-- counted --ch1-timeout-steps env steps in this episode (primary path; see
+-- CraftiumEnvironmentInterface.force_ch1_teleport in
+-- src/mindforge/custom_environment_craftium.py), OR (b) the lua-side
+-- step_counter crossing CH1_TIMEOUT_TICKS (fallback). Door 1 itself stays
+-- locked — agents are teleported *across* it, not *through* it, so the
+-- "Ch1 is over, no going back" framing holds. Fires at most once per
+-- episode (gated by door1_force_teleported, reset in init_doors()).
+
+-- Diagnostic: log step_counter / timeout / connected player count every
+-- 600 ticks (~30s wall, ~67 env steps with 9 ticks/step). Lets us see
+-- in the trainer stderr whether the timeout teleport globalstep is even
+-- being entered, what step_counter it sees, and whether
+-- get_connected_players() returns the agents (a frequent silent failure
+-- on HPC where the clients reconnect under different names).
+local _CH1_DIAG_INTERVAL = 600
 
 minetest.register_globalstep(function(dtime)
     if not five_chambers.CHAMBERS[2].enabled then return end
+
+    local sc = five_chambers.step_counter or 0
+    if sc > 0 and sc % _CH1_DIAG_INTERVAL == 0
+       and not five_chambers.door_state.door1_force_teleported then
+        if io and io.stderr then
+            io.stderr:write(string.format(
+                "[CH1_TIMEOUT_DIAG] step_counter=%d target=%d "
+                .. "force_teleported=%s players=%d\n",
+                sc,
+                five_chambers.CH1_TIMEOUT_TICKS or -1,
+                tostring(five_chambers.door_state.door1_force_teleported),
+                #minetest.get_connected_players()))
+            io.stderr:flush()
+        end
+    end
+
     if five_chambers.door_state.door1_force_teleported then return end
-    if five_chambers.step_counter % 3 ~= 0 then return end
-    if five_chambers.step_counter < (five_chambers.CH1_TIMEOUT_TICKS or 3000) then
+    if sc % 3 ~= 0 then return end
+
+    -- Two paths fire the teleport: (1) Python writes a force-flag file once
+    -- it has counted ch1_timeout_steps env steps in this episode (robust);
+    -- (2) lua step_counter crosses CH1_TIMEOUT_TICKS (legacy fallback in
+    -- case the file isn't being written for some reason).
+    local force_flag_path = (minetest.get_worldpath() or "") .. "/ch1_force_teleport.txt"
+    local force_fired = false
+    do
+        local f = io.open(force_flag_path, "r")
+        if f then
+            f:close()
+            force_fired = true
+            os.remove(force_flag_path)
+        end
+    end
+    if (not force_fired)
+       and sc < (five_chambers.CH1_TIMEOUT_TICKS or 3000) then
         return
     end
 
@@ -286,19 +344,28 @@ minetest.register_globalstep(function(dtime)
     five_chambers.door_state.door1_force_teleported = true
     minetest.log("action",
         "[five_chambers] Ch1 timeout fired at tick "
-        .. tostring(five_chambers.step_counter)
+        .. tostring(sc)
         .. " — teleporting agents to Ch2.")
     if io and io.stderr then
         io.stderr:write("[CH1_TIMEOUT] tick="
-            .. tostring(five_chambers.step_counter)
-            .. " forced teleport to Ch2\n")
+            .. tostring(sc)
+            .. " forced teleport to Ch2 — players="
+            .. tostring(#minetest.get_connected_players()) .. "\n")
         io.stderr:flush()
     end
     for _, player in ipairs(minetest.get_connected_players()) do
         local name = player:get_player_name()
         local idx  = five_chambers.agent_index(name)
-        if idx >= 0 then
-            player:set_pos(five_chambers.ch2_fallback_spawn_pos(idx))
+        local dest = (idx >= 0)
+            and five_chambers.ch2_fallback_spawn_pos(idx)
+            or  {x = 7, y = five_chambers.FLOOR_Y + 1,
+                 z = (five_chambers.CH2 and five_chambers.CH2.z0 or 17) + 2}
+        player:set_pos(dest)
+        if io and io.stderr then
+            io.stderr:write(string.format(
+                "[CH1_TIMEOUT] %s idx=%d -> (%d,%d,%d)\n",
+                name, idx, dest.x, dest.y, dest.z))
+            io.stderr:flush()
         end
     end
 end)

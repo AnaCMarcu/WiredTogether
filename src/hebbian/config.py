@@ -43,14 +43,22 @@ class HebbianConfig:
     # ── Base co-activity LTP — unconditional bond growth when cij > 0 ──
     # Fires regardless of advantage sign: base_ltp * cij * (1-W).
     # Provides a floor against pure decay so co-presence alone builds bonds.
-    base_ltp: float = 0.002
+    # Raised from 0.002 → 0.005 because in Ch1 (1500 env steps of solo
+    # learning where agents are rarely co-active and milestones rarely fire)
+    # the previous 0.002 floor was too weak to keep init_weight=0.1 from
+    # decaying to ~0.02 by Ch2 entry — observed mean weight dropped from
+    # 0.093 → 0.051 over 100 env steps in the hebbian_rewards run.
+    base_ltp: float = 0.005
 
     # ── Decay — passive bond flexibility ──
     # Half-life of an unsupported bond ≈ ln(2) / decay steps.
-    # 0.001 → ~700 steps; 0.005 → ~138 steps. Bonds need to persist through
-    # Ch3 isolation (agents physically separated for a long stretch) so
-    # they can resume diffusing rewards once everyone regroups in communal.
-    decay: float = 0.001  # λ
+    # 0.0003 → ~2300 steps; 0.001 → ~700 steps; 0.005 → ~138 steps.
+    # Lowered from 0.001 → 0.0003 because Ch1 alone is 1500 env steps of
+    # mostly-solo activity (no spatial co-activation, sparse milestones);
+    # at decay=0.001 init_weight=0.1 falls to 0.022 by Ch2 entry, leaving
+    # no warm-start signal for reward diffusion when the team finally
+    # regroups. 0.0003 keeps W ≈ 0.064 through Ch1.
+    decay: float = 0.0003  # λ
 
     # ── Modulation sensitivity ──
     modulation_beta: float = 1.0  # β

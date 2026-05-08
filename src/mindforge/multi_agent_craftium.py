@@ -700,11 +700,26 @@ async def run(args):
 
     # Pass the Ch1 timeout to the Lua mod via an env var. The Lua side
     # config.lua reads CH1_TIMEOUT_TICKS at mod load and falls back to
-    # its hard-coded default if the var is unset. We multiply by 3
-    # because one env step = 3 Lua ticks.
-    os.environ["CH1_TIMEOUT_TICKS"] = str(args.ch1_timeout_steps * 3)
+    # its hard-coded default if the var is unset.
+    #
+    # Tick math: each call to environment.step(action, agent_id) issues
+    # one (or _SUSTAINED_TICKS[action]) underlying env.step calls. With
+    # frameskip=3 in craftium, each underlying step fires the Lua
+    # globalstep 3 times, which increments five_chambers.step_counter.
+    # Phase 1a calls environment.step ONCE PER AGENT, so a single
+    # outer "Python step" advances step_counter by:
+    #   num_agents * frameskip                           — all-NoOp baseline
+    #   num_agents * frameskip * _SUSTAINED_TICKS[action] — when an agent Digs (5×)
+    # We pick the conservative ALL-NON-SUSTAINED conversion below
+    # (3 agents × frameskip 3 = 9 ticks/step) so Dig-heavy rollouts
+    # may trigger the teleport slightly earlier than the requested
+    # --ch1-timeout-steps; the alternative — using the maximum Dig
+    # multiplier — would let an all-NoOp run never time out.
+    _LUA_TICKS_PER_ENV_STEP = num_agents * 3
+    _ch1_lua_ticks = args.ch1_timeout_steps * _LUA_TICKS_PER_ENV_STEP
+    os.environ["CH1_TIMEOUT_TICKS"] = str(_ch1_lua_ticks)
     print(f"[FEATURES] Ch1 timeout:        {args.ch1_timeout_steps} env steps "
-          f"({args.ch1_timeout_steps * 3} Lua ticks)")
+          f"({_ch1_lua_ticks} Lua ticks @ {_LUA_TICKS_PER_ENV_STEP} ticks/step)")
 
     environment = CraftiumEnvironmentInterface(
         num_agents=num_agents,
@@ -1022,9 +1037,26 @@ async def run(args):
                     print(f"  Saved GIF checkpoint: {gif_path}")
                     _frames_to_mp4(agent_frames, gif_path.replace(".gif", ".mp4"))
 
+        # Per-episode flag so we only fire the Ch1→Ch2 force-teleport once
+        # per episode (the lua side also dedupes via door1_force_teleported,
+        # but resetting here keeps the Python state in sync after env.reset).
+        _ch1_force_teleport_fired = False
         for step in range(max_steps):
             global_step += 1
             logging.info(f"ep={episode+1} step={step+1}/{max_steps} global_step={global_step}")
+
+            # Python-driven Ch1→Ch2 timeout: when this episode has run for
+            # ch1_timeout_steps env steps, signal lua to teleport every agent
+            # to its Ch2 fallback spawn. Counting in Python is robust against
+            # any lua-tick rate quirks (the lua-side step_counter check is
+            # left in as a fallback but was observed never to fire).
+            if (not _ch1_force_teleport_fired
+                    and step + 1 >= args.ch1_timeout_steps):
+                if environment.force_ch1_teleport():
+                    _ch1_force_teleport_fired = True
+                    print(f"[CH1_TIMEOUT] Python-side trigger fired "
+                          f"at ep={episode+1} step={step+1} "
+                          f"(threshold={args.ch1_timeout_steps})")
 
             if step % log_interval == 0:
                 returns_str = "  ".join(
@@ -1107,6 +1139,11 @@ async def run(args):
             # Per-message metadata staged here in Phase 1a; rewards stamped
             # and the records flushed to messages.jsonl in Phase 1b.
             _messages_this_step = []
+            # Five-chambers milestone events polled in Phase 1c (drained into
+            # step_rewards_raw before Hebbian) and re-consumed in Phase 3b for
+            # metric/log emission. Reset per step so a `break` upstream cannot
+            # leak last step's events into the next iteration.
+            _milestone_events_this_step: list = []
 
             # Build per-agent social bond summaries for the LLM prompt
             _bond_strings = {}
@@ -1282,39 +1319,52 @@ async def run(args):
 
                     # Resolve recipient from communication_target. Tolerant
                     # parser: accept "agent_N", "agentN", "Agent_N" — the LLM
-                    # sometimes drops the underscore or capitalises. Self-
-                    # targets are caught here and rerouted via the fallback
-                    # below (Hebbian-strongest or random).
+                    # sometimes drops the underscore or capitalises. We
+                    # categorise the failure mode (self / out-of-range /
+                    # malformed) so the routing_source field tells us *why*
+                    # the model output had to be rescued, not just that it did.
                     import re as _re
                     recv_idx = -1
                     routing_source = "model"
-                    if comm_target and comm_target != "all":
+                    target_failure = None  # set when the model output is rejected
+                    canonical_target = None  # normalised "agent_N" we parsed out
+                    if not comm_target or comm_target == "all":
+                        target_failure = "missing_or_all"
+                    else:
                         _m = _re.match(r"^\s*agent_?(\d+)\s*$",
                                        str(comm_target).lower())
-                        if _m:
+                        if not _m:
+                            target_failure = "unparseable"
+                        else:
                             try:
                                 cand = int(_m.group(1))
-                                if 0 <= cand < num_agents and cand != sender_idx:
+                                canonical_target = f"agent_{cand}"
+                                if cand == sender_idx:
+                                    target_failure = "self_target"
+                                elif not (0 <= cand < num_agents):
+                                    target_failure = "out_of_range"
+                                else:
                                     recv_idx = cand
                             except (IndexError, ValueError):
-                                recv_idx = -1
+                                target_failure = "unparseable"
 
                     if recv_idx < 0:
-                        # Model returned "all" or a malformed/self target despite
-                        # the targeted-communication policy. Fall back to the
-                        # strongest Hebbian bond, or a random teammate, so the
-                        # message still reaches exactly one agent.
+                        # Model returned a bad target despite the prompt
+                        # naming its valid teammates. Reroute via Hebbian
+                        # bond / random and tag routing_source with the
+                        # *reason* so we can track whether prompt fixes
+                        # actually reduce self-targeting over time.
                         if hebbian_graph.config.enabled:
                             candidates = [
                                 (j, float(hebbian_graph.W[sender_idx, j]))
                                 for j in range(num_agents) if j != sender_idx
                             ]
                             recv_idx = max(candidates, key=lambda x: x[1])[0]
-                            routing_source = "hebbian_fallback"
+                            routing_source = f"hebbian_fallback:{target_failure}"
                         else:
                             others = [j for j in range(num_agents) if j != sender_idx]
                             recv_idx = random.choice(others)
-                            routing_source = "random_fallback"
+                            routing_source = f"random_fallback:{target_failure}"
 
                     agent_communications[recv_idx].append(message)
                     if len(agent_communications[recv_idx]) > num_agents - 1:
@@ -1330,6 +1380,7 @@ async def run(args):
                         "tokens": len(msg_text.split()),
                         "routing": routing_source,
                         "model_target": comm_target,
+                        "model_target_canonical": canonical_target,
                     })
 
                 time.sleep(sleep_time)
@@ -1348,6 +1399,19 @@ async def run(args):
             _chat_this_step = {}
             _agent_pos_map = {}
             _actions_this_step = {}
+            # Speakers whose model-emitted communication_target was self /
+            # "all" / unparseable. Routing rescues their message but the
+            # comm-reward layer will skip BASE_MSG_REWARD for them so the
+            # policy doesn't get +0.5 for talking to itself.
+            _bad_target_speakers: set = set()
+            for _msg_meta in _messages_this_step:
+                if _msg_meta.get("routing", "model").startswith(
+                        ("hebbian_fallback:", "random_fallback:")):
+                    try:
+                        _bad_target_speakers.add(
+                            int(_msg_meta["sender"].split("_")[-1]))
+                    except (KeyError, ValueError, IndexError):
+                        pass
             for _i in range(num_agents):
                 _c = step_contents[_i]
                 msg = _c.get("communication", "") if _c else ""
@@ -1378,11 +1442,23 @@ async def run(args):
             # the thousands of negatives.
             _REPEAT_PENALTY_THRESHOLD = 3
             _REPEAT_PENALTY_PER_STEP = 0.5
-            _REPEAT_PENALTY_CAP = 2.0   # was 5.0 — ±5/step easily overwhelmed
-                                        # comm + small task signal; ±2/step
-                                        # still nudges the policy out of
-                                        # collapsed loops without dominating
-                                        # the per-step reward.
+            _REPEAT_PENALTY_CAP = 4.0   # was 2.0 — observed agents staying in
+                                        # 30+-step LookUp loops in ch1
+                                        # (hebbian_rewards run, ep5). At -2/step
+                                        # cap, total penalty ≈ -56 over 30
+                                        # steps — meaningful but evidently not
+                                        # enough to escape since milestone
+                                        # rewards never fire to reset the
+                                        # counter. Raised to -4/step cap so
+                                        # 30 LookUps cost ≈ -112.
+            # Pitch-cap "futile" penalty: env.step redirects LookUp/LookDown
+            # to NoOp once the camera hits its limit (±_PITCH_MAX_*). Each
+            # cap-hit is tracked per-agent in CraftiumEnvironmentInterface
+            # and consumed here. A small flat -1.0 per cap-hit teaches the
+            # policy "the camera is already at the limit, stop asking" —
+            # exactly the gap that let agent_0 spam LookUp for 30+ steps
+            # while pitch was already maxed and every action became NoOp.
+            _PITCH_FUTILE_PENALTY = 1.0
             for _i in range(num_agents):
                 if step_contents[_i] is None:
                     # Macro continuation tick — leave repetition state
@@ -1402,12 +1478,17 @@ async def run(args):
                                _REPEAT_PENALTY_PER_STEP * excess)
                     step_rewards_raw[_i] += pen
 
+                _futile_n = environment.consume_futile(_i)
+                if _futile_n > 0:
+                    step_rewards_raw[_i] -= _PITCH_FUTILE_PENALTY * _futile_n
+
             _comm_rewards_this_step: dict = {}
             _comm_milestones: list = []
             _valid_speakers: set = set()
             if communication:
                 _comm_rewards_this_step, _comm_milestones, _valid_speakers = comm_tracker.process_step(
-                    step, _chat_this_step, _agent_pos_map
+                    step, _chat_this_step, _agent_pos_map,
+                    bad_target_speakers=_bad_target_speakers,
                 )
                 for _aid, _bonus in _comm_rewards_this_step.items():
                     step_rewards_raw[_aid] += _bonus
@@ -1475,14 +1556,28 @@ async def run(args):
                 infos={"chambers": {i: environment.get_chamber(i) for i in range(num_agents)}},
             )
 
-            # ── (Phase 1c removed) ──
-            # The centralised critic's joint_state_t / v_global_t are now
-            # computed in Phase 0 (top of step, BEFORE any agent acts) so
-            # V_global represents V(s_t) and is attached to each agent's
-            # pending transition right after select_action. This fixes the
-            # off-by-one credit-assignment bug where old_value_global used
-            # to be V(s_{t+1}). The centralised critic's own buffer is
-            # populated from the same pre-step values in Phase 3a below.
+            # ── Phase 1c: Drain Five-chambers milestone rewards ──
+            # Lua's emit_milestone() writes to milestone_events.jsonl and also
+            # calls craftium.reward() as a backup, but the latter does not
+            # reach env.step()'s rewards channel in the multi-agent
+            # five-chambers context — so the JSONL is the authoritative reward
+            # source. We must drain into step_rewards_raw HERE (before Hebbian
+            # diffusion + record_reward) so the +N points propagate through
+            # the graph and into cumulative_returns. The events are saved into
+            # _milestone_events_this_step and re-consumed in Phase 3b below
+            # for metrics / logging without re-reading the JSONL file.
+            _milestone_events_this_step = environment.poll_milestone_events()
+            for _ev in _milestone_events_this_step:
+                _rw = float(_ev.get("reward", 0))
+                if _rw == 0.0:
+                    continue
+                for _name in _ev.get("contributors", []):
+                    try:
+                        _aid = int(str(_name).split("_")[-1])
+                    except (ValueError, IndexError):
+                        continue
+                    if 0 <= _aid < num_agents:
+                        step_rewards_raw[_aid] += _rw
 
             # ── Phase 2: Hebbian update + reward diffusion ──
 
@@ -1678,7 +1773,7 @@ async def run(args):
                 "m22_all_mobs_killed": "ch4_zombie",
                 "m27_boss_defeated":   "boss",
             }
-            for _ev in environment.poll_milestone_events():
+            for _ev in _milestone_events_this_step:
                 metric.record_milestone_event(_ev)
                 _mid = _ev.get("milestone", "")
                 _ev_step = _ev.get("step", step)

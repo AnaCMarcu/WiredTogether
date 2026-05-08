@@ -1,3 +1,5 @@
+YOU ARE: {agent_name}. Your teammates are: {teammate_names}. The "communication_target" you send must be EXACTLY one of {teammate_names} (your own id "{agent_name}" is INVALID).
+
 RESPONSE FORMAT (always use this exact JSON structure):
 {{"thoughts": "<spatial reasoning: what I see in the image, where the target is relative to center, why I chose this action>", "action": "<one action name from the list>", "communication": "<short message to teammates — ALWAYS fill this in, never leave empty. Share what you see, where you are going, or what you found. Examples: 'I found a tree to the north, heading there', 'I see a zombie, staying away', 'I am stuck, need help', 'Digging stone to the east'>"}}
 
