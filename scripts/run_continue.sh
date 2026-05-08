@@ -108,10 +108,11 @@ cd src/mindforge
 python -c "from autogen_agentchat.messages import TextMessage; print('autogen OK')"
 
 python multi_agent_craftium.py \
-    --num-agents 3 \
-    --episodes 5 \
+    --episodes 1 \
+    --max-steps 5000 \
     --warmup-time 300 \
     --rl \
+    --ch1-timeout-steps 800 \
     --rl-model-path "$RL_MODEL_PATH" \
     --hebbian \
     --hebbian-gamma 0.2 \

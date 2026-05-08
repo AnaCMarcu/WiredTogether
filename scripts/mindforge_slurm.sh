@@ -16,7 +16,7 @@ PROJECT_DIR=/scratch/acmarcu/WiredTogether
 ENV_PREFIX=/scratch/acmarcu/.conda/envs/WiredTogether
 
 # Fallback: load model in-process (no server)
-LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-9B
+LOCAL_MODEL_PATH=/scratch/acmarcu/models/Qwen3.5-2B
 
 module purge
 module load 2025
