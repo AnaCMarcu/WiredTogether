@@ -47,13 +47,40 @@ _ROLE_DEFAULT_TASKS = {
     "agent": "Explore by moving forward and turning to survey the room",
 }
 
+# Keywords that name fixtures only present in a specific chamber. If the
+# curriculum LLM proposes a task containing one of these while the agent
+# is in a DIFFERENT chamber, the task is unreachable and PPO will train on
+# guaranteed failure. We've observed agent_2 stuck in ch1 with task
+# "Move forward towards the nearest visible anvil" — anvils only exist in
+# ch2, so the policy collected ~7000 steps of negative reward chasing a
+# block that doesn't exist in its chamber.
+_CHAMBER_FIXTURES = {
+    "anvil":  "ch2",
+    "switch": "ch3",
+    "cell":   "ch3",
+    "zombie": "ch4",
+    "monster": "ch4",
+    "boss":   "ch5",
+}
 
-def _is_achievable_task(task: str) -> bool:
-    """True if `task` describes something the agent can do in-world."""
+
+def _is_achievable_task(task: str, current_chamber: str = "") -> bool:
+    """True if `task` describes something the agent can do in-world AND
+    in the current chamber. Chamber check is best-effort: when
+    current_chamber is unknown we skip it."""
     task_lower = task.lower()
     if any(kw in task_lower for kw in _TASK_BLOCKLIST):
         return False
-    return any(kw in task_lower for kw in _ACHIEVABLE_KEYWORDS)
+    if not any(kw in task_lower for kw in _ACHIEVABLE_KEYWORDS):
+        return False
+    chamber = (current_chamber or "").lower()
+    # ch3 has two sub-areas (ch3_cell / ch3_communal); collapse to "ch3".
+    chamber_short = chamber.split("_")[0] if chamber else ""
+    if chamber_short:
+        for fixture, fixture_chamber in _CHAMBER_FIXTURES.items():
+            if fixture in task_lower and chamber_short != fixture_chamber:
+                return False
+    return True
 
 
 # ─── Prompt loading ────────────────────────────────────────────────────
@@ -194,7 +221,7 @@ class AutoCurriculum:
         )
 
         task = (response.get("task") or self.current_task or "Explore").strip()
-        task = self._validate_or_fallback(task)
+        task = self._validate_or_fallback(task, current_chamber=current_chamber)
         self.current_task = task
 
         self.current_context = await self.get_task_context(
@@ -202,17 +229,19 @@ class AutoCurriculum:
         )
         return self.current_task, self.current_context
 
-    def _validate_or_fallback(self, task: str) -> str:
-        """Replace unachievable/blocklisted tasks with a role default."""
-        if _is_achievable_task(task):
+    def _validate_or_fallback(self, task: str, current_chamber: str = "") -> str:
+        """Replace unachievable/wrong-chamber/blocklisted tasks with a role default."""
+        if _is_achievable_task(task, current_chamber=current_chamber):
             return task
         fallback = _ROLE_DEFAULT_TASKS.get(self._role, "Dig a nearby tree to get wood")
         logging.warning(
-            "Non-actionable task '%s' for %s, replacing with '%s'",
-            task, self._role, fallback,
+            "Non-actionable task '%s' for %s in chamber=%r, replacing with '%s'",
+            task, self._role, current_chamber, fallback,
         )
         # Record the rejected task so the curriculum LLM stops proposing it.
-        self.failed_tasks.append(f"{task} [INVALID: not achievable in this environment]")
+        reason = "not achievable" if not current_chamber else (
+            f"not achievable in chamber={current_chamber}")
+        self.failed_tasks.append(f"{task} [INVALID: {reason}]")
         return fallback
 
     @staticmethod

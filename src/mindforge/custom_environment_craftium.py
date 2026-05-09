@@ -714,6 +714,11 @@ class CraftiumEnvironmentInterface:
         "[PHASE]",       # phase transitions
         "[MILESTONE]",   # five_chambers milestone events
         "[ANVIL]", "[SWITCH]", "[DOOR]", "[MOB]", "[BOSS]",
+        # Ch1 timeout teleport diagnostics (doors.lua). The tailer
+        # surfaces these as "  [SRV] [CH1_TIMEOUT] ..." so it's visible
+        # whether the lua side fired the teleport after Python wrote the
+        # force-flag file.
+        "[CH1_TIMEOUT]", "[CH1_TIMEOUT_DIAG]",
     )
 
     # Python mirror of Lua get_chamber_for_pos (keep in sync with config.lua).

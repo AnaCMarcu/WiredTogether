@@ -338,6 +338,29 @@ minetest.register_globalstep(function(dtime)
         return
     end
 
+    -- Pre-join race guard. Without this, the lua-side step_counter
+    -- crosses CH1_TIMEOUT_TICKS during server warmup BEFORE any client
+    -- finishes joining (server starts at T=0; agents join several minutes
+    -- later after VoxeLibre media loading). The teleport then fires with
+    -- get_connected_players() returning {}, the for-loop is a no-op, but
+    -- door1_force_teleported still gets set to true — burning the flag
+    -- for the rest of the episode and trapping agents in Ch1 forever
+    -- once they DO join. We require all NUM_AGENTS to be connected before
+    -- firing OR the explicit Python force-flag (Python only writes it
+    -- after env.step() rounds have started, i.e. after all agents joined).
+    local connected = minetest.get_connected_players()
+    local n_connected = #connected
+    if (not force_fired) and n_connected < (five_chambers.NUM_AGENTS or 1) then
+        if io and io.stderr then
+            io.stderr:write(string.format(
+                "[CH1_TIMEOUT] tick=%d skipped: only %d/%d players connected; "
+                .. "waiting for joins before firing teleport\n",
+                sc, n_connected, five_chambers.NUM_AGENTS or 1))
+            io.stderr:flush()
+        end
+        return
+    end
+
     -- Door 1 stays locked. Agents are teleported across, not through —
     -- leaving it visibly closed is consistent with "Ch1 is over, no
     -- going back" and stops agents wasting actions trying to dig through.
@@ -350,10 +373,10 @@ minetest.register_globalstep(function(dtime)
         io.stderr:write("[CH1_TIMEOUT] tick="
             .. tostring(sc)
             .. " forced teleport to Ch2 — players="
-            .. tostring(#minetest.get_connected_players()) .. "\n")
+            .. tostring(n_connected) .. "\n")
         io.stderr:flush()
     end
-    for _, player in ipairs(minetest.get_connected_players()) do
+    for _, player in ipairs(connected) do
         local name = player:get_player_name()
         local idx  = five_chambers.agent_index(name)
         local dest = (idx >= 0)

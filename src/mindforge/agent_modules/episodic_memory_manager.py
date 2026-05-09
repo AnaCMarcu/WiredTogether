@@ -31,20 +31,6 @@ class EpisodicMemoryManager:
             if episode_model_client
             else create_model_client(response_format=EpisodeResponse)
         )
-        # self.vectordb = ChromaDBVectorMemory(
-        #     config=PersistentChromaDBVectorMemoryConfig(
-        #         collection_name="episodes_vectordb_nvidia",
-        #         persistence_path=os.path.join(
-        #             str(Path.home()),
-        #             f"chromadb_autogen/episodes_vectodb_{agent_name}",
-        #         ),
-        #         k=retrieval_top_k,  # Return top  k results
-        #         score_threshold=0.4,  # Minimum similarity score
-        #         embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
-        #             model_name="all-MiniLM-L6-v2", device="cuda"
-        #         ),
-        #     ),
-        # )
         from agent_modules.skill_manager import _chromadb_base_dir
         db_path = os.path.join(_chromadb_base_dir(), f"episodes_vectodb_{agent_name}")
 
