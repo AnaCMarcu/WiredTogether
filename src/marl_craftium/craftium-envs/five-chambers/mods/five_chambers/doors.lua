@@ -37,6 +37,14 @@ five_chambers.door_state = {
 five_chambers.ch2_transitioned       = {}
 five_chambers.ch2_transitioned_count = 0
 
+-- Tick at which all NUM_AGENTS players were first connected. The Ch1
+-- timeout countdown measures from THIS tick, not from server start —
+-- otherwise the warmup phase (server boots minutes before clients join)
+-- burns the whole timeout budget and the teleport fires the instant the
+-- last agent joins, dropping them in Ch2 with zero Ch1 experience.
+-- Reset to nil in init_doors() at episode boundaries.
+five_chambers.all_connected_tick = nil
+
 -- Re-place the visible door_locked block at a door position. Inverse of
 -- open_door_at(). Used by relock_all_doors() at episode reset to undo any
 -- doors that were swapped to air during the previous episode.
@@ -121,6 +129,7 @@ function five_chambers.init_doors()
     five_chambers.door_state.cell_doors             = {}
     five_chambers.ch2_transitioned                  = {}
     five_chambers.ch2_transitioned_count            = 0
+    five_chambers.all_connected_tick                = nil
     for i = 0, five_chambers.NUM_AGENTS - 1 do
         five_chambers.door_state.cell_doors[i] = false
         five_chambers.ch2_transitioned[i]      = false
@@ -302,16 +311,42 @@ minetest.register_globalstep(function(dtime)
     if not five_chambers.CHAMBERS[2].enabled then return end
 
     local sc = five_chambers.step_counter or 0
+    local n_required = five_chambers.NUM_AGENTS or 1
+    local connected_now = minetest.get_connected_players()
+    local n_connected_now = #connected_now
+
+    -- Stamp the tick at which all agents first appeared. Subsequent
+    -- timeout math is relative to THIS tick, not server start, so the
+    -- warmup phase (server up several minutes before clients finish
+    -- joining) doesn't burn the Ch1 budget. Once stamped, doesn't move.
+    if (not five_chambers.all_connected_tick)
+       and n_connected_now >= n_required then
+        five_chambers.all_connected_tick = sc
+        if io and io.stderr then
+            io.stderr:write(string.format(
+                "[CH1_TIMEOUT] all %d/%d players connected at tick=%d "
+                .. "— Ch1 timeout countdown starts now (target=%d ticks "
+                .. "from this point)\n",
+                n_connected_now, n_required, sc,
+                five_chambers.CH1_TIMEOUT_TICKS or -1))
+            io.stderr:flush()
+        end
+    end
+
+    -- Ticks since the all-connected stamp (or -1 if never stamped yet).
+    local act = five_chambers.all_connected_tick
+    local ticks_in_ch1 = (act and (sc - act)) or -1
+
     if sc > 0 and sc % _CH1_DIAG_INTERVAL == 0
        and not five_chambers.door_state.door1_force_teleported then
         if io and io.stderr then
             io.stderr:write(string.format(
-                "[CH1_TIMEOUT_DIAG] step_counter=%d target=%d "
-                .. "force_teleported=%s players=%d\n",
-                sc,
+                "[CH1_TIMEOUT_DIAG] step_counter=%d ticks_in_ch1=%d "
+                .. "target=%d force_teleported=%s players=%d\n",
+                sc, ticks_in_ch1,
                 five_chambers.CH1_TIMEOUT_TICKS or -1,
                 tostring(five_chambers.door_state.door1_force_teleported),
-                #minetest.get_connected_players()))
+                n_connected_now))
             io.stderr:flush()
         end
     end
@@ -333,33 +368,28 @@ minetest.register_globalstep(function(dtime)
             os.remove(force_flag_path)
         end
     end
+    -- Timer compares ticks-since-all-joined to the target. This avoids
+    -- two failure modes the previous "raw step_counter < target" check
+    -- had:
+    --   1. Pre-join race: warmup ticks accumulate while clients are
+    --      loading; raw counter crosses target before any agent connects;
+    --      teleport fires with 0 players, sets door1_force_teleported,
+    --      burns the flag for the whole episode.
+    --   2. Post-join instant-fire: if clients take longer to join than
+    --      CH1_TIMEOUT_TICKS, raw counter is *already* past target the
+    --      moment the last agent joins, so teleport fires within seconds
+    --      of join — agents land in Ch2 with zero Ch1 experience.
+    -- Both are fixed by stamping all_connected_tick on first full join
+    -- and measuring from there. Python's force-flag still bypasses the
+    -- timer for the explicit-trigger path.
     if (not force_fired)
-       and sc < (five_chambers.CH1_TIMEOUT_TICKS or 3000) then
+       and (ticks_in_ch1 < 0
+            or ticks_in_ch1 < (five_chambers.CH1_TIMEOUT_TICKS or 3000)) then
         return
     end
 
-    -- Pre-join race guard. Without this, the lua-side step_counter
-    -- crosses CH1_TIMEOUT_TICKS during server warmup BEFORE any client
-    -- finishes joining (server starts at T=0; agents join several minutes
-    -- later after VoxeLibre media loading). The teleport then fires with
-    -- get_connected_players() returning {}, the for-loop is a no-op, but
-    -- door1_force_teleported still gets set to true — burning the flag
-    -- for the rest of the episode and trapping agents in Ch1 forever
-    -- once they DO join. We require all NUM_AGENTS to be connected before
-    -- firing OR the explicit Python force-flag (Python only writes it
-    -- after env.step() rounds have started, i.e. after all agents joined).
-    local connected = minetest.get_connected_players()
-    local n_connected = #connected
-    if (not force_fired) and n_connected < (five_chambers.NUM_AGENTS or 1) then
-        if io and io.stderr then
-            io.stderr:write(string.format(
-                "[CH1_TIMEOUT] tick=%d skipped: only %d/%d players connected; "
-                .. "waiting for joins before firing teleport\n",
-                sc, n_connected, five_chambers.NUM_AGENTS or 1))
-            io.stderr:flush()
-        end
-        return
-    end
+    local connected = connected_now
+    local n_connected = n_connected_now
 
     -- Door 1 stays locked. Agents are teleported across, not through —
     -- leaving it visibly closed is consistent with "Ch1 is over, no

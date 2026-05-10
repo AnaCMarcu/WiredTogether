@@ -452,6 +452,47 @@ class CraftiumEnvironmentInterface:
         agent_name = f"agent_{agentId}"
         return self._step_rewards.get(agent_name, 0.0)
 
+    def get_chamber_state(self, agentId: int) -> str:
+        """Return a one-line LLM-readable summary of the current chamber's
+        puzzle state for the given agent. Used to populate the
+        ``{chamber_state}`` placeholder in the action-selection prompt so
+        the policy can reason about hidden state (anvil HP, who's punching
+        what, etc.) instead of inferring it from the visual frame.
+
+        Returns an empty string when there's no chamber-specific state to
+        report (e.g., agent is in Ch1 where everything is visible).
+        """
+        chamber = self.get_chamber(agentId)
+        if chamber == "ch2":
+            return self._read_ch2_anvil_state()
+        return ""
+
+    def _read_ch2_anvil_state(self) -> str:
+        """Parse {world_path}/anvils.txt (written by player_state.lua) into
+        a compact human-readable line."""
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            return ""
+        path = os.path.join(world_path, "anvils.txt")
+        try:
+            with open(path, "r") as f:
+                raw = f.read()
+        except (FileNotFoundError, OSError):
+            return ""
+        parts = []
+        for line in raw.strip().splitlines():
+            fields = line.split("|")
+            if len(fields) < 3:
+                continue
+            kind, hp_str, names = fields[0], fields[1], fields[2]
+            n_active = len([n for n in names.split(",") if n])
+            who = (f" punchers: {names}") if names else " (idle)"
+            parts.append(f"{kind} anvil={hp_str} hp{who}")
+        if not parts:
+            return ""
+        return "Anvils — " + "; ".join(parts)
+
     def consume_futile(self, agentId: int) -> int:
         """Pop and return the count of pitch-cap-redirected actions since
         the last call. The trainer multiplies this by a small penalty per

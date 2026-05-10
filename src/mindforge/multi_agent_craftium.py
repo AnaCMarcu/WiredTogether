@@ -337,6 +337,7 @@ async def agent_do_action(
     current_chamber=None,
     visited_chambers=None,
     completed_milestones=None,
+    chamber_state=None,
 ):
     """Have one agent observe and choose an action.
 
@@ -373,6 +374,7 @@ async def agent_do_action(
         current_chamber=current_chamber,
         visited_chambers=visited_chambers,
         completed_milestones=completed_milestones,
+        chamber_state=chamber_state,
     )
 
     last_action = "NoOp"
@@ -392,6 +394,7 @@ async def agent_do_action(
                 current_chamber=current_chamber,
                 visited_chambers=visited_chambers,
                 completed_milestones=completed_milestones,
+                chamber_state=chamber_state,
             )
         else:
             logging.error(f"Agent {agent_id} exceeded retry limit, using NoOp")
@@ -992,12 +995,6 @@ async def run(args):
         # in the prompt as a hard ground-truth list so the LLM can't claim
         # to be in a chamber it has never visited (frequent hallucination).
         _visited_chambers = [set() for _ in range(num_agents)]
-        # Per-agent action repetition counter (episode-scoped). When an
-        # agent picks the same action 3+ steps in a row, apply a small
-        # penalty to break the policy-collapse loop (Slot5 / LookDown
-        # spam observed in early training).
-        _action_repeat = [{"action": None, "count": 0} for _ in range(num_agents)]
-
         # ── Macro credit assignment: accumulate rewards across macro ticks ──
         # When the RL policy selects a macro, store_reward() is deferred until
         # the macro completes so the buffer receives the full accumulated return.
@@ -1268,6 +1265,7 @@ async def run(args):
                     completed_milestones=metric._agent_milestones.get(
                         f"agent_{agent_id}", set()
                     ),
+                    chamber_state=environment.get_chamber_state(agent_id),
                 )
                 agents_error_count[agent_id] = error_count
                 for _i in range(num_agents):
@@ -1421,63 +1419,23 @@ async def run(args):
                 _env_pos = environment.get_agent_position(_i)
                 _agent_pos_map[_i] = _env_pos if _env_pos is not None else positions[_i]
 
-            # ── Action-repetition penalty ────────────────────────────────
-            # Detect policy-collapse loops (e.g. Slot5 spammed for 30+ steps,
-            # LookDown stuck) and apply a small per-step disincentive.
-            # Penalty starts firing on the 3rd identical-action step and
-            # scales lightly so it nudges the policy without overwhelming
-            # task signal. Sustained Dig isn't penalised — env-internal
-            # sustained-tick repetition happens INSIDE one outer step,
-            # not across outer steps; the agent only emits "Dig" once per
-            # outer step regardless of inner ticks.
+            # ── Pitch-cap "futile" penalty ───────────────────────────────
+            # Action-repetition penalty was REMOVED — too harsh; even at
+            # -0.5/step it crushed cumulative returns deeper than milestone
+            # spikes could compensate, and the policy learned "every action
+            # is bad" rather than "this specific repeat is bad". Loops
+            # break naturally now that hunger doesn't kill, the curriculum
+            # only proposes chamber-feasible tasks, and Ch2 is reachable.
             #
-            # Skip ticks where the agent didn't make a fresh decision
-            # (step_contents[i] is None during macro-continuation skips,
-            # see [Phase 1a] line ~1117). Without this guard, a single
-            # Escape (23 ticks) or ScanArea (18 ticks) macro selection
-            # would accumulate ~−5 × N_ticks ≈ −90 of penalty because
-            # _actions_this_step defaults to "NoOp" for those ticks and
-            # the counter would log 18+ NoOp repeats. That made macros
-            # net-negative-EV and quickly drove cumulative returns into
-            # the thousands of negatives.
-            _REPEAT_PENALTY_THRESHOLD = 3
-            _REPEAT_PENALTY_PER_STEP = 0.5
-            _REPEAT_PENALTY_CAP = 4.0   # was 2.0 — observed agents staying in
-                                        # 30+-step LookUp loops in ch1
-                                        # (hebbian_rewards run, ep5). At -2/step
-                                        # cap, total penalty ≈ -56 over 30
-                                        # steps — meaningful but evidently not
-                                        # enough to escape since milestone
-                                        # rewards never fire to reset the
-                                        # counter. Raised to -4/step cap so
-                                        # 30 LookUps cost ≈ -112.
-            # Pitch-cap "futile" penalty: env.step redirects LookUp/LookDown
-            # to NoOp once the camera hits its limit (±_PITCH_MAX_*). Each
-            # cap-hit is tracked per-agent in CraftiumEnvironmentInterface
-            # and consumed here. A small flat -1.0 per cap-hit teaches the
-            # policy "the camera is already at the limit, stop asking" —
-            # exactly the gap that let agent_0 spam LookUp for 30+ steps
-            # while pitch was already maxed and every action became NoOp.
+            # The pitch-cap futile penalty is kept (it's narrower — only
+            # fires when env.step() redirects LookUp/LookDown to NoOp due
+            # to the camera being at its physical limit). Drain on these
+            # specifically prevents the LookUp-against-ceiling spam
+            # without penalising legitimate repeats of useful actions.
             _PITCH_FUTILE_PENALTY = 1.0
             for _i in range(num_agents):
                 if step_contents[_i] is None:
-                    # Macro continuation tick — leave repetition state
-                    # untouched and don't levy a penalty. Counter resumes
-                    # tracking when the agent next makes a real choice.
                     continue
-                _act = _actions_this_step[_i]
-                _state = _action_repeat[_i]
-                if _act == _state["action"]:
-                    _state["count"] += 1
-                else:
-                    _state["action"] = _act
-                    _state["count"] = 1
-                if _state["count"] >= _REPEAT_PENALTY_THRESHOLD:
-                    excess = _state["count"] - (_REPEAT_PENALTY_THRESHOLD - 1)
-                    pen = -min(_REPEAT_PENALTY_CAP,
-                               _REPEAT_PENALTY_PER_STEP * excess)
-                    step_rewards_raw[_i] += pen
-
                 _futile_n = environment.consume_futile(_i)
                 if _futile_n > 0:
                     step_rewards_raw[_i] -= _PITCH_FUTILE_PENALTY * _futile_n

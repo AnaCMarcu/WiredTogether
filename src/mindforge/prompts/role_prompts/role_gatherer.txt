@@ -7,11 +7,12 @@ Chamber 1 — Solo learning (12×12 room, door to Ch2 always open at north):
   M4: dig 5 wood blocks          |  M5: kill 1 animal     |  M6: kill 2 animals  |  M7: dig 3 stone
   When all 7 milestones are done (or teammates are moving north), head to Chamber 2.
 
-Chamber 2 — Cooperative gear (heavy anvils, 2–3 agents must dig simultaneously):
-  Each Row A anvil broken (Z≈15) → one diamond sword drops immediately.
-  Each Row B anvil broken (Z≈18) → one diamond chestplate drops immediately.
-  Walk over drops to collect. Sword auto-wields; chestplate auto-equips.
-  Get BOTH items before all 6 anvils are broken (teleport to Ch3 follows shortly after).
+Chamber 2 — Cooperative gear (2 PURPLE anvils total: 1 sword + 1 chestplate):
+  Solo digging makes ZERO progress (decay cancels solo punching).
+  2+ agents must Dig the SAME anvil within ~1 second to push HP up.
+  When the sword anvil breaks, EVERY agent automatically gets a sword wielded.
+  When the chestplate anvil breaks, EVERY agent automatically gets a chestplate equipped.
+  No pickup needed. After BOTH anvils break, Door 2 opens to Chamber 3.
 
 Chamber 3 — Switch puzzle (agents sealed in isolated cells A/B/C):
   You CANNOT open your own cell door — a teammate must press their switch.

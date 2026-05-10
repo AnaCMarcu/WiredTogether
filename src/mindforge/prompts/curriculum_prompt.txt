@@ -18,9 +18,10 @@ Guidance by chamber (use only what applies):
 - Ch1, no digs yet:                "Dig a tree (move to nearest wood block and use Dig)"
 - Ch1, no animals killed:          "Find and attack a chicken or sheep"
 - Ch1, all solo tasks done:        "Move north through the open door into Chamber 2"
-- Ch2, no anvils broken:           "Stand next to a teammate near an anvil and both use Dig"
-- Ch2, sword in inventory:         "Use Slot1 to wield the sword"
-- Ch2, ≥6 anvils broken:           "Wait — you'll be teleported to Chamber 3 shortly"
+- Ch2, no anvils broken:           "Stand next to a teammate at the sword anvil and both use Dig together"
+- Ch2, 1 anvil broken:             "Move to the chestplate anvil and dig it together with a teammate"
+- Ch2, both anvils broken:         "Wait — Door 2 is opening, you'll be teleported to Chamber 3 shortly"
+NOTE for Ch2: there are EXACTLY 2 anvils total (one sword, one chestplate). Solo digging makes ZERO progress (DECAY cancels SOLO_DIG_RATE). 2+ agents punching the same anvil within ~1 second = +3 hp/tick. When an anvil breaks, EVERY agent automatically receives the gear (sword auto-wielded, chestplate auto-equipped) — no pickup or Slot1 action needed.
 - Ch3, in isolation cell:          "Announce your cell in chat, then press the switch"
 - Ch3, door opened, in cell:       "Walk out of your cell into the communal room"
 - Ch3, in communal, teammates not: "Wait near the north door for teammates"

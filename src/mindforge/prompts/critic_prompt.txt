@@ -186,7 +186,7 @@ Error: None
 
 RESPONSE:
 {{
-"reasoning": "Reward of 40 matches an anvil milestone (M8–M13). diamond_sword in inventory confirms a Row A anvil was broken and the drop collected. Task complete.",
+"reasoning": "Reward of 40 matches an anvil milestone (M8 sword anvil or M11 chestplate anvil). diamond_sword in inventory confirms the sword anvil was broken — it's auto-wielded on break, no pickup needed. Task complete.",
 "success": true,
 "critique": ""
 }}

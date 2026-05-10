@@ -7,9 +7,11 @@ image (the crosshair). The center is where Dig/Place will act.
 What to look for, depending on your chamber:
 - Ch1 (solo learning): trees, stone blocks, grass floor, chickens/sheep,
   north door opening, bedrock walls.
-- Ch2 (anvils): 6 obsidian-colored anvils in two rows; teammates standing
-  next to anvils (needed for cooperative digging); dropped diamond sword or
-  chestplate on the ground.
+- Ch2 (anvils): 2 PURPLE anvils total — one drops swords, one drops
+  chestplates, placed close together near the south of the chamber.
+  Teammates standing next to the same anvil (needed for cooperative
+  digging — solo digging makes zero progress). NO dropped items: when an
+  anvil breaks, all agents auto-receive the gear directly into inventory.
 - Ch3 (cells): you are alone in a small 3x3 sealed cell; one switch on a
   wall; a door (bedrock) on one side. Or, after exit, you are in the
   communal room with teammates.

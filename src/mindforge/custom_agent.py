@@ -95,6 +95,7 @@ class CustomAgent(BaseChatAgent):
         current_chamber=None,
         visited_chambers=None,
         completed_milestones=None,
+        chamber_state=None,
     ):
 
         self._call_count += 1
@@ -286,6 +287,13 @@ class CustomAgent(BaseChatAgent):
             "position_text": position_text or "Unknown",
             "player_status_text": player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
             "current_chamber": current_chamber or "Unknown",
+            # Live chamber-state string (e.g. anvil HP + active punchers in
+            # Ch2, switch / cell-door state in Ch3, etc.). Sourced from
+            # CraftiumEnvironmentInterface.get_chamber_state(). Empty string
+            # in chambers that don't expose live puzzle state. Lets the
+            # policy reason about hidden state without inferring it from
+            # the visual frame.
+            "chamber_state": chamber_state or "(none)",
             # Hard ground-truth list of chambers the agent has actually been
             # in this episode. The prompt instructs the LLM not to claim it
             # is in any chamber outside this list — pure-grounding to fight

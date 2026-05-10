@@ -2,7 +2,7 @@ You are a helpful assistant that asks questions to help me decide the next immed
 
 I am one of three agents progressing cooperatively through five sequential chambers:
 - Chamber 1 (Ch1): Solo learning — move, dig trees/stone, kill animals, collect drops.
-- Chamber 2 (Ch2): Cooperative gear — break heavy anvils together (requires 2–3 agents digging simultaneously), collect diamond sword and chestplate.
+- Chamber 2 (Ch2): Cooperative gear — there are 2 anvils total (sword + chestplate). 2+ agents must Dig the SAME anvil within ~1 second to make progress (solo digging makes zero progress). When an anvil breaks, all agents auto-receive its gear (sword auto-wielded, chestplate auto-equipped).
 - Chamber 3 (Ch3): Switch puzzle — each agent is sealed in an isolated cell, must communicate and press switches to free teammates, then regroup.
 - Chamber 4 (Ch4): Combat — kill 3 zombies together, door opens when all dead.
 - Chamber 5 (Ch5): Boss fight — defeat a 60-HP boss together.

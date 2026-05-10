@@ -135,12 +135,21 @@ five_chambers.DOOR4_POS = { x=6, z=63 }
 five_chambers.CH5 = { x0=2, x1=10, z0=64, z1=72 }
 
 -- Anvil mechanic (plan §4)
+-- Two anvils total in Ch2: one drops swords, one drops chestplates. Both
+-- distribute their gear to all agents and auto-equip on break.
+-- Solo digging is now NET ZERO (DECAY=1, SOLO=1) instead of net negative —
+-- this prevents the policy from learning "punching purple = bad" when an
+-- agent tries the anvil alone. Cooperation still required to make progress
+-- (PAIR=4 → +3/tick; TRIO=8 → +7/tick), it just isn't actively punished.
+-- ACTIVE_WINDOW raised from 6 → 18 ticks (~1s, 6 env steps) so that
+-- round-robin per-agent action selection doesn't constantly miss the
+-- coordination window — agents acting in sequence have more margin.
 five_chambers.ANVIL_MAX_HP  = 30
 five_chambers.SOLO_DIG_RATE = 1
 five_chambers.PAIR_DIG_RATE = 4
 five_chambers.TRIO_DIG_RATE = 8
-five_chambers.DECAY_RATE    = 2
-five_chambers.ACTIVE_WINDOW = 6  -- Lua ticks (2 env steps × frameskip=3)
+five_chambers.DECAY_RATE    = 1   -- was 2 (made solo digging net negative)
+five_chambers.ACTIVE_WINDOW = 18  -- was 6 (~0.3s); 18 ticks ≈ 1s, 6 env steps
 five_chambers.DIGGER_RADIUS = 3
 
 -- Boss (plan §5)

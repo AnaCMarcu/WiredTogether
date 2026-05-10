@@ -1,40 +1,43 @@
--- anvil.lua: heavy anvil mechanic (plan §4).
--- Anvils require 2+ simultaneous diggers because solo digging has net negative
--- progress (dig_rate(1)=1 < DECAY_RATE=2). All decay is always applied.
+-- anvil.lua: heavy anvil mechanic (plan §4, simplified for RL tractability).
+-- Two anvils total in Ch2: one drops swords (row A → m8), one drops
+-- chestplates (row B → m11). Solo digging is net 0 (DECAY=1, SOLO=1) —
+-- not punished, just unproductive. Pair digging is +3/tick, trio +7/tick.
+-- When BOTH anvils have been broken once, gear is given directly to all
+-- agents (sword in wield slot, chestplate in armor slot — see gear.lua's
+-- give_gear_to_all) AND Door 2 opens.
 --
--- Anvil positions for i=0..NUM_AGENTS-1:
---   Row A (swords):      x = CH2.x0+1 + i*3,  z = CH2.z0+2
---   Row B (chestplates): x = CH2.x0+1 + i*3,  z = CH2.z0+5
---
--- Milestone mapping:
---   Anvil A_i → m{8+i}_anvil_A{i+1}
---   Anvil B_i → m{8+N+i}_anvil_B{i+1}
+-- Why 2 anvils and not 6: with the original 2×N=6 anvils and net-negative
+-- solo digging, MAPPO would need to discover synchronised punching within
+-- a 6-tick window for 6 separate anvils with zero learning signal until
+-- the first break — observed never to happen in practice. Reducing to one
+-- anvil per gear type (one round of cooperation needed) keeps the coop
+-- requirement central without the exponential discovery cost.
 
 five_chambers.anvil_state        = {}  -- key=pos_string → {pos,hp,punchers,milestone_id,row,first_break}
 five_chambers.anvil_breaks_total = 0
 five_chambers.anvil_first_breaks = 0  -- distinct anvils broken at least once
+five_chambers.total_anvils       = 0  -- set in init_anvils(); door 2 fires when first_breaks >= total_anvils
 
 -- ── Helpers ──────────────────────────────────────────────────────────
 
 local function anvil_positions()
-    local N = five_chambers.NUM_AGENTS
-    local c = five_chambers.CH2
-    local y = five_chambers.FLOOR_Y + 1
-    local list = {}
-    for i = 0, N - 1 do
-        local ax = c.x0 + 1 + (i * 3)
-        table.insert(list, {
-            pos          = {x = ax, y = y, z = c.z0 + 2},
-            milestone_id = "m" .. (8 + i)     .. "_anvil_A" .. (i + 1),
-            row          = "A",
-        })
-        table.insert(list, {
-            pos          = {x = ax, y = y, z = c.z0 + 5},
-            milestone_id = "m" .. (8 + N + i) .. "_anvil_B" .. (i + 1),
-            row          = "B",
-        })
-    end
-    return list
+    -- Two anvils: sword (row A) and chestplate (row B). Centred along x in
+    -- Ch2 so all 3 agents can reach either from the south-side spawn.
+    local c  = five_chambers.CH2
+    local y  = five_chambers.FLOOR_Y + 1
+    local cx = math.floor((c.x0 + c.x1) / 2)  -- 6 for default Ch2 bounds
+    return {
+        {
+            pos          = {x = cx, y = y, z = c.z0 + 2},
+            milestone_id = "m8_anvil_A1",
+            row          = "A",  -- drops swords
+        },
+        {
+            pos          = {x = cx, y = y, z = c.z0 + 5},
+            milestone_id = "m11_anvil_B1",
+            row          = "B",  -- drops chestplates
+        },
+    }
 end
 
 -- ── Node registration (module-level, runs when anvil.lua is dofile'd) ──
@@ -78,7 +81,9 @@ function five_chambers.init_anvils()
     five_chambers.anvil_state        = {}
     five_chambers.anvil_breaks_total = 0
     five_chambers.anvil_first_breaks = 0
-    for _, info in ipairs(anvil_positions()) do
+    local positions = anvil_positions()
+    five_chambers.total_anvils = #positions
+    for _, info in ipairs(positions) do
         local key = minetest.pos_to_string(info.pos)
         five_chambers.anvil_state[key] = {
             pos          = info.pos,
@@ -128,18 +133,23 @@ minetest.register_globalstep(function(dtime)
                 five_chambers.fire_milestone(state.milestone_id, active)
             end
 
-            -- Drop gear at anvil position.
-            five_chambers.drop_gear(state.pos,
+            -- Distribute gear DIRECTLY to every connected agent's inventory
+            -- (sword → wield slot; chestplate → armor slot). Auto-equip means
+            -- agents don't need to walk over a dropped item to gain combat
+            -- ability — Ch4/Ch5 fights become tractable even without
+            -- dedicated pickup behaviour.
+            five_chambers.give_gear_to_all(
                 state.row == "A" and "sword" or "chestplate")
 
-            -- Track first-break per distinct anvil; unlock door when all done.
+            -- Track first-break per distinct anvil; open Door 2 when ALL
+            -- anvils (currently 2) have broken at least once.
             if not state.first_break then
                 state.first_break = true
                 five_chambers.anvil_first_breaks = five_chambers.anvil_first_breaks + 1
-                if five_chambers.anvil_first_breaks >= five_chambers.NUM_AGENTS * 2 then
+                if five_chambers.anvil_first_breaks >= (five_chambers.total_anvils or 2) then
                     five_chambers.start_door2_countdown()
                     minetest.log("action",
-                        "[five_chambers] All anvils broken — Door 2 countdown started.")
+                        "[five_chambers] Both anvils broken — Door 2 countdown started.")
                 end
             end
 
