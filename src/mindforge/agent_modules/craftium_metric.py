@@ -704,8 +704,24 @@ class CraftiumMetric:
         plt.close(fig)
 
     def _plot_hebbian_bonds(self):
+        """Render bond evolution plots. Calls both the legacy mean-bond
+        line plot and the per-pair asymmetry plot. The asymmetry plot is
+        the one designed for paper figures; the line plot stays for
+        backward-compat with tooling that expects graph_bond_evolution.png.
+        """
         if not self._graph_snapshots:
             return
+        # Legacy view (mean + top-3): kept for continuity.
+        self._plot_hebbian_mean()
+        # Paper-quality view: per-pair asymmetric bonds.
+        self._plot_hebbian_asymmetry()
+
+    def _plot_hebbian_mean(self):
+        """Mean-bond + top-3 lines. Note: top-3 pair lines can ARTIFICIALLY
+        drop to 0 when a pair falls out of the current top-3 set — only
+        meaningful for snapshots where the FULL W matrix isn't stored.
+        For runs with W stored per snapshot, prefer _plot_hebbian_asymmetry.
+        """
         fig, ax = plt.subplots(figsize=(10, 5))
         snap_steps = [s["step"] for s in self._graph_snapshots]
         mean_bond  = [s.get("mean_bond_strength", 0) for s in self._graph_snapshots]
@@ -719,13 +735,84 @@ class CraftiumMetric:
 
         ax.set_xlabel("Timestep")
         ax.set_ylabel("Bond Strength")
-        ax.set_title("Hebbian Social Graph — Bond Evolution")
+        ax.set_title("Hebbian Social Graph — Bond Evolution (mean view)")
         ax.legend()
         fig.savefig(os.path.join(self.target_folder, "graph_bond_evolution.png"), dpi=150)
         plt.close(fig)
 
+    def _plot_hebbian_asymmetry(self):
+        """Per-pair asymmetric bond figure for the paper.
+
+        For each undirected pair (i, j) with i < j, draws W[i,j] and
+        W[j,i] as two lines on the same subplot, with the area between
+        them shaded to highlight the directed-trust asymmetry. Requires
+        the full W matrix per snapshot (added to get_graph_metrics in
+        hebbian/graph.py); silently falls back to "no plot" otherwise.
+        """
+        snaps = self._graph_snapshots
+        if not snaps:
+            return
+        first_W = snaps[0].get("W")
+        if not first_W:
+            # Run pre-dates the W-in-snapshot fix; nothing to plot.
+            return
+
+        N = len(first_W)
+        steps = [s["step"] for s in snaps]
+        # Undirected pairs (i, j) with i < j — one subplot each.
+        pairs = [(i, j) for i in range(N) for j in range(i + 1, N)]
+        if not pairs:
+            return
+
+        fig, axes = plt.subplots(
+            len(pairs), 1, figsize=(8, 2.4 * len(pairs)),
+            sharex=True, constrained_layout=True,
+        )
+        if len(pairs) == 1:
+            axes = [axes]
+
+        # Match colour pair to direction: forward (i→j) blue, reverse (j→i) orange.
+        c_forward = "#2c7fb8"
+        c_reverse = "#d95f0e"
+        c_asym    = "#888888"
+
+        for ax, (i, j) in zip(axes, pairs):
+            w_ij = [s["W"][i][j] for s in snaps]
+            w_ji = [s["W"][j][i] for s in snaps]
+
+            ax.plot(steps, w_ij, color=c_forward, linewidth=2,
+                    label=f"agent_{i} → agent_{j}")
+            ax.plot(steps, w_ji, color=c_reverse, linewidth=2,
+                    label=f"agent_{j} → agent_{i}")
+
+            # Shaded asymmetry band: between min and max of the two directions.
+            lo = [min(a, b) for a, b in zip(w_ij, w_ji)]
+            hi = [max(a, b) for a, b in zip(w_ij, w_ji)]
+            ax.fill_between(steps, lo, hi, color=c_asym, alpha=0.18,
+                            label="|W_ij − W_ji|")
+
+            ax.set_ylabel("Bond W")
+            ax.set_ylim(0, 1)
+            ax.set_title(f"Pair (agent_{i}, agent_{j})", fontsize=11)
+            ax.grid(True, alpha=0.3)
+            ax.legend(loc="upper left", fontsize=9, framealpha=0.85)
+
+        axes[-1].set_xlabel("Timestep")
+        fig.suptitle("Asymmetric Hebbian Bonds Over One Episode",
+                     fontsize=13, y=1.02)
+        fig.savefig(
+            os.path.join(self.target_folder, "graph_bond_asymmetry.png"),
+            dpi=150, bbox_inches="tight",
+        )
+        plt.close(fig)
+
     @staticmethod
     def _bond_weight_at(snapshot, i_idx, j_idx) -> float:
+        # Prefer full W if present (post-fix runs); fall back to top_3_pairs
+        # lookup for legacy snapshots.
+        W = snapshot.get("W")
+        if W and 0 <= i_idx < len(W) and 0 <= j_idx < len(W[i_idx]):
+            return float(W[i_idx][j_idx])
         for tp in snapshot.get("top_3_pairs", []):
             if tp["i"] == i_idx and tp["j"] == j_idx:
                 return tp["w"]

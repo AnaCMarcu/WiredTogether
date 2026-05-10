@@ -550,13 +550,20 @@ class HebbianSocialGraph:
         """Compute graph-level metrics for logging and analysis.
 
         Returns metrics for RQ2 analysis: bond strength, sparsity,
-        top pairs, per-agent centrality, modularity proxy, and the
-        LTD heatmap.
+        top pairs, per-agent centrality, modularity proxy, the LTD
+        heatmap, AND the full W matrix per snapshot.
+
+        Storing the full W (~N×N floats — trivial for typical N=3..8) lets
+        post-hoc plots (e.g., asymmetric W[i,j] vs W[j,i] over time) work
+        without losing pairs that drop out of the top-3 mid-episode. The
+        previous schema only stored top_3_pairs, which made any plot of
+        a specific pair show abrupt drops to 0 whenever that pair fell
+        out of top-3 — see graph_bond_evolution.png artifact.
 
         Returns
         -------
         dict with keys: mean_bond_strength, sparsity, top_3_pairs,
-        per_agent_out_strength, modularity_proxy, ltd_heatmap
+        per_agent_out_strength, modularity_proxy, ltd_heatmap, W
         """
         if not self.config.enabled:
             return {}
@@ -623,6 +630,9 @@ class HebbianSocialGraph:
             "per_agent_out_strength": per_agent_out_strength,
             "modularity_proxy": modularity_proxy,
             "ltd_heatmap": ltd_heatmap.tolist(),
+            # Full N×N weight matrix — required by post-hoc plots that
+            # need any specific pair (not just current top-3).
+            "W": W.tolist(),
         }
 
     def get_ltd_heatmap(self) -> np.ndarray:
