@@ -1,0 +1,62 @@
+# Stage 4b only: Hebbian-weighted group composition (Option 4b-i, clipped
+# off-policy). NO reward diffusion. Ablation isolating composition's effect.
+
+env:
+  num_agents: 3
+  max_episode_steps: 1000
+  obs_width: 320
+  obs_height: 180
+  chamber_subset: [ch3]
+
+llm:
+  base_model_name: "REPLACE_ME"
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  target_modules: ["q_proj", "v_proj"]
+  policy_adapter: "grpo_policy"
+  reference_adapter: "grpo_reference"
+  device: "cuda"
+  max_new_tokens: 256
+  temperature: 1.0
+
+policy:
+  trained_agents: [0, 1, 2]
+  checkpoint_path: null
+
+sampler:
+  n_per_group: 4
+  horizon: 50
+  position_bucket_size: 2.0
+  max_resets_per_group: 1024
+
+grpo:
+  clip_epsilon: 0.2
+  kl_coefficient: 0.05
+  learning_rate: 5.0e-6
+  n_per_group: 4
+  total_steps: 1000
+  checkpoint_interval: 100
+  log_interval: 10
+  grad_clip_norm: 1.0
+  team_reward: false
+  hebbian_group_composition: true         # 4b ON
+  hebbian_borrow_fraction: 0.25
+  hebbian_buffer_capacity: 64
+
+verifier:
+  use_milestone_rewards: true
+  use_format_reward: true
+  format_reward_weight: 0.1
+  use_alive_bonus: true
+  alive_bonus_amount: 5.0
+  hebbian_reward_diffusion: false         # 4a OFF
+
+hebbian:
+  enabled: true
+  num_agents: 3
+  init_weight: 0.1
+
+seed: 0
+checkpoint_dir: "runs/grpo_hebbian_composition/grpo_lora"
+log_dir: "runs/grpo_hebbian_composition"

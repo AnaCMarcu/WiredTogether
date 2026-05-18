@@ -39,6 +39,7 @@ from agent_modules.craftium_metric import CraftiumMetric
 from mindforge.env.communication_rewards import CommunicationTracker
 from mindforge.env.cooperation_metric import CooperationMetric
 from mindforge.env.episode_logger import EpisodeLogger
+from rlvr.passive_logger import attach_if_enabled as _rlvr_attach_if_enabled
 from mindforge.run_layout import RunPaths
 import json as _json
 
@@ -991,6 +992,9 @@ async def run(args):
         comm_tracker = CommunicationTracker(agent_ids=list(range(num_agents)))
         coop_metric = CooperationMetric(agent_ids=list(range(num_agents)))
         ep_logger = EpisodeLogger(run_dir=metric.target_folder, episode=episode + 1)
+        # RLVR/GRPO Stage-1 passive observer — no-op unless RLVR_PASSIVE_LOG=1.
+        # See docs/rlvr_grpo_plan.md §5.1 and src/rlvr/passive_logger.py.
+        _rlvr_attach_if_enabled(ep_logger, metric.target_folder)
         # Track chambers each agent has been in during this episode. Surfaced
         # in the prompt as a hard ground-truth list so the LLM can't claim
         # to be in a chamber it has never visited (frequent hallucination).
