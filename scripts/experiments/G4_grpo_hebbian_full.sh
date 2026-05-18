@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=G4-grpo-hebbian-full
 #SBATCH --partition=gpu-a100
-#SBATCH --time=24:00:00
+#SBATCH --time=00:30:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
@@ -21,8 +21,15 @@ export LLM_MODEL_PATH="$MODEL_2B"
 
 bash "$PROJECT_DIR/scripts/grpo.sh" \
     grpo_hebbian_full.yaml \
-    G4 \
-    --set grpo.total_steps=1000 \
-    --set grpo.hebbian_borrow_fraction=0.25
+    G4-smoke \
+    --set grpo.total_steps=5            # was 1000
+    # --set grpo.hebbian_borrow_fraction=0.25     # remove for smoke
+
+
+# bash "$PROJECT_DIR/scripts/grpo.sh" \
+#     grpo_hebbian_full.yaml \
+#     G4 \
+#     --set grpo.total_steps=1000 \
+#     --set grpo.hebbian_borrow_fraction=0.25
 
 echo "G4 done (seed=$SEED)"

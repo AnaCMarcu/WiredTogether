@@ -20,6 +20,16 @@
 # ============================================================
 set -euo pipefail
 
+# ── Self-derive PROJECT_DIR and SEED ──
+# ``_common.sh`` defines both but does not export them, so when an
+# experiment script does ``bash $PROJECT_DIR/scripts/grpo.sh ...`` the
+# subshell can't see them. Derive locally so this script works whether
+# it's sourced, bash'd, or run standalone.
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+if [ -z "${SEED:-}" ]; then
+    SEED="${SLURM_ARRAY_TASK_ID:-0}"
+fi
+
 if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <config-name.yaml> <experiment-id> [extra --set ...]" >&2
     echo "  e.g.: $0 grpo_hebbian_full.yaml G4" >&2
@@ -37,7 +47,6 @@ if [ ! -f "$CONFIG_PATH" ]; then
 fi
 
 : "${LLM_MODEL_PATH:?LLM_MODEL_PATH must be set (source _common.sh first)}"
-: "${SEED:?SEED must be set (source _common.sh first)}"
 
 # Run dir lives on /scratch so it survives the job.
 RUN_DIR="/scratch/${USER}/WiredTogether/runs/grpo/${EXPERIMENT_ID}/seed_${SEED}"
