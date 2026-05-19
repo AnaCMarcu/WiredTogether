@@ -4,7 +4,7 @@
 #SBATCH --time=01:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem-per-cpu=4G
+#SBATCH --mem-per-cpu=3G
 #SBATCH --account=education-eemcs-msc-dsait
 #SBATCH --output=/scratch/%u/WiredTogether/slurm_logs/hebb-tier5-%A_%a.out
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/hebb-tier5-%A_%a.err
