@@ -29,6 +29,8 @@
 # Resumability: re-submitting an array task whose run already finished
 # successfully is a fast no-op (the launcher checks runs.jsonl).
 
+set -euo pipefail   # fail fast: source / env / cd errors halt the job instead of silently continuing into a broken python invocation.
+
 source "/scratch/acmarcu/WiredTogether/hebbian-marl/scripts/slurm/_common_hebbmarl.sh"
 
 python scripts/run_experiments.py \

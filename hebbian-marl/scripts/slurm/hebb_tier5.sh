@@ -21,6 +21,8 @@
 #
 # Wall-time estimate: ~25 min per task (1M steps).
 
+set -euo pipefail   # fail fast: source / env / cd errors halt the job instead of silently continuing into a broken python invocation.
+
 source "/scratch/acmarcu/WiredTogether/hebbian-marl/scripts/slurm/_common_hebbmarl.sh"
 
 python scripts/run_experiments.py \
