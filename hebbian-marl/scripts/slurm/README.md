@@ -9,9 +9,9 @@ convention.
 ```
 hebbian-marl/scripts/slurm/
 ├── _common_hebbmarl.sh   # module load + conda activate + HEBBIAN_RESULTS_DIR
-├── hebb_tier0.sbatch     # 5 diagnostic runs, 500k steps each
-├── hebb_tier5.sbatch     # 5 preview runs, 1M steps each
-└── hebb_tier1.sbatch     # 15 headline runs, 5M steps each
+├── hebb_tier0.sh         # 5 diagnostic runs, 500k steps each
+├── hebb_tier5.sh         # 5 preview runs, 1M steps each
+└── hebb_tier1.sh         # 15 headline runs, 5M steps each
 ```
 
 All three sbatch files:
@@ -55,27 +55,27 @@ cd /scratch/$USER/WiredTogether/hebbian-marl
 
 # Tier 0 — diagnostics (5 runs, ~15 min each)
 python scripts/run_experiments.py --tier 0 --list
-sbatch --array=0-4 scripts/slurm/hebb_tier0.sbatch
+sbatch --array=0-4 scripts/slurm/hebb_tier0.sh
 
 # Tier 5 — preview (5 runs, ~25 min each)
 python scripts/run_experiments.py --tier 5 --list
-sbatch --array=0-4 scripts/slurm/hebb_tier5.sbatch
+sbatch --array=0-4 scripts/slurm/hebb_tier5.sh
 
 # Tier 1 — headline grid (15 runs, ~2 h each)
 python scripts/run_experiments.py --tier 1 --list
-sbatch --array=0-14 scripts/slurm/hebb_tier1.sbatch
+sbatch --array=0-14 scripts/slurm/hebb_tier1.sh
 ```
 
 Subset submission (e.g., just the hebb_s seeds of tier 1):
 
 ```bash
-sbatch --array=0-4 scripts/slurm/hebb_tier1.sbatch
+sbatch --array=0-4 scripts/slurm/hebb_tier1.sh
 ```
 
 Retry only failed/missing tasks (e.g., tasks 7 and 12):
 
 ```bash
-sbatch --array=7,12 scripts/slurm/hebb_tier1.sbatch
+sbatch --array=7,12 scripts/slurm/hebb_tier1.sh
 ```
 
 ## Monitoring

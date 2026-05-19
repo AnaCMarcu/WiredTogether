@@ -17,7 +17,7 @@
 #   python scripts/run_experiments.py --tier 0 --list
 #
 # Submit:
-#   sbatch --array=0-4 scripts/slurm/hebb_tier0.sbatch
+#   sbatch --array=0-4 scripts/slurm/hebb_tier0.sh
 #
 # Wall-time estimate: ~15 min per task (500k steps).
 

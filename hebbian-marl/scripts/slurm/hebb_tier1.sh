@@ -18,10 +18,10 @@
 #   python scripts/run_experiments.py --tier 1 --list
 #
 # Submit:
-#   sbatch --array=0-14 scripts/slurm/hebb_tier1.sbatch
+#   sbatch --array=0-14 scripts/slurm/hebb_tier1.sh
 #
 # Submit a subset (e.g., only the hebb_s seeds):
-#   sbatch --array=0-4 scripts/slurm/hebb_tier1.sbatch
+#   sbatch --array=0-4 scripts/slurm/hebb_tier1.sh
 #
 # Wall-time estimate: ~2h per task (5M steps, single-threaded CPU).
 # 4h budget leaves headroom for slow nodes + sacred/init overhead.
