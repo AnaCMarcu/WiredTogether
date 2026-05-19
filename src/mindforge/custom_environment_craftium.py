@@ -581,6 +581,41 @@ class CraftiumEnvironmentInterface:
             )
         return self._world_path
 
+    def signal_warmup_complete(self) -> bool:
+        """Tell the Lua side that Python has finished warmup and is about to
+        start real env steps. The Ch1-timeout fallback in ``doors.lua`` counts
+        ticks from THIS signal, not from server start — otherwise the timeout
+        fires during the warmup poll loop.
+
+        Concrete failure mode this avoids: ``warmup_time=300`` s in Python
+        runs ``warmup_noop()`` for 300 s. Lua's globalstep keeps ticking at
+        20 Hz the whole time, so by the time Python issues step 0, the
+        lua-tick counter has already exceeded ``CH1_TIMEOUT_TICKS`` (default
+        1200 ≈ 60 s; thesis runs override to 400 ≈ 20 s) and the timeout
+        fallback has already teleported agents to the Ch2 fallback spawn.
+        Result: agents start at ``z=19`` (Ch2) instead of ``z=1`` (Ch1) and
+        every Ch1 milestone is unreachable.
+
+        Writes ``{world_path}/warmup_complete.txt`` atomically. ``doors.lua``
+        polls for it and stamps ``warmup_complete_tick`` when it appears.
+        Idempotent — safe to call multiple times.
+        """
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            return False
+        tmp = os.path.join(world_path, "warmup_complete.tmp")
+        dst = os.path.join(world_path, "warmup_complete.txt")
+        try:
+            with open(tmp, "w") as f:
+                f.write("1")
+            os.replace(tmp, dst)
+            return True
+        except OSError as e:
+            import logging as _log
+            _log.warning("[WARMUP] signal_warmup_complete failed: %s", e)
+            return False
+
     def force_ch1_teleport(self) -> bool:
         """Signal the Lua side to force-fire the Ch1→Ch2 teleport now.
 

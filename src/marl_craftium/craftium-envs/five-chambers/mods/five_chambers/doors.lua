@@ -45,6 +45,13 @@ five_chambers.ch2_transitioned_count = 0
 -- Reset to nil in init_doors() at episode boundaries.
 five_chambers.all_connected_tick = nil
 
+-- Tick at which Python signals warmup-complete (preferred anchor over
+-- all_connected_tick — see the stamping logic in the timeout globalstep).
+-- Reset to nil in init_doors() so each episode re-anchors at episode start;
+-- the warmup_complete.txt file persists on disk, so the next globalstep
+-- after a reset will immediately re-stamp this to the current sc.
+five_chambers.warmup_complete_tick = nil
+
 -- Re-place the visible door_locked block at a door position. Inverse of
 -- open_door_at(). Used by relock_all_doors() at episode reset to undo any
 -- doors that were swapped to air during the previous episode.
@@ -130,6 +137,7 @@ function five_chambers.init_doors()
     five_chambers.ch2_transitioned                  = {}
     five_chambers.ch2_transitioned_count            = 0
     five_chambers.all_connected_tick                = nil
+    five_chambers.warmup_complete_tick              = nil
     for i = 0, five_chambers.NUM_AGENTS - 1 do
         five_chambers.door_state.cell_doors[i] = false
         five_chambers.ch2_transitioned[i]      = false
@@ -333,18 +341,48 @@ minetest.register_globalstep(function(dtime)
         end
     end
 
-    -- Ticks since the all-connected stamp (or -1 if never stamped yet).
-    local act = five_chambers.all_connected_tick
-    local ticks_in_ch1 = (act and (sc - act)) or -1
+    -- Stamp the tick at which Python signals warmup-complete. The
+    -- all_connected_tick stamp above isn't enough because clients join
+    -- early in warmup; Python then sits in warmup_noop() for the full
+    -- warmup_time (e.g. 300 s) while Lua's globalstep keeps ticking. With
+    -- CH1_TIMEOUT_TICKS=400 (~20 s) the timeout would fire mid-warmup and
+    -- agents start in Ch2. Warmup-complete is signalled by Python writing
+    -- {worldpath}/warmup_complete.txt after the media-load poll loop ends
+    -- (see CraftiumEnvironmentInterface.signal_warmup_complete).
+    if not five_chambers.warmup_complete_tick then
+        local wc_path = (minetest.get_worldpath() or "") .. "/warmup_complete.txt"
+        local f = io.open(wc_path, "r")
+        if f then
+            f:close()
+            five_chambers.warmup_complete_tick = sc
+            if io and io.stderr then
+                io.stderr:write(string.format(
+                    "[CH1_TIMEOUT] warmup_complete signalled at tick=%d "
+                    .. "— Ch1 timeout countdown anchored here\n", sc))
+                io.stderr:flush()
+            end
+        end
+    end
+
+    -- Reference tick for the countdown: prefer warmup_complete_tick when
+    -- Python has signalled, else fall back to all_connected_tick. Either
+    -- way, ticks_in_ch1 measures time since the chosen anchor.
+    local ref_tick = five_chambers.warmup_complete_tick
+        or five_chambers.all_connected_tick
+    local ticks_in_ch1 = (ref_tick and (sc - ref_tick)) or -1
 
     if sc > 0 and sc % _CH1_DIAG_INTERVAL == 0
        and not five_chambers.door_state.door1_force_teleported then
         if io and io.stderr then
+            local anchor = five_chambers.warmup_complete_tick
+                and "warmup_complete"
+                or (five_chambers.all_connected_tick and "all_connected" or "none")
             io.stderr:write(string.format(
                 "[CH1_TIMEOUT_DIAG] step_counter=%d ticks_in_ch1=%d "
-                .. "target=%d force_teleported=%s players=%d\n",
+                .. "target=%d anchor=%s force_teleported=%s players=%d\n",
                 sc, ticks_in_ch1,
                 five_chambers.CH1_TIMEOUT_TICKS or -1,
+                anchor,
                 tostring(five_chambers.door_state.door1_force_teleported),
                 n_connected_now))
             io.stderr:flush()
@@ -368,9 +406,10 @@ minetest.register_globalstep(function(dtime)
             os.remove(force_flag_path)
         end
     end
-    -- Timer compares ticks-since-all-joined to the target. This avoids
-    -- two failure modes the previous "raw step_counter < target" check
-    -- had:
+    -- Timer compares ticks-since-anchor to the target. Anchor is whichever
+    -- of warmup_complete_tick / all_connected_tick is set (see stamping
+    -- above). This avoids three failure modes the previous "raw
+    -- step_counter < target" check had:
     --   1. Pre-join race: warmup ticks accumulate while clients are
     --      loading; raw counter crosses target before any agent connects;
     --      teleport fires with 0 players, sets door1_force_teleported,
@@ -379,9 +418,13 @@ minetest.register_globalstep(function(dtime)
     --      CH1_TIMEOUT_TICKS, raw counter is *already* past target the
     --      moment the last agent joins, so teleport fires within seconds
     --      of join — agents land in Ch2 with zero Ch1 experience.
-    -- Both are fixed by stamping all_connected_tick on first full join
-    -- and measuring from there. Python's force-flag still bypasses the
-    -- timer for the explicit-trigger path.
+    --   3. Warmup-poll race: clients join EARLY in warmup but Python sits
+    --      in warmup_noop() for the full warmup_time before issuing step 0.
+    --      ticks_in_ch1 (measured from all_connected_tick) crosses target
+    --      mid-warmup → agents start step 0 in Ch2. Fixed by preferring
+    --      warmup_complete_tick (anchored after Python's warmup loop).
+    -- Python's force-flag still bypasses the timer for the explicit-trigger
+    -- path so a manual --ch1-timeout-steps still works.
     if (not force_fired)
        and (ticks_in_ch1 < 0
             or ticks_in_ch1 < (five_chambers.CH1_TIMEOUT_TICKS or 3000)) then

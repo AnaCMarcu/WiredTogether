@@ -209,6 +209,7 @@ __marimo__/
 
 # Runs
 runs/
+runs_from_hpc/
 
 # Vendored hebbian-marl sub-project — per-run artifacts only.
 # The source (epymarl/, scripts/, tests/, configs/, pyproject.toml) IS tracked;

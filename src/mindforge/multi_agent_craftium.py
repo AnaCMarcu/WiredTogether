@@ -1058,6 +1058,21 @@ async def run(args):
             std_str = ", ".join(f"agent_{i}={s:.1f}" for i, s in enumerate(stds)) if stds else "N/A"
             print(f"  * Warm-up timeout ({elapsed:.0f}s). std-dev: {std_str}. Starting anyway.")
 
+        # Signal Lua that warmup is done. The Ch1-timeout fallback in
+        # doors.lua otherwise counts ticks from server start, which during a
+        # 300 s warmup blows past CH1_TIMEOUT_TICKS=400 (~20 s) and teleports
+        # agents to the Ch2 fallback spawn BEFORE Python step 0. See
+        # CraftiumEnvironmentInterface.signal_warmup_complete docstring for
+        # the full failure-mode write-up.
+        try:
+            environment.signal_warmup_complete()
+        except AttributeError:
+            # Older env class without the signal method — Lua falls back to
+            # the legacy all_connected_tick path. Logged so we notice on HPC
+            # if the patched class isn't actually loaded.
+            print("  * WARNING: env has no signal_warmup_complete; "
+                  "Ch1 timeout may fire prematurely.")
+
         # All communication is targeted: each agent has its own inbox.
         agent_communications = {i: [] for i in range(num_agents)}
         agents_error_count = [0] * num_agents
