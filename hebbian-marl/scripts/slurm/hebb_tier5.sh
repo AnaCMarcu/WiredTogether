@@ -21,7 +21,7 @@
 #
 # Wall-time estimate: ~25 min per task (1M steps).
 
-source "$(dirname "$0")/_common_hebbmarl.sh"
+source "/scratch/acmarcu/WiredTogether/hebbian-marl/scripts/slurm/_common_hebbmarl.sh"
 
 python scripts/run_experiments.py \
     --tier 5 \

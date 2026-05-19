@@ -29,7 +29,7 @@
 # Resumability: re-submitting an array task whose run already finished
 # successfully is a fast no-op (the launcher checks runs.jsonl).
 
-source "$(dirname "$0")/_common_hebbmarl.sh"
+source "/scratch/acmarcu/WiredTogether/hebbian-marl/scripts/slurm/_common_hebbmarl.sh"
 
 python scripts/run_experiments.py \
     --tier 1 \
