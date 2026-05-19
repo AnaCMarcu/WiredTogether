@@ -209,3 +209,14 @@ __marimo__/
 
 # Runs
 runs/
+
+# Vendored hebbian-marl sub-project — per-run artifacts only.
+# The source (epymarl/, scripts/, tests/, configs/, pyproject.toml) IS tracked;
+# only training outputs and local environments are excluded.
+hebbian-marl/.venv/
+hebbian-marl/results/
+hebbian-marl/runs/
+hebbian-marl/hebbian_marl.egg-info/
+hebbian-marl/epymarl/results/
+hebbian-marl/**/__pycache__/
+hebbian-marl/**/.pytest_cache/

@@ -1,0 +1,47 @@
+# hebb_r — Hebbian reward diffusion only (integration (a) in isolation).
+#
+# Plain IPPO learner; HebbianRunner with reward_diffusion=True.
+
+action_selector: "soft_policies"
+mask_before_softmax: True
+
+runner: "hebbian"
+batch_size_run: 1
+buffer_size: 32
+batch_size: 32
+
+target_update_interval_or_tau: 200
+lr: 0.0003
+
+obs_agent_id: False
+obs_last_action: False
+obs_individual_obs: False
+
+mac: "non_shared_mac"
+agent: "rnn_ns"
+agent_output_type: "pi_logits"
+learner: "ppo_learner"
+entropy_coef: 0.01
+standardise_returns: False
+standardise_rewards: True
+use_rnn: False
+epochs: 4
+eps_clip: 0.2
+q_nstep: 5
+critic_type: "ac_critic_ns"
+name: "hebb_r"
+
+t_max: 5050000
+
+uniform_sharing: False
+weighted_sharing: False
+
+hebbian:
+  enabled: True
+  reward_diffusion: True     # (a) only
+  weighted_sharing: False
+  policy_mixture: False
+  num_agents: 3
+  interaction_radius: 2.0
+  communication_coactivity_bonus: 0.5
+  reward_diffusion_gamma: 0.2

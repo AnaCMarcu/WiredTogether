@@ -1,0 +1,24 @@
+# Comm-augmented Level-Based Foraging env-config.
+#
+# Plug-and-play with the gymma wrapper: the comm-augmented env IDs are
+# registered as bare `Foraging-Comm-WxH-Np-Mf-v3` ids (see
+# epymarl/src/envs/lbf_comm_wrapper.py). Override the `key` per run.
+
+env: "gymma"
+
+env_args:
+  key: "Foraging-Comm-10x10-3p-3f-v3"
+  time_limit: 50
+  pretrained_wrapper: null
+
+test_greedy: True
+test_nepisode: 100
+test_interval: 50000
+log_interval: 50000
+runner_log_interval: 10000
+learner_log_interval: 10000
+t_max: 5050000
+
+# Hebbian variants need per-agent rewards.
+common_reward: False
+reward_scalarisation: "sum"

@@ -1,0 +1,50 @@
+# hebb_s — Hebbian-weighted off-policy sharing (HEADLINE variant).
+#
+# Identical setup to `seac` but with `weighted_sharing: True` so teammate
+# j contributes to agent i's update in proportion to W̄[i,j] from the
+# active HebbianSocialGraph. δ_comm = 0.5 (default — comm term active).
+
+action_selector: "soft_policies"
+mask_before_softmax: True
+
+runner: "hebbian"
+batch_size_run: 1
+buffer_size: 32
+batch_size: 32
+
+target_update_interval_or_tau: 200
+lr: 0.0003
+
+obs_agent_id: False
+obs_last_action: False
+obs_individual_obs: False
+
+mac: "non_shared_mac"
+agent: "rnn_ns"
+agent_output_type: "pi_logits"
+learner: "hebbian_seac_learner"
+entropy_coef: 0.01
+standardise_returns: False
+standardise_rewards: True
+use_rnn: False
+epochs: 4
+eps_clip: 0.2
+q_nstep: 5
+critic_type: "ac_critic_ns"
+name: "hebb_s"
+
+t_max: 5050000
+
+# SEAC sharing parameters — Hebbian-weighted
+uniform_sharing: False
+weighted_sharing: True
+lambda_share: 0.5
+
+hebbian:
+  enabled: True
+  reward_diffusion: False    # (b) only, no (a)
+  weighted_sharing: True
+  policy_mixture: False
+  num_agents: 3
+  interaction_radius: 2.0
+  communication_coactivity_bonus: 0.5   # comm path active

@@ -1,0 +1,51 @@
+# IPPO baseline for the hebbian-marl ablation grid.
+#
+# Same as epymarl's `ippo_ns` (per-agent networks, feed-forward) but routed
+# through HebbianRunner with every Hebbian flag off (strict no-op). The
+# point is to compare against Hebbian variants on bitwise-identical infra
+# — same runner, MAC, and learner; only the Hebbian module is disabled.
+# Per-agent rewards (`common_reward: False`), no in-process parallelism.
+#
+# Renamed from `hebbian_ippo` to stop implying the Hebbian module is
+# active. It isn't.
+
+action_selector: "soft_policies"
+mask_before_softmax: True
+
+runner: "hebbian"            # HebbianRunner with all flags off ≡ EpisodeRunner
+batch_size_run: 1
+buffer_size: 32
+batch_size: 32
+
+target_update_interval_or_tau: 200
+lr: 0.0003
+
+obs_agent_id: False
+obs_last_action: False
+obs_individual_obs: False
+
+mac: "non_shared_mac"
+agent: "rnn_ns"
+agent_output_type: "pi_logits"
+learner: "ppo_learner"
+entropy_coef: 0.01
+standardise_returns: False
+standardise_rewards: True
+use_rnn: False               # feed-forward — required for SEAC cross-agent fwd
+epochs: 4
+eps_clip: 0.2
+q_nstep: 5
+critic_type: "ac_critic_ns"
+name: "ippo_baseline"
+
+t_max: 5050000
+
+# Hebbian: master switch off → runner is a strict no-op.
+hebbian:
+  enabled: False
+  reward_diffusion: False
+  weighted_sharing: False
+  uniform_sharing: False
+  policy_mixture: False
+  num_agents: 3
+  interaction_radius: 2.0
