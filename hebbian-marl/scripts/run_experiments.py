@@ -121,6 +121,22 @@ def already_completed(spec: RunSpec) -> bool:
     return False
 
 
+def _relpath_for_record(p: Path) -> str:
+    """Stable, forward-slash path for the runs.jsonl record.
+
+    Prefers paths relative to RESULTS_DIR (where logs/ lives) so the entry
+    is portable across machines. Falls back to REPO_ROOT-relative if
+    RESULTS_DIR isn't an ancestor, then to absolute. The forward-slash
+    normalisation makes the records readable on both Windows and Linux.
+    """
+    for base in (RESULTS_DIR, REPO_ROOT):
+        try:
+            return str(p.relative_to(base)).replace("\\", "/")
+        except ValueError:
+            continue
+    return str(p).replace("\\", "/")
+
+
 def append_record(rec: dict) -> None:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     with RUNS_LOG.open("a") as f:
@@ -165,7 +181,7 @@ def run_one(spec: RunSpec, py: str) -> dict:
         "finished_at": datetime.now(timezone.utc).isoformat(),
         "wall_seconds": round(time.time() - t0, 1),
         "exit_code": proc.returncode,
-        "log_path": str(spec.log_path.relative_to(REPO_ROOT)).replace("\\", "/"),
+        "log_path": _relpath_for_record(spec.log_path),
         "rationale": spec.rationale,
     }
     append_record(rec)
