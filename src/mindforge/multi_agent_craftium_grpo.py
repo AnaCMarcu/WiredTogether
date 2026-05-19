@@ -350,9 +350,12 @@ def build_multi_agent_env(cfg: EnvConfig):
     """
     from marl_craftium.openworld_multi_agents import OpenWorldMultiAgentEnv
 
+    # Real ``OpenWorldMultiAgentEnv.__init__`` (see
+    # ``src/marl_craftium/openworld_multi_agents.py:40``) takes ``num_agents``
+    # and ``max_steps`` — translate from our ``EnvConfig`` field names.
     return OpenWorldMultiAgentEnv(
-        n_agents=cfg.num_agents,
-        max_episode_steps=cfg.max_episode_steps,
+        num_agents=cfg.num_agents,
+        max_steps=cfg.max_episode_steps,
         obs_width=cfg.obs_width,
         obs_height=cfg.obs_height,
         **cfg.extra_kwargs,

@@ -22,7 +22,7 @@ export LLM_MODEL_PATH="$MODEL_2B"
 bash "$PROJECT_DIR/scripts/grpo.sh" \
     grpo_hebbian_full.yaml \
     G4 \
-    --set grpo.total_steps=1000 \
-    --set grpo.hebbian_borrow_fraction=0.25
+    --set grpo.total_steps=100 \
+    # --set grpo.hebbian_borrow_fraction=0.25
 
 echo "G4 done (seed=$SEED)"

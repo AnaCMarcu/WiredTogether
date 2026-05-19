@@ -30,6 +30,11 @@ if [ -z "${SEED:-}" ]; then
     SEED="${SLURM_ARRAY_TASK_ID:-0}"
 fi
 
+# Every legacy script exports CRAFTIUM_ENV_DIR to the five-chambers path —
+# ``_common.sh`` doesn't. Without it the env loads vanilla VoxeLibre and
+# our five-chambers milestones never fire (silent verifier-scores-zero bug).
+export CRAFTIUM_ENV_DIR="${CRAFTIUM_ENV_DIR:-${PROJECT_DIR}/src/marl_craftium/craftium-envs/five-chambers}"
+
 if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <config-name.yaml> <experiment-id> [extra --set ...]" >&2
     echo "  e.g.: $0 grpo_hebbian_full.yaml G4" >&2
