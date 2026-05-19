@@ -106,6 +106,25 @@ experiments:
     tier: 3
     rationale: "standard cooperative param-sharing baseline"
 
+  # ── Tier 4 — Failure-grace mechanism, full 5-seed grid ─────────────────
+  # The grace mechanism (failure_grace_enabled=True; see HebbianConfig) adds
+  # an additive LTP bonus on team-failure steps that decays with F_ij. The
+  # diagnostic at diag_hebb_s_grace_500k (tier 0) was meant to gate
+  # promotion; this tier runs the full 5-seed × 5M-step grid in parallel
+  # with tier 1 so the comparison hebb_s_grace vs hebb_s can be made on
+  # equal footing if HPC compute is available.
+  #
+  # Submit alongside tier 1:
+  #   sbatch --array=0-9 scripts/slurm/hebb_tier4.sh
+
+  - variant: hebb_s_grace
+    tier: 4
+    rationale: "headline variant + failure-grace LTP bonus"
+
+  - variant: hebb_rs_grace
+    tier: 4
+    rationale: "(a)+(b) combined + failure-grace LTP bonus"
+
   # ── Tier 5 — Preview pass (run AFTER tier 0, BEFORE tier 1) ────────────
   # Single-seed 1M-step comparison of the five "main contenders" on the
   # default env. Establishes the relative ordering before committing 5
