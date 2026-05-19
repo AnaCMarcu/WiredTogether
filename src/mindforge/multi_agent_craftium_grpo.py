@@ -442,9 +442,13 @@ def main(config_path: str, overrides: list[str] | None = None) -> int:
             trained_agents=tuple(trained_agents),
             max_resets_per_group=cfg.sampler.max_resets_per_group,
         )
+        # §A.4: cooperation metric sidecar lives next to grpo_metrics.jsonl.
+        coop_path = (Path(cfg.log_dir) / "episode_summary.jsonl"
+                     if cfg.log_dir else None)
         sampler = MultiAgentRolloutSampler(
             env=env, policy=llm_policy, config=ma_sampler_cfg,
             hebbian_bridge=hebbian_bridge,
+            episode_summary_path=coop_path,
         )
     else:
         logger.info("Single-agent mode: training agent %d", trained_agents[0])

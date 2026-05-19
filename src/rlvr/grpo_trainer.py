@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -42,6 +42,11 @@ from rlvr.grpo_buffer import (
     PerAgentTrajectoryBuffer,
     ScoredTrajectory,
     group_relative_advantage,
+)
+from rlvr.metrics_grpo import (
+    GRPOStepMetrics,
+    _hebbian_step_stats,
+    _milestone_stats,
 )
 from rlvr.rollout_sampler import (
     MultiAgentRolloutSampler,
@@ -110,42 +115,12 @@ class GRPOConfig:
     """Per-agent FIFO capacity. Bounds memory and limits how stale a
     borrowed trajectory's logprobs can become."""
 
-
-@dataclass
-class GRPOStepMetrics:
-    """One-step metrics, ready to be logged or aggregated.
-
-    The ``milestone_*`` fields make the metric stream directly comparable
-    against the legacy stack's per-episode milestone records (Stage 6's
-    headline ``compare_modes.py`` plot).
-    """
-
-    step: int
-    group_size: int
-    group_mean_reward: float
-    group_reward_std: float
-    advantage_mean_abs: float
-    surrogate_loss: float
-    kl_loss: float
-    total_loss: float
-    fraction_clipped: float
-    grad_norm: float
-    milestone_fires: int = 0
-    """Total milestone events across this step's group (sum of
-    ``len(traj.milestone_events)`` over all scored trajectories)."""
-    milestone_fire_rate: float = 0.0
-    """Fraction of scored trajectories that fired ≥ 1 milestone."""
-    borrowed_fraction: float = 0.0
-    """Stage-4b only: fraction of the batch with ``origin_agent != None``."""
-    per_agent_reward: dict = field(default_factory=dict)
-    """Per-(owning_agent_id) mean reward. Empty when ``owning_agent_id`` is
-    not set on any trajectory (Stage-2 single-agent path). Keys are stringified
-    for clean JSON serialisation."""
-    per_agent_milestone_rate: dict = field(default_factory=dict)
-    """Per-(owning_agent_id) fraction of trajectories that fired ≥ 1 milestone."""
-
-    def as_dict(self) -> dict:
-        return self.__dict__.copy()
+    hebbian_snapshot_interval: int = 10
+    """How often (in GRPO steps) to write a graph snapshot to
+    ``hebbian_snapshots.jsonl``. Set to 0 to disable snapshots entirely.
+    No-op when the Hebbian bridge is disabled regardless of this value.
+    Each snapshot is small (~1 KB for N=3 agents); 10 keeps the sidecar
+    ≪ the per-step metrics jsonl."""
 
 
 class GRPOTrainer:
@@ -191,6 +166,12 @@ class GRPOTrainer:
             )
         self.optimizer = torch.optim.Adam(trainable, lr=config.learning_rate)
         self.buffer = GroupBuffer(group_size=config.n_per_group)
+
+        # §A.2: time-to-first-milestone tracker. Pre-populate with every
+        # known milestone id as ``None`` so the sidecar JSON has a stable
+        # schema (T5 reads from it). Unknown milestones that fire during
+        # training get added on the fly.
+        self._first_fire: dict[str, int | None] = _init_first_fire()
 
     # ──── one update step ───────────────────────────────────────────
 
@@ -266,7 +247,14 @@ class GRPOTrainer:
         return metrics
 
     def _update(self, batch: list[ScoredTrajectory]) -> GRPOStepMetrics:
-        """Inner update on one minibatch (== full group in Stage 2)."""
+        """Inner update on one minibatch (== full group in Stage 2).
+
+        Gradients are accumulated **per-sample** (one backward call per
+        trajectory, scaled by 1/n) so peak activation memory is one
+        forward graph at a time, not the whole batch. Without this, a
+        2B LoRA model with G×n_trained_agents trajectories and long
+        Craftium prompts OOMs an 80 GiB A100.
+        """
         import torch
 
         self.optimizer.zero_grad()
@@ -274,19 +262,33 @@ class GRPOTrainer:
         # toggles it internally and restores, but be defensive.
         self.model.set_active_adapter(self.model.config.policy_adapter)
 
-        surrogates: list[torch.Tensor] = []
-        kls: list[torch.Tensor] = []
+        eps = self.config.clip_epsilon
+        valid = [s for s in batch
+                 if s.response_tokens is not None and s.response_logprobs is not None]
+        skipped = len(batch) - len(valid)
+        if skipped:
+            logger.warning(
+                "ScoredTrajectory missing tensors; skipping %d in loss", skipped)
+
+        n_valid = len(valid)
+        if n_valid == 0:
+            return GRPOStepMetrics(
+                step=self.step_idx, group_size=len(batch),
+                group_mean_reward=float(sum(s.reward for s in batch)
+                                        / max(len(batch), 1)),
+                group_reward_std=0.0, advantage_mean_abs=0.0,
+                surrogate_loss=0.0, kl_loss=0.0, total_loss=0.0,
+                fraction_clipped=0.0, grad_norm=0.0,
+                **_milestone_stats(batch),
+                **_hebbian_step_stats(self.hebbian_bridge),
+            )
+
+        sum_surrogate = 0.0
+        sum_kl = 0.0
         clipped_counts: list[int] = []
         total_counts: list[int] = []
-        eps = self.config.clip_epsilon
 
-        for s in batch:
-            if s.response_tokens is None or s.response_logprobs is None:
-                # Skip — a trajectory that lost its tensors can't contribute
-                # to gradient. Logged so we know it happened.
-                logger.warning("ScoredTrajectory missing tensors; skipping in loss")
-                continue
-
+        for s in valid:
             new_logprobs = self.model.logprobs(s.prompt_text, s.response_tokens)
             old_logprobs = s.response_logprobs.detach().to(new_logprobs.device)
             ratio = torch.exp(new_logprobs - old_logprobs)
@@ -295,7 +297,7 @@ class GRPOTrainer:
             unclipped = ratio * advantage
             clipped = torch.clamp(ratio, 1.0 - eps, 1.0 + eps) * advantage
             per_token_surrogate = torch.minimum(unclipped, clipped)
-            surrogates.append(per_token_surrogate.mean())
+            surrogate = per_token_surrogate.mean()
 
             # KL — reference logprobs computed under the reference adapter
             # inside compute_kl, which restores the policy adapter on exit.
@@ -303,28 +305,29 @@ class GRPOTrainer:
                 s.prompt_text, s.response_tokens,
                 policy_logprobs=new_logprobs,
             )
-            kls.append(kl_per_token.mean())
+            kl = kl_per_token.mean()
+
+            # Divide by n_valid so accumulated grads equal the original
+            # batch-mean loss exactly: Σ_i d/dθ((-surr_i + β·kl_i)/N)
+            #                         = d/dθ((-mean(surr) + β·mean(kl))).
+            sample_loss = (-surrogate + self.config.kl_coefficient * kl) / n_valid
+            sample_loss.backward()
+
+            sum_surrogate += float(surrogate.detach().item())
+            sum_kl += float(kl.detach().item())
 
             with torch.no_grad():
                 was_clipped = ((ratio < 1.0 - eps) | (ratio > 1.0 + eps)).sum().item()
                 clipped_counts.append(int(was_clipped))
                 total_counts.append(int(ratio.numel()))
 
-        if not surrogates:
-            # Nothing trainable in the batch — record a no-op step.
-            return GRPOStepMetrics(
-                step=self.step_idx, group_size=len(batch),
-                group_mean_reward=float(sum(s.reward for s in batch) / len(batch)),
-                group_reward_std=0.0, advantage_mean_abs=0.0,
-                surrogate_loss=0.0, kl_loss=0.0, total_loss=0.0,
-                fraction_clipped=0.0, grad_norm=0.0,
-                **_milestone_stats(batch),
-            )
+            # Drop refs to the graph so CUDA caching allocator can reclaim
+            # activations before the next sample's forward pass.
+            del new_logprobs, kl_per_token, ratio, surrogate, kl, sample_loss
 
-        surrogate_loss = -torch.stack(surrogates).mean()
-        kl_loss = torch.stack(kls).mean()
-        loss = surrogate_loss + self.config.kl_coefficient * kl_loss
-        loss.backward()
+        surrogate_loss = -sum_surrogate / n_valid
+        kl_loss = sum_kl / n_valid
+        total_loss = surrogate_loss + self.config.kl_coefficient * kl_loss
 
         grad_norm = torch.nn.utils.clip_grad_norm_(
             (p for p in self.model.model.parameters() if p.requires_grad),
@@ -340,13 +343,14 @@ class GRPOTrainer:
             group_mean_reward=float(sum(rewards) / len(rewards)),
             group_reward_std=float(_std(rewards)),
             advantage_mean_abs=float(sum(abs(a) for a in advantages) / len(advantages)),
-            surrogate_loss=float(surrogate_loss.item()),
-            kl_loss=float(kl_loss.item()),
-            total_loss=float(loss.item()),
+            surrogate_loss=float(surrogate_loss),
+            kl_loss=float(kl_loss),
+            total_loss=float(total_loss),
             fraction_clipped=(sum(clipped_counts) / sum(total_counts)
                               if sum(total_counts) > 0 else 0.0),
             grad_norm=float(grad_norm),
             **_milestone_stats(batch),
+            **_hebbian_step_stats(self.hebbian_bridge),
         )
 
     # ──── outer loop ────────────────────────────────────────────────
@@ -358,6 +362,10 @@ class GRPOTrainer:
         If ``metrics_path`` is set, every ``step()`` appends one JSON record
         to that file (one line per step). This is the data ``compare_modes.py``
         reads for the headline thesis figure.
+
+        After the loop, writes ``time_to_first.json`` next to ``metrics_path``
+        — a ``{milestone_id: first_step_index | None}`` map feeding the T5
+        sample-efficiency table.
         """
         import json as _json
 
@@ -366,11 +374,25 @@ class GRPOTrainer:
         if metrics_path is not None:
             metrics_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # §A.3: hebbian_snapshots.jsonl sidecar — written next to metrics_path
+        # when the bridge is active and the interval is positive.
+        hebbian_snap_path: Path | None = None
+        if (metrics_path is not None
+                and self.hebbian_bridge is not None
+                and self.config.hebbian_snapshot_interval > 0):
+            hebbian_snap_path = metrics_path.parent / "hebbian_snapshots.jsonl"
+
         for _ in range(n):
             metrics = self.step()
             if metrics_path is not None:
                 with metrics_path.open("a", encoding="utf-8") as f:
                     f.write(_json.dumps(metrics.as_dict()) + "\n")
+            _record_first_fires(self._first_fire, metrics)
+            if (hebbian_snap_path is not None
+                    and self.step_idx % self.config.hebbian_snapshot_interval == 0):
+                snap = self.hebbian_bridge.snapshot(self.step_idx)
+                with hebbian_snap_path.open("a", encoding="utf-8") as f:
+                    f.write(_json.dumps(snap) + "\n")
             if self.step_idx % self.config.log_interval == 0:
                 logger.info(
                     "grpo step=%d reward=%.2f±%.2f surrogate=%.4f kl=%.4f "
@@ -384,6 +406,9 @@ class GRPOTrainer:
             if (self.checkpoint_dir is not None
                     and self.step_idx % self.config.checkpoint_interval == 0):
                 self.save_checkpoint()
+
+        if metrics_path is not None:
+            _write_time_to_first(self._first_fire, metrics_path.parent)
 
     def save_checkpoint(self) -> Path | None:
         """Write the policy adapter to ``checkpoint_dir/step_<N>/``."""
@@ -407,61 +432,66 @@ def _std(values: list[float]) -> float:
     return math.sqrt(sum((v - m) ** 2 for v in values) / len(values))
 
 
-def _milestone_stats(batch: list[ScoredTrajectory]) -> dict:
-    """Compute milestone + borrowing + per-agent stats for the batch.
+def _init_first_fire() -> dict[str, int | None]:
+    """Pre-populate the time-to-first-milestone tracker with every known
+    milestone id (from ``MILESTONE_TRACK``) mapped to ``None``.
 
-    Used by both single-agent and multi-agent ``_update`` paths so the
-    JSONL stream has uniform schema regardless of mode. Per-agent
-    breakdowns key off ``owning_agent_id`` (which equals
-    ``trajectory.agent_id`` for own samples and may differ for Stage-4b
-    borrowed samples — the per-agent reward attributes to the
-    *borrower*, which is what we want for thesis-side per-agent curves).
+    Returns ``{}`` in dev environments where ``mindforge.agent_modules`` is
+    unavailable — the tracker then only records milestones that actually
+    fire during training, which keeps the trainer importable without the
+    legacy stack.
     """
-    if not batch:
-        return {
-            "milestone_fires": 0,
-            "milestone_fire_rate": 0.0,
-            "borrowed_fraction": 0.0,
-            "per_agent_reward": {},
-            "per_agent_milestone_rate": {},
-        }
+    try:
+        from mindforge.agent_modules.craftium_metric import MILESTONE_TRACK
+        return {mid: None for mid in MILESTONE_TRACK}
+    except ImportError:
+        return {}
 
-    total_fires = 0
-    trajectories_with_fire = 0
-    borrowed = 0
-    rewards_by_owner: dict[int, list[float]] = {}
-    fires_by_owner: dict[int, list[int]] = {}
 
-    for s in batch:
-        fires = len(s.trajectory.milestone_events)
-        total_fires += fires
-        if fires > 0:
-            trajectories_with_fire += 1
-        if s.origin_agent is not None:
-            borrowed += 1
+def _record_first_fires(
+    first_fire: dict[str, int | None],
+    metrics: GRPOStepMetrics,
+) -> None:
+    """Mutate ``first_fire`` in place: record the first GRPO step at which
+    each milestone fires.
 
-        owner = s.owning_agent_id
-        if owner is None:
-            owner = s.trajectory.agent_id   # single-agent path fallback
-        rewards_by_owner.setdefault(owner, []).append(s.reward)
-        fires_by_owner.setdefault(owner, []).append(1 if fires > 0 else 0)
+    Idempotent on a fixed ``first_fire`` snapshot — re-calling with the
+    same metrics doesn't overwrite an existing first-fire entry. A
+    milestone fires when its count in ``metrics.milestone_fires_by_id`` is
+    positive; entries with count 0 (or missing) leave ``first_fire``
+    untouched.
 
-    per_agent_reward = {
-        str(aid): sum(rs) / len(rs)
-        for aid, rs in rewards_by_owner.items()
-    }
-    per_agent_milestone_rate = {
-        str(aid): sum(fs) / len(fs)
-        for aid, fs in fires_by_owner.items()
-    }
+    Unknown milestones (not pre-populated by ``_init_first_fire``) are
+    added on the fly so the legacy ``MILESTONE_TRACK`` is not the hard
+    schema — if a Lua mod fires something new, we still record it.
+    """
+    for mid, count in metrics.milestone_fires_by_id.items():
+        if count <= 0:
+            continue
+        if first_fire.get(mid) is None:
+            first_fire[mid] = metrics.step
 
-    return {
-        "milestone_fires": total_fires,
-        "milestone_fire_rate": trajectories_with_fire / len(batch),
-        "borrowed_fraction": borrowed / len(batch),
-        "per_agent_reward": per_agent_reward,
-        "per_agent_milestone_rate": per_agent_milestone_rate,
-    }
+
+def _write_time_to_first(
+    first_fire: dict[str, int | None],
+    parent: Path,
+) -> Path | None:
+    """Write ``first_fire`` to ``parent/time_to_first.json``.
+
+    No-op (returns None) if ``first_fire`` is empty — happens in dev envs
+    where ``MILESTONE_TRACK`` couldn't be imported and no milestones fired.
+    Idempotent on a stable ``first_fire`` (sorted keys for diff-friendly
+    output).
+    """
+    import json as _json
+
+    if not first_fire:
+        return None
+    parent.mkdir(parents=True, exist_ok=True)
+    sidecar = parent / "time_to_first.json"
+    with sidecar.open("w", encoding="utf-8") as f:
+        _json.dump(first_fire, f, indent=2, sort_keys=True)
+    return sidecar
 
 
 def assemble_composed_multi_agent_batch(

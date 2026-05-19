@@ -96,6 +96,14 @@ class GRPOModelConfig:
     sampling being stochastic — a temperature of 0 would make GRPO's
     advantage signal degenerate."""
 
+    gradient_checkpointing: bool = True
+    """Trade compute for activation memory: recompute layer activations
+    during backward instead of caching them. ~25-30% slower backward,
+    but roughly halves peak activation memory — combined with per-sample
+    backward in ``_update``, brings a 2B LoRA model with G×n_agents
+    trajectories well under an 80 GiB A100. Disable for tiny smoke tests
+    where the slowdown matters more than the memory."""
+
 
 class GRPOLanguageModel:
     """A HuggingFace causal-LM with two PEFT LoRA adapters loaded
@@ -123,6 +131,19 @@ class GRPOLanguageModel:
 
         base = AutoModelForCausalLM.from_pretrained(config.base_model_name)
         base = base.to(config.device)
+
+        if config.gradient_checkpointing:
+            # Must be enabled on the base model *before* PEFT wrapping.
+            # ``use_cache`` is incompatible with checkpointing (the KV cache
+            # short-circuits the recomputation path); transformers warns
+            # otherwise. We're not using KV cache during training anyway.
+            base.config.use_cache = False
+            base.gradient_checkpointing_enable()
+            # With the base frozen and only LoRA params trainable, gradients
+            # would not flow back to LoRA without this hook (the frozen
+            # embedding output has ``requires_grad=False``, breaking the
+            # backward chain). See HF docs on PEFT + checkpointing.
+            base.enable_input_require_grads()
 
         lora_cfg = LoraConfig(
             r=config.lora_r,
@@ -190,6 +211,11 @@ class GRPOLanguageModel:
                 return_dict_in_generate=True,
                 output_scores=True,
                 pad_token_id=self.tokenizer.pad_token_id,
+                # Re-enable KV cache for generation specifically.
+                # ``__init__`` disables it globally to coexist with gradient
+                # checkpointing during training; without re-enabling here,
+                # generation would run O(N²) per token in the response length.
+                use_cache=True,
             )
         response_ids = out.sequences[0, prompt_len:]
         text = self.tokenizer.decode(response_ids, skip_special_tokens=True)

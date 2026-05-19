@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=E5-hebbian
+#SBATCH --job-name=M5-ippo-hebbian
 #SBATCH --partition=gpu-a100
 #SBATCH --time=10:00:00
 #SBATCH --ntasks=1
@@ -7,15 +7,16 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --mem-per-cpu=4G
 #SBATCH --account=education-eemcs-msc-dsait
-#SBATCH --output=/scratch/%u/WiredTogether/slurm_logs/E5-%A_%a.out
-#SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/E5-%A_%a.err
-# Submit: sbatch --array=0-2 E5_hebbian.sh
+#SBATCH --output=/scratch/%u/WiredTogether/slurm_logs/M5-%A_%a.out
+#SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/M5-%A_%a.err
+# Submit: sbatch --array=0-4 M5_ippo_hebbian.sh
 
 source "/scratch/acmarcu/WiredTogether/scripts/experiments/_common.sh"
 
-# H5: Hebbian social plasticity (core thesis contribution)
-# Compared against: E4 (ceiling baseline)
-# Model: Qwen3.5-2B  |  RQ: RQ1
+# M5 — IPPO + Hebbian. Mirror of M3 (MAPPO + Hebbian) but with
+# independent per-agent critics rather than the shared centralized one.
+# Compared against: M4 (IPPO baseline), M3 (MAPPO + Hebbian).
+# Model: Qwen3.5-2B  |  RQ: Hebbian × critic-flavour interaction
 
 export LLM_MODEL_PATH="$MODEL_2B"
 
@@ -25,10 +26,10 @@ python multi_agent_craftium.py \
     --max-steps 200 \
     --warmup-time 300 \
     --rl \
+    --rl-critic-mode independent \
     --rl-model-path "$MODEL_2B" \
     --rl-update-interval 64 \
     --rl-lr 3e-4 \
-    --rl-auto-token-opt \
     --hebbian \
     --hebbian-ltp 0.01 \
     --hebbian-ltd 0.005 \
@@ -37,7 +38,7 @@ python multi_agent_craftium.py \
     --hebbian-rho 0.3 \
     --hebbian-gamma 0.2 \
     --seed "$SEED" \
-    --experiment-id "E5" \
-    --tag "M3"
+    --experiment-id "M5" \
+    --tag "M5"
 
-echo "E5 done (seed=$SEED)"
+echo "M5 done (seed=$SEED)"

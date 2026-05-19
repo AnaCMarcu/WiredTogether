@@ -35,6 +35,12 @@ fi
 # our five-chambers milestones never fire (silent verifier-scores-zero bug).
 export CRAFTIUM_ENV_DIR="${CRAFTIUM_ENV_DIR:-${PROJECT_DIR}/src/marl_craftium/craftium-envs/five-chambers}"
 
+# Reduce CUDA allocator fragmentation. With per-sample backward in
+# ``_update``, activation memory churns hard between trajectories;
+# expandable segments let the allocator return memory between samples
+# instead of holding fragmented blocks.
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+
 if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <config-name.yaml> <experiment-id> [extra --set ...]" >&2
     echo "  e.g.: $0 grpo_hebbian_full.yaml G4" >&2

@@ -331,9 +331,14 @@ class MultiAgentSamplerConfig:
 class JointRollout:
     """One joint env rollout. Maps each trained ``agent_id`` to its
     ``(trajectory, tensors)`` pair. Scenery agents are not included.
+
+    ``coop_summary`` (§A.4) carries the ``CooperationMetric.episode_summary``
+    for this rollout when collection is enabled — drives the T4 cooperation
+    table (carry_imbalance, comm_efficacy, cooperation_score, etc.).
     """
 
     per_agent: dict[int, tuple[GRPOTrajectory, RolloutTensors]] = field(default_factory=dict)
+    coop_summary: dict | None = None
 
     @property
     def trained_agent_ids(self) -> list[int]:
@@ -370,6 +375,8 @@ class MultiAgentRolloutSampler:
         policy,            # rlvr.rollout_sampler.Policy — shared across agents
         config: MultiAgentSamplerConfig,
         hebbian_bridge=None,
+        episode_summary_path: "Path | str | None" = None,
+        collect_cooperation_metrics: bool = True,
     ):
         self.env = env
         self.policy = policy
@@ -377,6 +384,21 @@ class MultiAgentRolloutSampler:
         self.hebbian_bridge = hebbian_bridge
         self._buckets: dict[str, list[JointRollout]] = {}
         self._global_step = 0
+
+        # §A.4 cooperation-metric integration. When ``collect_cooperation_metrics``
+        # is True AND ``CooperationMetric`` is importable, the sampler builds
+        # one ``CooperationMetric`` per joint rollout and attaches the
+        # episode_summary to the returned ``JointRollout``.
+        # When ``episode_summary_path`` is set, those summaries are also
+        # appended to a ``episode_summary.jsonl`` sidecar — drives T4.
+        from pathlib import Path as _Path
+        self.collect_cooperation_metrics = collect_cooperation_metrics
+        self.episode_summary_path = (
+            _Path(episode_summary_path) if episode_summary_path else None
+        )
+        if self.episode_summary_path is not None:
+            self.episode_summary_path.parent.mkdir(parents=True, exist_ok=True)
+        self._cooperation_metric_cls = _load_cooperation_metric()
 
     def sample_joint_group(self) -> list[JointRollout]:
         for _ in range(self.config.max_resets_per_group):
@@ -411,6 +433,19 @@ class MultiAgentRolloutSampler:
         event_log: list[dict] = []
         milestone_events: list[dict] = []
 
+        # §A.4 cooperation tracker: observes every env step + milestone fire
+        # for this joint rollout. ``None`` if the class isn't importable
+        # (dev env) or the feature is disabled at sampler init.
+        coop = None
+        seen_milestones: set[tuple[int, str]] = set()
+        if self.collect_cooperation_metrics and self._cooperation_metric_cls is not None:
+            try:
+                coop = self._cooperation_metric_cls(
+                    agent_ids=list(range(self.config.num_agents)),
+                )
+            except Exception:  # pragma: no cover — defensive
+                coop = None
+
         termination_reason = "horizon"
 
         for _t in range(self.config.horizon):
@@ -435,6 +470,20 @@ class MultiAgentRolloutSampler:
             new_milestones, new_events = _aggregate_env_events(info_by_agent, trained)
             milestone_events.extend(new_milestones)
             event_log.extend(new_events)
+
+            # §A.4: feed CooperationMetric one step's worth of data. The
+            # contract is best-effort — failures in the metric must not
+            # break the rollout.
+            if coop is not None:
+                try:
+                    _coop_observe(
+                        coop, self._global_step,
+                        actions_this_step, info_by_agent,
+                        rewards_by_agent, new_milestones, seen_milestones,
+                        n_agents=self.config.num_agents,
+                    )
+                except Exception:  # pragma: no cover — defensive
+                    pass
 
             # Stage 4a: feed the Hebbian graph one step of co-activity +
             # reward + communication data (every agent, not just trained).
@@ -493,7 +542,27 @@ class MultiAgentRolloutSampler:
             )
             per_agent[aid] = (traj, tensors)
 
-        return JointRollout(per_agent=per_agent)
+        # §A.4: build CooperationMetric.episode_summary and optionally
+        # write it to the episode_summary.jsonl sidecar. Each line includes
+        # the rollout's start/end steps + chamber so multi-rollout files
+        # are partitionable per-rollout downstream.
+        coop_summary: dict | None = None
+        if coop is not None:
+            try:
+                coop_summary = coop.episode_summary(final_step=end_step)
+            except Exception:  # pragma: no cover — defensive
+                coop_summary = None
+            if coop_summary is not None and self.episode_summary_path is not None:
+                _append_coop_summary(
+                    self.episode_summary_path,
+                    coop_summary,
+                    start_step=start_step,
+                    end_step=end_step,
+                    chamber=str(starting_info.get(trained[0], {}).get("chamber", "")),
+                    termination_reason=termination_reason,
+                )
+
+        return JointRollout(per_agent=per_agent, coop_summary=coop_summary)
 
     def _classify_joint_termination(
         self,
@@ -539,6 +608,147 @@ def _position_prompt_id(chamber: str, position, bucket: float) -> str:
     bz = round(z / bucket) * bucket
     chamber_token = chamber or "unknown"
     return f"{chamber_token}:x{bx:.0f}_z{bz:.0f}"
+
+
+def _load_cooperation_metric():
+    """Return the ``CooperationMetric`` class lazily.
+
+    The legacy module isn't importable in some minimal dev environments
+    (it pulls in numpy at module load, which IS available, but the import
+    path is still wrapped to keep this module self-contained). Returns
+    ``None`` on ImportError — cooperation tracking is then silently skipped
+    and ``JointRollout.coop_summary`` stays ``None``.
+    """
+    try:
+        from mindforge.env.cooperation_metric import CooperationMetric
+        return CooperationMetric
+    except ImportError:
+        return None
+
+
+def _coop_observe(
+    coop,
+    step: int,
+    actions_this_step: dict[int, dict],
+    info_by_agent: dict,
+    rewards_by_agent: dict[int, float],
+    new_milestones: list[dict],
+    seen_milestones: set,
+    n_agents: int,
+) -> None:
+    """Forward one env step into ``CooperationMetric.observe_step`` and
+    flush any new milestones via ``observe_milestone``.
+
+    The CooperationMetric was designed against the legacy stack's schema
+    (string action names, free-text messages, info dict with damage_events
+    etc.). Here we adapt the GRPO sampler's per-agent dicts:
+
+      * ``actions[aid]`` becomes the action *name* string (extracted from
+        the parsed action_dict) — matches CooperationMetric's expectation
+        for ``actions: {aid: str}``.
+      * ``messages[aid]`` is empty unless the action emitted a non-None
+        ``communication_target``, in which case the ``thoughts`` field is
+        passed as the message content. CooperationMetric filters messages
+        by ``len(strip()) >= 5`` so short / empty thoughts are ignored.
+      * ``positions[aid]`` is read from ``info_by_agent[aid]["position"]``
+        (the env populates it). None when missing.
+      * ``infos`` is an empty dict — the env-specific damage/routing
+        signals aren't surfaced through the GRPO sampler, so cooperation
+        tracking falls back to the position/action-only metrics. T4's
+        carry-imbalance and credit-Gini may be 0 for GRPO runs as a
+        result; legacy MAPPO runs (with richer infos) populate them fully.
+    """
+    positions = {
+        aid: info_by_agent.get(aid, {}).get("position")
+        for aid in range(n_agents)
+    }
+    action_names: dict[int, str] = {}
+    messages: dict[int, str] = {}
+    for aid, action_dict in actions_this_step.items():
+        if not isinstance(action_dict, dict):
+            continue
+        name = action_dict.get("action")
+        if isinstance(name, str):
+            action_names[aid] = name
+        target = action_dict.get("communication_target")
+        if target is not None and not isinstance(target, bool):
+            messages[aid] = str(action_dict.get("thoughts") or "")
+    task_rewards = {
+        aid: float(rewards_by_agent.get(aid, 0.0))
+        for aid in range(n_agents)
+    }
+    coop.observe_step(
+        step=step,
+        positions=positions,
+        actions=action_names,
+        messages=messages,
+        task_rewards=task_rewards,
+        infos={},
+    )
+    for me in new_milestones:
+        mid = me.get("milestone_id")
+        if not isinstance(mid, str):
+            continue
+        ev_step = int(me.get("step", step))
+        key = (ev_step, mid)
+        if key in seen_milestones:
+            continue
+        seen_milestones.add(key)
+        contributor = me.get("agent_id")
+        contributors = ([f"agent_{int(contributor)}"]
+                        if isinstance(contributor, int) else [])
+        coop.observe_milestone(step=ev_step, milestone_id=mid,
+                                contributors=contributors)
+
+
+def _append_coop_summary(
+    path,
+    summary: dict,
+    *,
+    start_step: int,
+    end_step: int,
+    chamber: str,
+    termination_reason: str,
+) -> None:
+    """Append one cooperation summary to ``path``, JSONL-encoded.
+
+    The leading metadata fields (``rollout_start_step``, ``rollout_end_step``,
+    ``chamber``, ``termination_reason``) let downstream code partition
+    multi-rollout summary files per rollout without needing extra indexes.
+
+    Numpy-typed entries from CooperationMetric are coerced to JSON-safe
+    Python types via ``_jsonable_info`` semantics inlined here.
+    """
+    import json as _json
+
+    record = {
+        "rollout_start_step": int(start_step),
+        "rollout_end_step": int(end_step),
+        "chamber": chamber,
+        "termination_reason": termination_reason,
+    }
+    for k, v in summary.items():
+        record[k] = _coerce_coop_value(v)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(_json.dumps(record) + "\n")
+
+
+def _coerce_coop_value(value):
+    """Coerce a CooperationMetric value (may contain numpy types / dicts of
+    them) to a JSON-safe form.
+    """
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    if hasattr(value, "tolist") and callable(value.tolist):
+        try:
+            return value.tolist()
+        except Exception:  # pragma: no cover
+            pass
+    if isinstance(value, dict):
+        return {str(k): _coerce_coop_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_coerce_coop_value(v) for v in value]
+    return str(value)
 
 
 def _aggregate_env_events(

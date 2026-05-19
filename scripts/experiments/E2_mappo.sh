@@ -29,6 +29,7 @@ python multi_agent_craftium.py \
     --rl-update-interval 64 \
     --rl-lr 3e-4 \
     --seed "$SEED" \
-    --experiment-id "E2"
+    --experiment-id "E2" \
+    --tag "M2"
 
 echo "E2 done (seed=$SEED)"

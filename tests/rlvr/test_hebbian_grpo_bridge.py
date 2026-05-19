@@ -204,6 +204,70 @@ def test_sampler_calls_bridge_per_step():
     assert all(len(call["step_rewards"]) == 3 for call in g.update_calls)
 
 
+def test_snapshot_disabled_bridge_returns_short_record():
+    bridge = HebbianGRPOBridge(_FakeGraph(enabled=False))
+    snap = bridge.snapshot(step=42)
+    assert snap == {"step": 42, "enabled": False}
+
+
+def test_snapshot_returns_full_schema():
+    g = _FakeGraph(enabled=True)
+    # Patch get_graph_metrics with a realistic-looking result.
+    g.get_graph_metrics = lambda: {
+        "mean_bond_strength": 0.42,
+        "sparsity": 0.71,
+        "modularity_proxy": 0.18,
+        "top_3_pairs": [{"i": 0, "j": 1, "w": 0.78}],
+        "per_agent_out_strength": np.array([1.2, 1.5, 0.9]),
+        "W": np.array([[0.0, 0.78, 0.45],
+                       [0.31, 0.0, 0.6],
+                       [0.1, 0.22, 0.0]]),
+        "ltd_heatmap": np.zeros((3, 3)),
+    }
+    bridge = HebbianGRPOBridge(g)
+    snap = bridge.snapshot(step=7)
+    assert snap["step"] == 7
+    assert snap["enabled"] is True
+    assert snap["mean_bond_strength"] == 0.42
+    assert snap["sparsity"] == 0.71
+    assert snap["modularity_proxy"] == 0.18
+    # Numpy arrays must be coerced to lists.
+    assert isinstance(snap["W"], list)
+    assert isinstance(snap["W"][0], list)
+    assert snap["per_agent_out_strength"] == [1.2, 1.5, 0.9]
+
+
+def test_snapshot_swallows_get_graph_metrics_errors():
+    g = _FakeGraph(enabled=True)
+    g.get_graph_metrics = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+    bridge = HebbianGRPOBridge(g)
+    snap = bridge.snapshot(step=3)
+    assert snap["step"] == 3
+    assert snap["enabled"] is True
+    assert "error" in snap
+
+
+def test_snapshot_serialises_to_json_cleanly():
+    """Round-trip through json — guards against hidden non-JSON-safe types."""
+    import json
+    g = _FakeGraph(enabled=True)
+    g.get_graph_metrics = lambda: {
+        "mean_bond_strength": 0.5,
+        "sparsity": 0.5,
+        "modularity_proxy": 0.1,
+        "top_3_pairs": [{"i": 0, "j": 1, "w": 0.5}],
+        "per_agent_out_strength": np.array([1.0]),
+        "W": np.array([[0.0]]),
+        "ltd_heatmap": np.array([[0.0]]),
+    }
+    bridge = HebbianGRPOBridge(g)
+    snap = bridge.snapshot(step=1)
+    text = json.dumps(snap)
+    parsed = json.loads(text)
+    assert parsed["mean_bond_strength"] == 0.5
+    assert parsed["W"] == [[0.0]]
+
+
 def test_sampler_skips_bridge_when_disabled():
     """A disabled graph means observe_step is a no-op; the sampler should
     still run without crashing."""

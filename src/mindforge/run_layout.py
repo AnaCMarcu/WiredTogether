@@ -91,3 +91,35 @@ class RunPaths:
         rp.checkpoints_dir.mkdir(exist_ok=True)
         rp.plots_dir.mkdir(exist_ok=True)
         return rp
+
+    @classmethod
+    def create_tagged(
+        cls,
+        *,
+        tag: str,
+        seed: int,
+        root: str | os.PathLike | None = None,
+    ) -> "RunPaths":
+        """Tagged-and-seeded layout matching the GRPO pattern.
+
+        Produces ``runs/legacy/<tag>/seed_<seed>/`` (or ``<root>/<tag>/seed_<N>/``
+        when ``root`` is given). The two-level structure makes
+        ``build_results.py`` + the schema bridge auto-discover legacy
+        runs with the same globbing logic used for GRPO
+        (``<root>/<tag>/seed_*``).
+
+        Idempotent: calling twice with the same ``(tag, seed)`` recreates
+        the same path with the directory skeleton already in place.
+
+        ``run_id`` is set to ``"<tag>/seed_<seed>"`` so downstream code
+        that logs the run id sees the canonical tag/seed identity.
+        """
+        base = Path(root) if root is not None else Path("runs") / "legacy"
+        run_root = base / tag / f"seed_{seed}"
+        run_id = f"{tag}/seed_{seed}"
+        rp = cls(root=run_root, run_id=run_id)
+        run_root.mkdir(parents=True, exist_ok=True)
+        rp.episodes_dir.mkdir(exist_ok=True)
+        rp.checkpoints_dir.mkdir(exist_ok=True)
+        rp.plots_dir.mkdir(exist_ok=True)
+        return rp

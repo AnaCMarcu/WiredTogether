@@ -17,6 +17,7 @@ import random
 import sys
 import time
 import logging
+from pathlib import Path
 
 sys.setrecursionlimit(10000)
 from datetime import datetime
@@ -76,9 +77,12 @@ def parse_args():
                              "cached success/critique are reused, saving 1 LLM call per skipped step.")
     parser.add_argument("--no-gif", action="store_true",
                         help="Disable GIF saving")
-    parser.add_argument("--gif-dir", type=str, default="gifs",
-                        help="Directory to save GIFs (default: gifs/ relative to cwd). "
-                             "On HPC set to an absolute path under /scratch.")
+    parser.add_argument("--gif-dir", type=str, default="auto",
+                        help="Directory to save GIFs. Default 'auto' resolves "
+                             "to <run_dir>/gifs/ so each run's media stays "
+                             "bundled with its other artifacts. Pass an "
+                             "explicit path (e.g. /scratch/$USER/gifs) to "
+                             "override.")
     parser.add_argument("--gif-interval", type=int, default=100,
                         help="Save a checkpoint GIF every N steps (default 100). 0 = only save at episode end.")
     parser.add_argument("--warmup-time", type=int, default=60,
@@ -144,9 +148,26 @@ def parse_args():
                         help="Initial bond weight W_0 (default 0.1 = warm start)")
     parser.add_argument("--hebbian-no-comm-bond", action="store_true",
                         help="Set δ_comm=0 (spatial-only, for RQ4 ablation)")
+    # ── Phase B+ thesis comparison: prompt-side reward propagation + interpretability ──
+    parser.add_argument("--reward-propagation", action="store_true",
+                        help="Inject per-teammate reward-propagation deltas "
+                             "into the LLM action-selection prompt (the L2 "
+                             "variant). Requires --hebbian.")
+    parser.add_argument("--interpretability", action="store_true",
+                        help="Emit interpretability.jsonl with per-step "
+                             "(agent, bond_row, action, comm_target, "
+                             "propagated_deltas) records. Auto-enabled when "
+                             "--hebbian is on; off otherwise.")
     # ── Experiment tracking ──
     parser.add_argument("--experiment-id", type=str, default=None,
                         help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
+    parser.add_argument("--tag", type=str, default=None,
+                        help="Phase B++ tagged-run layout: when set, output "
+                             "lands at runs/legacy/<tag>/seed_<seed>/ instead "
+                             "of the default runs/<timestamp>_<experiment_id>/. "
+                             "Lines up with the GRPO runs/grpo/<tag>/seed_<N>/ "
+                             "pattern so build_results.py and the legacy "
+                             "schema bridge discover both stacks uniformly.")
     parser.add_argument("--log-interval", type=int, default=10,
                         help="Print a reward/metric summary every N steps (default 10)")
     # ── Team composition (five-chambers: all agents are homogeneous) ──
@@ -319,6 +340,30 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
     return agents
 
 
+def _resume_run_paths(run_id: str) -> RunPaths:
+    """Reconstruct a ``RunPaths`` from a saved ``run_id`` regardless of layout.
+
+    Two cases:
+      * ``"<tag>/seed_<N>"`` (Phase B++ tagged layout) → lives under
+        ``runs/legacy/<tag>/seed_<N>/``.
+      * Anything else (legacy timestamp-based id) → lives under
+        ``runs/<run_id>/``.
+
+    Detected by the presence of ``/seed_`` in the run_id, which can only
+    come from ``RunPaths.create_tagged``. The dataclass stores both
+    forms identically — only the on-disk root differs.
+    """
+    if "/seed_" in run_id and run_id.count("/") == 1:
+        tag, seed_part = run_id.split("/", 1)
+        try:
+            seed = int(seed_part.removeprefix("seed_"))
+        except ValueError:
+            # Malformed id — fall back to the untagged factory.
+            return RunPaths.create(run_id=run_id, root="runs")
+        return RunPaths.create_tagged(tag=tag, seed=seed)
+    return RunPaths.create(run_id=run_id, root="runs")
+
+
 # ===========================
 # Agent action loop
 # ===========================
@@ -333,6 +378,7 @@ async def agent_do_action(
     error=None,
     error_count=0,
     social_bonds=None,
+    propagation_summary=None,
     position_text=None,
     player_status_text=None,
     current_chamber=None,
@@ -370,6 +416,7 @@ async def agent_do_action(
         picked_object=environment.pickedup_object(agentId=agent_id),
         reward_text=reward_text,
         social_bonds=social_bonds,
+        propagation_summary=propagation_summary,
         position_text=position_text,
         player_status_text=player_status_text,
         current_chamber=current_chamber,
@@ -390,6 +437,7 @@ async def agent_do_action(
                 instruction_prompt, environment,
                 error=str(e), error_count=error_count + 1,
                 social_bonds=social_bonds,
+                propagation_summary=propagation_summary,
                 position_text=position_text,
                 player_status_text=player_status_text,
                 current_chamber=current_chamber,
@@ -631,10 +679,11 @@ async def run(args):
     communication = not args.no_communication
     sleep_time = args.sleep_time
     save_gif = not args.no_gif
-    gif_dir = args.gif_dir
+    # Gif-dir resolution is deferred until after run_paths is built so the
+    # ``auto`` sentinel can land under <run_dir>/gifs/. Concrete value
+    # assigned below.
+    gif_dir: str | None = None
     gif_interval = args.gif_interval
-    if save_gif:
-        os.makedirs(gif_dir, exist_ok=True)
 
     # ── Reproducibility: seed all RNG sources ──
     # LLM sampling (temperature > 0) is inherently stochastic and not seeded —
@@ -651,17 +700,38 @@ async def run(args):
         torch.backends.cudnn.benchmark = False
         print(f"Seeded RNG: seed={seed}")
 
-    # ── Run ID: short unique tag shared by all log/gif/metric filenames ──
-    from uuid import uuid4
-    _ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-    _exp = args.experiment_id or ""
-    run_id = f"{_exp+'_' if _exp else ''}{_ts}_{uuid4().hex[:6]}"
-    print(f"[RUN ID] {run_id}")
+    # ── Run ID + RunPaths construction ──
+    # Two modes:
+    #   * ``--tag <id>`` (Phase B++): runs/legacy/<tag>/seed_<seed>/, matching
+    #     the GRPO ``runs/grpo/<tag>/seed_<N>/`` pattern so build_results.py
+    #     and the legacy schema bridge discover both stacks uniformly.
+    #   * untagged (legacy default): runs/<timestamp>_<experiment_id>_<uuid>/
+    #     — backwards-compatible with every existing run script.
+    if args.tag is not None:
+        seed_for_path = args.seed if args.seed is not None else 0
+        run_paths = RunPaths.create_tagged(
+            tag=args.tag, seed=seed_for_path,
+        )
+        run_id = run_paths.run_id
+        print(f"[RUN ID] {run_id} (tagged)")
+    else:
+        from uuid import uuid4
+        _ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        _exp = args.experiment_id or ""
+        run_id = f"{_exp+'_' if _exp else ''}{_ts}_{uuid4().hex[:6]}"
+        print(f"[RUN ID] {run_id}")
+        run_paths = RunPaths.create(run_id=run_id, root="runs")
 
-    # ── Single root for all run artifacts: runs/<run_id>/ ──
-    # Replaces three previously-separate roots (run_metrics/, checkpoints/, logs/).
-    run_paths = RunPaths.create(run_id=run_id, root="runs")
-    os.makedirs("gifs", exist_ok=True)
+    # ── Phase B++ §3: resolve gif directory ──
+    # ``auto`` → <run_dir>/gifs/ (run-scoped, matches GRPO layout).
+    # Explicit path → use as-is (preserves the /scratch override pattern
+    # for HPC quota management).
+    if args.gif_dir == "auto":
+        gif_dir = str(run_paths.root / "gifs")
+    else:
+        gif_dir = args.gif_dir
+    if save_gif:
+        os.makedirs(gif_dir, exist_ok=True)
 
     event_logger = logging.getLogger(EVENT_LOGGER_NAME)
     event_logger.disabled = True
@@ -900,9 +970,11 @@ async def run(args):
         run_id = restored["run_id"]
         metric = restored["metric"]
         # Patch rl_config so adapters are loaded from the original run's
-        # rl_live directory under runs/<orig_run_id>/.
+        # rl_live directory under runs/<orig_run_id>/. For Phase B++
+        # tagged runs the original run_id has the form ``<tag>/seed_<N>``
+        # and lives under ``runs/legacy/``; the helper auto-detects.
         rl_config.lora_save_dir = str(
-            RunPaths.create(run_id=run_id, root="runs").root / "rl_live"
+            _resume_run_paths(run_id).root / "rl_live"
         )
         print(f"[CKPT] Resuming from episode {resume_episode} step {resume_step}")
 
@@ -995,6 +1067,24 @@ async def run(args):
         # RLVR/GRPO Stage-1 passive observer — no-op unless RLVR_PASSIVE_LOG=1.
         # See docs/rlvr_grpo_plan.md §5.1 and src/rlvr/passive_logger.py.
         _rlvr_attach_if_enabled(ep_logger, metric.target_folder)
+        # Phase B+ reward-propagation cache: per-teammate contributions from
+        # the previous step. Surfaced in this step's prompt so the LLM sees
+        # ``+2.5 from agent_1 (m17_switch_pressed)`` on the step right after
+        # the milestone fires. First step has empty cache → empty prompt line.
+        _last_propagation_contribs: dict[int, dict[int, float]] = {
+            i: {} for i in range(num_agents)
+        }
+        _last_milestone_sources: dict[int, str] = {}
+        # Phase B+ §2: interpretability sidecar. Default ON whenever
+        # Hebbian is active (cheap, ~250 B per agent per step); also
+        # honour the explicit --interpretability flag for non-Hebbian runs.
+        _interpretability_enabled = bool(
+            args.interpretability or args.hebbian
+        )
+        _interp_path = (
+            Path(metric.target_folder) / "interpretability.jsonl"
+            if _interpretability_enabled else None
+        )
         # Track chambers each agent has been in during this episode. Surfaced
         # in the prompt as a hard ground-truth list so the LLM can't claim
         # to be in a chamber it has never visited (frequent hallucination).
@@ -1159,6 +1249,24 @@ async def run(args):
                         parts.append(f"agent_{j} ({role_j}): {raw_w:.2f}")
                     _bond_strings[i] = "Social bonds: " + ", ".join(parts)
 
+            # ── Phase B+ §1: per-teammate reward-propagation prompt lines ──
+            # Uses the contributions cached from the *previous* step (since
+            # diffuse_rewards runs after actions). First step → empty cache →
+            # empty strings. The role label included in _bond_strings is
+            # reused here so the LLM sees consistent teammate labelling.
+            _propagation_strings: dict[int, str] = {}
+            if args.reward_propagation and hebbian_config.enabled:
+                from rlvr.reward_propagation import format_propagation_prompt
+                _role_names = {
+                    j: ROLE_NAMES[j % len(ROLE_NAMES)] for j in range(num_agents)
+                }
+                for i in range(num_agents):
+                    _propagation_strings[i] = format_propagation_prompt(
+                        contributions=_last_propagation_contribs.get(i, {}),
+                        source_events=_last_milestone_sources,
+                        role_names=_role_names,
+                    )
+
             # Update each agent's visited-chambers set BEFORE the action loop,
             # so the prompt the LLM sees this step reflects its full history
             # (current chamber included).
@@ -1262,6 +1370,7 @@ async def run(args):
                     _phase_prefix + instruction_prompt, environment,
                     error_count=error_count,
                     social_bonds=_bond_strings.get(agent_id),
+                    propagation_summary=_propagation_strings.get(agent_id, ""),
                     position_text=environment.get_position_text(agent_id),
                     player_status_text=environment.get_player_status_text(agent_id),
                     current_chamber=environment.get_chamber(agent_id),
@@ -1275,6 +1384,36 @@ async def run(args):
                 for _i in range(num_agents):
                     step_rewards_raw[_i] += environment.get_step_reward(_i)
                 step_contents[agent_id] = content
+
+                # ── Phase B+ §2: interpretability sidecar emission ──
+                # One record per (env step, agent) captures bond_row,
+                # chosen action, comm target, thoughts, propagated deltas.
+                # Default ON whenever Hebbian is enabled (the cheap part of
+                # the run); pass --interpretability to force on for
+                # non-Hebbian runs.
+                if _interpretability_enabled and _interp_path is not None:
+                    import json as _interp_json
+                    from rlvr.reward_propagation import (
+                        build_interpretability_record,
+                    )
+                    _bond_row_i = []
+                    if hebbian_config.enabled:
+                        # Read full W row (raw weights, not normalised) so the
+                        # JSON reflects what the prompt showed via _bond_strings.
+                        _bond_row_i = [
+                            float(hebbian_graph.get_weight(agent_id, j))
+                            for j in range(num_agents)
+                        ]
+                    _interp_record = build_interpretability_record(
+                        step=step, agent_id=agent_id,
+                        chamber=environment.get_chamber(agent_id),
+                        bond_row=_bond_row_i,
+                        parsed_action=content,
+                        propagated_contribs=_last_propagation_contribs.get(agent_id),
+                        propagated_sources=_last_milestone_sources,
+                    )
+                    with _interp_path.open("a", encoding="utf-8") as _f:
+                        _f.write(_interp_json.dumps(_interp_record) + "\n")
 
                 # Attach the PRE-step V_global(s_t) to the transition that
                 # select_action just opened. This is the fix for the
@@ -1571,6 +1710,28 @@ async def run(args):
                 comm_events=comm_events if communication else None,
             )
             diffused_rewards = hebbian_graph.diffuse_rewards(step_rewards_raw)
+
+            # ── Phase B+ §1: cache per-teammate contributions for NEXT step's
+            #    prompt. We compute the decomposition only when the prompt-side
+            #    feature is on (avoid the overhead in non-L2 runs).
+            if args.reward_propagation and hebbian_config.enabled:
+                from rlvr.reward_propagation import (
+                    attribute_source_events,
+                    per_teammate_contributions,
+                )
+                _coactivity = hebbian_graph._last_coactivity
+                if _coactivity is not None:
+                    for i in range(num_agents):
+                        _last_propagation_contribs[i] = per_teammate_contributions(
+                            agent_id=i,
+                            raw_rewards=list(step_rewards_raw),
+                            w_bar_row=hebbian_graph.get_normalized_weights(i),
+                            coactivity_row=_coactivity[i],
+                            gamma=hebbian_config.reward_diffusion_gamma,
+                        )
+                _last_milestone_sources = attribute_source_events(
+                    _milestone_events_this_step,
+                )
 
             # ── Reward decomposition: split each agent's diffused reward into
             #    its source streams. Recoverable from values already in scope:
@@ -1967,4 +2128,14 @@ if __name__ == "__main__":
     import functools
     print = functools.partial(print, flush=True)
     args = parse_args()
+    # Phase B+ §1: validate flag pairing — reward propagation needs an
+    # active Hebbian graph for the per-teammate decomposition to mean
+    # anything.
+    if args.reward_propagation and not args.hebbian:
+        parser_msg = (
+            "--reward-propagation requires --hebbian to be set "
+            "(the propagation lines decompose the diffused-reward signal "
+            "produced by the Hebbian graph)"
+        )
+        raise SystemExit(parser_msg)
     asyncio.run(run(args))

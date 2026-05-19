@@ -90,6 +90,7 @@ class CustomAgent(BaseChatAgent):
         picked_object=None,
         reward_text=None,
         social_bonds=None,
+        propagation_summary=None,
         position_text=None,
         player_status_text=None,
         current_chamber=None,
@@ -284,6 +285,11 @@ class CustomAgent(BaseChatAgent):
             **belief_parts,
             "reward_text": reward_text or "N/A",
             "social_bonds": social_bonds or "N/A",
+            # Phase B+ §1 reward propagation. Default to empty string so the
+            # ``{propagation_summary}`` placeholder in instruction_prompt_p2.txt
+            # collapses to a blank line for runs without --reward-propagation
+            # (every existing run pre-Phase-B+).
+            "propagation_summary": propagation_summary or "",
             "position_text": position_text or "Unknown",
             "player_status_text": player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
             "current_chamber": current_chamber or "Unknown",

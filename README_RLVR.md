@@ -186,21 +186,274 @@ Produces in `reports/grpo_ablation/`:
 - `final_milestone_rate_bar.png` — bar chart of end-of-training fire rate
   per run (the headline thesis figure)
 
-### MAPPO baseline integration
+## Thesis-grade results pipeline (n=5+ seeds)
 
-The legacy stack writes metrics in a different schema (per-episode JSON
-files, plot images). Bridging this into `compare_modes.py` is its own
-work item. For the thesis figure, two pragmatic options:
+For the full thesis tables, use `scripts/build_results.py` instead of the
+older `compare_modes.py`. The new pipeline reads the multi-seed run tree,
+aggregates with bootstrap CIs + Wilcoxon signed-rank, renders the five
+canonical tables in both markdown and LaTeX, and produces the headline
+2-panel figure.
 
-1. **Run MAPPO eval separately**, plot end-of-training milestone-fire
-   rate from `craftium_metric` output, overlay it as a horizontal line
-   on the headline bar chart in postprocessing.
-2. **Wrap the legacy eval loop** in a thin script that emits the same
-   schema as `grpo_metrics.jsonl`, then feed both into
-   `compare_modes.py` uniformly. See `docs/rlvr_grpo_plan.md` §10 for
-   the expected schema bridge.
+### Required sidecars (per seed)
 
-Both are unfinished — they're deferred to the HPC validation phase.
+Every GRPO run writes four artifacts next to its `grpo_metrics.jsonl`:
+
+| File | Source | Drives |
+|---|---|---|
+| `grpo_metrics.jsonl` | `GRPOTrainer.train(metrics_path=…)` per step | T1 (headline), T2 (per-chamber), learning curves |
+| `time_to_first.json` | `GRPOTrainer._first_fire` dumped at end of `train()` | T5 (sample efficiency) |
+| `hebbian_snapshots.jsonl` | `HebbianGRPOBridge.snapshot()` every K=10 steps | bond-strength evolution plot, T3 |
+| `episode_summary.jsonl` | `CooperationMetric.episode_summary()` per joint rollout | T4 (coop_score / comm_efficacy / carry_imbalance) |
+
+These four sidecars cover all the data the thesis tables read. They land
+automatically when training runs through the entry point — no extra wiring
+needed.
+
+### Build the report
+
+```bash
+python scripts/build_results.py \
+    --grpo runs/grpo \
+    --out  results \
+    --ablations G2,G2b,G3a,G3b,G4 \
+    --baseline G2 \
+    --bootstrap 10000 \
+    --window 50 \
+    --rolling-window 20
+```
+
+Output tree:
+```
+results/
+├── per_ablation/
+│   └── <tag>/summary.json          AblationSummary as JSON
+├── cross_ablation/
+│   ├── comparisons.json            list[PairwiseComparison]
+│   └── plots/
+│       ├── headline.png            2-panel: learning curves + final-rate bars
+│       ├── learning_curves.png     all variants on one axis, median±p10-p90
+│       ├── per_chamber_bars.png    grouped bars, x=chamber, color=method
+│       ├── hebbian_axis_decomposition.png
+│       └── bond_strength_evolution.png (only when ≥1 ablation has the sidecar)
+└── tables/
+    ├── T1_headline.{md,tex}        method × {fire rate, group reward}
+    ├── T2_per_chamber.{md,tex}     method × {ch1..ch5, comm}
+    ├── T3_hebbian_axis.{md,tex}    paired-bootstrap delta vs baseline
+    ├── T4_coop_comm.{md,tex}       method × {coop_score, comm_efficacy, …}
+    └── T5_sample_efficiency.{md,tex}  milestone × method, Kaplan-Meier censored
+```
+
+### Statistical conventions
+
+- **Central tendency**: median + 10th/90th percentile across seeds
+  (Agarwal et al., NeurIPS 2021).
+- **Confidence intervals**: bootstrap 10k-resample percentile CI on every
+  aggregated number; tables show `median [p10, p90]` for compactness.
+- **Pairwise significance**: paired bootstrap of seed-aligned deltas (primary)
+  + Wilcoxon signed-rank exact p-values (sanity check, **n≥5 only**).
+  Stars: `*` p<0.05, `**` p<0.01, `***` p<0.001. When n<5, Wilcoxon
+  reports `n.a.` and stars come from bootstrap-CI-excludes-zero alone.
+- **Right-censoring**: in T5, if fewer than 50% of seeds reach a milestone,
+  the median step is reported as `—` (no imputation).
+- **Honest caveat**: every table caption notes the seed count. With n=3
+  effects below ~5% absolute are unreliable; n=5+ tightens this.
+
+### LaTeX integration
+
+The `.tex` outputs use `booktabs` formatting (`\toprule` / `\midrule` /
+`\bottomrule`) and are wrapped in a `table` float with caption + label.
+Inputtable directly into the thesis:
+
+```latex
+\input{results/tables/T1_headline.tex}
+\input{results/tables/T2_per_chamber.tex}
+\input{results/tables/T4_coop_comm.tex}
+\input{results/tables/T5_sample_efficiency.tex}
+```
+
+## Phase B+: cross-stack thesis comparison (11 methods)
+
+The Phase A pipeline above handles **GRPO ablations only**. Phase B+
+extends it to the full thesis grid — 11 methods covering GRPO, the
+legacy RL stack (MAPPO / IPPO ± Hebbian), and LLM-as-policy variants
+including reward propagation. New code lives in `src/rlvr/legacy_bridge.py`
++ `src/rlvr/reward_propagation.py`; new CLI flags are
+`--reward-propagation` + `--interpretability` on the legacy entry point.
+
+### Ablation grid (11 tags)
+
+| Tag | Stack | Training | Hebbian | Heb in prompt | Reward prop in prompt |
+|---|---|---|---|---|---|
+| M1 | legacy | none | no | no | no |
+| L1 | legacy | none | yes | yes | no |
+| **L2** | legacy | none | yes | yes | **YES** (new) |
+| M2 | legacy | MAPPO (centralized) | no | no | no |
+| M3 | legacy | MAPPO + Hebbian | yes | yes | no |
+| M4 | legacy | IPPO (independent) | no | no | no |
+| M5 | legacy | IPPO + Hebbian | yes | yes | no |
+| G2 | GRPO | per-agent (3B) | no | n/a | n/a |
+| G2b | GRPO | team (3A) | no | n/a | n/a |
+| G3a | GRPO | per-agent | 4a only | n/a | n/a |
+| G3b | GRPO | per-agent | 4b only | n/a | n/a |
+| G4 | GRPO | per-agent | 4a + 4b | n/a | n/a |
+
+### Run-directory layout (Phase B++)
+
+Legacy runs now write to **`runs/legacy/<tag>/seed_<N>/`** — matching
+the GRPO `runs/grpo/<tag>/seed_<N>/` pattern. Activated by the new
+`--tag <id>` flag on the legacy entry point (e.g. `--tag M3 --seed 0`).
+Without `--tag`, the legacy entry point falls back to the old
+`runs/<timestamp>_<experiment_id>_<uuid>/` layout for backwards
+compatibility.
+
+Gifs land at **`<run_dir>/gifs/`** by default — set
+`--gif-dir auto` is the new default and resolves to the run-scoped
+subdir. Pass `--gif-dir <absolute_path>` to override (the legacy
+HPC pattern of writing to `/scratch/$USER/gifs` still works).
+
+### Cooperation-metric parity across stacks (confirmation)
+
+The T4 cooperation table reads the same 5 keys (`cooperation_score`,
+`communication_efficacy`, `carry_imbalance`, `ch4_damage_gini`,
+`ch5_damage_gini`) from **both** legacy and GRPO runs. The data lands
+in `episode_summary.jsonl` next to `grpo_metrics.jsonl`, populated by:
+
+- **GRPO runs** — `MultiAgentRolloutSampler` instantiates one
+  `CooperationMetric` per joint rollout and dumps `episode_summary()`
+  per joint (wired in Phase A §A.4).
+- **Legacy runs** — `multi_agent_craftium.py` instantiates one
+  `CooperationMetric` per episode; the schema bridge concatenates
+  all `episodes/ep_*/episode_summary.json` files into the
+  GRPO-shaped `episode_summary.jsonl` during translation.
+
+The richer `comm_eval.py` / `coop_eval.py` post-hoc evaluators
+(tokens_per_milestone, credit_gini, pair_message_count,
+speaker_consistency, etc.) are legacy-only and don't enter the
+cross-stack tables. If you need them for GRPO runs too, raise the
+scope — it requires wiring an `EpisodeLogger`-style step/event/message
+JSONL into the GRPO sampler.
+
+### New CLI flags on the legacy entry point
+
+`src/mindforge/multi_agent_craftium.py` gains three flags:
+
+- `--tag <id>` — Phase B++ tagged-and-seeded run layout (see above).
+- `--reward-propagation` — surfaces per-teammate reward deltas in the
+  action-selection prompt:
+  ```
+  Propagated rewards this step: +2.50 from agent_1 (m17_switch_pressed),
+  +0.30 from agent_2
+  ```
+  Requires `--hebbian` (the decomposition uses Hebbian's
+  `diffuse_rewards`). The L2 row in the ablation grid is the only
+  variant using this today.
+
+- `--interpretability` — emits `runs/<run_id>/interpretability.jsonl`
+  with one record per (env step, agent) capturing the bond row, chosen
+  action, communication target, thoughts excerpt, and propagated-reward
+  deltas the agent saw. Auto-on whenever `--hebbian` is on (cheap;
+  ~250 B per record); pass explicitly to force on for non-Hebbian runs.
+
+Existing `--hebbian` (no `--rl`) gives the L1 row — Hebbian weights in
+the prompt without training. No new flag needed; the integration was
+already there.
+
+### SLURM scripts for the new variants
+
+| Script | Tag | What it runs |
+|---|---|---|
+| `scripts/experiments/M1_plain_llm.sh` | M1 | No `--rl`, no `--hebbian` |
+| `scripts/experiments/L1_llm_hebbian_prompt.sh` | L1 | `--hebbian` only |
+| `scripts/experiments/L2_llm_hebbian_propagation.sh` | L2 | `--hebbian --reward-propagation` |
+| `scripts/experiments/E2_mappo.sh` | M2 | already shipped |
+| `scripts/experiments/E5_hebbian.sh` | M3 | already shipped (MAPPO + Hebbian) |
+| `scripts/experiments/M4_ippo.sh` | M4 | `--rl --rl-critic-mode independent` |
+| `scripts/experiments/M5_ippo_hebbian.sh` | M5 | `--rl --rl-critic-mode independent --hebbian` |
+| `scripts/experiments/submit_full_grid.sh` | (orchestrator) | submits all 11 + post-hoc build_results |
+
+### Legacy → GRPO schema bridge
+
+The legacy stack writes `final_metrics.json` (rich, per-episode-summary
+plus graph snapshots). The new translator turns that into the four
+Phase A sidecars (`grpo_metrics.jsonl`, `time_to_first.json`,
+`episode_summary.jsonl`, `hebbian_snapshots.jsonl`) so the same
+`build_results.py` ingests legacy and GRPO uniformly.
+
+```bash
+# Single-run mode:
+python scripts/legacy_to_grpo_schema.py \
+    --input  runs/E5_seed_42 \
+    --output runs/legacy_translated
+
+# Directory-of-runs mode (recommended):
+python scripts/legacy_to_grpo_schema.py \
+    --input  runs                      # every subdir with final_metrics.json
+    --output runs/legacy_translated    # auto-tagged + auto-seeded per run
+```
+
+Auto-tag classification reads `final_metrics.json::config.cli_args` and
+maps it to M1/L1/L2/M2/M3/M4/M5 per the grid above.
+
+### Build the cross-stack report
+
+```bash
+python scripts/build_results.py \
+    --grpo   runs/grpo \
+    --legacy runs                            # legacy runs (translator runs first)
+    --out    results \
+    --ablations M1,L1,L2,M2,M3,M4,M5,G2,G2b,G3a,G3b,G4 \
+    --baseline M1 \
+    --bootstrap 10000 --window 50 --rolling-window 20
+```
+
+Either `--grpo` or `--legacy` may be supplied alone; both is the full
+thesis run. `build_results.py` runs the translator before any
+aggregation, drops translated sidecars under
+`<out>/legacy_translated/`, then aggregates both stacks into the same
+`AblationSummary` dict.
+
+Output additions vs. Phase A:
+- `results/legacy_translated/<tag>/seed_<N>/` — translated sidecars
+  per legacy run (re-runnable, idempotent)
+- `results/cross_ablation/plots/cross_stack_grouped.png` — learning
+  curves with line styles by stack family (GRPO solid, legacy-RL
+  dashed, LLM-only dotted) + warm/cool palette by Hebbian on/off
+- All five tables (T1-T5) now show 11 rows with no schema changes —
+  the renderers handle any number of ablations the dict carries.
+
+### Interpretability sidecar (raw exports for external analysis)
+
+Hebbian-enabled runs (L1, L2, M3, M5, and any other variant with
+`--interpretability`) emit per-(step, agent) records:
+
+```json
+{
+  "step": 247, "agent_id": 0, "chamber": "ch3",
+  "bond_row": [0.0, 0.42, 0.18],
+  "chosen_action": "dig",
+  "communication_target": 1,
+  "thoughts_excerpt": "agent_1 is closer to the switch...",
+  "propagated_delta_by_teammate": {"1": 2.5, "2": 0.3},
+  "propagated_source_events": {"1": "m17_switch_pressed"}
+}
+```
+
+Phase B+ does not auto-render a T6 interpretability table; the raw
+JSONL is intended for analysis in a notebook. Typical questions:
+
+- Does `communication_target` correlate with the maximum entry of
+  `bond_row`? (Does the agent prefer to message its strongest bond?)
+- Does the bond row at step N predict the agent's action at step N+1?
+- Do mentions of teammates in `thoughts_excerpt` scale with bond
+  strength?
+
+### MAPPO baseline integration (Phase B+, **now shipped**)
+
+The MAPPO bridge originally deferred from Phase A is implemented as the
+legacy → GRPO schema translator above. The same `build_results.py` call
+ingests MAPPO (M2), MAPPO+Hebbian (M3), IPPO (M4), IPPO+Hebbian (M5),
+plain LLM (M1), and the two new LLM-as-policy variants (L1, L2) without
+schema-specific code paths.
 
 ## Tests
 
