@@ -327,17 +327,17 @@ def main():
                 )
     plot_signal_counts(metrics_all, os.path.join(args.out_dir, "signal_counts.png"))
 
-    # Headline statistical tests (failure-grace mechanism, tier 1).
-    # All variants share the comm-augmented LBF action space; only the
-    # Hebbian + sharing mechanism differs across arms.
+    # Headline statistical tests (tier 1). The grace mechanism is baked
+    # into the canonical Hebbian update, so the hebb_* variants ARE the
+    # grace-enabled variants — no _grace suffix.
     print()
     print("=== Headline paired-seed Wilcoxon tests (final 10% window) ===")
     headline_pairs = [
-        ("hebb_s_grace",  "seac",                "claim 1: sharing+grace > uniform sharing"),
-        ("hebb_s_grace",  "ippo_baseline",       "claim 2: sharing+grace > no-sharing floor"),
-        ("hebb_s_grace",  "hebb_s_grace_nocomm", "claim 3: comm term carries signal in grace regime"),
-        ("hebb_rs_grace", "seac",                "claim 4: full stack > uniform sharing"),
-        ("hebb_rs_grace", "hebb_s_grace",        "claim 5: (a)+(b)+grace > (b)+grace alone"),
+        ("hebb_s",  "seac",           "claim 1: Hebbian-weighted > uniform sharing"),
+        ("hebb_s",  "ippo_baseline",  "claim 2: Hebbian-weighted > no-sharing floor"),
+        ("hebb_s",  "hebb_s_nocomm",  "claim 3: comm term carries signal"),
+        ("hebb_rs", "seac",           "claim 4: full stack > uniform sharing"),
+        ("hebb_rs", "hebb_s",         "claim 5: (a)+(b) > (b) alone"),
     ]
     for treat, base, label in headline_pairs:
         if treat not in metrics_all or base not in metrics_all:

@@ -217,8 +217,13 @@ def _failing_step(N=3, radius=5.0):
 def test_grace_disabled_is_identical_to_legacy():
     """Setting non-default values for failure_grace_threshold and
     failure_ltp_lr must NOT change behavior while failure_grace_enabled=False.
-    Locks down the no-op-when-disabled contract."""
-    cfg_a = HebbianConfig(enabled=True, num_agents=3, log_graph_every=10**9)
+    Locks down the no-op-when-disabled contract — important because grace
+    is now the canonical default, so the disabled path is the regression
+    check for the legacy pre-grace math."""
+    cfg_a = HebbianConfig(
+        enabled=True, num_agents=3, log_graph_every=10**9,
+        failure_grace_enabled=False,
+    )
     cfg_b = HebbianConfig(
         enabled=True, num_agents=3, log_graph_every=10**9,
         failure_grace_enabled=False,
@@ -241,9 +246,12 @@ def test_grace_disabled_is_identical_to_legacy():
 
 def test_grace_bonus_lifts_w_on_first_failure():
     """One forced-failure step with grace enabled must produce strictly higher
-    off-diagonal W than the same step without grace. This is the headline
-    behavioral test: the bonus actively grows bonds on failure."""
-    cfg_legacy = HebbianConfig(enabled=True, num_agents=3, log_graph_every=10**9)
+    off-diagonal W than the same step with grace disabled. This is the
+    headline behavioral test: the bonus actively grows bonds on failure."""
+    cfg_legacy = HebbianConfig(
+        enabled=True, num_agents=3, log_graph_every=10**9,
+        failure_grace_enabled=False,
+    )
     cfg_grace = HebbianConfig(
         enabled=True, num_agents=3, log_graph_every=10**9,
         failure_grace_enabled=True,
@@ -267,7 +275,10 @@ def test_grace_w_grows_above_legacy_during_grace_window():
     steps (well inside the grace window — threshold=0.3, window=50, so F_ij
     crosses 0.3 around step 15), the grace graph's bonds must be measurably
     above the legacy graph's."""
-    cfg_legacy = HebbianConfig(enabled=True, num_agents=3, log_graph_every=10**9)
+    cfg_legacy = HebbianConfig(
+        enabled=True, num_agents=3, log_graph_every=10**9,
+        failure_grace_enabled=False,
+    )
     cfg_grace = HebbianConfig(
         enabled=True, num_agents=3, log_graph_every=10**9,
         failure_grace_enabled=True,

@@ -355,12 +355,32 @@ class HebbianSocialGraph:
         # Update failure window BEFORE computing sustained LTD
         self._update_failure_window(cij, At_team)
 
+        # Failure-grace LTP bonus (opt-in, on by default). When team is
+        # failing and the pair's F_ij is still below threshold, add LTP
+        # proportional to co-activity — the "we tried something together"
+        # reinforcement. The bonus fades to zero once F_ij ≥
+        # failure_grace_threshold, after which only the existing sustained
+        # LTD applies, so the bond's per-step delta flips from positive
+        # to negative across the threshold. Set failure_grace_enabled=False
+        # in the config to reproduce the legacy pre-grace math.
+        grace_bonus = None
+        if cfg.failure_grace_enabled and At_team < -cfg.ltd_threshold:
+            F_ij = self._failure_coactivation / float(cfg.failure_memory_window)
+            grace_factor = np.clip(
+                1.0 - F_ij / max(cfg.failure_grace_threshold, _EPS),
+                0.0,
+                1.0,
+            )
+            grace_bonus = cfg.failure_ltp_lr * grace_factor * cij * (1.0 - self.W)
+
         # Main Hebbian delta — m is now (N×N), element-wise with cij and W
         delta_main = (
             m * cij * (1.0 - self.W)               # advantage-gated LTP/LTD
             + cfg.base_ltp * cij * (1.0 - self.W)  # unconditional co-activity LTP
             - cfg.decay * self.W                    # passive decay
         )
+        if grace_bonus is not None:
+            delta_main = delta_main + grace_bonus
 
         # Sustained LTD
         delta_ltd = self._compute_sustained_ltd()
@@ -380,9 +400,13 @@ class HebbianSocialGraph:
             ltd_pairs = int((delta_main < 0).sum())
             mean_w = float(self.W[self.W > 0].mean()) if (self.W > 0).any() else 0.0
             max_w = float(self.W.max())
+            grace_str = (
+                f"  grace pairs={int((grace_bonus > 0).sum())}"
+                if grace_bonus is not None else ""
+            )
             logger.info(
-                "[Hebbian step=%d] W mean=%.4f max=%.4f  LTP pairs=%d  LTD pairs=%d",
-                self._step_count, mean_w, max_w, ltp_pairs, ltd_pairs,
+                "[Hebbian step=%d] W mean=%.4f max=%.4f  LTP pairs=%d  LTD pairs=%d%s",
+                self._step_count, mean_w, max_w, ltp_pairs, ltd_pairs, grace_str,
             )
 
         return self.W

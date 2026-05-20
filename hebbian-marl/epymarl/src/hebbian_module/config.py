@@ -73,14 +73,15 @@ class HebbianConfig:
     failure_memory_window: int = 50  # rolling window size for Fij
 
     # ── Failure-grace period (additive LTP bonus on co-failure) ──
-    # When enabled, team-level failure steps add a per-pair LTP bonus
-    # that decays as F_ij grows past failure_grace_threshold. Once F_ij
-    # crosses the threshold the bonus is zero and only the existing
-    # sustained LTD applies — the bond's per-step delta flips from
-    # positive ("we tried together") to negative ("we keep failing
-    # together"). Disabled by default so legacy hebb_* variants get
-    # bit-identical math.
-    failure_grace_enabled: bool = False
+    # Team-level failure steps add a per-pair LTP bonus that decays as
+    # F_ij grows past failure_grace_threshold. Once F_ij crosses the
+    # threshold the bonus is zero and only the existing sustained LTD
+    # applies — the bond's per-step delta flips from positive ("we tried
+    # together") to negative ("we keep failing together"). Enabled by
+    # default: this is now part of the canonical Hebbian update rule.
+    # Set failure_grace_enabled=False explicitly to reproduce the legacy
+    # pre-grace math for ablation.
+    failure_grace_enabled: bool = True
     failure_grace_threshold: float = 0.3  # F_ij value where grace ends
     failure_ltp_lr: float = 0.015         # bonus LTP rate (3× ltd_lr by default)
 

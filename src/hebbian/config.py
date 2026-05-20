@@ -67,6 +67,18 @@ class HebbianConfig:
     ltd_sustained_lr: float = 0.002  # λ_F
     failure_memory_window: int = 50  # rolling window size for Fij; tasks take 50-100+ steps
 
+    # ── Failure-grace period (additive LTP bonus on co-failure) ──
+    # Team-level failure steps add a per-pair LTP bonus that decays as
+    # F_ij grows past failure_grace_threshold. Once F_ij crosses the
+    # threshold the bonus is zero and only the existing sustained LTD
+    # applies — the bond's per-step delta flips from positive ("we tried
+    # together") to negative ("we keep failing together"). Enabled by
+    # default: canonical Hebbian update rule. Set False to reproduce the
+    # legacy pre-grace math.
+    failure_grace_enabled: bool = True
+    failure_grace_threshold: float = 0.3  # F_ij value where grace ends
+    failure_ltp_lr: float = 0.015         # bonus LTP rate (3× ltd_lr by default)
+
     # ── Social replay (Eq. 7) ──
     # Disabled: PPO ratio exp(log_π_i - log_π_j_old) is undefined for cross-agent transitions
     # (π_j_old is not π_i's old policy). All neighbour transitions are clipped to near-zero
