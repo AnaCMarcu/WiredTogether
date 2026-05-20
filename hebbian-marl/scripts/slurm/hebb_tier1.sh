@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=hebb-tier1
 #SBATCH --partition=compute
-#SBATCH --time=04:00:00
+#SBATCH --time=24:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem-per-cpu=3G
@@ -23,8 +23,10 @@
 # Submit a subset (e.g., only the hebb_s seeds):
 #   sbatch --array=0-4 scripts/slurm/hebb_tier1.sh
 #
-# Wall-time estimate: ~2h per task (5M steps, single-threaded CPU).
-# 4h budget leaves headroom for slow nodes + sacred/init overhead.
+# Wall-time estimate: 3M steps at compute-p1's observed ~48 steps/sec
+# is ~17.4h per task. 24h budget gives ~6h headroom for slow nodes +
+# sacred/init overhead. Reduced from the original 5M plan because the
+# first attempt timed out at ~700k of 5M.
 #
 # Resumability: re-submitting an array task whose run already finished
 # successfully is a fast no-op (the launcher checks runs.jsonl).

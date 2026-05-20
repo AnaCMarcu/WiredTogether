@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=hebb-tier4
 #SBATCH --partition=compute
-#SBATCH --time=04:00:00
+#SBATCH --time=24:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem-per-cpu=3G
@@ -20,8 +20,9 @@
 # Submit:
 #   sbatch --array=0-9 scripts/slurm/hebb_tier4.sh
 #
-# Wall-time estimate: ~2 h per task (5M steps, same as tier 1).
-# 4 h budget leaves headroom for slow nodes + sacred/init overhead.
+# Wall-time estimate: 3M steps at compute-p1's observed ~48 steps/sec
+# is ~17.4h per task. 24h budget gives ~6h headroom. Reduced from the
+# original 5M plan to match tier 1.
 
 set -euo pipefail   # fail fast: source / env / cd errors halt the job instead of silently continuing into a broken python invocation.
 

@@ -2,7 +2,10 @@ defaults:
   env_config: lbf_comm
   env_key: Foraging-Comm-10x10-3p-3f-v3
   time_limit: 50
-  t_max: 5000000
+  # Reduced from 5M to 3M after the first HPC tier-1 attempt: compute-p1 nodes
+  # run at ~48 steps/sec (vs. ~800 on the laptop), so 5M wouldn't fit even
+  # in a 24h budget. 3M @ 48 steps/sec ≈ 17.4h, comfortably inside 24h.
+  t_max: 3000000
   seeds: [0, 1, 2, 3, 4]
   use_cuda: false
 
