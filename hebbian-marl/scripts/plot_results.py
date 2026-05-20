@@ -327,35 +327,31 @@ def main():
                 )
     plot_signal_counts(metrics_all, os.path.join(args.out_dir, "signal_counts.png"))
 
-    # Headline statistical tests
+    # Headline statistical tests (failure-grace mechanism, tier 1).
+    # All variants share the comm-augmented LBF action space; only the
+    # Hebbian + sharing mechanism differs across arms.
     print()
     print("=== Headline paired-seed Wilcoxon tests (final 10% window) ===")
-    if "hebb_s" in metrics_all and "seac" in metrics_all:
-        a = _final_returns(metrics_all["hebb_s"])
-        b = _final_returns(metrics_all["seac"])
-        # Pair by seed index (assume sorted seeds align)
+    headline_pairs = [
+        ("hebb_s_grace",  "seac",                "claim 1: sharing+grace > uniform sharing"),
+        ("hebb_s_grace",  "ippo_baseline",       "claim 2: sharing+grace > no-sharing floor"),
+        ("hebb_s_grace",  "hebb_s_grace_nocomm", "claim 3: comm term carries signal in grace regime"),
+        ("hebb_rs_grace", "seac",                "claim 4: full stack > uniform sharing"),
+        ("hebb_rs_grace", "hebb_s_grace",        "claim 5: (a)+(b)+grace > (b)+grace alone"),
+    ]
+    for treat, base, label in headline_pairs:
+        if treat not in metrics_all or base not in metrics_all:
+            print(f"[skip] {label} — missing {treat!r} or {base!r}")
+            continue
+        a = _final_returns(metrics_all[treat])
+        b = _final_returns(metrics_all[base])
         n = min(a.size, b.size)
-        if n >= 2:
-            p = _paired_wilcoxon(a[:n], b[:n])
-            print(f"hebb_s ({a[:n].mean():+.4f}) vs seac ({b[:n].mean():+.4f}) — "
-                  f"n={n}, p={p}")
-        else:
-            print(f"hebb_s vs seac — not enough seeds (n={n})")
-    else:
-        print("hebb_s vs seac — missing variants")
-
-    if "hebb_s" in metrics_all and "hebb_s_nocomm" in metrics_all:
-        a = _final_returns(metrics_all["hebb_s"])
-        b = _final_returns(metrics_all["hebb_s_nocomm"])
-        n = min(a.size, b.size)
-        if n >= 2:
-            p = _paired_wilcoxon(a[:n], b[:n])
-            print(f"hebb_s ({a[:n].mean():+.4f}) vs hebb_s_nocomm ({b[:n].mean():+.4f}) — "
-                  f"n={n}, p={p}")
-        else:
-            print(f"hebb_s vs hebb_s_nocomm — not enough seeds (n={n})")
-    else:
-        print("hebb_s vs hebb_s_nocomm — missing variants")
+        if n < 2:
+            print(f"[skip] {label} — not enough paired seeds (n={n})")
+            continue
+        p = _paired_wilcoxon(a[:n], b[:n])
+        print(f"{label}:")
+        print(f"    {treat} ({a[:n].mean():+.4f}) vs {base} ({b[:n].mean():+.4f}) — n={n}, p={p}")
 
     print()
     print(f"[plot_results] wrote PNGs to {args.out_dir}/")

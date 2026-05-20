@@ -63,24 +63,50 @@ experiments:
     t_max: 500000
     rationale: "diagnostic 5 — does additive failure-LTP grace prevent bond collapse without saturating? Promote to tier 1 only if bonds stay in (0.05, 0.95) AND total_return_mean is non-inferior to diag_hebb_s_500k."
 
-  # ── Tier 1 — Headline statistical claims ──────────────────────────────
-  # These three variants are jointly required for the two pre-registered
-  # paired-seed Wilcoxon tests in plot_results.py:
-  #   1) hebb_s > seac           — does Hebbian weighting beat uniform?
-  #   2) hebb_s > hebb_s_nocomm  — does the comm term carry signal?
-  # If compute is short, run ONLY tier 1.
+  # ── Tier 1 — Headline statistical claims (failure-grace mechanism) ────
+  # All Hebbian arms use failure_grace_enabled=True. The legacy `hebb_s`
+  # mechanism collapsed bonds on 4/5 seeds in the first HPC attempt; the
+  # grace bonus keeps them stable (confirmed in diag_hebb_s_grace_500k
+  # and hebb_rs_grace_seed0).
+  #
+  # Six variants × 5 seeds = 30 runs:
+  #   - hebb_s_grace         headline: sharing only + grace
+  #   - hebb_r_grace         treatment: reward diffusion only + grace
+  #   - hebb_rs_grace        treatment: (a) + (b) combined + grace
+  #   - seac                 baseline: uniform sharing, no Hebbian
+  #   - ippo_baseline        floor: no sharing, no Hebbian
+  #   - hebb_s_grace_nocomm  ablation: hebb_s_grace with delta_comm=0
+  #
+  # Pre-registered paired-seed Wilcoxon tests (plot_results.py):
+  #   1) hebb_s_grace  > seac                  — does Hebbian+grace beat uniform?
+  #   2) hebb_s_grace  > ippo_baseline         — does Hebbian+grace beat no-sharing?
+  #   3) hebb_s_grace  > hebb_s_grace_nocomm   — does the comm term carry signal?
+  #   4) hebb_rs_grace > seac                  — does the full stack beat uniform?
+  #   5) hebb_rs_grace > hebb_s_grace          — does (a)+(b) beat (b) alone?
 
-  - variant: hebb_s
+  - variant: hebb_s_grace
     tier: 1
-    rationale: "headline — Hebbian-weighted SEAC sharing (subject of both claims)"
+    rationale: "headline — sharing only + failure-grace LTP"
+
+  - variant: hebb_r_grace
+    tier: 1
+    rationale: "treatment — reward diffusion only + failure-grace LTP"
+
+  - variant: hebb_rs_grace
+    tier: 1
+    rationale: "treatment — sharing + reward diffusion + failure-grace LTP"
 
   - variant: seac
     tier: 1
-    rationale: "headline claim 1 baseline — uniform SEAC sharing"
+    rationale: "baseline — uniform SEAC sharing (must-beat for claim 1)"
 
-  - variant: hebb_s_nocomm
+  - variant: ippo_baseline
     tier: 1
-    rationale: "headline claim 2 baseline — Hebbian sharing with comm term ablated (delta_comm=0)"
+    rationale: "floor — IPPO with no sharing and no Hebbian mechanism"
+
+  - variant: hebb_s_grace_nocomm
+    tier: 1
+    rationale: "ablation — hebb_s_grace with delta_comm=0 (comm-term carrier test)"
 
   # ── Tier 2 — Component validation ─────────────────────────────────────
   # Needed to interpret tier-1 results: isolate reward diffusion,
@@ -108,25 +134,6 @@ experiments:
   - variant: mappo
     tier: 3
     rationale: "standard cooperative param-sharing baseline"
-
-  # ── Tier 4 — Failure-grace mechanism, full 5-seed grid ─────────────────
-  # The grace mechanism (failure_grace_enabled=True; see HebbianConfig) adds
-  # an additive LTP bonus on team-failure steps that decays with F_ij. The
-  # diagnostic at diag_hebb_s_grace_500k (tier 0) was meant to gate
-  # promotion; this tier runs the full 5-seed × 5M-step grid in parallel
-  # with tier 1 so the comparison hebb_s_grace vs hebb_s can be made on
-  # equal footing if HPC compute is available.
-  #
-  # Submit alongside tier 1:
-  #   sbatch --array=0-9 scripts/slurm/hebb_tier4.sh
-
-  - variant: hebb_s_grace
-    tier: 4
-    rationale: "headline variant + failure-grace LTP bonus"
-
-  - variant: hebb_rs_grace
-    tier: 4
-    rationale: "(a)+(b) combined + failure-grace LTP bonus"
 
   # ── Tier 5 — Preview pass (run AFTER tier 0, BEFORE tier 1) ────────────
   # Single-seed 1M-step comparison of the five "main contenders" on the
