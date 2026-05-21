@@ -395,9 +395,15 @@ def set_seeds(seed: int | None) -> None:
 
 
 def main(config_path: str, overrides: list[str] | None = None) -> int:
+    # Route logs to stdout (default is stderr). Under SLURM, --output captures
+    # stdout and --error captures stderr — running logs in .err while you
+    # stare at an empty .out file is the most common "why isn't anything
+    # happening" symptom. Stream to stdout so the .out file is the canonical
+    # log destination.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        stream=sys.stdout,
     )
     cfg = load_config(config_path, overrides=overrides)
     if overrides:

@@ -24,6 +24,12 @@ export DISPLAY=
 export LIBGL_ALWAYS_SOFTWARE=1
 export MESA_GL_VERSION_OVERRIDE=3.3
 
+# Unbuffered Python stdout/stderr so logs land in slurm .out/.err in
+# real time. Without this, Python block-buffers when not on a TTY and
+# nothing appears in the log file until the buffer fills (~4-8 KB) or
+# the process exits — looks like the job hung for the first 30 min.
+export PYTHONUNBUFFERED=1
+
 # Offline mode — compute nodes have no internet
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
