@@ -85,6 +85,33 @@ class BeliefResponse(BaseModel):
     beliefs: str
 
 
+class SocialThought(BaseModel):
+    """Output of the SocialModule's deliberation step.
+
+    Lives between the Hebbian graph and the action LLM: takes (bond weights,
+    bond deltas, incoming messages, recent self-state) and produces an
+    explicit social directive that the action prompt consumes. The
+    ``referenced_bonds`` + ``bond_change_explanation`` fields are the
+    interpretability artifact for the Hebbian-as-social-intelligence claim —
+    they show whether the LLM actually conditioned on the graph.
+    """
+    # Why each non-zero bond delta is moving the way it is (one line per
+    # teammate). Surfaces the LLM's causal model of its own graph; greppable
+    # post-hoc for "ignored my request" / "helped me" patterns.
+    bond_change_explanation: dict[str, str]
+    # Free-text rationale tying bonds + incoming messages to the decision.
+    reasoning: str
+    # Bonds the LLM claims to have used. Compared offline against the bonds
+    # actually passed in to detect cargo-cult reasoning.
+    referenced_bonds: dict[str, float]
+    # Asker side: who to send a help request to, and the suggested text.
+    ask_target: Optional[str] = None
+    ask_message: Optional[str] = None
+    # Responder side: subset of incoming senders to help this step.
+    respond_to: List[str] = []
+    confidence: float = 0.5
+
+
 # ─── Prompt formatting ─────────────────────────────────────────────────
 
 def safe_format(template: str, **kwargs) -> str:

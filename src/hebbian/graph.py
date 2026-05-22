@@ -85,6 +85,14 @@ class HebbianSocialGraph:
         # Running max of |ri(t)| for engagement normalisation
         self._max_reward_seen: float = 0.0
 
+        # Rolling snapshot of W for bond-delta queries. Length matches the
+        # social module's "recent history" window. bond_delta_row(i) returns
+        # (W_now[i,:] - W_history[0][i,:]) — Δw over the window. Keeps
+        # numpy-only; no torch dep.
+        self._bond_delta_window: int = 50
+        self._W_history: deque = deque(maxlen=self._bond_delta_window)
+        self._W_history.append(self.W.copy())
+
     # ──────────────────────────────────────────────
     # 2.2  Co-activity signal (refined Eq. 2)
     # ──────────────────────────────────────────────
@@ -394,6 +402,12 @@ class HebbianSocialGraph:
 
         self._step_count += 1
 
+        # Snapshot current W for the bond-delta window. Done AFTER the W
+        # update so the oldest entry in _W_history is the W from
+        # (_bond_delta_window) steps ago — Δw queries reflect actual change
+        # over that window.
+        self._W_history.append(self.W.copy())
+
         # Per-interval logging: show LTP vs LTD pair counts so weight trends are visible
         if self._step_count % cfg.log_graph_every == 0:
             ltp_pairs = int((delta_main > 0).sum())
@@ -437,6 +451,27 @@ class HebbianSocialGraph:
         if not self.config.enabled:
             return 0.0
         return float(self.W[i, j])
+
+    def bond_delta_row(self, agent_i: int) -> Dict[int, float]:
+        """Return Δw_{i,j} over the bond-delta window for each teammate j.
+
+        The window length is fixed at construction (default 50 steps). When
+        fewer than 2 snapshots exist, returns zeros — early-episode bonds
+        haven't moved meaningfully yet.
+
+        Returns
+        -------
+        dict[int, float] : {teammate_idx: w_now - w_window_ago}, diagonal excluded.
+        """
+        if not self.config.enabled or len(self._W_history) < 2:
+            N = self.config.num_agents
+            return {j: 0.0 for j in range(N) if j != agent_i}
+        old = self._W_history[0]
+        return {
+            j: float(self.W[agent_i, j] - old[agent_i, j])
+            for j in range(self.config.num_agents)
+            if j != agent_i
+        }
 
     def get_all_weights(self) -> np.ndarray:
         """Return a copy of the full weight matrix W."""

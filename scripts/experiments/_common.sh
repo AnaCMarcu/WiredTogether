@@ -47,7 +47,6 @@ export CRAFTIUM_ENV_DIR="${PROJECT_DIR}/src/marl_craftium/craftium-envs/five-cha
 # ── Model paths ──
 export MODEL_2B=/scratch/acmarcu/models/Qwen3.5-2B
 export MODEL_9B=/scratch/acmarcu/models/Qwen3.5-9B
-export MODEL_27B=/scratch/acmarcu/models/Qwen3.5-27B
 
 # Default: use 9B local model (override in experiment script if needed)
 export LLM_MODEL_PATH="$MODEL_9B"

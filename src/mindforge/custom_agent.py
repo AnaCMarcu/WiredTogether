@@ -14,6 +14,7 @@ from agent_modules.critic import Critic
 from agent_modules.episodic_memory_manager import EpisodicMemoryManager
 from agent_modules.craftium_metric import CraftiumMetric as Metric
 from agent_modules.skill_manager import SkillManager
+from agent_modules.social_module import SocialModule
 
 
 class CustomAgent(BaseChatAgent):
@@ -36,6 +37,7 @@ class CustomAgent(BaseChatAgent):
         belief_interval: int = 1,
         critic_interval: int = 1,
         num_agents: int = 1,
+        social_module: SocialModule = None,
     ) -> None:
         super().__init__(name, description)
         self.rl_layer = rl_layer
@@ -73,6 +75,10 @@ class CustomAgent(BaseChatAgent):
         self._last_reward_text = "N/A"
         self._episode_summary_cache = "There are no past episodes."
         self._episode_summary_dirty = False
+        # Optional — only instantiated when --social-module is not "none".
+        # When None, on_messages falls back to the legacy raw social_bonds
+        # string in the action prompt.
+        self.social_module = social_module
 
 
     # Message types that this agent can produce
@@ -97,6 +103,8 @@ class CustomAgent(BaseChatAgent):
         visited_chambers=None,
         completed_milestones=None,
         chamber_state=None,
+        bond_weights=None,
+        bond_deltas=None,
     ):
 
         self._call_count += 1
@@ -281,10 +289,50 @@ class CustomAgent(BaseChatAgent):
             _fetch_beliefs(),
         )
 
+        # ── Social module deliberation ──
+        # If a SocialModule was attached and we have bond weights from the
+        # Hebbian graph, run the deliberation before action selection. The
+        # produced directive replaces the raw `Social bonds: ...` text in
+        # the action prompt (legacy text is still rendered when the module
+        # is not attached, preserving backward compat).
+        social_directive = f"Social bonds: {social_bonds or 'N/A'}"
+        if self.social_module is not None and bond_weights:
+            # Resolve "who am I" to format teammate names for the prompt.
+            try:
+                _self_idx = int(str(self.name).split("_")[-1])
+            except (ValueError, IndexError):
+                _self_idx = -1
+            _teammate_names = ", ".join(
+                f"agent_{j}" for j in range(self.num_agents) if j != _self_idx
+            )
+            # Filter incoming comms to plain text (the action-LLM call later
+            # uses MultiModalMessage; the social call is text-only).
+            _incoming = list(communication) if communication else []
+            await self.social_module.deliberate(
+                bond_weights=bond_weights,
+                bond_deltas=bond_deltas or {},
+                incoming=_incoming,
+                teammate_names=_teammate_names,
+                last_action=last_action or "N/A",
+                last_reward=reward_text or "N/A",
+                picked_object=picked_object or "N/A",
+                position_text=position_text or "Unknown",
+                cancellation_token=cancellation_token,
+            )
+            social_directive = self.social_module.render_directive()
+            self.metric.log(
+                f"Agent {self.name} social directive: {social_directive}"
+            )
+
         beliefs = {
             **belief_parts,
             "reward_text": reward_text or "N/A",
             "social_bonds": social_bonds or "N/A",
+            # New placeholder: the deliberated social directive. When the
+            # social module is disabled this is just the legacy "Social
+            # bonds: ..." line so instruction_prompt_p2.txt formats the
+            # same way as before.
+            "social_directive": social_directive,
             # Phase B+ §1 reward propagation. Default to empty string so the
             # ``{propagation_summary}`` placeholder in instruction_prompt_p2.txt
             # collapses to a blank line for runs without --reward-propagation

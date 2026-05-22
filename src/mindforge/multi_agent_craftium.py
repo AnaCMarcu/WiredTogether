@@ -37,6 +37,7 @@ from agent_modules.critic import Critic
 from agent_modules.skill_manager import SkillManager
 from agent_modules.episodic_memory_manager import EpisodicMemoryManager
 from agent_modules.craftium_metric import CraftiumMetric
+from agent_modules.social_module import SocialModule
 from mindforge.env.communication_rewards import CommunicationTracker
 from mindforge.env.cooperation_metric import CooperationMetric
 from mindforge.env.episode_logger import EpisodeLogger
@@ -158,6 +159,19 @@ def parse_args():
                              "(agent, bond_row, action, comm_target, "
                              "propagated_deltas) records. Auto-enabled when "
                              "--hebbian is on; off otherwise.")
+    # ── Social module (Hebbian-driven social-reasoning layer) ──
+    parser.add_argument("--social-module", type=str, default="none",
+                        choices=["none", "prompt", "bias"],
+                        help="Social-reasoning module coupling: 'none' = "
+                             "disabled (legacy raw bond text in action "
+                             "prompt), 'prompt' = deliberation rendered as "
+                             "directive text in the action prompt, 'bias' = "
+                             "directive's ask_target also overwrites the "
+                             "agent's communication_target at the routing "
+                             "site. Requires --hebbian.")
+    parser.add_argument("--social-interval", type=int, default=1,
+                        help="Run the social-module deliberation every N "
+                             "steps (cached in between). 1 = every step.")
     # ── Experiment tracking ──
     parser.add_argument("--experiment-id", type=str, default=None,
                         help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
@@ -272,7 +286,8 @@ def build_role_configs(
 
 def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
                  rl_config=None, belief_interval=5, critic_interval=20,
-                 centralized_critic=None, is_resume: bool = False):
+                 centralized_critic=None, is_resume: bool = False,
+                 social_module_mode: str = "none", social_interval: int = 1):
     """Initialize all Mindforge agents.
 
     ``centralized_critic`` (when not None) is shared by all agents' RLLayers
@@ -296,6 +311,17 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
         # uses its own agent name (passed in via the user message) to exclude
         # itself from the recipient list.
         agent_system_prompt = system_prompt
+
+        # Optional Hebbian-driven social-reasoning module. Stays None when
+        # --social-module=none so the agent loop falls back to the legacy
+        # raw bond text in the action prompt.
+        agent_social_module = None
+        if social_module_mode != "none":
+            agent_social_module = SocialModule(
+                agent_name=role_cfg["agent_name"],
+                num_agents=num_agents,
+                social_interval=social_interval,
+            )
 
         agent = CustomAgent(
             name=role_cfg["agent_name"],
@@ -333,6 +359,7 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
             belief_interval=belief_interval,
             critic_interval=critic_interval,
             num_agents=num_agents,
+            social_module=agent_social_module,
         )
         agents.append(agent)
         rl_status = " [RL enabled]" if rl_layer else ""
@@ -385,6 +412,8 @@ async def agent_do_action(
     visited_chambers=None,
     completed_milestones=None,
     chamber_state=None,
+    bond_weights=None,
+    bond_deltas=None,
 ):
     """Have one agent observe and choose an action.
 
@@ -423,6 +452,8 @@ async def agent_do_action(
         visited_chambers=visited_chambers,
         completed_milestones=completed_milestones,
         chamber_state=chamber_state,
+        bond_weights=bond_weights,
+        bond_deltas=bond_deltas,
     )
 
     last_action = "NoOp"
@@ -444,6 +475,8 @@ async def agent_do_action(
                 visited_chambers=visited_chambers,
                 completed_milestones=completed_milestones,
                 chamber_state=chamber_state,
+                bond_weights=bond_weights,
+                bond_deltas=bond_deltas,
             )
         else:
             logging.error(f"Agent {agent_id} exceeded retry limit, using NoOp")
@@ -865,7 +898,9 @@ async def run(args):
                          belief_interval=args.belief_interval,
                          critic_interval=args.critic_interval,
                          centralized_critic=centralized_critic,
-                         is_resume=bool(args.resume))
+                         is_resume=bool(args.resume),
+                         social_module_mode=args.social_module,
+                         social_interval=args.social_interval)
 
     # ── Hebbian social plasticity ──
     hebbian_config = HebbianConfig(
@@ -1253,6 +1288,12 @@ async def run(args):
 
             # Build per-agent social bond summaries for the LLM prompt
             _bond_strings = {}
+            # Parallel dicts of raw (weight, delta) per teammate, consumed by
+            # the SocialModule when --social-module != none. Empty when
+            # Hebbian is disabled — the social module then can't run either
+            # since it has no graph to reason about.
+            _bond_weights: dict[int, dict[str, float]] = {}
+            _bond_deltas: dict[int, dict[str, float]] = {}
             if hebbian_config.enabled:
                 for i in range(num_agents):
                     parts = []
@@ -1263,6 +1304,19 @@ async def run(args):
                         role_j = ROLE_NAMES[j % len(ROLE_NAMES)]
                         parts.append(f"agent_{j} ({role_j}): {raw_w:.2f}")
                     _bond_strings[i] = "Social bonds: " + ", ".join(parts)
+                    # Also build the structured (weight, delta) dicts for the
+                    # SocialModule. Keys are "agent_N" strings so they survive
+                    # JSON round-trips and match the comm-target format the
+                    # LLM emits.
+                    delta_row = hebbian_graph.bond_delta_row(i)
+                    _bond_weights[i] = {
+                        f"agent_{j}": float(hebbian_graph.get_weight(i, j))
+                        for j in range(num_agents) if j != i
+                    }
+                    _bond_deltas[i] = {
+                        f"agent_{j}": float(delta_row.get(j, 0.0))
+                        for j in range(num_agents) if j != i
+                    }
 
             # ── Phase B+ §1: per-teammate reward-propagation prompt lines ──
             # Uses the contributions cached from the *previous* step (since
@@ -1394,6 +1448,8 @@ async def run(args):
                         f"agent_{agent_id}", set()
                     ),
                     chamber_state=environment.get_chamber_state(agent_id),
+                    bond_weights=_bond_weights.get(agent_id),
+                    bond_deltas=_bond_deltas.get(agent_id),
                 )
                 agents_error_count[agent_id] = error_count
                 for _i in range(num_agents):
@@ -1521,6 +1577,35 @@ async def run(args):
                             others = [j for j in range(num_agents) if j != sender_idx]
                             recv_idx = random.choice(others)
                             routing_source = f"random_fallback:{target_failure}"
+
+                    # ── Social-module bias coupling ──
+                    # When --social-module=bias, the sender's SocialModule's
+                    # ask_target wins over whatever the action LLM emitted.
+                    # This makes the social directive a hard guarantee on
+                    # routing: the bond-weighted pick the social step made
+                    # IS where the message goes. Skipped in 'prompt' mode
+                    # (directive stays as prompt-text only) and 'none'.
+                    if args.social_module == "bias":
+                        _sender_sm = getattr(agent, "social_module", None)
+                        _thought = (
+                            _sender_sm.last_thought if _sender_sm else None
+                        )
+                        _sm_target = _thought.get("ask_target") if _thought else None
+                        if _sm_target:
+                            _m2 = _re.match(
+                                r"^\s*agent_?(\d+)\s*$", str(_sm_target).lower()
+                            )
+                            if _m2:
+                                try:
+                                    _sm_idx = int(_m2.group(1))
+                                    if (
+                                        _sm_idx != sender_idx
+                                        and 0 <= _sm_idx < num_agents
+                                    ):
+                                        recv_idx = _sm_idx
+                                        routing_source = "social_bias"
+                                except (IndexError, ValueError):
+                                    pass
 
                     agent_communications[recv_idx].append(message)
                     if len(agent_communications[recv_idx]) > num_agents - 1:
@@ -2143,9 +2228,6 @@ if __name__ == "__main__":
     import functools
     print = functools.partial(print, flush=True)
     args = parse_args()
-    # Phase B+ §1: validate flag pairing — reward propagation needs an
-    # active Hebbian graph for the per-teammate decomposition to mean
-    # anything.
     if args.reward_propagation and not args.hebbian:
         parser_msg = (
             "--reward-propagation requires --hebbian to be set "
@@ -2153,4 +2235,15 @@ if __name__ == "__main__":
             "produced by the Hebbian graph)"
         )
         raise SystemExit(parser_msg)
+    if args.social_module != "none" and not args.hebbian:
+        # The social module reads from bond_weights / bond_deltas, which
+        # are only populated when the Hebbian graph is enabled. Without
+        # --hebbian, deliberation never runs and the directive falls back
+        # to "Social bonds: N/A" every step — a silent no-op. Fail loudly
+        # rather than letting an experiment run for 24h producing useless
+        # output.
+        raise SystemExit(
+            "--social-module requires --hebbian to be set (the social "
+            "module needs bond weights to reason over)"
+        )
     asyncio.run(run(args))

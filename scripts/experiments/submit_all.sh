@@ -1,5 +1,5 @@
 #!/bin/bash
-# Submit all 10 experiments to SLURM in parallel.
+# Submit all 12 experiments to SLURM in parallel.
 #
 # Usage (from anywhere on DelftBlue):
 #     bash /scratch/$USER/WiredTogether/scripts/experiments/submit_all.sh
@@ -28,11 +28,13 @@ EXPERIMENTS=(
     "exp6_ippo_hebbian.sh"
     "exp7_llm_9b.sh"
     "exp8_llm_9b_hebbian.sh"
-    "exp9_llm_27b.sh"
-    "exp10_llm_27b_hebbian.sh"
+    "exp9_llm_2b_social_prompt.sh"
+    "exp10_llm_2b_social_bias.sh"
+    "exp11_llm_9b_social_prompt.sh"
+    "exp12_llm_9b_social_bias.sh"
 )
 
-echo "== Submitting 10 experiments =="
+echo "== Submitting 12 experiments =="
 for exp in "${EXPERIMENTS[@]}"; do
     script="$EXP_DIR/$exp"
     if [ ! -f "$script" ]; then
