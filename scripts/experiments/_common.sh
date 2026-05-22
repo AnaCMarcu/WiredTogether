@@ -39,6 +39,11 @@ export ST_MODEL_NAME=/scratch/acmarcu/models/all-MiniLM-L6-v2
 # Ensure Craftium/Luanti can find libiconv
 export LD_LIBRARY_PATH="${ENV_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 
+# Make src/ packages (marl_craftium, mindforge, etc.) importable.
+# Without this, `from marl_craftium import OpenWorldMultiAgentEnv` fails.
+export PYTHONPATH="${PROJECT_DIR}/src:${PYTHONPATH:-}"
+export CRAFTIUM_ENV_DIR="${PROJECT_DIR}/src/marl_craftium/craftium-envs/five-chambers"
+
 # ── Model paths ──
 export MODEL_2B=/scratch/acmarcu/models/Qwen3.5-2B
 export MODEL_9B=/scratch/acmarcu/models/Qwen3.5-9B
