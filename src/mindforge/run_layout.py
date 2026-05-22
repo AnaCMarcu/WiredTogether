@@ -28,6 +28,30 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def _resolve_root(root: str | os.PathLike) -> Path:
+    """Resolve a possibly-relative ``root`` against ``WIREDTOGETHER_RUNS_ROOT``.
+
+    When the caller passes a relative path like ``"runs"`` AND the env var
+    is set, anchor the relative path under the env-var directory. Lets HPC
+    SLURM scripts point all outputs to ``/scratch/$USER/.../runs/`` without
+    every caller having to be aware of the convention. Absolute paths and
+    the case of a no-env-var run are passed through unchanged.
+    """
+    p = Path(root)
+    if p.is_absolute():
+        return p
+    env_root = os.environ.get("WIREDTOGETHER_RUNS_ROOT")
+    if env_root:
+        env = Path(env_root)
+        # If caller asked for "runs" specifically, swap to the env root
+        # directly (the env var IS the runs dir). Otherwise treat the env
+        # root as a parent.
+        if p == Path("runs"):
+            return env
+        return env / p
+    return p
+
+
 @dataclass
 class RunPaths:
     root: Path           # runs/<run_id>/
@@ -84,7 +108,7 @@ class RunPaths:
     @classmethod
     def create(cls, run_id: str, root: str | os.PathLike = "runs") -> "RunPaths":
         """Build a RunPaths and create the directory skeleton on disk."""
-        run_root = Path(root) / run_id
+        run_root = _resolve_root(root) / run_id
         rp = cls(root=run_root, run_id=run_id)
         run_root.mkdir(parents=True, exist_ok=True)
         rp.episodes_dir.mkdir(exist_ok=True)
@@ -113,8 +137,20 @@ class RunPaths:
 
         ``run_id`` is set to ``"<tag>/seed_<seed>"`` so downstream code
         that logs the run id sees the canonical tag/seed identity.
+
+        Root resolution (when ``root`` is not given):
+        1. If ``WIREDTOGETHER_RUNS_ROOT`` env var is set, use ``<env>/legacy``.
+        2. Otherwise fall back to relative ``runs/legacy``.
+        The env-var path is what HPC SLURM scripts use to anchor outputs
+        under an absolute ``/scratch/$USER/WiredTogether/runs/`` regardless
+        of cwd (``_common.sh`` cds to ``src/mindforge/`` for Python's
+        sake, which would otherwise scatter outputs there).
         """
-        base = Path(root) if root is not None else Path("runs") / "legacy"
+        if root is not None:
+            base = Path(root)
+        else:
+            env_root = os.environ.get("WIREDTOGETHER_RUNS_ROOT")
+            base = Path(env_root) / "legacy" if env_root else Path("runs") / "legacy"
         run_root = base / tag / f"seed_{seed}"
         run_id = f"{tag}/seed_{seed}"
         rp = cls(root=run_root, run_id=run_id)

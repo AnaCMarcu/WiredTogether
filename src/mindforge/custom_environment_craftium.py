@@ -88,10 +88,13 @@ class CraftiumEnvironmentInterface:
     # Camera pitch cap: agent may look at most this many LookDown steps below
     # horizontal, or this many LookUp steps above it.  Beyond these limits the
     # action is redirected to keep the crosshair in a useful range.
-    # Each LookDown/LookUp step moves ~10-15° at _MOUSE_MOV=0.5.
-    # Cap of 4 ≈ 40-60° down (enough to aim at ground), 2 up (enough to see trees).
-    _PITCH_MAX_DOWN = 4   # positive pitch limit (looking down)
-    _PITCH_MAX_UP   = 2   # negative pitch limit (looking up)
+    # Each LookDown/LookUp step now moves ~20-30° (marl_craftium/_actions.py
+    # doubled _MOUSE_MOV from 0.5 to 1.0). At the original cap of 4 down, that
+    # was ~80-120° (essentially staring at feet), which let LookDown spam
+    # produce useless camera state. Halved to 2 down so the cap holds at
+    # roughly the originally-intended 40-60° downward range.
+    _PITCH_MAX_DOWN = 2   # positive pitch limit (looking down)
+    _PITCH_MAX_UP   = 1   # negative pitch limit (looking up); ~20-30° matches original ~30°
     _MAX_CONSECUTIVE_IDLE = 1
 
     # Actions that need to be held for multiple env ticks to take effect.
@@ -343,12 +346,22 @@ class CraftiumEnvironmentInterface:
         if action_str == "Dig":
             best_slot = self._find_best_tool(agentId)
             if best_slot is not None:
-                equip_actions = {}
                 slot_action_id = ACTION_MAP.get(f"Slot{best_slot}")
-                for ag_name in actions:
-                    i = int(ag_name.split("_")[1])
-                    equip_actions[ag_name] = slot_action_id if i == agentId else ACTION_MAP["NoOp"]
-                self.env.step(equip_actions)  # one tick to switch slot
+                # Belt-and-braces guard: _find_best_tool now caps at the
+                # hotbar (Slot1..Slot8), but if a future change ever lets
+                # best_slot escape that range, skip the equip step instead
+                # of crashing in _discrete_to_dict(None).
+                if slot_action_id is not None:
+                    equip_actions = {}
+                    for ag_name in actions:
+                        i = int(ag_name.split("_")[1])
+                        equip_actions[ag_name] = slot_action_id if i == agentId else ACTION_MAP["NoOp"]
+                    self.env.step(equip_actions)  # one tick to switch slot
+                else:
+                    _logging.warning(
+                        "Auto-equip: Slot%d not in ACTION_MAP — "
+                        "skipping equip and proceeding to Dig", best_slot,
+                    )
 
         # Jump+forward pairing: a bare Jump rarely clears obstacles since the
         # agent doesn't move horizontally while airborne.  Send MoveForward on
@@ -757,7 +770,12 @@ class CraftiumEnvironmentInterface:
         except ValueError:
             return None
 
-        slots = parts[1:]
+        # Only the first 8 inventory slots are the hotbar, and only Slot1..Slot8
+        # are wieldable via discrete actions (ACTION_MAP). Iterating past slot 8
+        # produces a best_slot that has no corresponding action — and crashes
+        # downstream in _discrete_to_dict(None). Cap defensively at the source.
+        _HOTBAR_LIMIT = 8
+        slots = parts[1:1 + _HOTBAR_LIMIT]
         best_slot = None
         best_tier = -1
 
@@ -772,7 +790,7 @@ class CraftiumEnvironmentInterface:
                 tier = self._TOOL_TIER.get(item_parts[1], 0)
                 if tier > best_tier:
                     best_tier = tier
-                    best_slot = i + 1  # 1-indexed
+                    best_slot = i + 1  # 1-indexed (always in [1, 8])
 
         # Only switch if we found a tool and it's not already wielded
         if best_slot is not None and best_slot != wield_idx:

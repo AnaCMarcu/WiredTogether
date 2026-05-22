@@ -44,6 +44,14 @@ export LD_LIBRARY_PATH="${ENV_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 export PYTHONPATH="${PROJECT_DIR}/src:${PYTHONPATH:-}"
 export CRAFTIUM_ENV_DIR="${PROJECT_DIR}/src/marl_craftium/craftium-envs/five-chambers"
 
+# Anchor all run outputs to an ABSOLUTE path. Without this, the legacy
+# stack's RunPaths.create_tagged() defaults to ``Path("runs") / "legacy"``
+# (relative), and since this script cds to src/mindforge/ for Python's
+# imports, outputs would land at src/mindforge/runs/legacy/... instead
+# of under /scratch/$USER/WiredTogether/runs/. The Python helper
+# run_layout._resolve_root() picks this up.
+export WIREDTOGETHER_RUNS_ROOT="${PROJECT_DIR}/runs"
+
 # ── Model paths ──
 export MODEL_2B=/scratch/acmarcu/models/Qwen3.5-2B
 export MODEL_9B=/scratch/acmarcu/models/Qwen3.5-9B
