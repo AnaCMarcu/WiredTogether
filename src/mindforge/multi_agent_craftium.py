@@ -1167,6 +1167,7 @@ async def run(args):
                         f"{gif_dir}/{run_id}_{role_configs[i]['agent_name']}_ep{episode+1}"
                         f"_step{step_num}.gif"
                     )
+                    os.makedirs(os.path.dirname(gif_path), exist_ok=True)
                     agent_frames[0].save(
                         gif_path,
                         format="GIF",
@@ -2183,6 +2184,7 @@ async def run(args):
                     gif_path = (
                         f"{gif_dir}/{run_id}_{role_configs[i]['agent_name']}_ep{episode+1}.gif"
                     )
+                    os.makedirs(os.path.dirname(gif_path), exist_ok=True)
                     agent_frames[0].save(
                         gif_path,
                         format="GIF",
