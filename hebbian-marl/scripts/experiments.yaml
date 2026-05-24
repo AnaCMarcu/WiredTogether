@@ -179,3 +179,60 @@ experiments:
     seeds: [0]
     t_max: 1000000
     rationale: "preview — no-sharing IPPO floor at 1M"
+
+  # ── Tier 6 — Sanity / pipeline diagnostic ─────────────────────────────
+  # Tier-1 (5-seed headline grid) collapsed: all four variants degrade
+  # from ~0.06 -> ~0.01 test return over 3M steps; final-window means
+  # are statistically indistinguishable. Before launching another sweep
+  # we need to know WHICH layer is broken. Three single-seed ippo_baseline
+  # runs at 1M steps, ordered to isolate the failure mode:
+  #
+  #   0) sanity_plain_easy   — plain lbforaging via gymma, no comm wrapper,
+  #                            on the canonical easy map. Reference: EPyMARL
+  #                            paper IPPO hits ~0.8 on 8x8-2p-2f-coop by 2M.
+  #                            If THIS fails, the training pipeline itself
+  #                            is broken (config, torch, sacred, ...).
+  #
+  #   1) sanity_comm_easy    — same easy map but THROUGH the lbf_comm
+  #                            wrapper. If sanity_plain_easy passed but
+  #                            this fails, the comm wrapper is the culprit
+  #                            (cf. the `reward returned as <class 'list'>`
+  #                            warning at start of every tier-1 log).
+  #
+  #   2) sanity_horizon      — original failed env, but time_limit=100
+  #                            (2x the tier-1 config). If 0 and 1 pass but
+  #                            this fails, 10x10-3p-3f-v3 is too sparse
+  #                            for 50-step horizons; bump to 100 for tier 1.
+  #
+  # Submit:
+  #   sbatch --array=0-2 scripts/slurm/hebb_tier6.sh
+
+  - variant: ippo_baseline
+    label: sanity_plain_easy
+    tier: 6
+    seeds: [0]
+    t_max: 1000000
+    time_limit: 25
+    env_config: gymma
+    env_key: "lbforaging:Foraging-8x8-2p-2f-coop-v3"
+    rationale: "sanity — plain lbforaging, no comm wrapper. EPyMARL reference IPPO hits ~0.8 by 2M on this map; failure here indicates a pipeline-level bug."
+
+  - variant: ippo_baseline
+    label: sanity_comm_easy
+    tier: 6
+    seeds: [0]
+    t_max: 1000000
+    time_limit: 25
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-8x8-2p-2f-v3"
+    rationale: "sanity — same easy map but through the lbf_comm wrapper. Isolates whether the comm wrapper itself breaks training (vs. sanity_plain_easy)."
+
+  - variant: ippo_baseline
+    label: sanity_horizon
+    tier: 6
+    seeds: [0]
+    t_max: 1000000
+    time_limit: 100
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-10x10-3p-3f-v3"
+    rationale: "sanity — original failed env with 2x horizon. Tests whether tier-1's time_limit=50 was the constraint."
