@@ -229,13 +229,15 @@ class CraftiumMetric:
         """Record a per-step reward broken down by source.
 
         components keys (all floats, default 0):
-          task              base reward from craftium.reward (milestones)
+          task              env-step reward + pitch-cap penalty + drained
+                            five-chambers milestone rewards (m1..m28)
           comm_base         BASE_MSG_REWARD per valid message
           comm_milestone    Tier-2 per-chamber communication milestones
-          proximity         Hebbian-gated proximity bonus
-          hebbian_diffuse   reward bled from peers via Hebbian W
+          proximity         vestigial — the +0.3/pair proximity bonus was
+                            removed; field stays at 0 for schema back-compat
+          hebbian_diffuse   reward bled from peers via Hebbian W (signed)
 
-        The five streams must sum to the value passed to record_reward().
+        The five streams sum to the value passed to record_reward().
         Persisted to reward_history_decomposed so we can answer "what fraction
         of cumulative return came from each source".
         """

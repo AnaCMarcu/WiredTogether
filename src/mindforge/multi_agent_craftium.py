@@ -775,6 +775,14 @@ async def run(args):
         format=f"[{run_id}] %(asctime)s %(levelname)s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+    # Per-module LLM logs: one file per module under runs/<run_id>/llm_logs/.
+    # Each call to llm_call() routes to the file matching its log_prefix
+    # (e.g. "Belief System ..." → belief_system.log). The prompt body is no
+    # longer dumped; only call metadata and the model response are logged.
+    from agent_modules.llm_call import setup_llm_logging as _setup_llm_logging
+    _setup_llm_logging(run_paths.root / "llm_logs")
+
     log_interval = args.log_interval
 
     # Load prompts
@@ -1276,6 +1284,14 @@ async def run(args):
             # ── Phase 1: All agents act (collect data for Hebbian) ──
             step_comm_count = 0
             step_rewards_raw = [0.0] * num_agents
+            # Per-source accumulators for the reward decomposition. Populated
+            # at the same sites that mutate step_rewards_raw so the post-step
+            # decomp can split each agent's reward into its true streams
+            # without re-deriving from snapshot differences (which previously
+            # mislabeled drained milestones as "proximity").
+            _step_envstep_reward = [0.0] * num_agents   # environment.get_step_reward
+            _step_pitch_penalty  = [0.0] * num_agents   # negative; pitch-cap futile
+            _step_milestone_drain = [0.0] * num_agents  # poll_milestone_events drain
             step_contents = [None] * num_agents
             comm_events = []
             # Per-message metadata staged here in Phase 1a; rewards stamped
@@ -1403,7 +1419,9 @@ async def run(args):
                     # this agent's slot. See the bug-fix note at the second
                     # drain site below.
                     for _i in range(num_agents):
-                        step_rewards_raw[_i] += environment.get_step_reward(_i)
+                        _r_env = environment.get_step_reward(_i)
+                        step_rewards_raw[_i] += _r_env
+                        _step_envstep_reward[_i] += _r_env
                     step_contents[agent_id] = None
                     _was_macro_running[agent_id] = True
                     continue
@@ -1454,7 +1472,9 @@ async def run(args):
                 )
                 agents_error_count[agent_id] = error_count
                 for _i in range(num_agents):
-                    step_rewards_raw[_i] += environment.get_step_reward(_i)
+                    _r_env = environment.get_step_reward(_i)
+                    step_rewards_raw[_i] += _r_env
+                    _step_envstep_reward[_i] += _r_env
                 step_contents[agent_id] = content
 
                 # ── Phase B+ §2: interpretability sidecar emission ──
@@ -1682,7 +1702,9 @@ async def run(args):
                     continue
                 _futile_n = environment.consume_futile(_i)
                 if _futile_n > 0:
-                    step_rewards_raw[_i] -= _PITCH_FUTILE_PENALTY * _futile_n
+                    _pen = _PITCH_FUTILE_PENALTY * _futile_n
+                    step_rewards_raw[_i] -= _pen
+                    _step_pitch_penalty[_i] -= _pen
 
             _comm_rewards_this_step: dict = {}
             _comm_milestones: list = []
@@ -1780,6 +1802,7 @@ async def run(args):
                         continue
                     if 0 <= _aid < num_agents:
                         step_rewards_raw[_aid] += _rw
+                        _step_milestone_drain[_aid] += _rw
 
             # ── Phase 2: Hebbian update + reward diffusion ──
 
@@ -1835,13 +1858,17 @@ async def run(args):
                 )
 
             # ── Reward decomposition: split each agent's diffused reward into
-            #    its source streams. Recoverable from values already in scope:
-            #      task              = _task_rewards_this_step[i]   (line ~1188 snapshot)
-            #      comm_total        = _comm_rewards_this_step[i]   (CommTracker output)
-            #      comm_milestone    = sum of milestone rewards in _comm_milestones for i
-            #      comm_base         = comm_total - comm_milestone
-            #      proximity         = step_rewards_raw[i] - task - comm_total
-            #      hebbian_diffuse   = diffused_rewards[i] - step_rewards_raw[i] (signed)
+            #    its source streams. Each stream is read directly from the
+            #    per-source accumulator populated at the matching add-site:
+            #      task            = env-step reward + pitch penalty + drained milestones
+            #      comm_base       = BASE_MSG_REWARD per valid message
+            #      comm_milestone  = Tier-2 per-chamber communication milestones
+            #      proximity       = 0 (the +0.3/pair proximity bonus was removed;
+            #                        the field is kept for back-compat with
+            #                        downstream consumers that index the 5-tuple)
+            #      hebbian_diffuse = diffused_rewards[i] - step_rewards_raw[i]
+            #    The five streams sum to diffused_rewards[i] (== the value
+            #    passed to record_reward).
             _comm_milestone_per_agent = {i: 0.0 for i in range(num_agents)}
             if communication:
                 for _aid, _mid, _rw in (_comm_milestones or []):
@@ -1850,11 +1877,13 @@ async def run(args):
                     )
             _reward_decomp_this_step = {}
             for _aid in range(num_agents):
-                _task = float(_task_rewards_this_step.get(_aid, 0.0))
+                _task = (_step_envstep_reward[_aid]
+                         + _step_pitch_penalty[_aid]
+                         + _step_milestone_drain[_aid])
                 _comm_total = float(_comm_rewards_this_step.get(_aid, 0.0)) if communication else 0.0
                 _comm_ms = float(_comm_milestone_per_agent.get(_aid, 0.0))
                 _comm_base = _comm_total - _comm_ms
-                _prox = float(step_rewards_raw[_aid]) - _task - _comm_total
+                _prox = 0.0
                 _hebb = float(diffused_rewards[_aid]) - float(step_rewards_raw[_aid])
                 _reward_decomp_this_step[_aid] = {
                     "task":            _task,
