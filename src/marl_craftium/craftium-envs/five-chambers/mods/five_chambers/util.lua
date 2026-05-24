@@ -30,14 +30,19 @@ function five_chambers.get_chamber_for_pos(pos)
     return "unknown"
 end
 
--- Returns the 0-based agent index from a player name ("agent_0" → 0).
+-- Returns the 0-based agent index from a player name ("agent_0" or "agent0" → 0).
 -- Returns -1 if the name is not a recognised agent.
+-- Underscore is optional because upstream craftium spawns clients with
+-- ``client_name=f"agent{i}"`` (no underscore) while our own scripts and docs
+-- often use ``agent_0``. Accepting both keeps Ch1-timeout teleport,
+-- ch2_fallback_spawn_pos, Ch3 cell assignment, and milestone attribution
+-- working regardless of which convention is in play.
 -- In DEBUG_SINGLE mode any connected player is treated as agent_0 so the
 -- standalone-Luanti "singleplayer" name still triggers switch / milestone
 -- / door-3 logic during a manual walkthrough.
 function five_chambers.agent_index(name)
     if five_chambers.DEBUG_SINGLE then return 0 end
-    local idx = tonumber(name:match("^agent_(%d+)$"))
+    local idx = tonumber(name:match("^agent_?(%d+)$"))
     if idx and idx >= 0 and idx < five_chambers.NUM_AGENTS then
         return idx
     end

@@ -364,11 +364,17 @@ minetest.register_globalstep(function(dtime)
         end
     end
 
-    -- Reference tick for the countdown: prefer warmup_complete_tick when
-    -- Python has signalled, else fall back to all_connected_tick. Either
-    -- way, ticks_in_ch1 measures time since the chosen anchor.
+    -- Reference tick for the countdown: ONLY warmup_complete_tick. The
+    -- previous "warmup_complete OR all_connected" fallback fired the
+    -- timeout mid-warmup because clients connect ~5 min before Python
+    -- finishes its media-load poll loop, so ticks_in_ch1 (anchored at
+    -- all_connected_tick) crossed target before warmup_complete arrived.
+    -- Python's force-flag (force_ch1_teleport.txt at step >=
+    -- ch1_timeout_steps) remains the primary trigger; this lua-side timer
+    -- is only the safety net for runaway Python — and that safety net
+    -- correctly stays disarmed until Python signals it's actually using
+    -- the env.
     local ref_tick = five_chambers.warmup_complete_tick
-        or five_chambers.all_connected_tick
     local ticks_in_ch1 = (ref_tick and (sc - ref_tick)) or -1
 
     if sc > 0 and sc % _CH1_DIAG_INTERVAL == 0
@@ -376,7 +382,7 @@ minetest.register_globalstep(function(dtime)
         if io and io.stderr then
             local anchor = five_chambers.warmup_complete_tick
                 and "warmup_complete"
-                or (five_chambers.all_connected_tick and "all_connected" or "none")
+                or (five_chambers.all_connected_tick and "all_connected_only_no_countdown" or "none")
             io.stderr:write(string.format(
                 "[CH1_TIMEOUT_DIAG] step_counter=%d ticks_in_ch1=%d "
                 .. "target=%d anchor=%s force_teleported=%s players=%d\n",
@@ -406,23 +412,21 @@ minetest.register_globalstep(function(dtime)
             os.remove(force_flag_path)
         end
     end
-    -- Timer compares ticks-since-anchor to the target. Anchor is whichever
-    -- of warmup_complete_tick / all_connected_tick is set (see stamping
-    -- above). This avoids three failure modes the previous "raw
-    -- step_counter < target" check had:
-    --   1. Pre-join race: warmup ticks accumulate while clients are
-    --      loading; raw counter crosses target before any agent connects;
-    --      teleport fires with 0 players, sets door1_force_teleported,
-    --      burns the flag for the whole episode.
-    --   2. Post-join instant-fire: if clients take longer to join than
-    --      CH1_TIMEOUT_TICKS, raw counter is *already* past target the
-    --      moment the last agent joins, so teleport fires within seconds
-    --      of join — agents land in Ch2 with zero Ch1 experience.
-    --   3. Warmup-poll race: clients join EARLY in warmup but Python sits
-    --      in warmup_noop() for the full warmup_time before issuing step 0.
-    --      ticks_in_ch1 (measured from all_connected_tick) crosses target
-    --      mid-warmup → agents start step 0 in Ch2. Fixed by preferring
-    --      warmup_complete_tick (anchored after Python's warmup loop).
+    -- Timer compares ticks-since-anchor to the target. Anchor is
+    -- warmup_complete_tick ONLY. Until Python signals warmup-complete,
+    -- ticks_in_ch1 stays -1 and the lua-side timer is disarmed — Python's
+    -- force-flag is the only Ch1->Ch2 path during warmup.
+    -- Failure modes this avoids:
+    --   1. Pre-join race: warmup ticks accumulate while clients load;
+    --      raw counter crosses target before any agent connects; teleport
+    --      fires with 0 players and burns the flag for the episode.
+    --   2. Post-join instant-fire: if clients join slower than target,
+    --      teleport fires within seconds — agents land in Ch2 with zero
+    --      Ch1 experience.
+    --   3. Warmup-poll race: clients join EARLY in warmup, then Python
+    --      sits in warmup_noop() for the full warmup_time (e.g. 300 s).
+    --      With all_connected_tick as the anchor, ticks_in_ch1 crosses
+    --      target mid-warmup and agents start step 0 in Ch2.
     -- Python's force-flag still bypasses the timer for the explicit-trigger
     -- path so a manual --ch1-timeout-steps still works.
     if (not force_fired)

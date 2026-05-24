@@ -1,16 +1,20 @@
 """Patched ``MarlCraftiumEnv`` with HPC fixes.
 
-Five concerns layered on top of upstream:
+Six concerns layered on top of upstream:
 
 1. **Binary name** — newer Luanti builds renamed ``./bin/minetest`` → ``./bin/luanti``.
 2. **Headless clients** — upstream only forces ``SDL_VIDEODRIVER=offscreen`` on
    client 0; on display-less HPC nodes clients 1+ crash.
-3. **Persistent media cache** — without a stable cache symlink, every reset
+3. **Subprocess env inheritance** — upstream sets ``proc_env = {"SDL_VIDEODRIVER":
+   "offscreen"}`` and passes it as ``env=`` to Popen, which *replaces* the parent
+   env. Anything the launcher set in ``os.environ`` (e.g. ``CH1_TIMEOUT_TICKS``
+   read by Lua) is dropped; we merge ``os.environ`` in.
+4. **Persistent media cache** — without a stable cache symlink, every reset
    re-downloads VoxeLibre media (5-60 minutes). Symlink each client's
    ``cache/`` to ``$SCRATCH/.craftium_media_cache``.
-4. **Pre-listen sockets** — upstream calls ``listen()`` only inside
+5. **Pre-listen sockets** — upstream calls ``listen()`` only inside
    ``server_listen()`` which races with the client's ``connect()`` call.
-5. **Server-ready polling** — upstream ``time.sleep(5)`` is far too short for
+6. **Server-ready polling** — upstream ``time.sleep(5)`` is far too short for
    VoxeLibre on HPC; we poll the server's stderr for ``"listening on"``.
 
 All of these wrap upstream rather than fork it, so we stay forward-compatible
@@ -40,6 +44,7 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         super().__init__(**kwargs)
         self._fix_binary_names()
         self._fix_headless_clients()
+        self._inherit_parent_env()
         self._fix_media_cache()
         # Per-agent position tracking for exploration reward.
         self._prev_pos = [None] * self.num_agents
@@ -81,6 +86,22 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
             elif "SDL_VIDEODRIVER" not in client.proc_env:
                 client.proc_env["SDL_VIDEODRIVER"] = "offscreen"
         print(f"* Forced all {len(self.mt_clients)} clients to headless (offscreen SDL)")
+
+    def _inherit_parent_env(self) -> None:
+        """Merge ``os.environ`` into each subprocess's ``proc_env``.
+
+        Upstream sets ``proc_env = {"SDL_VIDEODRIVER": "offscreen"}`` and passes
+        that as ``env=`` to Popen, which **replaces** the parent env. That drops
+        anything the launcher set in ``os.environ`` — e.g. ``CH1_TIMEOUT_TICKS``
+        (read by Lua's ``config.lua``), so Lua silently falls back to its
+        hardcoded default (1200 ticks ≈ 133 env steps) and agents get
+        teleported out of Ch1 almost immediately.
+
+        Merging with proc_env overrides on top preserves both: the parent env
+        propagates, and the headless SDL override still wins.
+        """
+        for sub in (self.mt_server, *self.mt_clients):
+            sub.proc_env = {**os.environ, **(sub.proc_env or {})}
 
     def _fix_media_cache(self) -> None:
         """Symlink a persistent cache dir into each client's run_dir.
