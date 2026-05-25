@@ -100,3 +100,14 @@ class HebbianConfig:
 
     # ── Logging ──
     log_graph_every: int = 50  # steps between graph metric snapshots
+
+    # ── Diffusion-control flags (for the uniform-baseline ablation) ──
+    # When ``uniform_weights=True``, the diffusion call returns
+    # ``W̄[i,j] = 1/(N-1)`` for every off-diagonal pair, ignoring the
+    # learned bond matrix. Combined with ``disable_coactivity_gate=True``,
+    # this strips both Hebbian learning AND spatial gating from reward
+    # diffusion, yielding pure uniform sharing — the control variant for
+    # "does the *learned* bond structure matter beyond uniform sharing?".
+    # Both default False so canonical Hebbian behavior is unchanged.
+    uniform_weights: bool = False
+    disable_coactivity_gate: bool = False

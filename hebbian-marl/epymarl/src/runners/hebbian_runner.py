@@ -61,6 +61,8 @@ def _build_hebbian_config(args) -> HebbianConfig:
         reward_diffusion_gamma=float(get("reward_diffusion_gamma", 0.2)),
         init_weight=float(get("init_weight", 0.1)),
         log_graph_every=int(get("log_graph_every", 50)),
+        uniform_weights=bool(get("uniform_weights", False)),
+        disable_coactivity_gate=bool(get("disable_coactivity_gate", False)),
     )
 
 

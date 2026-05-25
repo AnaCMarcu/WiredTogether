@@ -428,6 +428,11 @@ class HebbianSocialGraph:
         if not self.config.enabled:
             N = self.config.num_agents
             return np.zeros(N, dtype=np.float32)
+        if self.config.uniform_weights:
+            N = self.config.num_agents
+            row = np.full(N, 1.0 / (N - 1), dtype=np.float32)
+            row[i] = 0.0
+            return row
         row = self.W[i].copy()
         row[i] = 0.0
         total = row.sum() + _EPS
@@ -540,7 +545,7 @@ class HebbianSocialGraph:
         cij = co_activity_matrix
         if cij is None:
             cij = self._last_coactivity
-        if cij is None:
+        if cij is None and not self.config.disable_coactivity_gate:
             return list(raw_rewards)
 
         rewards = [_sanitize_reward(r) for r in raw_rewards]
@@ -551,7 +556,8 @@ class HebbianSocialGraph:
             for j in range(N):
                 if j == i:
                     continue
-                social_reward += w_bar[j] * cij[i, j] * rewards[j]
+                gate = 1.0 if self.config.disable_coactivity_gate else cij[i, j]
+                social_reward += w_bar[j] * gate * rewards[j]
             r_prime = (1.0 - gamma) * rewards[i] + gamma * social_reward
             diffused.append(r_prime)
 

@@ -342,3 +342,60 @@ experiments:
     env_config: lbf_comm
     env_key: "Foraging-Comm-10x10-3p-3f-v3"
     rationale: "headline mechanism — MAPPO + Hebbian reward diffusion. Bonds reshape the reward landscape; standard MAPPO trains on the diffused signal. The thesis-claim test: does bond-weighted prosocial reward sharing drive cooperation in 10x10-3p-3f?"
+
+  # ── Tier 9 — Headline 3-variant × 5-seed comparison ───────────────────
+  # The cleaned-up experiment. Three variants on the same env, 5 seeds
+  # each, paired so Wilcoxon paired-sign-rank applies on final-window
+  # returns:
+  #
+  #   1) mappo_hebbian          — MAPPO with per-agent rewards, no diffusion.
+  #                                Baseline: how well does plain MAPPO
+  #                                (common_reward=False) cooperate?
+  #   2) mappo_hebbian_r        — MAPPO + Hebbian-weighted reward diffusion.
+  #                                The thesis-claim mechanism.
+  #   3) mappo_hebbian_uniform_r — MAPPO + uniform-weighted reward diffusion.
+  #                                Control: does *learned* bond structure
+  #                                add anything over trivial uniform
+  #                                sharing at the same γ?
+  #
+  # Pre-registered comparisons (Wilcoxon paired-sign-rank on the
+  # final-window mean of test_total_return_mean):
+  #   A) mappo_hebbian_r > mappo_hebbian          (does diffusion help?)
+  #   B) mappo_hebbian_r > mappo_hebbian_uniform_r (does Hebbian beat
+  #                                                  uniform sharing?)
+  #
+  # Same env across all three: Foraging-Comm-10x10-3p-3f-v3, T=50, 3M steps.
+  # 3 variants × 5 seeds = 15 runs. At MAPPO's ~17 min per 1M steps with
+  # batch_size_run=10, each 3M run is ~50–60 min wall-time on compute-p1.
+  #
+  # Submit all 15 in parallel:
+  #   sbatch --array=0-14 scripts/slurm/hebb_tier9.sh
+  #
+  # Index order (sorted by variant, then seed):
+  #    0-4   mappo_hebbian          seeds 0..4
+  #    5-9   mappo_hebbian_r        seeds 0..4
+  #   10-14  mappo_hebbian_uniform_r seeds 0..4
+
+  - variant: mappo_hebbian
+    tier: 9
+    t_max: 3000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-10x10-3p-3f-v3"
+    rationale: "baseline — MAPPO with per-agent rewards, no Hebbian intervention."
+
+  - variant: mappo_hebbian_r
+    tier: 9
+    t_max: 3000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-10x10-3p-3f-v3"
+    rationale: "headline mechanism — Hebbian-weighted reward diffusion (learned bond structure)."
+
+  - variant: mappo_hebbian_uniform_r
+    tier: 9
+    t_max: 3000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-10x10-3p-3f-v3"
+    rationale: "control — uniform-weighted reward diffusion (no learned structure). Isolates the contribution of Hebbian learning."
