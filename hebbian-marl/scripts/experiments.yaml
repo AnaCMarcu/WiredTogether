@@ -236,3 +236,68 @@ experiments:
     env_config: lbf_comm
     env_key: "Foraging-Comm-10x10-3p-3f-v3"
     rationale: "sanity — original failed env with 2x horizon. Tests whether tier-1's time_limit=50 was the constraint."
+
+  # ── Tier 7 — MAPPO sanity (canonical EPyMARL config, unchanged) ────────
+  # Tier 6 showed `ippo_baseline` reaches exactly 0.0 return on 8x8-2p-2f-coop
+  # by 100k steps, with `pi_max` saturating to 0.999 — i.e. policy collapses
+  # to deterministic before exploration finds any reward. Possible causes:
+  # (a) the `runner: hebbian` codepath (used by ippo_baseline.yaml), (b) the
+  # `common_reward: False / reward_scalarisation: sum` setup the lbf_comm
+  # env-config forces, or (c) something else in the fork.
+  #
+  # Tier 7 swaps to the canonical EPyMARL `mappo` config + `gymma` env-config,
+  # i.e. exactly the code path the EPyMARL paper used. `mappo.yaml` is
+  # unchanged from upstream (parallel runner, cv_critic, shared MAC, RNN,
+  # batch_size_run=10), and `gymma` defaults to `common_reward: True`.
+  # This is the same invocation pattern as scripts/verify_baseline.sh, just
+  # at 1M steps instead of 50k.
+  #
+  # Indices:
+  #   0  sanity_mappo_plain_easy  canonical reference: 8x8-2p-2f-coop, T=25.
+  #                               EPyMARL paper IPPO/MAPPO hits ~0.8 here.
+  #                               Failure ⇒ pipeline-level bug in this fork.
+  #   1  sanity_mappo_plain_hard  10x10-3p-3f via gymma (no comm wrapper),
+  #                               T=50. Same map as tier-1, but standard
+  #                               MAPPO + cooperative-sum reward.
+  #   2  sanity_mappo_comm        Foraging-Comm-10x10-3p-3f-v3 via lbf_comm,
+  #                               T=50. Same as tier-1's failed env, but
+  #                               with MAPPO instead of ippo_baseline.
+  #                               (Note: lbf_comm forces common_reward=False,
+  #                               which diverges from upstream — included
+  #                               only to isolate the lbf_comm wrapper.)
+  #
+  # Wall-time: mappo's parallel runner with batch_size_run=10 should reach
+  # 1M env steps in ~1–2h on compute-p1. SLURM budget set to 4h with margin.
+  #
+  # Submit:
+  #   sbatch --array=0-2 scripts/slurm/hebb_tier7.sh
+
+  - variant: mappo
+    label: sanity_mappo_plain_easy
+    tier: 7
+    seeds: [0]
+    t_max: 1000000
+    time_limit: 25
+    env_config: gymma
+    env_key: "lbforaging:Foraging-8x8-2p-2f-coop-v3"
+    rationale: "sanity — canonical EPyMARL MAPPO on the reference easy LBF map. If this fails, the fork's epymarl is broken at the framework level."
+
+  - variant: mappo
+    label: sanity_mappo_plain_hard
+    tier: 7
+    seeds: [0]
+    t_max: 1000000
+    time_limit: 50
+    env_config: gymma
+    env_key: "lbforaging:Foraging-10x10-3p-3f-v3"
+    rationale: "sanity — canonical MAPPO on the tier-1 map without the comm wrapper. Isolates map difficulty from wrapper interactions."
+
+  - variant: mappo
+    label: sanity_mappo_comm
+    tier: 7
+    seeds: [0]
+    t_max: 1000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-10x10-3p-3f-v3"
+    rationale: "sanity — MAPPO through the lbf_comm wrapper on the tier-1 env. Note lbf_comm forces common_reward=False; included to isolate the wrapper as the culprit if tier 7.0 and 7.1 pass."
