@@ -18,12 +18,16 @@
 # port has a bug.
 #
 # Indices:
-#   0  sanity_mappo_hebbian_offflags
+#   0  sanity_mappo_hebbian_offflags   no-op runner check (hebbian.enabled=False)
+#   1  sanity_mappo_hebbian_r          headline mechanism (reward_diffusion=True)
 #
 # Verify indices first:
 #   python scripts/run_experiments.py --tier 8 --list
 #
-# Submit:
+# Submit both:
+#   sbatch --array=0-1 scripts/slurm/hebb_tier8.sh
+#
+# Submit only the no-op sanity (recommended first, before turning on diffusion):
 #   sbatch --array=0 scripts/slurm/hebb_tier8.sh
 #
 # Wall-time estimate: ~20-30 min (same as tier-7 MAPPO runs; parallel

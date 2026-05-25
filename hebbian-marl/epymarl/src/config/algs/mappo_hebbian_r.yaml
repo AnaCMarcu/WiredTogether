@@ -1,0 +1,64 @@
+# --- MAPPO + Hebbian reward diffusion ---
+#
+# Sister config to `mappo_hebbian.yaml` (which keeps the master switch off
+# for sanity-checking the runner port). This one turns the Hebbian module
+# ON and enables reward diffusion: per-agent rewards are reshaped by the
+# learned bond matrix W̄ before they hit the batch, then standard MAPPO
+# (cv_critic + basic_mac + rnn + ppo_learner) trains on the diffused
+# reward signal.
+#
+# No learner-side modifications. The thesis claim it's set up to test:
+#
+#   "Agents form Hebbian bonds from co-activity and co-success. Those
+#    bonds reshape the reward landscape: an agent's effective reward
+#    is its own reward plus a bond-weighted sum of teammates' rewards.
+#    Under this reward modification, standard MAPPO (unchanged)
+#    develops cooperative behavior that depends causally on the bond
+#    structure."
+#
+# Naming follows the existing tier-1 pattern (`hebb_r`, `hebb_s`, `hebb_rs`):
+# the `_r` suffix marks reward-diffusion-only.
+
+action_selector: "soft_policies"
+mask_before_softmax: True
+
+runner: "hebbian_parallel"
+
+buffer_size: 10
+batch_size_run: 10
+batch_size: 10
+
+target_update_interval_or_tau: 0.01
+
+lr: 0.0003
+hidden_dim: 128
+
+obs_agent_id: True
+obs_last_action: False
+obs_individual_obs: False
+
+agent_output_type: "pi_logits"
+learner: "ppo_learner"
+entropy_coef: 0.001
+use_rnn: True
+standardise_returns: False
+standardise_rewards: True
+q_nstep: 5
+critic_type: "cv_critic"
+epochs: 4
+eps_clip: 0.2
+name: "mappo_hebbian_r"
+
+t_max: 3050000
+
+common_reward: False
+reward_scalarisation: "sum"
+
+hebbian:
+  enabled: True
+  reward_diffusion: True
+  weighted_sharing: False    # actor-side sharing is intentionally OFF — this
+  uniform_sharing: False     # variant tests reward-level Hebbian intervention only
+  policy_mixture: False
+  num_agents: 3
+  interaction_radius: 2.0

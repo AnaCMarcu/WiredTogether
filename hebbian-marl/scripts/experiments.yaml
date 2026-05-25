@@ -332,3 +332,13 @@ experiments:
     env_config: lbf_comm
     env_key: "Foraging-Comm-10x10-3p-3f-v3"
     rationale: "sanity — MAPPO routed through HebbianParallelRunner with all hebbian flags off + per-agent rewards. Must learn (or the runner port has a bug). Also exercises the list-valued-info-keys fix that crashed tier 7.2."
+
+  - variant: mappo_hebbian_r
+    label: sanity_mappo_hebbian_r
+    tier: 8
+    seeds: [0]
+    t_max: 1000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-10x10-3p-3f-v3"
+    rationale: "headline mechanism — MAPPO + Hebbian reward diffusion. Bonds reshape the reward landscape; standard MAPPO trains on the diffused signal. The thesis-claim test: does bond-weighted prosocial reward sharing drive cooperation in 10x10-3p-3f?"
