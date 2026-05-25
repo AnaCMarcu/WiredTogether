@@ -1,6 +1,6 @@
 #!/bin/bash
 # ── check_chain_status.sh ────────────────────────────────────────────────────
-# Status snapshot for the exp0_100k_steps chained runs (3 conditions × 5
+# Status snapshot for the exp0_long chained runs (3 conditions × 5
 # chunks). Tells you, at a glance:
 #   - which chunks have finished, are running, are queued, or failed
 #   - the current cumulative training progress (episode, global_step)
@@ -9,7 +9,7 @@
 # Usage:
 #   bash scripts/check_chain_status.sh
 #   SEED=123 bash scripts/check_chain_status.sh
-#   EXP_ID=exp0_100k_steps NUM_CHUNKS=5 bash scripts/check_chain_status.sh
+#   EXP_ID=exp0_long NUM_CHUNKS=5 bash scripts/check_chain_status.sh
 #
 # Status legend:
 #   PENDING    in queue, waiting for dependency / resources
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 PROJECT_DIR=/scratch/${USER}/WiredTogether
-EXP_ID="${EXP_ID:-exp0_100k_steps}"
+EXP_ID="${EXP_ID:-exp0_long}"
 SEED="${SEED:-42}"
 NUM_CHUNKS="${NUM_CHUNKS:-5}"
 CONDITIONS=(llm_only llm_rl llm_rl_hebb)

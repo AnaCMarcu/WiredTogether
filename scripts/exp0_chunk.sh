@@ -11,17 +11,17 @@
 #SBATCH --error=/scratch/%u/WiredTogether/slurm_logs/%x-%j.err
 
 # ── exp0_chunk.sh ────────────────────────────────────────────────────────────
-# Per-chunk SLURM worker for the exp0_100k_steps experiment.
+# Per-chunk SLURM worker for the exp0_long experiment.
 # Runs ONE 8k-step chunk (--episodes 2 --max-steps 4000) of
 # multi_agent_craftium.py on five-chambers, then writes
 # latest_checkpoint.txt so the next chunk in the chain can resume.
 #
-# Submitted by scripts/experiments/exp0_100k_steps.sh, which chains 5 of
+# Submitted by scripts/experiments/exp0_long.sh, which chains 5 of
 # these via --dependency=afterok so chunk K+1 only starts after chunk K
 # succeeds.
 #
 # Env vars (set by the launcher via sbatch --export):
-#   EXP_ID     experiment id, e.g. exp0_100k_steps
+#   EXP_ID     experiment id, e.g. exp0_long
 #   COND       condition tag: llm_only | llm_rl | llm_rl_hebb
 #   SEED       seed integer
 #   CKPT_ROOT  shared checkpoint dir for this (cond, seed); ep* dirs land here
@@ -134,7 +134,7 @@ if [[ "$IS_FIRST" -eq 0 ]]; then
 fi
 
 echo "================================================================"
-echo "  exp0_100k_steps :: chunk ${CHUNK}  cond=${COND}  seed=${SEED}"
+echo "  ${EXP_ID} :: chunk ${CHUNK}  cond=${COND}  seed=${SEED}"
 echo "  ckpt_root  : ${CKPT_ROOT}"
 echo "  episodes   : ${EPISODES} × ${MAX_STEPS} steps = $((EPISODES * MAX_STEPS)) env-steps"
 echo "  ch1 rescue : at step ${CH1_TIMEOUT_STEPS} (${CH1_TIMEOUT_PCT}% of episode) — only if no agent past Ch1"
