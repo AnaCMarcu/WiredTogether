@@ -301,3 +301,34 @@ experiments:
     env_config: lbf_comm
     env_key: "Foraging-Comm-10x10-3p-3f-v3"
     rationale: "sanity — MAPPO through the lbf_comm wrapper on the tier-1 env. Note lbf_comm forces common_reward=False; included to isolate the wrapper as the culprit if tier 7.0 and 7.1 pass."
+
+  # ── Tier 8 — MAPPO + HebbianParallelRunner smoke ──────────────────────
+  # Tier 7 showed canonical MAPPO + common_reward=True learns to 0.74 on
+  # 10x10-3p-3f. Tier 8 verifies the new HebbianParallelRunner is a strict
+  # no-op when hebbian.enabled=False — i.e. that the runner port itself
+  # doesn't break MAPPO. Difference from tier 7.1 (sanity_mappo_plain_hard):
+  #
+  #   - new `mappo_hebbian` alg config (HebbianParallelRunner + per-agent
+  #     rewards via common_reward=False)
+  #   - uses lbf_comm env (the Hebbian variants need this env anyway, and
+  #     this also exercises the list-valued-info-keys fix in the new
+  #     runner — same wrapper that crashed sanity_mappo_comm in tier 7)
+  #
+  # Expected: learns at roughly the same trajectory as sanity_mappo_plain_hard
+  # (canonical MAPPO + common_reward=True on the same 10x10 map). A modest
+  # delta is acceptable because per-agent vs. summed rewards changes the
+  # advantage shape and lbf_comm adds a comm channel; a collapse to ~0.01
+  # would indicate a bug in the new runner.
+  #
+  # Submit:
+  #   sbatch --array=0 scripts/slurm/hebb_tier8.sh
+
+  - variant: mappo_hebbian
+    label: sanity_mappo_hebbian_offflags
+    tier: 8
+    seeds: [0]
+    t_max: 1000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-10x10-3p-3f-v3"
+    rationale: "sanity — MAPPO routed through HebbianParallelRunner with all hebbian flags off + per-agent rewards. Must learn (or the runner port has a bug). Also exercises the list-valued-info-keys fix that crashed tier 7.2."
