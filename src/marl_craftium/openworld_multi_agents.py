@@ -74,7 +74,6 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         )
         # Craftium discrete actions: 0=NOP + 22 named actions.
         self._action_space = spaces.Discrete(23)
-        self._step_count = 0
 
     # ─── Construction helpers ─────────────────────────────────────────
 
@@ -149,7 +148,6 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
 
         obs_array, _ = self.env.reset()
         self.agents = self.possible_agents.copy()
-        self._step_count = 0
 
         observations = {f"agent_{i}": obs for i, obs in enumerate(obs_array)}
         infos = {f"agent_{i}": {} for i in range(self._num_agents)}
@@ -164,8 +162,6 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         Dict[str, bool],
         Dict[str, Dict[str, Any]],
     ]:
-        self._step_count += 1
-
         # Always send actions for ALL agents — MarlCraftiumEnv expects exactly
         # num_agents actions every step. NoOp for terminated agents.
         action_list = [

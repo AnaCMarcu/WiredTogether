@@ -72,14 +72,22 @@ SAFETY:
 CHAMBER 1 — Solo learning:
 - Practice basic skills. Each reward is individual (not shared).
 - Tasks: move around, dig trees/stone, collect dropped items, kill chickens/sheep.
-- Chamber 1 is a FIXED-DURATION practice window. The RED locked door in
-  the north wall stays closed for the entire Ch1 phase — you cannot walk
-  through to Chamber 2. After a fixed number of steps (configured per run)
-  the door automatically opens and every agent is teleported into
-  Chamber 2. Use the time you have to fire as many Ch1 milestones as
-  possible — anything you didn't complete by then is forfeit.
+- The RED locked door in the north wall blocks the way to Chamber 2.
+  It UNLOCKS the moment ANY agent fires any of these Ch1 milestones:
+  M2 (dig 3 blocks), M3 (pick up 3 items), M4 (dig 5 wood), M5 (kill 1
+  animal), M6 (kill 2 animals), or M7 (dig 3 stone). Once unlocked, the
+  door becomes air and EVERY agent can walk through to Chamber 2 — you
+  do not need to repeat the trigger task yourself.
+- The agent who FIRST triggers the unlock earns a bonus M_door1_open
+  (50) on top of the triggering milestone's reward. Being first matters
+  — your teammates ride for free through the door you opened.
+- Safety net: if the entire team is still in Ch1 at the halfway point of
+  the episode, a rescue teleport drops everyone into Chamber 2.
+  Milestone rewards you didn't earn before the rescue are forfeit for
+  that episode, so unlock the door yourself when you can.
 - Milestones: M1 move >5 blocks (10), M2 dig 3 blocks (30), M3 pick up 3 items (30),
-  M4 dig 5 wood (50), M5 kill 1 animal (50), M6 kill 2 animals (80), M7 dig 3 stone (60).
+  M4 dig 5 wood (50), M5 kill 1 animal (50), M6 kill 2 animals (80),
+  M7 dig 3 stone (60), M_door1_open (50, bonus to the first unlocker).
 
 CHAMBER 2 — Cooperative gear production (6 heavy purple anvils):
 - 6 PURPLE anvils require MULTIPLE AGENTS to break. They are the only

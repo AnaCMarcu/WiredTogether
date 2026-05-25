@@ -24,6 +24,12 @@ five_chambers.MILESTONE_DEFS = {
     m5_kill_1_animal     = { track="ch1_solo",  reward=50,  once=true },
     m6_kill_2_animals    = { track="ch1_solo",  reward=80,  once=true },
     m7_dig_3_stone       = { track="ch1_solo",  reward=60,  once=true },
+    -- Door 1 unlock bonus. Fires for the agent whose Ch1 milestone first
+    -- caused open_door1() to fire (i.e. the agent who unlocked Ch1→Ch2
+    -- for the whole team). Teammates ride for free through the open door
+    -- but don't get this bonus; Hebbian's job is to amplify the
+    -- "follow the leader" pattern that creates.
+    m_door1_open         = { track="ch1_solo",  reward=50,  once=true },
     -- Ch2 anvil cooperation
     m8_anvil_A1          = { track="ch2_anvils", reward=40, once=true },
     m9_anvil_A2          = { track="ch2_anvils", reward=40, once=true },
@@ -113,6 +119,17 @@ function five_chambers.reset_milestone_state()
     end
 end
 
+-- Ch1 milestones that unlock Door 1 the first time any one of them fires.
+-- Lookup table (not a list) so the check in fire_milestone is O(1).
+local _CH1_UNLOCK_MILESTONES = {
+    m2_dig_3_any      = true,
+    m3_pickup_3       = true,
+    m4_dig_5_wood     = true,
+    m5_kill_1_animal  = true,
+    m6_kill_2_animals = true,
+    m7_dig_3_stone    = true,
+}
+
 -- Fire a milestone for a list of contributor player names.
 -- Skips contributors who already fired this milestone (when once=true).
 function five_chambers.fire_milestone(milestone_id, contributors)
@@ -140,6 +157,19 @@ function five_chambers.fire_milestone(milestone_id, contributors)
     if #actual == 0 then return end
 
     five_chambers.emit_milestone(milestone_id, actual, def.reward)
+
+    -- Door 1 unlock hook. The first agent to fire any of m2..m7 unlocks
+    -- Ch1→Ch2 for the whole team and earns the m_door1_open bonus.
+    -- door1_open guard makes the unlock fire at most once per episode
+    -- (m_door1_open's once=true would also dedup per-agent, but the
+    -- guard avoids a second redundant open_door1() call when a later
+    -- agent fires their own first m2..m7).
+    if _CH1_UNLOCK_MILESTONES[milestone_id]
+       and five_chambers.door_state
+       and not five_chambers.door_state.door1_open then
+        five_chambers.open_door1()
+        five_chambers.fire_milestone("m_door1_open", {actual[1]})
+    end
 end
 
 -- ──────────────────────────────────────────────────────────────────

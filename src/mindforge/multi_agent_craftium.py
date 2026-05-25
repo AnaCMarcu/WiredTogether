@@ -1195,18 +1195,49 @@ async def run(args):
             global_step += 1
             logging.info(f"ep={episode+1} step={step+1}/{max_steps} global_step={global_step}")
 
-            # Python-driven Ch1→Ch2 timeout: when this episode has run for
-            # ch1_timeout_steps env steps, signal lua to teleport every agent
-            # to its Ch2 fallback spawn. Counting in Python is robust against
-            # any lua-tick rate quirks (the lua-side step_counter check is
-            # left in as a fallback but was observed never to fire).
+            # Python-driven Ch1→Ch2 rescue teleport. Fires at most once per
+            # episode at step ≥ ch1_timeout_steps. Three regimes by chamber
+            # count past Ch1:
+            #   ≥ 2 advanced  → skip; the anvil-coop pair is already in
+            #                   place, third agent can join via Door 1
+            #                   organically (or stay behind — they'll get
+            #                   another chance next episode).
+            #   1 advanced    → REGROUP: the lone leader gets pulled back
+            #                   to the Ch2 fallback spawn alongside the
+            #                   stragglers. Brief disruption, but it
+            #                   clusters all 3 agents at the anvil-
+            #                   coordination zone (see CH2_FALLBACK_SPAWNS)
+            #                   so Ch2 cooperation can actually happen.
+            #   0 advanced    → RESCUE: classic timeout behaviour, all
+            #                   agents teleported to fallback spawns.
+            # Threshold of 2 = the anvil-pair size; cooperative tasks below
+            # that are impossible regardless of who's in Ch2.
             if (not _ch1_force_teleport_fired
                     and step + 1 >= args.ch1_timeout_steps):
-                if environment.force_ch1_teleport():
+                try:
+                    _trigger_chambers = [
+                        environment.get_chamber(_i) for _i in range(num_agents)
+                    ]
+                except Exception:
+                    _trigger_chambers = []
+                _n_advanced = sum(
+                    1 for _c in _trigger_chambers
+                    if _c is not None and _c != "ch1"
+                )
+                if _n_advanced >= 2:
+                    # Mark fired so we don't poll again this episode.
                     _ch1_force_teleport_fired = True
-                    print(f"[CH1_TIMEOUT] Python-side trigger fired "
-                          f"at ep={episode+1} step={step+1} "
-                          f"(threshold={args.ch1_timeout_steps})")
+                    print(f"[CH1_TIMEOUT] skipped at ep={episode+1} "
+                          f"step={step+1}: {_n_advanced} agents past Ch1 "
+                          f"(chambers={_trigger_chambers})")
+                elif environment.force_ch1_teleport():
+                    _ch1_force_teleport_fired = True
+                    _verb = "RESCUE" if _n_advanced == 0 else "REGROUP"
+                    print(f"[CH1_TIMEOUT] {_verb} at ep={episode+1} "
+                          f"step={step+1} "
+                          f"(threshold={args.ch1_timeout_steps}, "
+                          f"n_advanced={_n_advanced}, "
+                          f"chambers={_trigger_chambers})")
 
             if step % log_interval == 0:
                 returns_str = "  ".join(
