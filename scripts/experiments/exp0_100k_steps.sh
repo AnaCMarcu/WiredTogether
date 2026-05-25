@@ -1,9 +1,12 @@
 #!/bin/bash
 # ── exp0_100k_steps.sh ───────────────────────────────────────────────────────
-# Login-node launcher for the 100k-step baseline sweep on five-chambers.
+# Login-node launcher for the exp0 baseline sweep on five-chambers.
+# (Name is legacy — actual budget is 5 × 8k = 40k env-steps per condition.
+#  Keep the EXP_ID stable so CKPT_ROOT paths and prior partial runs stay
+#  consistent.)
 #
-# Submits 3 condition chains × 5 chunks of 20k env-steps each
-#   = 15 SLURM jobs, 30 h wall-clock per job, 100k total env-steps per condition.
+# Submits 3 condition chains × 5 chunks of 8k env-steps each
+#   = 15 SLURM jobs, 24 h wall-clock per job, 40k total env-steps per condition.
 #
 # Conditions:
 #   llm_only      LLM-driven actions only (no RL, no Hebbian)
@@ -20,11 +23,14 @@
 #   SEED=123 bash scripts/experiments/exp0_100k_steps.sh
 #   bash scripts/experiments/exp0_100k_steps.sh --dry-run
 #
+# Each chunk uses --tag so all 5 chunks of one (condition, seed) collapse
+# into ONE run dir at runs/legacy/<EXP_ID>_<COND>/seed_<SEED>/. Episode
+# counter is restored on resume so ep0001/, ep0002/, ... form a single
+# contiguous sequence across chunks.
+#
 # Aggregation after all 15 jobs finish:
 #   python scripts/aggregate_seeds.py \
-#       runs/exp0_100k_steps/*/seed_${SEED}/ --out runs/exp0_100k_steps/agg/
-# (the latest_checkpoint.txt + restored episode counter means chunks
-#  share one logical timeline — no merging required.)
+#       runs/legacy/exp0_100k_steps_*/seed_${SEED}/ --out runs/exp0_100k_steps/agg/
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -54,7 +60,7 @@ echo "==============================================="
 echo "  $EXP_ID launcher"
 echo "  seed       : $SEED"
 echo "  conditions : ${CONDITIONS[*]}"
-echo "  num_chunks : $NUM_CHUNKS  (× 20k env-steps each = $((NUM_CHUNKS * 20))k per condition)"
+echo "  num_chunks : $NUM_CHUNKS  (× 8k env-steps each = $((NUM_CHUNKS * 8))k per condition)"
 echo "  worker     : $WORKER"
 echo "  dry_run    : $DRY_RUN"
 echo "==============================================="

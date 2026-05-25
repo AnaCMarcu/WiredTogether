@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=wt_exp0
 #SBATCH --partition=gpu-a100
-#SBATCH --time=30:00:00
+#SBATCH --time=24:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gpus-per-task=1
@@ -12,7 +12,7 @@
 
 # ── exp0_chunk.sh ────────────────────────────────────────────────────────────
 # Per-chunk SLURM worker for the exp0_100k_steps experiment.
-# Runs ONE 20k-step chunk (--episodes 4 --max-steps 5000) of
+# Runs ONE 8k-step chunk (--episodes 2 --max-steps 4000) of
 # multi_agent_craftium.py on five-chambers, then writes
 # latest_checkpoint.txt so the next chunk in the chain can resume.
 #
@@ -44,11 +44,14 @@ source "/scratch/${USER}/WiredTogether/scripts/experiments/_common.sh"
 # so re-export the value the launcher set above.
 export SEED
 
-# Chunk size: --episodes 4 × --max-steps 5000 = 20 000 env steps.
-# Matches the run_first.sh sizing for five-chambers (long episodes so agents
-# can traverse multiple chambers within one episode).
-EPISODES=4
-MAX_STEPS=5000
+# Chunk size: --episodes 2 × --max-steps 4000 = 8 000 env steps.
+# Sized to comfortably finish inside the 24 h SLURM wall-clock cap with
+# margin: at the rate observed in earlier runs (~333 steps/hr LLM+RL),
+# 8k steps fits in ~24 h and the per-episode checkpoint at episode end
+# means every chunk hands off a clean ep{N}_end checkpoint (no
+# mid-episode resume).
+EPISODES=2
+MAX_STEPS=4000
 
 # Ch1 fallback teleport: at CH1_TIMEOUT_PCT% of the episode (default 50%)
 # Python checks how many agents have advanced past Ch1:
@@ -146,6 +149,8 @@ python multi_agent_craftium.py \
     --warmup-time 300 \
     --ch1-timeout-steps "$CH1_TIMEOUT_STEPS" \
     --experiment-id "${EXP_ID}_${COND}" \
+    --tag "${EXP_ID}_${COND}" \
+    --seed "$SEED" \
     --checkpoint-dir "$CKPT_ROOT" \
     --checkpoint-interval 200 \
     "${RESUME_ARGS[@]}" \
