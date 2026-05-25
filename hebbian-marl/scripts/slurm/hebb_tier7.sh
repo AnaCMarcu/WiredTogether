@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=hebb-tier7
 #SBATCH --partition=compute
-#SBATCH --time=04:00:00
+#SBATCH --time=06:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=3G
