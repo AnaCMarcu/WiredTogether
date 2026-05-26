@@ -19,7 +19,8 @@ source "/scratch/acmarcu/WiredTogether/scripts/experiments/_common.sh"
 # Tag-driven run dir: runs/legacy/exp2_llm_hebbian/seed_42/
 
 EXP_NAME="exp2_llm_hebbian"
-SEED=42
+# Honor seed inherited from _common.sh (array index, SEED env var, or default 42).
+SEED="${SEED:-42}"
 RUN_DIR="/scratch/${USER}/WiredTogether/runs/legacy/${EXP_NAME}/seed_${SEED}"
 mkdir -p "$RUN_DIR"
 

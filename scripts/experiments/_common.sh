@@ -59,13 +59,18 @@ export MODEL_9B=/scratch/acmarcu/models/Qwen3.5-9B
 # Default: use 9B local model (override in experiment script if needed)
 export LLM_MODEL_PATH="$MODEL_9B"
 
-# ── Multi-seed support via SLURM array ──
-# Usage: submit with `sbatch --array=0-2 script.sh`
-# Seeds array — index by $SLURM_ARRAY_TASK_ID
+# ── Multi-seed support via SLURM array or explicit SEED env var ──
+# Three ways to pick a seed, in priority order:
+#   1. Submit as array job:   sbatch --array=0-2 script.sh
+#      → uses SEEDS[$SLURM_ARRAY_TASK_ID]
+#   2. Pass SEED env var:     SEED=99 sbatch --export=ALL script.sh
+#      → uses that value
+#   3. No override:           sbatch script.sh
+#      → defaults to 42
 SEEDS=(42 123 456)
 if [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
     SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
-else
+elif [ -z "${SEED:-}" ]; then
     SEED=42
 fi
 
