@@ -817,24 +817,28 @@ async def run(args):
     # config.lua reads CH1_TIMEOUT_TICKS at mod load and falls back to
     # its hard-coded default if the var is unset.
     #
-    # Tick math: each call to environment.step(action, agent_id) issues
-    # one (or _SUSTAINED_TICKS[action]) underlying env.step calls. With
-    # frameskip=3 in craftium, each underlying step fires the Lua
-    # globalstep 3 times, which increments five_chambers.step_counter.
-    # Phase 1a calls environment.step ONCE PER AGENT, so a single
-    # outer "Python step" advances step_counter by:
-    #   num_agents * frameskip                           — all-NoOp baseline
-    #   num_agents * frameskip * _SUSTAINED_TICKS[action] — when an agent Digs (5×)
-    # We pick the conservative ALL-NON-SUSTAINED conversion below
-    # (3 agents × frameskip 3 = 9 ticks/step) so Dig-heavy rollouts
-    # may trigger the teleport slightly earlier than the requested
-    # --ch1-timeout-steps; the alternative — using the maximum Dig
-    # multiplier — would let an all-NoOp run never time out.
+    # AUTHORITY: Python's per-episode step check (see "[CH1_TIMEOUT]" in
+    # the main loop) is the canonical trigger. The Lua-side step_counter
+    # ticks in WALL-CLOCK seconds regardless of whether Python is calling
+    # environment.step() — so with slow LLM inference the env effectively
+    # pauses while Python thinks, but Lua keeps ticking and crosses the
+    # threshold in real time long before Python has made the requested
+    # number of env steps. The old _LUA_TICKS_PER_ENV_STEP = num_agents*3
+    # conversion baked in the wrong assumption that the env always runs
+    # at native rate; it doesn't.
+    #
+    # Fix: inflate the Lua-side budget with a generous safety factor so
+    # the Lua fallback only fires when Python is genuinely hung (hours
+    # without progress). Python's force-flag remains the only practical
+    # trigger.
     _LUA_TICKS_PER_ENV_STEP = num_agents * 3
-    _ch1_lua_ticks = args.ch1_timeout_steps * _LUA_TICKS_PER_ENV_STEP
+    _LUA_SAFETY_FACTOR = 50   # 50× more wall-clock budget than naive conversion
+    _ch1_lua_ticks = (args.ch1_timeout_steps
+                      * _LUA_TICKS_PER_ENV_STEP * _LUA_SAFETY_FACTOR)
     os.environ["CH1_TIMEOUT_TICKS"] = str(_ch1_lua_ticks)
     print(f"[FEATURES] Ch1 timeout:        {args.ch1_timeout_steps} env steps "
-          f"({_ch1_lua_ticks} Lua ticks @ {_LUA_TICKS_PER_ENV_STEP} ticks/step)")
+          f"(Python primary). Lua fallback at {_ch1_lua_ticks} ticks "
+          f"({_LUA_TICKS_PER_ENV_STEP}×{_LUA_SAFETY_FACTOR}/step safety margin).")
 
     environment = CraftiumEnvironmentInterface(
         num_agents=num_agents,
