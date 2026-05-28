@@ -238,14 +238,126 @@ class CooperationMetric:
             return 0.0
         return max(per_agent.values()) - min(per_agent.values())
 
+    # ── Per-chamber cooperation scoring ───────────────────────────────
+    # Cooperative chambers contribute perf × fair to the overall score
+    # ONLY if the team reached them. Ch1 is solo, so it's excluded.
+    _COOPERATIVE_CHAMBERS = ("ch2", "ch3", "ch4", "ch5")
+
+    # Milestone-prefix groups used to compute per-chamber performance /
+    # fairness from the per-fire contributor lists in milestone_log.
+    _CH2_ANVIL_PREFIXES = ("m8_", "m9_", "m10_", "m11_", "m12_", "m13_")
+    _CH3_PRESS_PREFIXES = ("m17_",)
+    _CH3_DOOR_PREFIXES  = ("m18_",)
+    _CH3_REGROUP_PREFIX = ("m19_",)
+
+    def _milestone_count(self, prefixes):
+        return sum(
+            1 for m in self.milestone_log
+            if any(m["milestone"].startswith(p) for p in prefixes)
+        )
+
+    def _milestone_contributor_counts(self, prefixes):
+        """Per-agent count of contributions to milestones matching ``prefixes``.
+        Returns a dict keyed by every agent id (0 for non-contributors) so the
+        Gini reflects participation gaps, not just non-zero-only inequality."""
+        counts = {a: 0 for a in self.agent_ids}
+        for m in self.milestone_log:
+            if not any(m["milestone"].startswith(p) for p in prefixes):
+                continue
+            for c in m["contributors"]:
+                aid = self._to_int_id(c)
+                if aid in counts:
+                    counts[aid] += 1
+        return counts
+
+    def _chamber_performance(self, chamber):
+        """Performance in [0, 1] — how much of the chamber's cooperative
+        content the team actually completed."""
+        if chamber == "ch2":
+            # 6 anvils to break (m8..m13), once-each.
+            return min(self._milestone_count(self._CH2_ANVIL_PREFIXES) / 6.0, 1.0)
+        if chamber == "ch3":
+            # Switch puzzle: 3 switches pressed (m17) + 3 cell doors opened
+            # (m18, consequence of teammate presses) + 1 team regroup (m19).
+            # Max contributions = 7.
+            total = (self._milestone_count(self._CH3_PRESS_PREFIXES)
+                     + self._milestone_count(self._CH3_DOOR_PREFIXES)
+                     + self._milestone_count(self._CH3_REGROUP_PREFIX))
+            return min(total / 7.0, 1.0)
+        if chamber == "ch4":
+            # 3 zombies × ~20 HP each = 60 total combat damage budget.
+            return min(sum(self.ch4_damage.values()) / 60.0, 1.0)
+        if chamber == "ch5":
+            # Boss = 60 HP.
+            return min(sum(self.ch5_damage.values()) / 60.0, 1.0)
+        return 0.0
+
+    def _chamber_fairness(self, chamber):
+        """Fairness in [0, 1] = 1 − Gini of per-agent contributions.
+        1.0 = perfectly equal across agents, 0.0 = one agent did everything.
+
+        For Ch2 anvils and Ch3 switches: count milestone contributor entries.
+        For Ch4 / Ch5 combat: per-agent damage values."""
+        if chamber == "ch2":
+            counts = self._milestone_contributor_counts(self._CH2_ANVIL_PREFIXES)
+        elif chamber == "ch3":
+            # Stick to switch presses — door-openings (m18) double-count the
+            # same cooperation since they are CAUSED by another agent's press
+            # in the rotational wiring (A→B→C→A).
+            counts = self._milestone_contributor_counts(self._CH3_PRESS_PREFIXES)
+        elif chamber == "ch4":
+            counts = {a: self.ch4_damage.get(a, 0.0) for a in self.agent_ids}
+        elif chamber == "ch5":
+            counts = {a: self.ch5_damage.get(a, 0.0) for a in self.agent_ids}
+        else:
+            return 1.0
+        return 1.0 - self._gini(counts)
+
+    def _cooperation_breakdown(self):
+        """Component breakdown of the cooperation_score, for interpretability.
+        ``sum(component values) / 5`` equals cooperation_score."""
+        out = {"comm_eff": self._comm_efficacy()}
+        for chamber in self._COOPERATIVE_CHAMBERS:
+            reached = chamber in self.chamber_entry_step
+            if reached:
+                perf = self._chamber_performance(chamber)
+                fair = self._chamber_fairness(chamber)
+                score = perf * fair
+            else:
+                perf = 0.0
+                fair = 0.0
+                score = 0.0
+            out[chamber] = {
+                "reached": reached,
+                "performance": perf,
+                "fairness": fair,
+                "score": score,
+            }
+        return out
+
     def _cooperation_score(self):
-        joint_dig_norm = min(self.joint_dig_events / 50.0, 1.0)
-        proximity_norm = min(self.proximity_events / 300.0, 1.0)
-        comm_eff = self._comm_efficacy()
-        ch5_fairness = 1.0 - self._gini(self.ch5_damage)
-        balance = 1.0 - min(self._carry_imbalance() / 10.0, 1.0)
-        return (0.2 * joint_dig_norm + 0.2 * proximity_norm +
-                0.2 * comm_eff + 0.2 * ch5_fairness + 0.2 * balance)
+        """Mean of (comm_eff, perf×fair per cooperative chamber).
+
+        Five components, each in [0, 1]:
+          1. comm_efficacy — fraction of multi-contributor milestones preceded
+             by communication.
+          2-5. Per cooperative chamber (Ch2..Ch5): performance × fairness.
+               Unreached chambers contribute 0 — so a team that never engages
+               cooperative content cannot inflate the score by virtue of "no
+               data = perfect fairness", which was the old metric's bug.
+
+        Ch1 is excluded: it is by design a solo-learning chamber with no
+        cooperative mechanic to score.
+        """
+        components = [self._comm_efficacy()]
+        for chamber in self._COOPERATIVE_CHAMBERS:
+            if chamber in self.chamber_entry_step:
+                perf = self._chamber_performance(chamber)
+                fair = self._chamber_fairness(chamber)
+                components.append(perf * fair)
+            else:
+                components.append(0.0)
+        return sum(components) / len(components)
 
     def _pair_to_matrix(self, nested) -> list:
         """Convert defaultdict[i][j] → N×N list (zero-filled, symmetric handled
@@ -276,6 +388,11 @@ class CooperationMetric:
             "communication_efficacy": self._comm_efficacy(),
             "carry_imbalance": self._carry_imbalance(),
             "cooperation_score": self._cooperation_score(),
+            # Per-component breakdown of cooperation_score (interpretability).
+            # Each cooperative chamber reports reached/perf/fair/score so the
+            # headline number can be traced back to "Ch3 was the weak link"
+            # vs. "everyone skipped Ch4" etc.
+            "cooperation_breakdown": self._cooperation_breakdown(),
             # Per-pair interaction tensor — five N×N planes covering the
             # cooperative mechanics in each chamber.
             "pair_interaction": {
