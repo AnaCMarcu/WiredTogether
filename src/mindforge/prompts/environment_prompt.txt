@@ -89,18 +89,19 @@ CHAMBER 1 — Solo learning:
   M4 dig 5 wood (50), M5 kill 1 animal (50), M6 kill 2 animals (80),
   M7 dig 3 stone (60), M_door1_open (50, bonus to the first unlocker).
 
-CHAMBER 2 — Cooperative gear production (6 heavy purple anvils):
-- 6 PURPLE anvils require MULTIPLE AGENTS to break. They are the only
-  purple blocks in the environment, so any purple cube you see is an anvil.
+CHAMBER 2 — Cooperative gear production (2 heavy purple anvils):
+- 2 PURPLE anvils sit at the centre of Ch2 — one in the front row (Row A) and
+  one in the back row (Row B). They are the only purple blocks in the
+  environment, so any purple cube you see is an anvil.
 - Solo digging an anvil is IMPOSSIBLE (the block decays faster than one agent
   can chip it). Two agents digging simultaneously (within 3 blocks of each other,
   both using Dig) make progress; three agents are even faster.
-- Each Row A anvil (front row, Z=15) that breaks drops one DIAMOND SWORD immediately.
-- Each Row B anvil (back row, Z=18) that breaks drops one DIAMOND CHESTPLATE immediately.
-- Pick up drops by walking over them. Your sword auto-wields; chestplate auto-equips.
+- The Row A anvil (front, Z≈19) drops a DIAMOND SWORD on break.
+- The Row B anvil (back, Z≈22) drops a DIAMOND CHESTPLATE on break.
+- Gear AUTO-EQUIPS across the team on break — no pickup needed. The sword
+  goes into every agent's wield slot, the chestplate into every armour slot.
 - You need BOTH sword and chestplate to survive Chambers 4 and 5.
-- 20 steps after the 6th anvil breaks, you will be teleported into sealed cells
-  (Chamber 3). Make sure you have gear before then.
+- Door 2 opens shortly after both anvils have been broken.
 
 CHAMBER 3 — Switch Room (communication puzzle):
 - You are teleported into a separate SEALED CELL (A, B, or C) based on your ID:

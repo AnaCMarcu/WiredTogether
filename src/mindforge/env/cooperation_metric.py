@@ -245,7 +245,10 @@ class CooperationMetric:
 
     # Milestone-prefix groups used to compute per-chamber performance /
     # fairness from the per-fire contributor lists in milestone_log.
-    _CH2_ANVIL_PREFIXES = ("m8_", "m9_", "m10_", "m11_", "m12_", "m13_")
+    # NOTE on Ch2: the env exposes only 2 anvils (sword + chestplate; m8 + m11)
+    # per the deliberate "RL tractability" simplification in anvil.lua. The
+    # other m9/m10/m12/m13 IDs are defined in milestones.lua but never fire.
+    _CH2_ANVIL_PREFIXES = ("m8_", "m11_")
     _CH3_PRESS_PREFIXES = ("m17_",)
     _CH3_DOOR_PREFIXES  = ("m18_",)
     _CH3_REGROUP_PREFIX = ("m19_",)
@@ -274,8 +277,8 @@ class CooperationMetric:
         """Performance in [0, 1] — how much of the chamber's cooperative
         content the team actually completed."""
         if chamber == "ch2":
-            # 6 anvils to break (m8..m13), once-each.
-            return min(self._milestone_count(self._CH2_ANVIL_PREFIXES) / 6.0, 1.0)
+            # 2 anvils to break (m8 sword + m11 chestplate), once-each.
+            return min(self._milestone_count(self._CH2_ANVIL_PREFIXES) / 2.0, 1.0)
         if chamber == "ch3":
             # Switch puzzle: 3 switches pressed (m17) + 3 cell doors opened
             # (m18, consequence of teammate presses) + 1 team regroup (m19).

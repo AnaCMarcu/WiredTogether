@@ -47,7 +47,7 @@ import json as _json
 
 from rl_layer import RLConfig, RLLayer, HebbianConfig, HebbianSocialGraph
 
-ROLE_NAMES = ["agent"]
+ROLE_NAMES = ["agent", "hunter", "harvester", "scouter"]
 
 # Macro action names — used to detect when a macro was selected so the RL
 # buffer defers store_reward() until the macro completes.
@@ -184,20 +184,34 @@ def parse_args():
                              "schema bridge discover both stacks uniformly.")
     parser.add_argument("--log-interval", type=int, default=10,
                         help="Print a reward/metric summary every N steps (default 10)")
-    # ── Team composition (five-chambers: all agents are homogeneous) ──
+    # ── Team composition ─────────────────────────────────────────────
+    # homogeneous-agent : all agents share --homogeneous-role (default).
+    # heterogeneous     : agents take distinct roles from --roles
+    #                     (comma-separated list, len must == --num-agents).
     parser.add_argument(
         "--team-mode",
         type=str,
         default="homogeneous-agent",
-        choices=["homogeneous-agent"],
-        help="All agents share the same 'agent' role in five-chambers.",
+        choices=["homogeneous-agent", "heterogeneous"],
+        help="homogeneous-agent: all agents share --homogeneous-role. "
+             "heterogeneous: each agent gets a distinct role from --roles.",
     )
     parser.add_argument(
         "--homogeneous-role",
         type=str,
         default="agent",
-        choices=["agent"],
-        help="Role for all agents (fixed: agent).",
+        choices=["agent", "hunter", "harvester", "scouter"],
+        help="Role for all agents in homogeneous-agent mode (default: agent).",
+    )
+    parser.add_argument(
+        "--roles",
+        type=str,
+        default=None,
+        help="Comma-separated role list for heterogeneous mode "
+             "(e.g. 'hunter,harvester,scouter'). Length must equal --num-agents. "
+             "Each role must be one of: agent, hunter, harvester, scouter. "
+             "Order maps to agent_0, agent_1, ... so changing the order changes "
+             "which physical spawn gets which role — keep it stable across runs.",
     )
     # ── Phased difficulty ──
     parser.add_argument("--survival-mode", action="store_true",
@@ -271,14 +285,54 @@ def build_role_configs(
     role_prompts,
     team_mode="homogeneous-agent",
     homogeneous_role="agent",
+    roles=None,
 ):
-    """Build ROLE_CONFIGS for num_agents. All agents share the 'agent' role."""
-    role_name = "agent"
+    """Build ROLE_CONFIGS for num_agents.
+
+    Two modes:
+      * homogeneous-agent: every agent gets ``homogeneous_role`` (default
+        "agent" — matches all prior runs).
+      * heterogeneous: ``roles`` is a list of role names of length
+        ``num_agents``; agent_i is assigned roles[i]. This is what makes
+        the Hebbian bonds meaningful — symmetric teams give symmetric W.
+
+    ``roles`` may also be a comma-separated string for CLI convenience.
+    """
+    if team_mode == "heterogeneous":
+        if roles is None:
+            raise ValueError(
+                "team_mode='heterogeneous' requires --roles "
+                "(comma-separated list, length == num_agents)."
+            )
+        if isinstance(roles, str):
+            roles = [r.strip() for r in roles.split(",") if r.strip()]
+        if len(roles) != num_agents:
+            raise ValueError(
+                f"--roles has {len(roles)} entries but num_agents is "
+                f"{num_agents}. They must match."
+            )
+        for r in roles:
+            if r not in role_prompts:
+                raise ValueError(
+                    f"Unknown role: {r!r}. Available roles: "
+                    f"{sorted(role_prompts.keys())}."
+                )
+        assigned_roles = list(roles)
+    else:
+        if homogeneous_role not in role_prompts:
+            raise ValueError(
+                f"Unknown homogeneous_role: {homogeneous_role!r}. "
+                f"Available roles: {sorted(role_prompts.keys())}."
+            )
+        assigned_roles = [homogeneous_role] * num_agents
+
     return [
         {
-            "name": role_name,
+            "name": assigned_roles[i],
             "agent_name": f"agent_{i}",
-            "curriculum_prompt": role_prompts[role_name].format(num_agents=num_agents),
+            "curriculum_prompt": role_prompts[assigned_roles[i]].format(
+                num_agents=num_agents
+            ),
         }
         for i in range(num_agents)
     ]
@@ -801,6 +855,7 @@ async def run(args):
         prompts["roles"],
         team_mode=args.team_mode,
         homogeneous_role=args.homogeneous_role,
+        roles=args.roles,
     )
 
     metric = CraftiumMetric(
@@ -812,6 +867,7 @@ async def run(args):
     # Attach team composition metadata for summary/checkpoint
     metric.team_mode = args.team_mode
     metric.homogeneous_role = args.homogeneous_role
+    metric.roles = [rc["name"] for rc in role_configs]
 
     # Pass the Ch1 timeout to the Lua mod via an env var. The Lua side
     # config.lua reads CH1_TIMEOUT_TICKS at mod load and falls back to
@@ -944,6 +1000,8 @@ async def run(args):
     _feat_sep = "─" * 60
     print(f"\n{_feat_sep}")
     print(f"[FEATURES] Team mode:        {args.team_mode}  ({num_agents} agents)")
+    _roles_str = ", ".join(f"agent_{i}={rc['name']}" for i, rc in enumerate(role_configs))
+    print(f"[FEATURES] Role assignment:  {_roles_str}")
     if args.survival_mode:
         if args.survival_step is not None:
             _surv_trigger = f"global_step >= {args.survival_step}"

@@ -20,7 +20,14 @@ five_chambers.total_anvils       = 0  -- set in init_anvils(); door 2 fires when
 
 -- ── Helpers ──────────────────────────────────────────────────────────
 
-local function anvil_positions()
+-- SINGLE SOURCE OF TRUTH for anvil positions. Called by init_anvils() below
+-- AND by world_gen.lua when it places the physical anvil nodes. Keeping these
+-- in sync was previously a manual job that drifted — world_gen used a 3-column
+-- N-agents loop while this file specified one centre column, so the placed
+-- nodes had no state and the state entries had no nodes. Every anvil punch
+-- silently early-returned. Exposing this function publicly makes the two
+-- callers share one definition.
+function five_chambers.anvil_positions()
     -- Two anvils: sword (row A) and chestplate (row B). Centred along x in
     -- Ch2 so all 3 agents can reach either from the south-side spawn.
     local c  = five_chambers.CH2
@@ -81,7 +88,7 @@ function five_chambers.init_anvils()
     five_chambers.anvil_state        = {}
     five_chambers.anvil_breaks_total = 0
     five_chambers.anvil_first_breaks = 0
-    local positions = anvil_positions()
+    local positions = five_chambers.anvil_positions()
     five_chambers.total_anvils = #positions
     for _, info in ipairs(positions) do
         local key = minetest.pos_to_string(info.pos)

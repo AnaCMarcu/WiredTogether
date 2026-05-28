@@ -244,12 +244,13 @@ local function build_chamber_2()
         place_node({x=d2.x, y=y, z=d2.z}, {name=wall})  -- block jumping over
     end
 
-    -- 8. Place anvils: Row A (z=z0+2=15) and Row B (z=z0+5=18).
-    --    x = x0+1 + i*3 = 3, 6, 9 for N=3.
-    for i = 0, N - 1 do
-        local ax = c.x0 + 1 + (i * 3)
-        place_node({x=ax, y=y0+1, z=c.z0+2}, {name="five_chambers:anvil"})
-        place_node({x=ax, y=y0+1, z=c.z0+5}, {name="five_chambers:anvil"})
+    -- 8. Place anvil nodes at the EXACT positions registered by
+    --    five_chambers.anvil_positions() in anvil.lua. Sharing the one
+    --    source of truth prevents the previous bug where this loop placed
+    --    six dummy nodes at x=1,4,7 while anvil.lua tracked state at the
+    --    centre column (x≈6) — net effect: zero functional anvils.
+    for _, info in ipairs(five_chambers.anvil_positions()) do
+        place_node(info.pos, {name="five_chambers:anvil"})
     end
 
     add_ceiling_lights(c.x0, c.x1, c.z0, c.z1, y1)
