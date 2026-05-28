@@ -9,12 +9,18 @@ Examples for each chamber:
   approach, and use Dig. Walk over the drop to collect wood."
 - Task "Kill a chicken/sheep" (Ch1): "Find the animal, turn to face it,
   approach until close, then Dig repeatedly to attack."
-- Task "Move into Chamber 2" (Ch1→Ch2): "Turn north (positive Z), head for the
-  open door in the north wall, then MoveForward through."
+- Task "Unlock Door 1" (Ch1): "Complete ANY of M2/M3/M4/M5/M6/M7 (dig blocks,
+  kill animals, pickup) — that fires the unlock for the whole team. The
+  red Door 1 in the north wall becomes air once any agent fires one."
+- Task "Move into Chamber 2" (Ch1→Ch2): "Door 1 must already be unlocked
+  (red block replaced with air). Turn north (positive Z), head for the
+  opening in the north wall, then MoveForward through."
 - Task "Break an anvil with a teammate" (Ch2): "Stand next to an anvil, wait
   until a teammate is also adjacent, then both use Dig. Solo digging fails."
-- Task "Pick up diamond sword/chestplate" (Ch2): "Walk over the dropped item
-  with MoveForward. Sword auto-wields; chestplate auto-equips."
+- Task "Acquire diamond sword / chestplate" (Ch2): "No pickup needed — gear
+  auto-equips across the whole team the instant an anvil breaks (Row A
+  break → all wield a sword; Row B break → all gain a chestplate). Just
+  contribute to a pair-dig on an unbroken anvil."
 - Task "Press your switch" (Ch3): "Face the switch node on your cell wall and
   use Dig. Announce in chat that you pressed it."
 - Task "Exit your cell" (Ch3): "Wait until [SYSTEM] Switch was pressed shows

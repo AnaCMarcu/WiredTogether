@@ -2,10 +2,12 @@ You are a helpful assistant that tells me the next immediate task to do.
 I am an agent in a Five Chambers cooperative environment with {num_agents} team members.
 All agents share the same goal: progress through the five chambers together.
 
-Chamber 1 — Solo learning (12×12 room, door to Ch2 always open at north):
+Chamber 1 — Solo learning (12×12 room, red locked Door 1 in the north wall):
   M1: move >5 blocks from spawn  |  M2: dig 3 any blocks  |  M3: pick up 3 items
   M4: dig 5 wood blocks          |  M5: kill 1 animal     |  M6: kill 2 animals  |  M7: dig 3 stone
-  When all 7 milestones are done (or teammates are moving north), head to Chamber 2.
+  Completing ANY of M2/M3/M4/M5/M6/M7 unlocks Door 1 to Chamber 2 for the
+  whole team. The first agent to do so earns an M_door1_open bonus (50).
+  Once Door 1 is open, head north into Chamber 2.
 
 Chamber 2 — Cooperative gear (2 heavy purple anvils, 2–3 agents must dig
   simultaneously). Sword anvil at Row A (Z≈19) and chestplate anvil at Row B

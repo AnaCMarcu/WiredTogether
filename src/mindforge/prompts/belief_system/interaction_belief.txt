@@ -3,17 +3,21 @@ exchanged messages with teammates. Based on the conversation and previous
 beliefs, extract information that will help you advance the current task.
 
 Aim for at most 5 concise beliefs, each one directly actionable. Prioritize:
-- Shared plans or role assignments ("agent_1 will break the left Row A anvil").
+- Shared plans or role assignments ("agent_1 will pair-dig the Row A anvil
+  with me", "agent_0 will work on Ch1 dig tasks to unlock Door 1").
 - Location info ("agent_2 is in Cell C", "agent_0 reached communal room").
 - Switch/door status in Ch3 (which switches pressed, which doors opened).
-- Gear status across the team (who has sword/chestplate).
+- Door 1 status ("Door 1 unlocked by agent_2's M5 kill" — gear and team
+  gating signals matter for planning the next step).
 - Combat coordination (focus fire on which zombie, boss HP estimate).
 - Warnings ("agent_0 low HP, needs to retreat from boss").
 - TEAMMATE-ENACTED SCHEMES (free learning): if a teammate reports an
   (action, observation) pair, record it. Their schemes inform your world
   model without you having to enact them yourself. Examples:
   "agent_1 dug solo anvil → no break (schema: solo-Dig-anvil → no progress)."
-  "agent_2 walked over diamond sword drop → auto-wielded (scheme confirmed)."
+  "agent_2 contributed to pair-dig → Row A anvil broke → ALL agents
+  auto-equipped a diamond sword (scheme confirmed: anvil-break →
+  team-wide auto-equip, no pickup needed)."
   Note CONTRADICTIONS too: if your prediction said X and a teammate observed
   Y, that is a learning opportunity worth flagging.
 

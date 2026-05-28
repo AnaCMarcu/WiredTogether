@@ -37,7 +37,7 @@ Use this priority order to judge success:
    Chamber 3 — Switch puzzle:
    - "Press the switch" → success if a "[SYSTEM] Switch was pressed" message appears in Communication, OR if reward > 0 this step.
    - "Announce my cell" → success if the agent's chat this step contains a cell identifier (A, B, or C).
-   - "Walk to communal room" / "Regroup" → check Position: Z should be in range 33–38 (communal side of Ch3).
+   - "Walk to communal room" / "Regroup" → check Position: Z should be in range 37–49 (communal side of Ch3). Z 33–35 is still inside the isolation cells; Z=50 is the north wall.
    Chamber 4/5 — Combat:
    - "Kill zombies" → check for rotten_flesh in inventory (each zombie drops it), or reward > 0.
    - "Attack the boss" → reward > 0 this step confirms a hit landed.

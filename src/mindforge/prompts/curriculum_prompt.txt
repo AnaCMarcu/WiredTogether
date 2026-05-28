@@ -17,7 +17,8 @@ Respond in JSON: {{"reasoning": "...", "task": "..."}}
 Guidance by chamber (use only what applies):
 - Ch1, no digs yet:                "Dig a tree (move to nearest wood block and use Dig)"
 - Ch1, no animals killed:          "Find and attack a chicken or sheep"
-- Ch1, all solo tasks done:        "Move north through the open door into Chamber 2"
+- Ch1, Door 1 still locked:        "Complete one Ch1 task — ANY of M2/M3/M4/M5/M6/M7 unlocks the red Door 1 for the whole team"
+- Ch1, Door 1 open:                "Move north through the now-open Door 1 into Chamber 2"
 - Ch2, no anvils broken:           "Stand next to a teammate at the sword anvil and both use Dig together"
 - Ch2, 1 anvil broken:             "Move to the chestplate anvil and dig it together with a teammate"
 - Ch2, both anvils broken:         "Wait — Door 2 is opening, you'll be teleported to Chamber 3 shortly"
