@@ -1,0 +1,16 @@
+variant,seed,final_window_mean,n_eval_points,peak
+mappo_hebbian,0,0.8224,59,0.8476
+mappo_hebbian,1,0.9143,59,0.9281
+mappo_hebbian,2,0.7291,59,0.7447
+mappo_hebbian,3,0.9143,59,0.9657
+mappo_hebbian,4,0.8931,59,0.9103
+mappo_hebbian_r,0,0.7505,59,0.7541
+mappo_hebbian_r,1,0.6736,59,0.6826
+mappo_hebbian_r,2,0.7462,59,0.7647
+mappo_hebbian_r,3,0.7379,59,0.7533
+mappo_hebbian_r,4,0.7049,59,0.7157
+mappo_hebbian_uniform_r,0,0.9460,59,0.9558
+mappo_hebbian_uniform_r,1,0.9544,59,0.9651
+mappo_hebbian_uniform_r,2,0.8694,59,0.8834
+mappo_hebbian_uniform_r,3,0.8799,59,0.8932
+mappo_hebbian_uniform_r,4,0.8623,59,0.8989

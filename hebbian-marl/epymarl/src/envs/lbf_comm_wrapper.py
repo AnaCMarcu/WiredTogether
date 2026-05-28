@@ -183,7 +183,7 @@ def _register_comm_envs():
     import lbforaging  # noqa: F401  ensure lbforaging's own register() ran first
 
     for size, players, foods in itertools.product(
-        range(5, 21), range(2, 5), range(1, 5)
+        range(5, 21), range(2, 5), range(1, 7)
     ):
         full_id = f"Foraging-Comm-{size}x{size}-{players}p-{foods}f-v3"
         # Skip if already registered (e.g. on re-import)

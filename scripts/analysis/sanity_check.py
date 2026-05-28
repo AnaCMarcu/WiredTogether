@@ -41,9 +41,14 @@ def get_return(kv):
     return None
 
 SANITY_RUNS = [
-    ("sanity_plain_easy",  "plain lbforaging, no comm wrapper, 8x8-2p-2f-coop, T=25"),
-    ("sanity_comm_easy",   "lbf_comm wrapper, 8x8-2p-2f-v3, T=25"),
-    ("sanity_horizon",     "Foraging-Comm-10x10-3p-3f-v3, T=100 (2x tier-1 horizon)"),
+    ("sanity_plain_easy",            "tier 6: ippo_baseline, plain lbf 8x8-2p-2f-coop, T=25"),
+    ("sanity_comm_easy",             "tier 6: ippo_baseline, lbf_comm 8x8-2p-2f-v3, T=25"),
+    ("sanity_horizon",               "tier 6: ippo_baseline, Foraging-Comm-10x10-3p-3f-v3, T=100"),
+    ("sanity_mappo_plain_easy",      "tier 7: MAPPO, plain lbf 8x8-2p-2f-coop, T=25"),
+    ("sanity_mappo_plain_hard",      "tier 7: MAPPO, plain lbf 10x10-3p-3f, T=50"),
+    ("sanity_mappo_comm",            "tier 7: MAPPO + lbf_comm wrapper (crashed)"),
+    ("sanity_mappo_hebbian_offflags","tier 8: mappo_hebbian, hebbian.enabled=False (runner sanity)"),
+    ("sanity_mappo_hebbian_r",       "tier 8: mappo_hebbian_r, reward_diffusion=True (headline)"),
 ]
 
 
