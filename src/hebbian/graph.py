@@ -381,12 +381,14 @@ class HebbianSocialGraph:
             )
             grace_bonus = cfg.failure_ltp_lr * grace_factor * cij * (1.0 - self.W)
 
-        # Main Hebbian delta — m is now (N×N), element-wise with cij and W
-        delta_main = (
-            m * cij * (1.0 - self.W)               # advantage-gated LTP/LTD
-            + cfg.base_ltp * cij * (1.0 - self.W)  # unconditional co-activity LTP
-            - cfg.decay * self.W                    # passive decay
-        )
+        # Main Hebbian delta — m is now (N×N), element-wise with cij and W.
+        # Sub-components are named so the per-interval log can report which
+        # term dominates the bond trajectory (advantage gate vs base LTP vs
+        # passive decay vs grace); collapses to one expression at apply time.
+        m_term        = m * cij * (1.0 - self.W)         # advantage-gated LTP/LTD
+        base_ltp_term = cfg.base_ltp * cij * (1.0 - self.W)  # unconditional co-activity LTP
+        decay_term    = -cfg.decay * self.W              # passive decay (≤ 0)
+        delta_main = m_term + base_ltp_term + decay_term
         if grace_bonus is not None:
             delta_main = delta_main + grace_bonus
 
@@ -421,6 +423,24 @@ class HebbianSocialGraph:
             logger.info(
                 "[Hebbian step=%d] W mean=%.4f max=%.4f  LTP pairs=%d  LTD pairs=%d%s",
                 self._step_count, mean_w, max_w, ltp_pairs, ltd_pairs, grace_str,
+            )
+            # Component breakdown — sum over all (i,j) pairs. If bonds are
+            # collapsing, the dominant negative term here identifies which
+            # knob to turn: decay→lower cfg.decay; ltd_sustained→raise
+            # cfg.ltd_threshold or lower cfg.ltd_sustained_lr; m_neg→the
+            # advantage signal is mostly negative (upstream reward issue).
+            m_pos_sum    = float(m_term[m_term > 0].sum())
+            m_neg_sum    = float(m_term[m_term < 0].sum())
+            base_ltp_sum = float(base_ltp_term.sum())
+            decay_sum    = float(decay_term.sum())
+            grace_sum    = float(grace_bonus.sum()) if grace_bonus is not None else 0.0
+            ltd_sum      = float(delta_ltd.sum())
+            logger.info(
+                "[Hebbian step=%d] Δw sums  m+=%+.4f m-=%+.4f base_ltp=%+.4f "
+                "decay=%+.4f grace=%+.4f sustained_ltd=%+.4f  net=%+.4f",
+                self._step_count, m_pos_sum, m_neg_sum, base_ltp_sum,
+                decay_sum, grace_sum, ltd_sum,
+                m_pos_sum + m_neg_sum + base_ltp_sum + decay_sum + grace_sum + ltd_sum,
             )
 
         return self.W
