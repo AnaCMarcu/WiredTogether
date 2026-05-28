@@ -32,11 +32,19 @@ SEED="${SEED:-42}"
 RUN_DIR="$WORKSPACE/WiredTogether/runs/legacy/${EXP_NAME}/seed_${SEED}"
 mkdir -p "$RUN_DIR"
 
+# Working directory MUST be on a filesystem that supports chmod, because
+# craftium's MTServerOnly copies its bundled luanti binary into a
+# `minetest-srv-<uuid>/bin/` directory in cwd via shutil.copy2.
+# PRB (/tudelft.net) rejects chmod, so we cd to node-local /tmp.
+WORK_DIR="/tmp/$USER/${EXP_NAME}_${SLURM_JOB_ID}"
+mkdir -p "$WORK_DIR"
+
 echo "== quick_test (DAIC) =="
 echo "Host:      $(hostname)"
 echo "Image:     $IMG"
 echo "Repo:      $REPO"
 echo "Run dir:   $RUN_DIR"
+echo "Work dir:  $WORK_DIR"
 echo "Seed:      $SEED"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || true
 echo "======================="
@@ -59,9 +67,9 @@ apptainer exec --nv \
     --env DISPLAY= \
     --env LIBGL_ALWAYS_SOFTWARE=1 \
     --env MESA_GL_VERSION_OVERRIDE=3.3 \
-    --pwd "$REPO/src/mindforge" \
+    --pwd "$WORK_DIR" \
     "$IMG" \
-    python -u multi_agent_craftium.py \
+    python -u "$REPO/src/mindforge/multi_agent_craftium.py" \
         --num-agents 3 \
         --episodes 1 \
         --max-steps 50 \
@@ -72,5 +80,14 @@ apptainer exec --nv \
     2>&1 | tee "$RUN_DIR/run.log"
 
 EXIT_CODE=${PIPESTATUS[0]}
+
+# Salvage anything craftium / the script dropped in cwd (minetest-srv-* debug
+# logs, gifs, etc.) back to PRB so we can inspect it after the job ends.
+# rsync without perms/owners avoids PRB chmod failures.
+echo "── archiving $WORK_DIR -> $RUN_DIR/work_artifacts/ ──"
+mkdir -p "$RUN_DIR/work_artifacts"
+rsync -r --no-perms --no-owner --no-group --no-times \
+    "$WORK_DIR/" "$RUN_DIR/work_artifacts/" 2>&1 | tail -5 || true
+
 echo "── ${EXP_NAME} python exit code: $EXIT_CODE (0 = success) ──"
 exit "$EXIT_CODE"
