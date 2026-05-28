@@ -43,6 +43,17 @@ From: python:3.12-slim-bookworm
     pip install --no-cache-dir \
         https://github.com/mikelma/craftium/releases/download/v0.0.1/craftium-0.0.1-cp312-cp312-manylinux_2_28_x86_64.whl
 
+    # Patch the wheel's Python files with the fork's fixes (binary stays from
+    # the wheel). The wheel's _create_mt_dirs misses the `isfile()` branch and
+    # tries shutil.copytree on minetest.conf — fork has the corrected logic.
+    git clone --depth 1 -b daic-changes \
+        https://github.com/AnaCMarcu/craftium_wired_together.git /tmp/craftium-fork
+    install -m 0644 /tmp/craftium-fork/craftium/minetest.py \
+        /usr/local/lib/python3.12/site-packages/craftium/minetest.py
+    install -m 0644 /tmp/craftium-fork/craftium/multiagent_env.py \
+        /usr/local/lib/python3.12/site-packages/craftium/multiagent_env.py
+    rm -rf /tmp/craftium-fork
+
     # WiredTogether deps (mirrors pyproject.toml).
     # Pin floors only, EXCEPT gymnasium — craftium pins it to ==0.29.1.
     pip install --no-cache-dir \
