@@ -210,6 +210,7 @@ __marimo__/
 # Runs
 runs/
 runs_from_hpc/
+runs_from_daic/
 
 # DAIC job outputs (keep submit.sh + script.py tracked; ignore generated logs)
 daic/slurm_*.out
