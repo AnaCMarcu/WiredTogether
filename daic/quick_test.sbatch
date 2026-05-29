@@ -68,6 +68,9 @@ apptainer exec --nv \
     --env LIBGL_ALWAYS_SOFTWARE=1 \
     --env MESA_GL_VERSION_OVERRIDE=3.3 \
     --env LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/craftium.libs \
+    --env PYTHONIOENCODING=utf-8 \
+    --env LANG=C.UTF-8 \
+    --env LC_ALL=C.UTF-8 \
     --pwd "$WORK_DIR" \
     "$IMG" \
     python -u "$REPO/src/mindforge/multi_agent_craftium.py" \
