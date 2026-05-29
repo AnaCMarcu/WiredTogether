@@ -518,3 +518,54 @@ experiments:
     env_config: lbf_comm
     env_key: "Foraging-Comm-10x10-3p-3f-coop-v3"
     rationale: "tier-11 control — uniform diffusion under forced cooperation. Pairs with tier-9 control to isolate the force_coop effect."
+
+  # ── Tier 12 — Smaller forced-coop env: 8x8-3p-2f-coop ─────────────────
+  # Tier 11 confirmed force_coop on 10x10-3p-3f is unlearnable in 3M
+  # steps (15/15 runs ended at exactly 0 return — exploration never
+  # bootstraps the cooperative-loading event). Tier 12 drops to the
+  # smallest 3-agent forced-coop variant: 8x8 grid, only 2 foods, every
+  # food level 3.
+  #
+  # Rationale: on 8x8 the grid is small enough that 3 agents are
+  # frequently in spatial-proximity range of each other AND a food.
+  # With only 2 foods (vs. 3 in tier 11), the chance of all 3 agents
+  # randomly converging on the same food is higher per episode.
+  # Canonical MAPPO reaches ~0.9 on 8x8-2p-2f-coop at 1M steps (tier 6
+  # verified). Adding a 3rd agent and forcing all-3 cooperation makes
+  # this harder, but plausibly within reach at 3M.
+  #
+  # If tier 12 also collapses to 0, all forced-cooperation LBF settings
+  # are likely too hard for the Hebbian bond hypothesis to be testable
+  # in this env family — pivot to RWARE / matrix-games becomes
+  # decisive next step.
+  #
+  # Three variants × 5 seeds, paired Wilcoxon on final-window means:
+  #   A) mappo_hebbian_r > mappo_hebbian
+  #   B) mappo_hebbian_r > mappo_hebbian_uniform_r
+  #
+  # Submit all 15:
+  #   sbatch --array=0-14 scripts/slurm/hebb_tier12.sh
+
+  - variant: mappo_hebbian
+    tier: 12
+    t_max: 3000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-8x8-3p-2f-coop-v3"
+    rationale: "tier-12 baseline — MAPPO baseline on the smallest 3-agent forced-coop LBF variant."
+
+  - variant: mappo_hebbian_r
+    tier: 12
+    t_max: 3000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-8x8-3p-2f-coop-v3"
+    rationale: "tier-12 headline — Hebbian-weighted diffusion on the smallest 3p coop env. Tests bond differentiation in the only LBF coop setting that has a plausible chance of learning at 3M."
+
+  - variant: mappo_hebbian_uniform_r
+    tier: 12
+    t_max: 3000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-8x8-3p-2f-coop-v3"
+    rationale: "tier-12 control — uniform diffusion on the smallest 3p coop env. Pairs with tier-11 control for cross-map comparison."
