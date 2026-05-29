@@ -102,8 +102,18 @@ class CraftiumEnvironmentInterface:
     # With frameskip=3, each env.step() = 3 physics ticks, so multiply accordingly.
     # VoxeLibre bare-hand: wood ~15 physics ticks, stone ~30.
     # At frameskip=3: 3 env steps = 9 ticks (enough for wood), 6 steps = 18 ticks.
+    #
+    # Raised from 5 -> 10 (30 physics ticks per Dig) to guarantee stone
+    # breaks in a single Dig action. With the old 5-tick budget, agents
+    # rarely strung two consecutive Digs on the same target (the action
+    # mix is heavily interspersed with TurnRight/MoveForward), so stone
+    # dig-progress kept resetting and m2_dig_3_any / m7_dig_3_stone almost
+    # never fired (0 dig events in 50 steps × 3 agents in the quick_test
+    # smoke run). Trade-off: each Dig is slower wall-clock, so the agent
+    # gets fewer total decisions per episode. Worth it — the previous
+    # rate produced zero milestone progress.
     _SUSTAINED_TICKS = {
-        "Dig": 5,  # 5 env steps × frameskip=3 = 15 physics ticks — enough for wood with any tool
+        "Dig": 10,  # 10 env steps × frameskip=3 = 30 physics ticks — breaks stone in 1 action
     }
 
     # Position-stuck detection: if x/z haven't moved more than this threshold

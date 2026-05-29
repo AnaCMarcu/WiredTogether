@@ -54,13 +54,22 @@ five_chambers.CH1_CEIL_Y = 16   -- CEIL_Y + 1 (one block taller than ch2-5)
 -- Chamber 1 bounds (solo learning, 16×16)
 five_chambers.CH1 = { x0=0, x1=15, z0=0, z1=15 }
 
--- Ch1 spawn points (plan §2.3; exact corners for N=3).
--- y=12 = CH1_DIRT_Y + 1 — agents stand on the dirt layer, not on the
--- bedrock subfloor. ch1_spawn_pos() in util.lua is the canonical lookup.
+-- Ch1 spawn points. y=12 = CH1_DIRT_Y + 1 — agents stand on the dirt
+-- layer, not on the bedrock subfloor. ch1_spawn_pos() in util.lua is the
+-- canonical lookup.
+--
+-- Spawns are placed near the interior, not at the wall corners. Originally
+-- agents spawned at (1,1)/(10,1)/(5,10) — two of those put the agent
+-- 1 block from two bedrock walls, so the agent's initial view immediately
+-- contains a grey unbreakable wall block which the LLM consistently
+-- misclassifies as `mcl_core:stone` and Digs (no break, no milestone).
+-- The new positions are each 3+ blocks from the nearest wall and have at
+-- least one breakable target (tree or stone) within 3 blocks — so the
+-- first scan-of-the-room has something dig-worthy in view.
 five_chambers.CH1_SPAWNS_3 = {
-    [0] = {x=1,  y=12, z=1},
-    [1] = {x=10, y=12, z=1},
-    [2] = {x=5,  y=12, z=10},
+    [0] = {x=3,  y=12, z=4},   -- adjacent to stone (3,5); near trees (2,2), (5,3)
+    [1] = {x=10, y=12, z=5},   -- adjacent to tree (10,4); near stone (9,3), tree (9,6)
+    [2] = {x=5,  y=12, z=11},  -- near stone (5,8), tree (7,9), sheep (3,9)
 }
 
 -- Ch1 resource positions (plan §2.3) — all at Y=FLOOR_Y+1=11
