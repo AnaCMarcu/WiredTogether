@@ -185,9 +185,18 @@ class CooperationMetric:
     def _to_int_id(agent_id):
         if isinstance(agent_id, int):
             return agent_id
+        # Handle both 'agent_0' (Python side) and 'agent0' (Lua side player
+        # names, no underscore). The previous `split('_')[-1]` parser only
+        # worked for the underscored form — for 'agent0', split returned
+        # ['agent0'], int('agent0') raised ValueError, and the function
+        # silently returned the original string. Downstream code that
+        # treated the result as an int key (milestone_log set membership,
+        # ch4_damage / ch5_damage dict access, etc.) missed every Lua-
+        # sourced contributor.
+        s = str(agent_id).removeprefix("agent_").removeprefix("agent")
         try:
-            return int(str(agent_id).split("_")[-1])
-        except (ValueError, IndexError):
+            return int(s)
+        except ValueError:
             return agent_id
 
     def observe_milestone(self, step, milestone_id, contributors):

@@ -1889,9 +1889,20 @@ async def run(args):
                 if _rw == 0.0:
                     continue
                 for _name in _ev.get("contributors", []):
+                    # The Lua side emits contributors as 'agent0' (no
+                    # underscore — Craftium's player-name convention),
+                    # while Python often uses 'agent_0'. The previous
+                    # `split('_')[-1]` parser worked only for the
+                    # underscored form: 'agent0'.split('_') = ['agent0'],
+                    # int('agent0') raised ValueError, and the contributor
+                    # was silently skipped. Net effect: every Lua-fired
+                    # milestone reward was DROPPED — m1_move_5 / m2_dig_3
+                    # / m_door1_open contributors never reached
+                    # step_rewards_raw. Strip both prefix shapes:
+                    _s = str(_name).removeprefix("agent_").removeprefix("agent")
                     try:
-                        _aid = int(str(_name).split("_")[-1])
-                    except (ValueError, IndexError):
+                        _aid = int(_s)
+                    except ValueError:
                         continue
                     if 0 <= _aid < num_agents:
                         step_rewards_raw[_aid] += _rw
