@@ -187,9 +187,16 @@ local function build_chamber_1()
         end
     end
 
-    -- 6. Stone blocks sit on the dirt layer (y_stand).
+    -- 6. Stone blocks: 2-high pillars on the dirt layer so they reach
+    --    agent eye height (same trick as the tree trunks). Single 1-high
+    --    blocks at y_stand sit at the agent's feet and routinely escape
+    --    the first-person view — the LLM then never targets them and M7
+    --    never fires despite the stones being technically present.
+    --    Both blocks are mcl_core:stone, so digging EITHER counts toward
+    --    counts.stone in milestones.lua.
     for _, sp in ipairs(five_chambers.CH1_STONE_POSITIONS) do
-        place_node({x=sp.x, y=y_stand, z=sp.z}, {name="mcl_core:stone"})
+        place_node({x=sp.x, y=y_stand,     z=sp.z}, {name="mcl_core:stone"})
+        place_node({x=sp.x, y=y_stand + 1, z=sp.z}, {name="mcl_core:stone"})
     end
 
     -- 7. Ceiling lights so the room isn't pitch-dark.
@@ -244,13 +251,21 @@ local function build_chamber_2()
         place_node({x=d2.x, y=y, z=d2.z}, {name=wall})  -- block jumping over
     end
 
-    -- 8. Place anvil nodes at the EXACT positions registered by
-    --    five_chambers.anvil_positions() in anvil.lua. Sharing the one
-    --    source of truth prevents the previous bug where this loop placed
-    --    six dummy nodes at x=1,4,7 while anvil.lua tracked state at the
-    --    centre column (x≈6) — net effect: zero functional anvils.
+    -- 8. Place each anvil as a 2-block pillar: a gray pedestal
+    --    (`five_chambers:anvil_pedestal`, cosmetic, no on_punch) at
+    --    FLOOR_Y+1, and the punchable purple `five_chambers:anvil` at
+    --    FLOOR_Y+2 = info.pos. Lifting the anvil one block off the floor
+    --    puts the purple block at agent eye level so the LLM actually
+    --    sees and targets it; the gray pedestal makes the lifted block
+    --    look intentional rather than floating.
+    --    Sharing five_chambers.anvil_positions() between world_gen and
+    --    anvil.lua prevents the prior bug where this loop placed dummies
+    --    at x=1,4,7 while anvil.lua tracked state at the centre column
+    --    (net effect: zero functional anvils).
     for _, info in ipairs(five_chambers.anvil_positions()) do
-        place_node(info.pos, {name="five_chambers:anvil"})
+        local pedestal_pos = {x = info.pos.x, y = info.pos.y - 1, z = info.pos.z}
+        place_node(pedestal_pos, {name="five_chambers:anvil_pedestal"})
+        place_node(info.pos,     {name="five_chambers:anvil"})
     end
 
     add_ceiling_lights(c.x0, c.x1, c.z0, c.z1, y1)

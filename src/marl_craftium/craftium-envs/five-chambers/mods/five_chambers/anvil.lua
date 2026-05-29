@@ -30,8 +30,17 @@ five_chambers.total_anvils       = 0  -- set in init_anvils(); door 2 fires when
 function five_chambers.anvil_positions()
     -- Two anvils: sword (row A) and chestplate (row B). Centred along x in
     -- Ch2 so all 3 agents can reach either from the south-side spawn.
+    --
+    -- pos is the eye-level (FLOOR_Y+2) position of the PURPLE punchable
+    -- anvil — the ONLY interactive block in the pillar. world_gen.lua
+    -- additionally places a gray, non-interactive pedestal node
+    -- (`five_chambers:anvil_pedestal`) one block below at FLOOR_Y+1. The
+    -- pedestal is purely cosmetic: it lifts the anvil into the agent's
+    -- field of view but has no on_punch handler, so digging it does
+    -- nothing (and it isn't in the `stone` group, so it can't be mistaken
+    -- for an M7 dig target either).
     local c  = five_chambers.CH2
-    local y  = five_chambers.FLOOR_Y + 1
+    local y  = five_chambers.FLOOR_Y + 2
     local cx = math.floor((c.x0 + c.x1) / 2)  -- 6 for default Ch2 bounds
     return {
         {
@@ -77,6 +86,27 @@ minetest.register_node("five_chambers:anvil", {
             state.hp = state.hp + 10
         end
     end,
+})
+
+-- Cosmetic gray pedestal block. Lifts the purple anvil block into the
+-- agent's field of view (eye level at FLOOR_Y+2 instead of foot level)
+-- without itself being interactive: no on_punch handler, marked
+-- unbreakable, and deliberately NOT in the `stone` group so digging it
+-- could never count toward M7 (m7_dig_3_stone). One pedestal per anvil
+-- is placed at FLOOR_Y+1 by world_gen.lua, directly below the
+-- corresponding `five_chambers:anvil` block.
+minetest.register_node("five_chambers:anvil_pedestal", {
+    description = "Anvil Pedestal (Gray)",
+    -- Plain mid-gray over the same stone base used for the anvil — visually
+    -- a neutral architectural block, clearly distinct from the purple anvil
+    -- above it and from the red locked-door blocks elsewhere in Ch2.
+    tiles  = {
+        "default_stone.png^[colorize:#808080:160",  -- top
+        "default_stone.png^[colorize:#808080:160",  -- bottom
+        "default_stone.png^[colorize:#909090:160",  -- sides (slightly brighter)
+    },
+    groups = {unbreakable = 1},
+    -- Intentionally no on_punch.
 })
 
 -- Keep as no-op so init.lua call (legacy) does nothing harmful.
@@ -161,10 +191,11 @@ minetest.register_globalstep(function(dtime)
             end
 
             -- Destroy the anvil so it cannot be broken again this episode.
-            -- Replaces the node with air (the floor below at y0 stays intact)
-            -- and drops the entry from anvil_state so the globalstep loop
-            -- stops ticking it. Lua's `pairs` allows clearing the current
-            -- key during iteration, so this is safe inside the for loop.
+            -- Only the upper (purple, stateful) block is removed — the
+            -- gray pedestal at state.pos.y - 1 stays as a visible marker
+            -- that an anvil USED to be here. Lua's `pairs` allows clearing
+            -- the current key during iteration, so dropping the entry
+            -- inside the for loop is safe.
             minetest.set_node(state.pos, {name = "air"})
             five_chambers.anvil_state[key] = nil
             minetest.log("action",
