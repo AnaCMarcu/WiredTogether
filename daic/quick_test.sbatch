@@ -67,6 +67,9 @@ apptainer exec --nv \
     --env DISPLAY= \
     --env LIBGL_ALWAYS_SOFTWARE=1 \
     --env MESA_GL_VERSION_OVERRIDE=3.3 \
+    --env GALLIUM_DRIVER=llvmpipe \
+    --env EGL_PLATFORM=surfaceless \
+    --env MESA_LOADER_DRIVER_OVERRIDE=llvmpipe \
     --env LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/craftium.libs \
     --env PYTHONIOENCODING=utf-8 \
     --env LANG=C.UTF-8 \

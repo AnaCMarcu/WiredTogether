@@ -124,6 +124,9 @@ run_exp() {
         --env DISPLAY= \
         --env LIBGL_ALWAYS_SOFTWARE=1 \
         --env MESA_GL_VERSION_OVERRIDE=3.3 \
+        --env GALLIUM_DRIVER=llvmpipe \
+        --env EGL_PLATFORM=surfaceless \
+        --env MESA_LOADER_DRIVER_OVERRIDE=llvmpipe \
         --env WANDB_API_KEY="${WANDB_API_KEY:-}" \
         --env WANDB_MODE="${WANDB_MODE:-online}" \
         --env WANDB_DIR="$WORK_DIR" \
