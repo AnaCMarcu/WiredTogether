@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=exp3-mappo
 #SBATCH --partition=general
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
@@ -10,6 +10,8 @@
 #SBATCH --error=exp3_mappo_%j.err
 
 source "$(dirname "$0")/_common.sh"
+
+export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-mappo,centralized_critic}"
 
 # MAPPO — action-level PPO with a SHARED centralized critic V(joint_state).
 # No Hebbian. The classical multi-agent baseline.

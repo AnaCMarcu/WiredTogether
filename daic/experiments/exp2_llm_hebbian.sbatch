@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=exp2-llm-hebbian
 #SBATCH --partition=general
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
@@ -10,6 +10,8 @@
 #SBATCH --error=exp2_llm_hebbian_%j.err
 
 source "$(dirname "$0")/_common.sh"
+
+export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,2b,hebbian}"
 
 # LLM + Hebbian-in-prompt. Hebbian graph updates per env step from co-activity
 # + comm events; bond weights are injected into the agent's prompt via the

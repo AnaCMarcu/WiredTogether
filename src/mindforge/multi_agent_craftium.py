@@ -96,6 +96,27 @@ def parse_args():
                              "This flag only sizes the Lua-side backstop in case "
                              "Python's force-flag never reaches the world (mod "
                              "I/O error, etc.). Default 400 → 60000 Lua ticks.")
+    # ── Weights & Biases ──
+    parser.add_argument("--wandb", action="store_true",
+                        help="Enable Weights & Biases logging. Requires WANDB_API_KEY "
+                             "in the environment. Failures during init/log are "
+                             "tolerated and do not kill training.")
+    parser.add_argument("--wandb-project", type=str, default="wired-together",
+                        help="W&B project name (default 'wired-together').")
+    parser.add_argument("--wandb-entity", type=str, default=None,
+                        help="W&B entity (team or user). Defaults to your "
+                             "wandb-configured default entity.")
+    parser.add_argument("--wandb-tags", type=str, default="",
+                        help="Comma-separated list of tags applied to the W&B "
+                             "run (e.g. 'llm,hebbian,seed_42').")
+    parser.add_argument("--wandb-id", type=str, default=None,
+                        help="Explicit W&B run id. Defaults to the sanitised "
+                             "run_id, which makes chunked SLURM jobs resume "
+                             "into the same W&B run (resume='allow').")
+    parser.add_argument("--wandb-upload-artifacts", action="store_true",
+                        help="Also upload final_metrics.json (and summary.txt) "
+                             "as W&B artifacts at run end. Off by default to "
+                             "save bandwidth on chunked runs.")
     # ── Reproducibility ──
     parser.add_argument("--seed", type=int, default=None,
                         help="Random seed for reproducibility. Seeds torch, numpy, random, "
@@ -837,6 +858,23 @@ async def run(args):
         print(f"[RUN ID] {run_id}")
         run_paths = RunPaths.create(run_id=run_id, root="runs")
 
+    # ── Weights & Biases init ─────────────────────────────────────────────
+    # Init early so config logging happens before training starts. For
+    # chunked SLURM jobs the wandb id is derived from run_id (which is
+    # stable across chunks for tagged runs), so resume="allow" merges
+    # the chunks into the same W&B run.
+    import wandb_logger as _wb
+    _wb_tags = [t.strip() for t in (args.wandb_tags or "").split(",") if t.strip()]
+    _wb.init(
+        enabled=args.wandb,
+        project=args.wandb_project,
+        entity=args.wandb_entity,
+        run_id=run_id,
+        tags=_wb_tags,
+        config=vars(args),
+        explicit_id=args.wandb_id,
+    )
+
     # ── Phase B++ §3: resolve gif directory ──
     # ``auto`` → <run_dir>/gifs/ (run-scoped, matches GRPO layout).
     # Explicit path → use as-is (preserves the /scratch override pattern
@@ -1326,6 +1364,17 @@ async def run(args):
                           f"chambers={_trigger_chambers})")
 
             if step % log_interval == 0:
+                # W&B: throttled per-step view of the in-progress episode.
+                # Logged at log_interval cadence so we don't spam the API.
+                _wb.log({
+                    "step/ep": episode + 1,
+                    "step/step_in_ep": step + 1,
+                    "step/phase": current_phase,
+                    **{
+                        f"step/episode_return/agent_{i}": float(metric.episode_returns[i])
+                        for i in range(num_agents)
+                    },
+                }, step=global_step)
                 returns_str = "  ".join(
                     f"agent_{i}={metric.episode_returns[i]:.1f}"
                     for i in range(num_agents)
@@ -2082,6 +2131,7 @@ async def run(args):
                             hebbian_graph=hebbian_graph,
                         )
                         metric.record_rl_update(agent_id, update_info)
+                        _wb.log_rl_update(agent_id, update_info, step=global_step)
 
                     # Agent-decided token-level optimisation
                     try:
@@ -2091,6 +2141,7 @@ async def run(args):
                         )
                         if token_info:
                             metric.record_rl_token_opt(agent_id, token_info)
+                            _wb.log_rl_token_opt(agent_id, token_info, step=global_step)
 
                         # Social propagation: when an agent trains, offer the
                         # same opportunity to strongly-bonded teammates.
@@ -2114,6 +2165,7 @@ async def run(args):
                                                 soc_info.get("decision", "?"),
                                             )
                                             metric.record_rl_token_opt(j, soc_info)
+                                            _wb.log_rl_token_opt(j, soc_info, step=global_step)
                                     except Exception as _soc_exc:
                                         logging.warning(
                                             "Social token-opt agent_%d failed: %s",
@@ -2143,6 +2195,7 @@ async def run(args):
                     _critic_info = centralized_critic.update()
                     if _critic_info:
                         metric.record_rl_update(-1, _critic_info)
+                        _wb.log_rl_update(-1, _critic_info, step=global_step)
 
             # ── Phase 3b: Five-chambers milestone events ──
             # Map kill-style milestones to a target-string so the cooperation
@@ -2278,6 +2331,7 @@ async def run(args):
                     gradual_trigger_step=_gradual_trigger_step,
                 )
                 print(f"[CKPT] Shutdown checkpoint saved → {_ep_ckpt_dir}")
+                _wb.finish()
                 environment.close()
                 return
 
@@ -2295,7 +2349,44 @@ async def run(args):
             f"agent_{i}": float(metric.episode_returns[i])
             for i in range(num_agents)
         }
+        # Snapshot per-episode track rewards / milestone count / comm count
+        # BEFORE end_episode() resets them, so the W&B log uses fresh values.
+        _ep_track_rewards = {
+            i: dict(metric.track_rewards_episode[i])
+            for i in range(num_agents)
+        }
+        _ep_milestone_count = {
+            i: len(metric._agent_milestones_episode[i])
+            for i in range(num_agents)
+        }
+        _ep_comm_count = list(metric.comm_count_episode)
         metric.end_episode(final_step=_ep_final_step)
+
+        # W&B: per-episode headline numbers. step=global_step keeps the
+        # x-axis consistent with the per-step throttled view above.
+        _wb_episode_payload = {
+            "ep/index": episode + 1,
+            "ep/length": int(_ep_final_step),
+            "ep/cooperation_score": float(_coop_summary.get("cooperation_score", 0.0)),
+            "ep/total_reward": float(sum(_ep_return_per_agent.values())),
+        }
+        for i in range(num_agents):
+            _wb_episode_payload[f"ep/return/agent_{i}"] = _ep_return_per_agent[f"agent_{i}"]
+            _wb_episode_payload[f"ep/milestones_reached/agent_{i}"] = _ep_milestone_count[i]
+            _wb_episode_payload[f"ep/comm_count/agent_{i}"] = int(_ep_comm_count[i])
+            for _track, _val in _ep_track_rewards[i].items():
+                _wb_episode_payload[f"ep/track_reward/agent_{i}/{_track}"] = float(_val)
+        if hebbian_config.enabled and _hebb_W is not None:
+            try:
+                import numpy as _np
+                _W = _np.asarray(_hebb_W)
+                # Off-diagonal mean = average bond strength between distinct agents.
+                _mask = ~_np.eye(_W.shape[0], dtype=bool)
+                _wb_episode_payload["ep/hebbian/mean_bond"] = float(_W[_mask].mean())
+                _wb_episode_payload["ep/hebbian/max_bond"] = float(_W[_mask].max())
+            except Exception:
+                pass
+        _wb.log(_wb_episode_payload, step=global_step)
         _ep_summary = {
             "episode": episode + 1,
             "final_step": _ep_final_step,
@@ -2383,6 +2474,44 @@ async def run(args):
         # Force one final snapshot and re-save metrics to include it
         metric.record_graph_snapshot(metric.timestep, hebbian_graph.get_graph_metrics())
         metric.save_run_metrics()
+
+    # ── W&B: final summary + optional artifact upload ─────────────────────
+    try:
+        _wb_final = {}
+        for i in range(num_agents):
+            _ep_returns = metric.per_episode_returns[i]
+            if _ep_returns:
+                _wb_final[f"final/mean_return/agent_{i}"] = (
+                    sum(_ep_returns) / len(_ep_returns)
+                )
+            _wb_final[f"final/cumulative_return/agent_{i}"] = float(
+                metric.cumulative_returns[i]
+            )
+            _ms_counts = [len(s) for s in metric.milestones_per_episode[i]]
+            if _ms_counts:
+                _wb_final[f"final/mean_milestones/agent_{i}"] = (
+                    sum(_ms_counts) / len(_ms_counts)
+                )
+        if metric.episode_lengths:
+            _wb_final["final/mean_episode_length"] = (
+                sum(metric.episode_lengths) / len(metric.episode_lengths)
+            )
+            _wb_final["final/num_episodes"] = len(metric.episode_lengths)
+        _wb.log(_wb_final, step=global_step)
+        if args.wandb_upload_artifacts:
+            _wb.upload_file(
+                os.path.join(metric.target_folder, "final_metrics.json"),
+                name=f"final_metrics__{run_id}",
+                artifact_type="metrics",
+            )
+            _wb.upload_file(
+                os.path.join(metric.target_folder, "summary.txt"),
+                name=f"summary__{run_id}",
+                artifact_type="summary",
+            )
+    except Exception as _e:
+        logging.warning("[wandb] final summary failed: %s", _e)
+    _wb.finish()
 
     environment.close()
 

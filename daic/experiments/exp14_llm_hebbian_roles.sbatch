@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=exp14-llm-hebbian-roles
 #SBATCH --partition=general
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB

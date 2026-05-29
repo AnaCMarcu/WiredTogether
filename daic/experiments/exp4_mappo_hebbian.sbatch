@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=exp4-mappo-hebbian
 #SBATCH --partition=general
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
@@ -10,6 +10,10 @@
 #SBATCH --error=exp4_mappo_hebbian_%j.err
 
 source "$(dirname "$0")/_common.sh"
+
+# Per-experiment wandb tags layered on top of the auto tags (exp_*, seed_*).
+# Useful for filtering "all hebbian runs" or "all mappo runs" in the UI.
+export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-mappo,hebbian,centralized_critic}"
 
 # MAPPO + Hebbian — the headline thesis claim. Shared centralized critic plus
 # a Hebbian social-plasticity graph that diffuses rewards across co-bonded
