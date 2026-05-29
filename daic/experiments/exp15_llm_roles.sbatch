@@ -10,7 +10,7 @@
 #SBATCH --output=exp15_llm_roles_%j.out
 #SBATCH --error=exp15_llm_roles_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # LLM + ROLE-DIFFERENTIATED agents, NO Hebbian, NO RL. Heterogeneous
 # counterpart to exp1_llm; completes the 2x2 ablation (role × hebbian).

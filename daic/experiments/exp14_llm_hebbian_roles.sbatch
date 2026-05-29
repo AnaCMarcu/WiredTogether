@@ -10,7 +10,7 @@
 #SBATCH --output=exp14_llm_hebbian_roles_%j.out
 #SBATCH --error=exp14_llm_hebbian_roles_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # LLM + Hebbian + ROLE-DIFFERENTIATED agents. Tests whether role asymmetry
 # gives the bonds something distinct to encode (vs the symmetric collapse).

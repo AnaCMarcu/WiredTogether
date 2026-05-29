@@ -10,7 +10,7 @@
 #SBATCH --output=exp10_llm_2b_social_bias_%j.out
 #SBATCH --error=exp10_llm_2b_social_bias_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # 2B LLM + Hebbian + SocialModule (bias coupling). Stronger than exp9: the
 # module's ask_target overwrites the action LLM's communication_target at

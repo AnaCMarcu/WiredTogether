@@ -10,7 +10,7 @@
 #SBATCH --output=exp8_llm_9b_hebbian_%j.out
 #SBATCH --error=exp8_llm_9b_hebbian_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,9b,hebbian}"
 

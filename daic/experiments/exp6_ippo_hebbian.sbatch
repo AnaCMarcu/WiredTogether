@@ -10,7 +10,7 @@
 #SBATCH --output=exp6_ippo_hebbian_%j.out
 #SBATCH --error=exp6_ippo_hebbian_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # IPPO + Hebbian — "Hebbian without a shared critic" cell of the 2x3
 # comparison matrix.

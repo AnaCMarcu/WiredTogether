@@ -10,7 +10,7 @@
 #SBATCH --output=exp7_llm_9b_%j.out
 #SBATCH --error=exp7_llm_9b_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,9b}"
 

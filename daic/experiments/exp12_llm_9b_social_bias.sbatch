@@ -10,7 +10,7 @@
 #SBATCH --output=exp12_llm_9b_social_bias_%j.out
 #SBATCH --error=exp12_llm_9b_social_bias_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # 9B LLM + Hebbian + SocialModule (bias coupling). Top of the social-module
 # ablation grid at 9B scale.

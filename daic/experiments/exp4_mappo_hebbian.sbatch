@@ -10,7 +10,7 @@
 #SBATCH --output=exp4_mappo_hebbian_%j.out
 #SBATCH --error=exp4_mappo_hebbian_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # Per-experiment wandb tags layered on top of the auto tags (exp_*, seed_*).
 # Useful for filtering "all hebbian runs" or "all mappo runs" in the UI.

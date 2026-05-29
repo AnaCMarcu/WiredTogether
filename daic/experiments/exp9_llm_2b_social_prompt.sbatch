@@ -10,7 +10,7 @@
 #SBATCH --output=exp9_llm_2b_social_prompt_%j.out
 #SBATCH --error=exp9_llm_2b_social_prompt_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # 2B LLM + Hebbian + SocialModule (prompt coupling). Weakest coupling rung
 # of the social-module ablation — text-only directive into the action prompt.

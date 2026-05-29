@@ -10,7 +10,7 @@
 #SBATCH --output=exp5_ippo_%j.out
 #SBATCH --error=exp5_ippo_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # IPPO — action-level PPO with PER-AGENT independent value heads. No shared
 # critic, no Hebbian. The "no centralized info" baseline.

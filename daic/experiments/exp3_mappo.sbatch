@@ -10,7 +10,7 @@
 #SBATCH --output=exp3_mappo_%j.out
 #SBATCH --error=exp3_mappo_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-mappo,centralized_critic}"
 

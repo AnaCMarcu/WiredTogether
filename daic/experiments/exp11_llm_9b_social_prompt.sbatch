@@ -10,7 +10,7 @@
 #SBATCH --output=exp11_llm_9b_social_prompt_%j.out
 #SBATCH --error=exp11_llm_9b_social_prompt_%j.err
 
-source "$(dirname "$0")/_common.sh"
+source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # 9B LLM + Hebbian + SocialModule (prompt coupling). 9B companion to exp9.
 run_exp "exp11_llm_9b_social_prompt" "$MODEL_9B" \
