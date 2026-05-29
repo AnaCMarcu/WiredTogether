@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=quick_test
+#SBATCH --job-name=fast
 #SBATCH --partition=general
 #SBATCH --qos=interactive
 #SBATCH --time=1:00:00
@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
 #SBATCH --gres=gpu:1
-#SBATCH --output=quick_test_%j.out
-#SBATCH --error=quick_test_%j.err
+#SBATCH --output=fast%j.out
+#SBATCH --error=fast%j.err
 
 # 200-step LLM-only smoke test. Uses the same apptainer + wandb + env
 # setup as the real experiments via _common.sh (pre-flight pkill, /tmp
