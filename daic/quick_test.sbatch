@@ -54,7 +54,7 @@ apptainer exec --nv \
     --bind /tudelft.net:/tudelft.net \
     --env PYTHONPATH="$REPO/src" \
     --env PYTHONUNBUFFERED=1 \
-    --env LLM_MODEL_PATH="$WORKSPACE/models/Qwen3.5-2B" \
+    --env LLM_MODEL_PATH="$WORKSPACE/models/Qwen3.5-9B" \
     --env LLM_ENABLE_THINKING=0 \
     --env ST_MODEL_NAME="$WORKSPACE/models/all-MiniLM-L6-v2" \
     --env SENTENCE_TRANSFORMERS_HOME="$WORKSPACE/models" \
