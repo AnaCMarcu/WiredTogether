@@ -182,11 +182,18 @@ def attribute_source_events(
         if not contribs:
             continue
         first = contribs[0]
-        if isinstance(first, str) and first.startswith("agent_"):
-            try:
-                out[int(first.split("_")[-1])] = mid
-            except ValueError:
-                continue
+        # The Lua side emits names without an underscore ('agent0'); the
+        # old parser additionally required the 'agent_' prefix, so 'agent0'
+        # was filtered out at startswith() and the milestone never reached
+        # the per-teammate attribution table that the LLM sees. Strip
+        # either prefix shape and parse the trailing digits.
+        if not isinstance(first, str):
+            continue
+        _s = first.removeprefix("agent_").removeprefix("agent")
+        try:
+            out[int(_s)] = mid
+        except ValueError:
+            continue
     return out
 
 

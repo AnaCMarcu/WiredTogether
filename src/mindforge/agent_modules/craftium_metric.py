@@ -103,10 +103,20 @@ _CO_COMPLETION_WINDOW = 5
 # ─── Module helpers ────────────────────────────────────────────────────
 
 def _agent_id_from_name(name: str) -> int:
-    """Return integer id from "agent_N" or -1 on malformed input."""
+    """Return integer id from "agent_N" / "agentN" or -1 on malformed input.
+
+    The Lua side emits player names without an underscore ('agent0') —
+    Craftium's player-name convention. Python often uses 'agent_0'. The
+    old `int(name.split('_')[1])` parser only handled the underscored form
+    and returned -1 for everything else. Every Lua-sourced contributor
+    name was silently bucketed as -1 and rejected by downstream
+    ``0 <= agent_id < num_agents`` guards — track_rewards and
+    co-completion bookkeeping never got credited from Lua milestones.
+    """
+    s = str(name).removeprefix("agent_").removeprefix("agent")
     try:
-        return int(name.split("_")[1])
-    except (IndexError, ValueError):
+        return int(s)
+    except ValueError:
         return -1
 
 
