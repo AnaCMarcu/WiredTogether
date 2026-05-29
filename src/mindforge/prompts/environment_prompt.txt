@@ -41,6 +41,34 @@ BASIC BEHAVIOR:
 - Use Slot1–Slot8 to choose which item you wield (e.g. Slot1 for the sword before combat).
 - Your inventory is shown in the "Inventory" field above.
 
+COMBAT TACTICS — how to actually kill things:
+- Mobs MOVE. Between each Dig the mob has likely shifted: re-check the
+  image, use TurnLeft/TurnRight/LookDown/LookUp to RECENTER the mob in
+  your crosshair, THEN Dig again. Digging where the mob WAS last frame
+  hits air.
+- A single Dig is one hit, not a kill. Expect to land MULTIPLE hits per
+  mob:
+    * Chicken: ~2 bare-hand hits (low HP, but flees fast).
+    * Sheep:   ~4 bare-hand hits (more HP, also flees).
+    * Zombie:  ~3 hits with a diamond sword (Ch4/5 only); MANY more
+                  bare-handed, and the zombie WILL hit you back. Make sure
+                  the diamond sword is in your wield slot first
+                  (Slot1 if it auto-equipped on anvil break).
+- Mobs flee when injured. If the target moves out of view between hits,
+  alternate MoveForward (chase) + TurnLeft/TurnRight (track), then Dig.
+  Don't keep digging air at the spot where the mob used to be.
+- Drops confirm the kill landed: chickens drop feather + raw_chicken,
+  sheep drop wool + raw_mutton, zombies drop rotten_flesh. If your
+  inventory hasn't gained the drop yet, the mob is alive — keep
+  attacking.
+- Health management:
+    * Below 10/20: retreat from active fights. Re-engage when safe.
+    * Below 6/20: hunger starts draining health — get out of combat
+                  entirely. Don't trade hits with a zombie at this HP.
+- In Ch4/Ch5 specifically: stay clustered with teammates. A zombie
+  focused on one agent dies faster if all three are hitting it. Don't
+  wander off solo — you become the next target.
+
 CHAMBER WALLS ARE UNBREAKABLE:
 - The walls, floor, and ceiling that enclose every chamber are INDESTRUCTIBLE. Dig
   on them does nothing — no block breaks, no drop appears, no progress is made.
@@ -59,10 +87,13 @@ VISUAL CUES — recognising special blocks:
   condition or coordinate with teammates to trigger it.
 - GREY indestructible block (bedrock): chamber walls, floor, ceiling. Ignore
   entirely — Dig has no effect.
-- Anvils (Chamber 2): bright PURPLE cubes — visually distinct from grey
-  bedrock walls and grey stone blocks. Six of them sit in two rows of three.
-  Disappear permanently the moment they break — once an anvil is gone, it
-  stays gone.
+- Anvils (Chamber 2): bright PURPLE cubes sitting on top of a smaller GRAY
+  stone pedestal — together they form a 2-block-tall pillar. The PURPLE
+  top block is the one you Dig; the gray pedestal below is inert (Dig on
+  it does nothing). There are exactly TWO anvils in Ch2, one for the sword
+  and one for the chestplate. Anvils disappear permanently the moment they
+  break — once an anvil is gone, it stays gone (the gray pedestal stays
+  behind as a marker).
 - Glowstone tiles on the ceiling: light source only. Nothing to interact with.
 
 SAFETY:

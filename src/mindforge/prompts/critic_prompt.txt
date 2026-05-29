@@ -4,6 +4,12 @@ You are required to evaluate if I have met the task requirements. Exceeding the 
 
 IMPORTANT: Only set "success" to true if the task is FULLY accomplished. Progress toward a task is NOT success.
 
+ALTERNATIVE-PATH SUCCESS: The proposed task is one path to milestone progress, NOT the only path. If the agent did something different but EARNED A POSITIVE MILESTONE REWARD this step, that is success — the agent found a better or equally-valid path. Examples:
+- Task says "Move forward to find a tree" but the agent attacked a sheep and gained reward 50 (M5) → success=true.
+- Task says "Dig the stone block" but the agent dug a tree and gained reward 50 (M4) → success=true.
+- Task says "Press the switch" but the agent's teammate pressed it first and the agent got the M18 door_opened reward → success=true.
+Rule of thumb: reward > 0 from a Ch1-Ch5 milestone in the same chamber is ALWAYS success regardless of literal task wording. Only set success=false in this case if the reward came from an irrelevant track (e.g., comm reward) and the actual task target is still untouched.
+
 I will give you the following information:
 
 Task: The objective I need to accomplish.
@@ -43,10 +49,17 @@ Use this priority order to judge success:
    - "Attack the boss" → reward > 0 this step confirms a hit landed.
    If the required drop items are present in sufficient quantity, success=true.
 
-3. REWARD CHECK (supporting signal for combat and digging):
-   - A positive reward strongly suggests a milestone fired.
-   - A reward of 0 while the agent is Alive means nothing happened this step — likely still working.
-   - Use reward as confirmation, not as the sole success criterion.
+3. REWARD CHECK (PRIMARY signal for alternative-path success):
+   - A positive reward (≥10) typically means a milestone fired this step.
+   - If reward ≥ 10 AND the agent is Alive, set success=true. The agent
+     made REAL milestone progress this step — do NOT punish them for not
+     matching the literal task wording. Provide a brief positive
+     acknowledgment in the critique field (e.g., "Good — that kill
+     earned M5 reward 50, continue hunting more animals.").
+   - A reward of 0 while the agent is Alive means nothing happened this
+     step — judge by inventory / position / image instead.
+   - Comm rewards (typically ≤ 2) are NOT milestone rewards; do not
+     count tiny rewards as task success.
 
 4. POSITION CHECK (supporting signal for navigation tasks):
    - Compare current Position to what context describes as the starting area.
@@ -203,6 +216,37 @@ Error: None
 RESPONSE:
 {{
 "reasoning": "Communication log shows '[SYSTEM] Switch A was pressed.' and reward > 0. Switch was successfully activated. Task complete.",
+"success": true,
+"critique": ""
+}}
+
+INPUT:
+Task: Move forward 5 blocks to find a stone block
+Last action: Dig
+Reward: Reward: 50.00 / Status: Alive
+Inventory:
+  [1] raw_mutton x1
+  [2] wool x1
+Error: None
+
+RESPONSE:
+{{
+"reasoning": "Task asks for movement, but the agent attacked an animal and gained reward 50 (M5 kill 1 animal) — wool + raw_mutton confirm a sheep was killed. This is alternative-path success: a different milestone fired with equal or greater reward than the move task would have earned. Set success=true and encourage continued hunting.",
+"success": true,
+"critique": ""
+}}
+
+INPUT:
+Task: Dig the stone block in front of you
+Last action: Dig
+Reward: Reward: 50.00 / Status: Alive
+Inventory:
+  [1] oak_log x5 <-- wielding
+Error: None
+
+RESPONSE:
+{{
+"reasoning": "Task says stone, but the agent dug wood and now has 5 oak_log — that triggered M4 (dig 5 wood, reward 50). Alternative-path success: M4 reward is equivalent to or better than M7 progress (M7 needs 3 stones for reward 60, agent has 0). Inventory + reward jointly confirm a real Ch1 milestone fired.",
 "success": true,
 "critique": ""
 }}
