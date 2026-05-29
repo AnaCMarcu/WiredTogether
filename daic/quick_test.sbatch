@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=quick_test
 #SBATCH --partition=general
-#SBATCH --qos=short
-#SBATCH --time=4:00:00
+#SBATCH --qos=interactive
+#SBATCH --time=1:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
@@ -17,5 +17,5 @@
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 run_exp "quick_test" "$MODEL_9B" \
-    --episodes 2 \
-    --max-steps 200
+    --episodes 1 \
+    --max-steps 100
