@@ -896,7 +896,26 @@ class CraftiumEnvironmentInterface:
                         # delivered at the call site in multi_agent_craftium.py
                         # by draining the returned events into step_rewards_raw
                         # before Hebbian diffusion / record_reward.
-                        for agent_name in ev.get("contributors", []):
+                        #
+                        # CRITICAL: normalise the contributor name to the
+                        # canonical 'agent_N' (with underscore) form before
+                        # using it as a key. The Lua side emits 'agent1' (no
+                        # underscore — Craftium's player-name convention) but
+                        # get_reward_summary reads `_rewards[f"agent_{i}"]`. If
+                        # we stored under the raw Lua name the LLM's prompt
+                        # would show Reward: 0.00 even when 80 points just
+                        # landed — observed in the exp1_llm/seed_42 analysis as
+                        # auto-curriculum stagnation: the critic saw no reward
+                        # progress, returned success=False, and the task never
+                        # updated. Fixes the LLM-visibility leg of the four-
+                        # site contributor-name parser bug.
+                        for raw_name in ev.get("contributors", []):
+                            _s = str(raw_name).removeprefix("agent_").removeprefix("agent")
+                            try:
+                                _aid = int(_s)
+                            except ValueError:
+                                continue
+                            agent_name = f"agent_{_aid}"
                             self._rewards[agent_name] = (
                                 self._rewards.get(agent_name, 0.0) + ev.get("reward", 0)
                             )
