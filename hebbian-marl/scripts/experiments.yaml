@@ -464,3 +464,57 @@ experiments:
     env_config: lbf_comm
     env_key: "Foraging-Comm-15x15-3p-5f-v3"
     rationale: "tier-10 control — uniform diffusion baseline on the asymmetric task. Pairs with tier 9 control for cross-env comparison."
+
+  # ── Tier 11 — Tier 9, but with force_coop=True ────────────────────────
+  # Tier 9 used the standard non-coop variant of LBF, which has random
+  # per-episode food levels (1..3). Many foods are solo-loadable and
+  # cooperation is opportunistic rather than required. Tier 11 repeats
+  # tier 9's setup but with `force_coop=True` (enabled via the new
+  # lbf_comm wrapper coop path) so every food has level N=3, requiring
+  # all 3 agents to load.
+  #
+  # What this controls for: in non-coop, agents can "go solo" on
+  # low-level foods, which means cooperative behaviour isn't the only
+  # path to reward. In `-coop-`, cooperation is strictly necessary on
+  # nearly every food (a level-3 agent could in principle solo-load,
+  # but being adjacent at the right time is rare with 3 foods on 10x10).
+  # If the bond structure is going to matter anywhere in LBF, it's
+  # here: every reward event involves all 3 agents.
+  #
+  # Pre-registered comparisons (paired Wilcoxon sign-rank, one-sided):
+  #   A) mappo_hebbian_r > mappo_hebbian          (does diffusion help in coop?)
+  #   B) mappo_hebbian_r > mappo_hebbian_uniform_r (Hebbian beats uniform in coop?)
+  #
+  # Plus the bond-structure descriptive check from tier9_bonds.py:
+  # do bonds differentiate (asymmetry > tier-9 floor, sparsity < 1.0)
+  # under forced cooperation?
+  #
+  # Same env size, agent count, t_max, time_limit, and seed set as tier 9
+  # for cross-tier comparability.
+  #
+  # Submit all 15:
+  #   sbatch --array=0-14 scripts/slurm/hebb_tier11.sh
+
+  - variant: mappo_hebbian
+    tier: 11
+    t_max: 3000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-10x10-3p-3f-coop-v3"
+    rationale: "tier-11 baseline — MAPPO baseline on the forced-cooperation variant of the tier-9 env."
+
+  - variant: mappo_hebbian_r
+    tier: 11
+    t_max: 3000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-10x10-3p-3f-coop-v3"
+    rationale: "tier-11 headline — Hebbian-weighted diffusion under forced cooperation. Tests whether bonds differentiate when every reward event requires all agents."
+
+  - variant: mappo_hebbian_uniform_r
+    tier: 11
+    t_max: 3000000
+    time_limit: 50
+    env_config: lbf_comm
+    env_key: "Foraging-Comm-10x10-3p-3f-coop-v3"
+    rationale: "tier-11 control — uniform diffusion under forced cooperation. Pairs with tier-9 control to isolate the force_coop effect."

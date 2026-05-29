@@ -171,29 +171,52 @@ class LBFCommWrapper(gym.Wrapper):
 # ───────────────────────────────────────────────────────────────────────
 
 
-def _make_comm_lbf(size: int, players: int, foods: int, version: int = 3, **kwargs):
-    """Factory used as a gym entry_point: build lbforaging env, then wrap."""
+def _make_comm_lbf(
+    size: int,
+    players: int,
+    foods: int,
+    version: int = 3,
+    coop: bool = False,
+    **kwargs,
+):
+    """Factory used as a gym entry_point: build lbforaging env, then wrap.
+
+    When ``coop=True`` we pass ``force_coop=True`` through to the underlying
+    ``ForagingEnv`` constructor. This sets every food's level to N (number
+    of players) in every episode, making cooperation strongly necessary
+    (a level-N agent could in principle solo-load, but rarely happens to
+    be both present AND adjacent in practice).
+    """
     inner_id = f"Foraging-{size}x{size}-{players}p-{foods}f-v{version}"
+    if coop:
+        kwargs = {"force_coop": True, **kwargs}
     inner = gym.make(f"lbforaging:{inner_id}", **kwargs)
     return LBFCommWrapper(inner)
 
 
 def _register_comm_envs():
-    """Register comm-augmented variants as bare env ids."""
+    """Register comm-augmented variants as bare env ids.
+
+    Registers both standard and ``-coop`` variants for each size/players/
+    foods combination. The coop variant passes ``force_coop=True`` to the
+    underlying lbforaging env via gym.make kwargs, independent of whether
+    lbforaging itself registers a coop env for that specific combination.
+    """
     import lbforaging  # noqa: F401  ensure lbforaging's own register() ran first
 
-    for size, players, foods in itertools.product(
-        range(5, 21), range(2, 5), range(1, 7)
+    for size, players, foods, coop in itertools.product(
+        range(5, 21), range(2, 5), range(1, 7), (False, True)
     ):
-        full_id = f"Foraging-Comm-{size}x{size}-{players}p-{foods}f-v3"
+        suffix = "-coop" if coop else ""
+        full_id = f"Foraging-Comm-{size}x{size}-{players}p-{foods}f{suffix}-v3"
         # Skip if already registered (e.g. on re-import)
         if full_id in gym.envs.registry:
             continue
         gym.register(
             id=full_id,
             entry_point=(
-                lambda s=size, p=players, f=foods, **kw:
-                _make_comm_lbf(s, p, f, **kw)
+                lambda s=size, p=players, f=foods, c=coop, **kw:
+                _make_comm_lbf(s, p, f, coop=c, **kw)
             ),
         )
 
