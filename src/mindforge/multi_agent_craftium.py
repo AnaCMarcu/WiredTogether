@@ -90,10 +90,12 @@ def parse_args():
                         help="Minimum seconds before checking if media loaded (default 60). "
                              "Smart detection exits early once all clients show game world.")
     parser.add_argument("--ch1-timeout-steps", type=int, default=400,
-                        help="Number of env steps agents are kept in Chamber 1 before "
-                             "the Ch1 timeout fires and teleports them to Chamber 2. "
-                             "Default 400. Internally converted to 3× Lua ticks and "
-                             "passed to the Lua mod via the CH1_TIMEOUT_TICKS env var.")
+                        help="Lua-side Ch1-timeout fallback budget, in env steps. "
+                             "The Python primary now fires unconditionally at "
+                             "50%% of --max-steps (regardless of Door 1 state). "
+                             "This flag only sizes the Lua-side backstop in case "
+                             "Python's force-flag never reaches the world (mod "
+                             "I/O error, etc.). Default 400 → 60000 Lua ticks.")
     # ── Reproducibility ──
     parser.add_argument("--seed", type=int, default=None,
                         help="Random seed for reproducibility. Seeds torch, numpy, random, "
@@ -892,8 +894,10 @@ async def run(args):
     _ch1_lua_ticks = (args.ch1_timeout_steps
                       * _LUA_TICKS_PER_ENV_STEP * _LUA_SAFETY_FACTOR)
     os.environ["CH1_TIMEOUT_TICKS"] = str(_ch1_lua_ticks)
-    print(f"[FEATURES] Ch1 timeout:        {args.ch1_timeout_steps} env steps "
-          f"(Python primary). Lua fallback at {_ch1_lua_ticks} ticks "
+    print(f"[FEATURES] Ch1 timeout:        50% of --max-steps = "
+          f"{max(1, args.max_steps // 2)} env steps "
+          f"(Python primary, unconditional — fires even if Door 1 opened). "
+          f"Lua fallback at {_ch1_lua_ticks} ticks "
           f"({_LUA_TICKS_PER_ENV_STEP}×{_LUA_SAFETY_FACTOR}/step safety margin).")
 
     environment = CraftiumEnvironmentInterface(
@@ -1257,25 +1261,20 @@ async def run(args):
             global_step += 1
             logging.info(f"ep={episode+1} step={step+1}/{max_steps} global_step={global_step}")
 
-            # Python-driven Ch1→Ch2 rescue teleport. Fires at most once per
-            # episode at step ≥ ch1_timeout_steps. Three regimes by chamber
-            # count past Ch1:
-            #   ≥ 2 advanced  → skip; the anvil-coop pair is already in
-            #                   place, third agent can join via Door 1
-            #                   organically (or stay behind — they'll get
-            #                   another chance next episode).
-            #   1 advanced    → REGROUP: the lone leader gets pulled back
-            #                   to the Ch2 fallback spawn alongside the
-            #                   stragglers. Brief disruption, but it
-            #                   clusters all 3 agents at the anvil-
-            #                   coordination zone (see CH2_FALLBACK_SPAWNS)
-            #                   so Ch2 cooperation can actually happen.
-            #   0 advanced    → RESCUE: classic timeout behaviour, all
-            #                   agents teleported to fallback spawns.
-            # Threshold of 2 = the anvil-pair size; cooperative tasks below
-            # that are impossible regardless of who's in Ch2.
+            # Python-driven Ch1→Ch2 force teleport. Fires once per episode at
+            # the 50%-of-episode-length midpoint, unconditionally — even if
+            # Door 1 was opened and some/all agents already advanced. Verb
+            # is informational only:
+            #   0 advanced  → RESCUE
+            #   1..N-1      → REGROUP (some leaders get pulled back to cluster
+            #                  the team at the Ch2 fallback spawn for anvil coop)
+            #   N           → NUDGE  (all already past — Lua still re-pins
+            #                  them to Ch2 fallback spawns; harmless if they
+            #                  were already in Ch2, regressive if any reached
+            #                  Ch3+ — accept that trade by request)
+            _ch1_trigger_step = max(1, max_steps // 2)
             if (not _ch1_force_teleport_fired
-                    and step + 1 >= args.ch1_timeout_steps):
+                    and step + 1 >= _ch1_trigger_step):
                 try:
                     _trigger_chambers = [
                         environment.get_chamber(_i) for _i in range(num_agents)
@@ -1286,18 +1285,17 @@ async def run(args):
                     1 for _c in _trigger_chambers
                     if _c is not None and _c != "ch1"
                 )
-                if _n_advanced >= 2:
-                    # Mark fired so we don't poll again this episode.
+                if environment.force_ch1_teleport():
                     _ch1_force_teleport_fired = True
-                    print(f"[CH1_TIMEOUT] skipped at ep={episode+1} "
-                          f"step={step+1}: {_n_advanced} agents past Ch1 "
-                          f"(chambers={_trigger_chambers})")
-                elif environment.force_ch1_teleport():
-                    _ch1_force_teleport_fired = True
-                    _verb = "RESCUE" if _n_advanced == 0 else "REGROUP"
+                    if _n_advanced == 0:
+                        _verb = "RESCUE"
+                    elif _n_advanced >= num_agents:
+                        _verb = "NUDGE"
+                    else:
+                        _verb = "REGROUP"
                     print(f"[CH1_TIMEOUT] {_verb} at ep={episode+1} "
                           f"step={step+1} "
-                          f"(threshold={args.ch1_timeout_steps}, "
+                          f"(threshold=50%={_ch1_trigger_step}, "
                           f"n_advanced={_n_advanced}, "
                           f"chambers={_trigger_chambers})")
 
