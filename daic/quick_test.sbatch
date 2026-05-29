@@ -2,7 +2,7 @@
 #SBATCH --job-name=quick_test
 #SBATCH --partition=general
 #SBATCH --qos=short
-#SBATCH --time=1:00:00
+#SBATCH --time=4:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
@@ -75,8 +75,8 @@ apptainer exec --nv \
     "$IMG" \
     python -u "$REPO/src/mindforge/multi_agent_craftium.py" \
         --num-agents 3 \
-        --episodes 1 \
-        --max-steps 100 \
+        --episodes 2 \
+        --max-steps 200 \
         --warmup-time 300 \
         --seed "$SEED" \
         --experiment-id "$EXP_NAME" \

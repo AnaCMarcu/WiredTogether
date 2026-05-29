@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=exp7-llm-9b
 #SBATCH --partition=general
-#SBATCH --qos=long
-#SBATCH --time=48:00:00
+#SBATCH --qos=medium
+#SBATCH --time=36:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
