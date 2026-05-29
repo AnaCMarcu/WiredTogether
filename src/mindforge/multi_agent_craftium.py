@@ -578,6 +578,32 @@ def save_checkpoint(
             "run_id": metric.run_id,
             "timestep": metric.timestep,
             "cumulative_returns": [float(x) for x in metric.cumulative_returns],
+            "episode_returns": [float(x) for x in metric.episode_returns],
+            "per_episode_returns": [
+                [float(x) for x in ep_list]
+                for ep_list in metric.per_episode_returns
+            ],
+            "track_rewards_episode": {
+                str(i): dict(metric.track_rewards_episode[i])
+                for i in range(metric.num_agents)
+            },
+            "track_rewards_per_episode": [
+                [dict(d) for d in agent_eps]
+                for agent_eps in metric.track_rewards_per_episode
+            ],
+            "agent_milestones_episode": {
+                str(i): sorted(metric._agent_milestones_episode[i])
+                for i in range(metric.num_agents)
+            },
+            "milestones_per_episode": [
+                [list(ms) for ms in agent_eps]
+                for agent_eps in metric.milestones_per_episode
+            ],
+            "comm_count_episode": list(metric.comm_count_episode),
+            "comm_count_per_episode": [
+                list(c) for c in metric.comm_count_per_episode
+            ],
+            "episode_lengths": list(metric.episode_lengths),
             "comm_counts_per_step": list(metric.comm_counts_per_step),
             "communication_log": metric.communication_log,
             "rl_updates": metric.rl_updates,
@@ -1301,7 +1327,7 @@ async def run(args):
 
             if step % log_interval == 0:
                 returns_str = "  ".join(
-                    f"agent_{i}={metric.cumulative_returns[i]:.1f}"
+                    f"agent_{i}={metric.episode_returns[i]:.1f}"
                     for i in range(num_agents)
                 )
                 tasks_str = "  ".join(
@@ -2262,13 +2288,18 @@ async def run(args):
             final_step=_ep_final_step,
             hebbian_weights=_hebb_W,
         )
+        # Snapshot the per-episode return (delta since episode start) BEFORE
+        # writing the episode summary so total_reward_per_agent reflects
+        # only this episode, not the cumulative across all episodes so far.
+        _ep_return_per_agent = {
+            f"agent_{i}": float(metric.episode_returns[i])
+            for i in range(num_agents)
+        }
+        metric.end_episode(final_step=_ep_final_step)
         _ep_summary = {
             "episode": episode + 1,
             "final_step": _ep_final_step,
-            "total_reward_per_agent": {
-                f"agent_{i}": metric.cumulative_returns[i]
-                for i in range(num_agents)
-            },
+            "total_reward_per_agent": _ep_return_per_agent,
             "cooperation_metrics": _coop_summary,
         }
         ep_logger.finalize(_ep_summary)
@@ -2286,7 +2317,7 @@ async def run(args):
                 "final_step": _coop_summary["final_step"],
                 "W": _hebb_W_serialisable,
                 "cooperation_score": float(_coop_summary.get("cooperation_score", 0.0)),
-                "reward_total": float(sum(metric.cumulative_returns)),
+                "reward_total": float(sum(_ep_return_per_agent.values())),
             }) + "\n")
 
         # ── End-of-episode checkpoint ──

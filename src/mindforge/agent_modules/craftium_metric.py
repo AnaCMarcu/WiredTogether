@@ -11,6 +11,7 @@ Tracks:
 import json
 import logging
 import os
+import statistics
 import subprocess
 from datetime import datetime
 
@@ -181,6 +182,16 @@ class CraftiumMetric:
 
         # Rewards
         self.cumulative_returns = [0.0] * num_agents
+        # Per-episode return for the CURRENTLY-RUNNING episode. Reset to
+        # zero by end_episode() after the previous episode's deltas are
+        # snapshotted into per_episode_returns. This is what gets reported
+        # in the per-step log and per-episode summary so episodes aren't
+        # contaminated by carry-over from prior episodes.
+        self.episode_returns = [0.0] * num_agents
+        # History: per_episode_returns[i] = list of returns for agent i,
+        # one entry per completed episode. Final-summary mean/std are
+        # computed from this list.
+        self.per_episode_returns = [[] for _ in range(num_agents)]
         self.reward_history = [[] for _ in range(num_agents)]
         # Reward decomposition: parallel to reward_history, splits each step
         # reward into its source streams. Lets us answer "how much of the
@@ -195,6 +206,25 @@ class CraftiumMetric:
             i: {track: 0.0 for track in TRACKS}
             for i in range(num_agents)
         }
+        # Per-episode mirrors for aggregable headline numbers. Reset by
+        # end_episode(), snapshotted into *_per_episode for cross-episode
+        # mean/std reporting in final_metrics.json / summary.txt.
+        self.track_rewards_episode = {
+            i: {track: 0.0 for track in TRACKS}
+            for i in range(num_agents)
+        }
+        self.track_rewards_per_episode = [[] for _ in range(num_agents)]
+        # agent_id -> set of milestone ids reached THIS episode (clears each ep)
+        self._agent_milestones_episode = {i: set() for i in range(num_agents)}
+        # per-agent list of per-episode milestone id sets (kept as sorted lists
+        # for JSON serialisation)
+        self.milestones_per_episode = [[] for _ in range(num_agents)]
+        # per-agent message-sent count for the current episode
+        self.comm_count_episode = [0] * num_agents
+        # per-agent list of per-episode message counts
+        self.comm_count_per_episode = [[] for _ in range(num_agents)]
+        # episode lengths (final_step at end_episode time), shared across agents
+        self.episode_lengths = []
 
         # Communication
         self.communication_log = []
@@ -233,7 +263,38 @@ class CraftiumMetric:
 
     def record_reward(self, agent_id: int, reward: float):
         self.cumulative_returns[agent_id] += reward
+        self.episode_returns[agent_id] += reward
         self.reward_history[agent_id].append((self.timestep, reward))
+
+    def end_episode(self, final_step: int = 0):
+        """Snapshot the just-finished episode's per-agent aggregables into
+        the *_per_episode histories and reset the per-episode mirrors.
+        Must be called once per episode, after the final record_* call and
+        before the next episode's first step.
+
+        Covers: reward, track_rewards, milestones reached, message count,
+        episode length. final_step is what gets stored in episode_lengths.
+        """
+        for i in range(self.num_agents):
+            self.per_episode_returns[i].append(self.episode_returns[i])
+            self.track_rewards_per_episode[i].append(
+                dict(self.track_rewards_episode[i])
+            )
+            self.milestones_per_episode[i].append(
+                sorted(self._agent_milestones_episode[i])
+            )
+            self.comm_count_per_episode[i].append(self.comm_count_episode[i])
+        self.episode_lengths.append(int(final_step))
+
+        self.episode_returns = [0.0] * self.num_agents
+        self.track_rewards_episode = {
+            i: {track: 0.0 for track in TRACKS}
+            for i in range(self.num_agents)
+        }
+        self._agent_milestones_episode = {
+            i: set() for i in range(self.num_agents)
+        }
+        self.comm_count_episode = [0] * self.num_agents
 
     def record_reward_decomposed(self, agent_id: int, components: dict):
         """Record a per-step reward broken down by source.
@@ -296,6 +357,9 @@ class CraftiumMetric:
         track = MILESTONE_TRACK.get(mid)
         if track and 0 <= agent_id < self.num_agents:
             self.track_rewards[agent_id][track] += reward
+            self.track_rewards_episode[agent_id][track] += reward
+        if 0 <= agent_id < self.num_agents:
+            self._agent_milestones_episode[agent_id].add(mid)
 
     def _register_co_completion(self, agent_id: int, mid: str):
         if not (0 <= agent_id < self.num_agents):
@@ -315,6 +379,9 @@ class CraftiumMetric:
         self.communication_log.append(
             (self.timestep, source_agent, preview, target or "all")
         )
+        agent_id = _agent_id_from_name(source_agent)
+        if 0 <= agent_id < self.num_agents:
+            self.comm_count_episode[agent_id] += 1
 
     def record_rl_update(self, agent_id: int, info: dict):
         self.rl_updates.append((self.timestep, agent_id, info))
@@ -478,6 +545,81 @@ class CraftiumMetric:
                 "cli_args":             getattr(self, "cli_args", None),
             },
             "cumulative_returns":   list(self.cumulative_returns),
+            "per_episode_returns":  [list(r) for r in self.per_episode_returns],
+            "mean_return_per_agent": [
+                (statistics.fmean(r) if r else 0.0)
+                for r in self.per_episode_returns
+            ],
+            "std_return_per_agent": [
+                (statistics.pstdev(r) if len(r) >= 2 else 0.0)
+                for r in self.per_episode_returns
+            ],
+            "episode_lengths":      list(self.episode_lengths),
+            "mean_episode_length":  (
+                statistics.fmean(self.episode_lengths)
+                if self.episode_lengths else 0.0
+            ),
+            "std_episode_length":   (
+                statistics.pstdev(self.episode_lengths)
+                if len(self.episode_lengths) >= 2 else 0.0
+            ),
+            "track_rewards_per_episode": [
+                [dict(d) for d in agent_eps]
+                for agent_eps in self.track_rewards_per_episode
+            ],
+            "mean_track_reward_per_agent": [
+                {
+                    track: (
+                        statistics.fmean([d.get(track, 0.0) for d in agent_eps])
+                        if agent_eps else 0.0
+                    )
+                    for track in TRACKS
+                }
+                for agent_eps in self.track_rewards_per_episode
+            ],
+            "std_track_reward_per_agent": [
+                {
+                    track: (
+                        statistics.pstdev([d.get(track, 0.0) for d in agent_eps])
+                        if len(agent_eps) >= 2 else 0.0
+                    )
+                    for track in TRACKS
+                }
+                for agent_eps in self.track_rewards_per_episode
+            ],
+            "milestones_per_episode": [
+                [list(ms) for ms in agent_eps]
+                for agent_eps in self.milestones_per_episode
+            ],
+            "milestone_count_per_episode": [
+                [len(ms) for ms in agent_eps]
+                for agent_eps in self.milestones_per_episode
+            ],
+            "mean_milestone_count_per_agent": [
+                (
+                    statistics.fmean([len(ms) for ms in agent_eps])
+                    if agent_eps else 0.0
+                )
+                for agent_eps in self.milestones_per_episode
+            ],
+            "std_milestone_count_per_agent": [
+                (
+                    statistics.pstdev([len(ms) for ms in agent_eps])
+                    if len(agent_eps) >= 2 else 0.0
+                )
+                for agent_eps in self.milestones_per_episode
+            ],
+            "comm_count_per_episode": [
+                list(c) for c in self.comm_count_per_episode
+            ],
+            "mean_comm_count_per_agent": [
+                (statistics.fmean(c) if c else 0.0)
+                for c in self.comm_count_per_episode
+            ],
+            "std_comm_count_per_agent": [
+                (statistics.pstdev(c) if len(c) >= 2 else 0.0)
+                for c in self.comm_count_per_episode
+            ],
             "steps_to_milestone":   self.steps_to_milestone_table(),
             "milestones_per_agent": self.milestones_per_agent(),
             "milestone_events":     self.milestone_events,
@@ -836,6 +978,7 @@ class CraftiumMetric:
         lines = []
         lines.extend(self._summary_header())
         lines.extend(self._summary_returns())
+        lines.extend(self._summary_per_episode_aggregates())
         lines.extend(self._summary_milestones())
         lines.extend(self._summary_steps_to_milestone())
         lines.extend(self._summary_specialization())
@@ -860,17 +1003,79 @@ class CraftiumMetric:
         ]
 
     def _summary_returns(self):
-        lines = ["--- Cumulative Returns ---"]
+        lines = ["--- Cumulative Returns (run total) ---"]
         for i in range(self.num_agents):
             lines.append(f"  Agent {i} (agent): {self.cumulative_returns[i]:.2f}")
         lines.append("")
+        n_eps = max((len(r) for r in self.per_episode_returns), default=0)
+        if n_eps > 0:
+            lines.append(f"--- Per-Episode Returns (n={n_eps} episodes) ---")
+            for i in range(self.num_agents):
+                ep_returns = self.per_episode_returns[i]
+                mean = statistics.fmean(ep_returns) if ep_returns else 0.0
+                std = statistics.pstdev(ep_returns) if len(ep_returns) >= 2 else 0.0
+                ep_str = ", ".join(f"{r:.2f}" for r in ep_returns)
+                lines.append(
+                    f"  Agent {i}: mean={mean:.2f}  std={std:.2f}  "
+                    f"per-ep=[{ep_str}]"
+                )
+            lines.append("")
         return lines
 
     def _summary_milestones(self):
-        lines = ["--- Milestones per Agent ---"]
+        lines = ["--- Milestones per Agent (run total) ---"]
         for i in range(self.num_agents):
             earned = sorted(self._agent_milestones.get(f"agent_{i}", set()))
             lines.append(f"  Agent {i} (agent): {', '.join(earned) if earned else 'none'}")
+        lines.append("")
+        return lines
+
+    def _summary_per_episode_aggregates(self):
+        """Per-episode mean ± std block for the headline aggregable metrics:
+        episode length, milestone count, comm count, and per-track reward."""
+        n_eps = len(self.episode_lengths)
+        if n_eps == 0:
+            return []
+        lines = [f"--- Per-Episode Aggregates (n={n_eps} episodes) ---"]
+        mean_len = statistics.fmean(self.episode_lengths)
+        std_len = (
+            statistics.pstdev(self.episode_lengths)
+            if n_eps >= 2 else 0.0
+        )
+        lines.append(f"  Episode length:  mean={mean_len:.1f}  std={std_len:.1f}")
+        lines.append("  Milestones per episode (count):")
+        for i in range(self.num_agents):
+            counts = [len(ms) for ms in self.milestones_per_episode[i]]
+            mean_c = statistics.fmean(counts) if counts else 0.0
+            std_c = statistics.pstdev(counts) if len(counts) >= 2 else 0.0
+            lines.append(
+                f"    Agent {i}: mean={mean_c:.2f}  std={std_c:.2f}  "
+                f"per-ep={counts}"
+            )
+        lines.append("  Comm count per episode:")
+        for i in range(self.num_agents):
+            counts = self.comm_count_per_episode[i]
+            mean_c = statistics.fmean(counts) if counts else 0.0
+            std_c = statistics.pstdev(counts) if len(counts) >= 2 else 0.0
+            lines.append(
+                f"    Agent {i}: mean={mean_c:.2f}  std={std_c:.2f}  "
+                f"per-ep={counts}"
+            )
+        lines.append("  Track rewards per episode (mean):")
+        for i in range(self.num_agents):
+            agent_eps = self.track_rewards_per_episode[i]
+            if not agent_eps:
+                continue
+            per_track_means = {
+                track: statistics.fmean(
+                    [d.get(track, 0.0) for d in agent_eps]
+                )
+                for track in TRACKS
+            }
+            parts = "  ".join(
+                f"{track}={v:.2f}" for track, v in per_track_means.items()
+            )
+            lines.append(f"    Agent {i}: {parts}")
         lines.append("")
         return lines
 
@@ -981,6 +1186,50 @@ class CraftiumMetric:
         metric.timestep = d.get("timestep", 0)
         metric.cumulative_returns = [
             float(x) for x in d.get("cumulative_returns", [0.0] * num_agents)
+        ]
+        metric.episode_returns = [
+            float(x) for x in d.get("episode_returns", [0.0] * num_agents)
+        ]
+        metric.per_episode_returns = [
+            [float(x) for x in ep_list]
+            for ep_list in d.get(
+                "per_episode_returns", [[] for _ in range(num_agents)]
+            )
+        ]
+        _tre = d.get("track_rewards_episode", {})
+        metric.track_rewards_episode = {
+            i: dict(_tre.get(str(i), {t: 0.0 for t in TRACKS}))
+            for i in range(num_agents)
+        }
+        for i in range(num_agents):
+            for t in TRACKS:
+                metric.track_rewards_episode[i].setdefault(t, 0.0)
+        metric.track_rewards_per_episode = [
+            [dict(d_ep) for d_ep in agent_eps]
+            for agent_eps in d.get(
+                "track_rewards_per_episode", [[] for _ in range(num_agents)]
+            )
+        ]
+        _ame = d.get("agent_milestones_episode", {})
+        metric._agent_milestones_episode = {
+            i: set(_ame.get(str(i), [])) for i in range(num_agents)
+        }
+        metric.milestones_per_episode = [
+            [list(ms) for ms in agent_eps]
+            for agent_eps in d.get(
+                "milestones_per_episode", [[] for _ in range(num_agents)]
+            )
+        ]
+        metric.comm_count_episode = [
+            int(x) for x in d.get("comm_count_episode", [0] * num_agents)
+        ]
+        metric.comm_count_per_episode = [
+            [int(x) for x in c] for c in d.get(
+                "comm_count_per_episode", [[] for _ in range(num_agents)]
+            )
+        ]
+        metric.episode_lengths = [
+            int(x) for x in d.get("episode_lengths", [])
         ]
         metric.reward_history = [
             [tuple(x) for x in agent_h]
