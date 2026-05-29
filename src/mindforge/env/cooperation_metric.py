@@ -128,11 +128,27 @@ class CooperationMetric:
             if chamber and chamber not in self.chamber_entry_step:
                 self.chamber_entry_step[chamber] = step
 
-        # Damage tracking from infos
+        # Damage tracking from infos. Currently no producer in the live
+        # code populates infos["damage_events"], but if/when one is added,
+        # ``attacker`` may arrive as either an int (already an agent id),
+        # the Python-side 'agent_N' string, or the Lua-side 'agentN'
+        # string. Normalise to int so:
+        #   (a) ch4_damage / ch5_damage dicts have a consistent key shape,
+        #       which matters because _chamber_fairness reads them with
+        #       `self.ch4_damage.get(a, 0.0) for a in self.agent_ids`
+        #       where self.agent_ids is a list of ints — mismatched keys
+        #       silently return 0 and inflate fairness to 1.0.
+        #   (b) downstream pair-matrix conversion in _pair_to_matrix can
+        #       use the same int keys it already uses for proximity /
+        #       messages / joint_dig.
+        # Events whose attacker can't be parsed are dropped — they would
+        # have been silently miscredited under the old code path anyway.
         for dmg_event in infos.get("damage_events", []):
             target = dmg_event.get("target", "")
-            attacker = dmg_event.get("attacker")
+            attacker = self._to_int_id(dmg_event.get("attacker"))
             amount = dmg_event.get("amount", 0.0)
+            if not isinstance(attacker, int) or attacker not in self.agent_ids:
+                continue
             if target == "ch4_zombie":
                 self.ch4_damage[attacker] += amount
             elif target == "boss":
