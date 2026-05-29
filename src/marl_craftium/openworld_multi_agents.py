@@ -106,10 +106,19 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
             num_agents=num_agents,
             obs_width=obs_width,
             obs_height=obs_height,
-            # CraftiumEnvironmentInterface calls env.step() once per agent per
-            # round; each env.step() runs one step_agent round which (after our
-            # fix) increments timesteps once. So timesteps = num_agents * rounds.
-            max_timesteps=max_steps * num_agents,
+            # Disable env-side step-count truncation. The old setting was
+            # `max_steps * num_agents`, written before the _patched_env fix
+            # that made `self.timesteps` advance once per ROUND instead of
+            # once per agent. Combined with sustained actions (Dig calls
+            # env.step() 5× per Python step in custom_environment_craftium.py),
+            # the env truncates AT episodes well before `max_steps` is reached
+            # (~750 Python steps for max_steps=1500 in dig-heavy rollouts,
+            # ~26 for max_steps=50). Python's `for step in range(max_steps)`
+            # in multi_agent_craftium.py is the authoritative episode-length
+            # cap; with max_timesteps=None the env's truncated flag stays
+            # False for the whole episode and only termination (an agent
+            # dying) ends the episode early.
+            max_timesteps=None,
             minetest_dir=minetest_dir,
             mt_listen_timeout=300_000,  # 5 min per client; VoxeLibre loads slowly on HPC
             seed=seed,
