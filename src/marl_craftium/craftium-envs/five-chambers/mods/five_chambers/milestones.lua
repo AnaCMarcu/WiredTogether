@@ -221,11 +221,27 @@ minetest.register_on_dignode(function(pos, oldnode, digger)
     local counts    = five_chambers.dig_counts[name]
 
     counts.any = counts.any + 1
-    if minetest.get_item_group(node_name, "tree") > 0 then
-        counts.wood = counts.wood + 1
-    end
-    if minetest.get_item_group(node_name, "stone") > 0 then
-        counts.stone = counts.stone + 1
+    local is_tree  = minetest.get_item_group(node_name, "tree")  > 0
+    local is_stone = minetest.get_item_group(node_name, "stone") > 0
+    if is_tree  then counts.wood  = counts.wood  + 1 end
+    if is_stone then counts.stone = counts.stone + 1 end
+
+    -- Per-dig diagnostic log. Lands in debug.txt and on stderr so we can
+    -- audit which agent dug what and why a milestone failed to fire.
+    -- Previously dig events were invisible until the per-agent threshold
+    -- of 3 was reached — if each agent broke only 1-2 blocks (likely
+    -- given the heavily interspersed Dig/Move/Turn action mix), the
+    -- breaks were genuinely happening but no log line ever appeared.
+    minetest.log("action", string.format(
+        "[five_chambers] dig: agent=%s node=%s tree=%s stone=%s "
+        .. "counts={any=%d wood=%d stone=%d}",
+        name, node_name, tostring(is_tree), tostring(is_stone),
+        counts.any, counts.wood, counts.stone))
+    if io and io.stderr then
+        io.stderr:write(string.format(
+            "[DIG] agent=%s node=%s counts={any=%d wood=%d stone=%d}\n",
+            name, node_name, counts.any, counts.wood, counts.stone))
+        io.stderr:flush()
     end
 
     if counts.any   >= 3 then five_chambers.fire_milestone("m2_dig_3_any",   {name}) end
