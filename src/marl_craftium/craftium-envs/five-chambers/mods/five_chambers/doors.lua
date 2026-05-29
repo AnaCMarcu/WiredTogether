@@ -98,7 +98,24 @@ end
 
 local function open_door1_blocks()
     local y_lo, y_hi = _door1_y_pair()
-    for _, p in ipairs(_door1_columns()) do
+    local cols = _door1_columns()
+    -- Force-load the area before set_node: if the chunk has drifted out
+    -- of the loaded set (no client has been near recently, or the engine
+    -- has paged it out under memory pressure), set_node silently buffers
+    -- the change. The blocks remain visible to clients until the chunk
+    -- reloads, so agents still see the red locked door even though Lua
+    -- thinks Door 1 is open. minetest.load_area makes the change
+    -- immediate and propagates to all connected clients.
+    minetest.load_area(
+        {x = cols[1].x - 1, y = y_lo - 1, z = cols[1].z - 1},
+        {x = cols[#cols].x + 1, y = y_hi + 1, z = cols[1].z + 1}
+    )
+    for _, p in ipairs(cols) do
+        -- swap_node first to clear any client-side render cache for the
+        -- old door_locked node (paramtype='light' + light_source=7 can
+        -- leave a stale lighting overlay), then set_node to commit.
+        minetest.swap_node({x=p.x, y=y_lo, z=p.z}, {name="air"})
+        minetest.swap_node({x=p.x, y=y_hi, z=p.z}, {name="air"})
         minetest.set_node({x=p.x, y=y_lo, z=p.z}, {name="air"})
         minetest.set_node({x=p.x, y=y_hi, z=p.z}, {name="air"})
     end
@@ -155,9 +172,19 @@ function five_chambers.init_doors()
 end
 
 -- Replaces the 2-block door opening at (x, FLOOR_Y+1, z) and (x, FLOOR_Y+2, z)
--- with air. Idempotent.
+-- with air. Idempotent. Used by Door 2 (Ch2→Ch3), Door 3 (Ch3 communal),
+-- Door 4 (Ch4→Ch5), and the per-cell doors in Ch3.
+-- Same load_area + swap_node + set_node belt-and-braces sequence as
+-- open_door1_blocks — set_node on an unloaded chunk silently buffers and
+-- leaves the red locked-door texture visible client-side.
 function five_chambers.open_door_at(x, z)
     local y = five_chambers.FLOOR_Y
+    minetest.load_area(
+        {x = x - 1, y = y, z = z - 1},
+        {x = x + 1, y = y + 3, z = z + 1}
+    )
+    minetest.swap_node({x=x, y=y+1, z=z}, {name="air"})
+    minetest.swap_node({x=x, y=y+2, z=z}, {name="air"})
     minetest.set_node({x=x, y=y+1, z=z}, {name="air"})
     minetest.set_node({x=x, y=y+2, z=z}, {name="air"})
 end
