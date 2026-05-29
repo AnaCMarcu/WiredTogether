@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=fast
 #SBATCH --partition=general
-#SBATCH --qos=interactive
+#SBATCH --qos=short
 #SBATCH --time=1:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
