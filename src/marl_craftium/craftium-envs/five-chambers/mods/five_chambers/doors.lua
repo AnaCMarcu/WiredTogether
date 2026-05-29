@@ -99,26 +99,32 @@ end
 local function open_door1_blocks()
     local y_lo, y_hi = _door1_y_pair()
     local cols = _door1_columns()
-    -- Force-load the area before set_node: if the chunk has drifted out
-    -- of the loaded set (no client has been near recently, or the engine
-    -- has paged it out under memory pressure), set_node silently buffers
-    -- the change. The blocks remain visible to clients until the chunk
-    -- reloads, so agents still see the red locked door even though Lua
-    -- thinks Door 1 is open. minetest.load_area makes the change
-    -- immediate and propagates to all connected clients.
-    minetest.load_area(
-        {x = cols[1].x - 1, y = y_lo - 1, z = cols[1].z - 1},
-        {x = cols[#cols].x + 1, y = y_hi + 1, z = cols[1].z + 1}
+    -- Use VoxelManip directly — same technique world_gen.lua uses to
+    -- PLACE the door_locked blocks. mcl_observers monkey-patches
+    -- minetest.set_node and minetest.swap_node; on partially-loaded
+    -- chunks its hook calls get_node() which can crash or silently
+    -- swallow the write, leaving the red door_locked block visible to
+    -- clients even though door_state.door1_open is true. Writing
+    -- through VoxelManip bypasses the hook entirely and write_to_map
+    -- with light=true forces lighting recalc to clear the locked door's
+    -- light_source=7 emission.
+    local air_cid = minetest.get_content_id("air")
+    local x0 = cols[1].x
+    local x1 = cols[#cols].x
+    local z  = cols[1].z
+    local vm = minetest.get_voxel_manip(
+        {x = x0, y = y_lo, z = z},
+        {x = x1, y = y_hi, z = z}
     )
+    local emin, emax = vm:get_emerged_area()
+    local data = vm:get_data()
+    local va   = VoxelArea:new{MinEdge = emin, MaxEdge = emax}
     for _, p in ipairs(cols) do
-        -- swap_node first to clear any client-side render cache for the
-        -- old door_locked node (paramtype='light' + light_source=7 can
-        -- leave a stale lighting overlay), then set_node to commit.
-        minetest.swap_node({x=p.x, y=y_lo, z=p.z}, {name="air"})
-        minetest.swap_node({x=p.x, y=y_hi, z=p.z}, {name="air"})
-        minetest.set_node({x=p.x, y=y_lo, z=p.z}, {name="air"})
-        minetest.set_node({x=p.x, y=y_hi, z=p.z}, {name="air"})
+        data[va:index(p.x, y_lo, z)] = air_cid
+        data[va:index(p.x, y_hi, z)] = air_cid
     end
+    vm:set_data(data)
+    vm:write_to_map(true)  -- true = update lighting
 end
 
 function five_chambers.relock_all_doors()
@@ -174,19 +180,29 @@ end
 -- Replaces the 2-block door opening at (x, FLOOR_Y+1, z) and (x, FLOOR_Y+2, z)
 -- with air. Idempotent. Used by Door 2 (Ch2→Ch3), Door 3 (Ch3 communal),
 -- Door 4 (Ch4→Ch5), and the per-cell doors in Ch3.
--- Same load_area + swap_node + set_node belt-and-braces sequence as
--- open_door1_blocks — set_node on an unloaded chunk silently buffers and
--- leaves the red locked-door texture visible client-side.
+--
+-- Uses VoxelManip directly — same technique world_gen.lua's place_node
+-- uses to PLACE these blocks at world build time. mcl_observers
+-- monkey-patches minetest.set_node and minetest.swap_node and its hook
+-- can crash or silently swallow writes on partially-loaded chunks,
+-- leaving the red door_locked block visible to clients even though Lua
+-- thinks the door is open. Going through VoxelManip avoids the hook;
+-- write_to_map(true) forces lighting recalc to clear door_locked's
+-- light_source=7 emission so the area properly darkens.
 function five_chambers.open_door_at(x, z)
     local y = five_chambers.FLOOR_Y
-    minetest.load_area(
-        {x = x - 1, y = y, z = z - 1},
-        {x = x + 1, y = y + 3, z = z + 1}
+    local air_cid = minetest.get_content_id("air")
+    local vm = minetest.get_voxel_manip(
+        {x = x, y = y + 1, z = z},
+        {x = x, y = y + 2, z = z}
     )
-    minetest.swap_node({x=x, y=y+1, z=z}, {name="air"})
-    minetest.swap_node({x=x, y=y+2, z=z}, {name="air"})
-    minetest.set_node({x=x, y=y+1, z=z}, {name="air"})
-    minetest.set_node({x=x, y=y+2, z=z}, {name="air"})
+    local emin, emax = vm:get_emerged_area()
+    local data = vm:get_data()
+    local va   = VoxelArea:new{MinEdge = emin, MaxEdge = emax}
+    data[va:index(x, y + 1, z)] = air_cid
+    data[va:index(x, y + 2, z)] = air_cid
+    vm:set_data(data)
+    vm:write_to_map(true)  -- true = update lighting
 end
 
 -- Opens Door 1 (Ch1 → Ch2). Idempotent. Called by milestones.lua when a
