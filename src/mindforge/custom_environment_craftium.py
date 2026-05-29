@@ -181,6 +181,13 @@ class CraftiumEnvironmentInterface:
         # Milestone event file polling (see §4.6, poll_milestone_events())
         self._milestone_file_offset = 0  # byte offset into milestone_events.jsonl
 
+        # Per-agent invalid-action warning, surfaced to the LLM via
+        # get_chamber_state() on the NEXT prompt so the policy can see that
+        # its previous action got clamped (otherwise the warning only lands
+        # in slurm .err and the LLM keeps emitting 'Mine' / 'Attack' / etc.).
+        # Cleared once read.
+        self._invalid_action_warning = {}  # agent_name -> str
+
     # ------------------------------------------------------------------
     # Core interface
     # ------------------------------------------------------------------
@@ -240,6 +247,16 @@ class CraftiumEnvironmentInterface:
             _logging.warning(
                 f"Invalid action: '{action_str}', clamping to NoOp. "
                 f"Valid actions: {VALID_ACTIONS}"
+            )
+            # Stash for the LLM to see on the next prompt — without this
+            # surfacing, the policy keeps emitting 'Mine' / 'Attack' / etc.
+            # indefinitely because the clamping is silent.
+            self._invalid_action_warning[agent_name] = (
+                f"WARNING: Your previous action '{action_str}' is NOT a "
+                f"valid action — it was silently clamped to NoOp. Valid "
+                f"actions are: {VALID_ACTIONS}. Do not emit invalid action "
+                f"names; use 'Dig' (not 'Mine' or 'Attack'), 'TurnRight' "
+                f"(not 'Turn'), etc."
             )
             action_str = "NoOp"
 
@@ -486,9 +503,39 @@ class CraftiumEnvironmentInterface:
         report (e.g., agent is in Ch1 where everything is visible).
         """
         chamber = self.get_chamber(agentId)
+        agent_name = f"agent_{agentId}"
+
+        # Pop any pending invalid-action warning from the previous step.
+        # Prepending it to chamber_state means the LLM sees it on the next
+        # prompt without requiring a new placeholder in instruction_prompt_p2.
+        prefix = ""
+        warning = self._invalid_action_warning.pop(agent_name, "")
+        if warning:
+            prefix = warning + " "
+
+        if chamber == "ch1":
+            return prefix + self._read_ch1_door_state()
         if chamber == "ch2":
-            return self._read_ch2_anvil_state()
-        return ""
+            return prefix + self._read_ch2_anvil_state()
+        return prefix or ""
+
+    def _read_ch1_door_state(self) -> str:
+        """Return a one-line Door 1 status string for agents still in Ch1.
+        Without this, an agent in Ch1 has no signal that Door 1 has
+        unlocked beyond the visual delta (a red bedrock-textured block
+        becomes air at the same coords) — the LLM consistently misses it.
+        Lua writes {world_path}/door1_state.txt when open_door1() fires."""
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            return ""
+        if os.path.exists(os.path.join(world_path, "door1_state.txt")):
+            return ("Door 1: OPEN — walk north (positive Z) to the opening "
+                    "in the north wall and MoveForward through into Chamber 2.")
+        return ("Door 1: LOCKED — complete any of M2/M3/M4/M5/M6/M7 "
+                "(dig 3 blocks, pick up 3 items, dig 5 wood, kill an "
+                "animal, kill 2 animals, or dig 3 stone) to unlock it "
+                "for the whole team.")
 
     def _read_ch2_anvil_state(self) -> str:
         """Parse {world_path}/anvils.txt (written by player_state.lua) into

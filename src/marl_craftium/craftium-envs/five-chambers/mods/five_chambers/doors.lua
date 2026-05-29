@@ -170,6 +170,20 @@ function five_chambers.open_door1()
     five_chambers.door_state.door1_open = true
     open_door1_blocks()
     minetest.log("action", "[five_chambers] Door 1 opened.")
+    -- Surface to Python via the state-file IPC so agents still in Ch1
+    -- can see "Door 1: OPEN — walk north to enter Chamber 2" in their
+    -- chamber_state field on the next prompt. Without this they have
+    -- no signal that the door unlocked (the visual delta is subtle —
+    -- a red bedrock-textured block becomes air at the same coords).
+    local wp = minetest.get_worldpath()
+    local tmp = wp .. "/door1_state.tmp"
+    local dst = wp .. "/door1_state.txt"
+    local f = io.open(tmp, "w")
+    if f then
+        f:write("open\n")
+        f:close()
+        os.rename(tmp, dst)
+    end
 end
 
 -- Called when all anvils have been broken at least once; starts the countdown.

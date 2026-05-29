@@ -61,7 +61,13 @@ minetest.register_node("five_chambers:switch", {
         five_chambers.fire_milestone("m17_switch_pressed", {presser})
 
         -- 4. M18: door opened (for the freed agent in the target cell).
-        local freed_name   = "agent_" .. target
+        --    Minetest player names are 'agentN' (no underscore — the
+        --    --name arg passed when each client connects). Previously this
+        --    code looked up "agent_" .. target ('agent_2'), which always
+        --    returned nil from get_player_by_name, so the if-guard never
+        --    fired and m18_door_opened was NEVER emitted in any Ch3
+        --    run. Use the unprefixed form to match the player name shape.
+        local freed_name   = "agent" .. target
         local freed_player = minetest.get_player_by_name(freed_name)
         if freed_player then
             five_chambers.fire_milestone("m18_door_opened", {freed_name})

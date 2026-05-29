@@ -255,10 +255,20 @@ class CooperationMetric:
         return sum(1 for m in multi if m["comm_before_coop"]) / len(multi)
 
     def _carry_imbalance(self):
-        per_agent = defaultdict(int)
+        # milestone_log preserves contributor names in whatever shape the
+        # source emitted — 'agent_0' for Python-fired (comm milestones),
+        # 'agent0' for Lua-fired (m1..m_door1_open, m8..m13, etc.). Without
+        # normalisation, the same agent's contributions split across two
+        # dict keys and max-min computes wrong. Route through _to_int_id
+        # so both shapes collapse to the same int id; also enforce that
+        # every agent has an entry (otherwise an agent with zero firings
+        # is invisible and min() ignores them, inflating fairness).
+        per_agent = {a: 0 for a in self.agent_ids}
         for m in self.milestone_log:
             for c in m["contributors"]:
-                per_agent[c] += 1
+                aid = self._to_int_id(c)
+                if isinstance(aid, int) and aid in per_agent:
+                    per_agent[aid] += 1
         if not per_agent:
             return 0.0
         return max(per_agent.values()) - min(per_agent.values())

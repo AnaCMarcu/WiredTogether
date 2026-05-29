@@ -80,4 +80,9 @@ function five_chambers.clear_state_files()
     os.remove(world_path .. "/milestone_events.jsonl")
     os.remove(world_path .. "/switch_events.jsonl")
     os.remove(world_path .. "/episode_done.txt")
+    -- Door 1 unlock state — written by doors.lua's open_door1() when the
+    -- door is unlocked via an m2..m7 milestone (or the timeout fallback).
+    -- Must be cleared at episode reset because the door re-locks via
+    -- relock_all_doors() and agents shouldn't see a stale "open" flag.
+    os.remove(world_path .. "/door1_state.txt")
 end
