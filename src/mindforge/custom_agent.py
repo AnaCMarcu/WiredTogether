@@ -17,6 +17,65 @@ from agent_modules.skill_manager import SkillManager
 from agent_modules.social_module import SocialModule
 
 
+# Per-chamber object whitelist. Substituted into the `Chamber:` field of
+# instruction_prompt_p2.txt so the action LLM sees an explicit list of what
+# can and CAN NOT appear in its current view. Action-time hallucinations of
+# the form "I see a purple anvil" (in Ch1) or "a zombie spawned" (in Ch2)
+# are a well-observed failure mode of the small action models — see the
+# exp1_llm/seed_42 analysis. The whitelist gives the LLM a concrete
+# negative grounding signal it can override its image interpretation with.
+_CHAMBER_OBJECT_WHITELIST = {
+    "ch1": (
+        "trees (brown trunks), stone blocks (grey textured), chickens, sheep, "
+        "the locked red Door 1 in the north wall, bedrock walls/floor/ceiling. "
+        "There are NO purple anvils, NO blue switches, NO zombies, NO boss, "
+        "NO diamond sword or chestplate, NO red conveyor belts here. If you "
+        "'see' any of those, you are hallucinating from the HUD overlay or "
+        "from a stale belief — ignore it"
+    ),
+    "ch2": (
+        "exactly 2 purple anvils (Row A front + Row B back, both centred "
+        "along x), bedrock walls/floor/ceiling. There are NO trees, NO stone "
+        "blocks, NO animals, NO switches, NO zombies, NO boss in Ch2"
+    ),
+    "ch3": (
+        "your isolated cell with ONE blue switch cube on the south wall, "
+        "the locked red cell door, bedrock walls. There are NO anvils, NO "
+        "animals, NO zombies, NO boss in your cell. You CANNOT see your "
+        "teammates from inside the cell"
+    ),
+    "ch3_communal": (
+        "the communal regroup room (no puzzle objects here), the locked "
+        "red Door 3 to Ch4, bedrock walls. There are NO anvils, NO switches, "
+        "NO zombies in the communal room"
+    ),
+    "ch4": (
+        "3 zombies, the locked red Door 4 to Ch5, bedrock walls. There are "
+        "NO trees, NO anvils, NO switches, NO boss in Ch4"
+    ),
+    "ch5": (
+        "1 boss (large zombie variant), bedrock walls. There are NO trees, "
+        "NO anvils, NO switches, NO other zombies in Ch5"
+    ),
+}
+
+
+def _describe_chamber(chamber):
+    """Return a self-contained `Chamber:` line: name + visible-objects whitelist.
+
+    Substituted directly into the ``{current_chamber}`` placeholder in
+    instruction_prompt_p2.txt. Each value is a single line of text so the
+    surrounding prompt format stays unchanged.
+    """
+    if not chamber:
+        return ("Unknown (position not yet locked — assume Ch1; only "
+                "trees / stone / animals / locked red Door 1 are valid targets)")
+    whitelist = _CHAMBER_OBJECT_WHITELIST.get(chamber)
+    if whitelist is None:
+        return chamber
+    return f"{chamber} — VISIBLE HERE: {whitelist}."
+
+
 class CustomAgent(BaseChatAgent):
 
     # Initialize the agent with a name, description, and model client
@@ -340,7 +399,13 @@ class CustomAgent(BaseChatAgent):
             "propagation_summary": propagation_summary or "",
             "position_text": position_text or "Unknown",
             "player_status_text": player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
-            "current_chamber": current_chamber or "Unknown",
+            # Substitute the chamber name PLUS an explicit object whitelist
+            # ("VISIBLE HERE: ... NO X, NO Y here") so the action LLM has a
+            # concrete negative-grounding signal to override its image
+            # interpretation with. Without this, agents in Ch1 routinely
+            # hallucinated "purple anvil" / "diamond sword" / "red conveyor"
+            # objects (which only exist in Ch2 / post-Ch2). See _describe_chamber.
+            "current_chamber": _describe_chamber(current_chamber),
             # Live chamber-state string (e.g. anvil HP + active punchers in
             # Ch2, switch / cell-door state in Ch3, etc.). Sourced from
             # CraftiumEnvironmentInterface.get_chamber_state(). Empty string
