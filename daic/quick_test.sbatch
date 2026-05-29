@@ -76,7 +76,7 @@ apptainer exec --nv \
     python -u "$REPO/src/mindforge/multi_agent_craftium.py" \
         --num-agents 3 \
         --episodes 1 \
-        --max-steps 50 \
+        --max-steps 100 \
         --warmup-time 300 \
         --seed "$SEED" \
         --experiment-id "$EXP_NAME" \
