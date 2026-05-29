@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=exp5-ippo
 #SBATCH --partition=general
+#SBATCH --qos=long
 #SBATCH --time=48:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8

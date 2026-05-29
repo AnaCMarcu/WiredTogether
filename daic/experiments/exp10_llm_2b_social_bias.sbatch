@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=exp10-llm-2b-social-bias
 #SBATCH --partition=general
+#SBATCH --qos=long
 #SBATCH --time=48:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
