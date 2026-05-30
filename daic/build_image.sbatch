@@ -28,7 +28,7 @@ echo "[build] tmp:       $BUILD_TMP"
 echo "[build] start:     $(date)"
 echo
 
-apptainer build --fakeroot "$IMG_FILE" "$DEF_FILE"
+apptainer build --fakeroot --force "$IMG_FILE" "$DEF_FILE"
 
 echo
 echo "[build] end:       $(date)"
