@@ -14,6 +14,45 @@ Do not suggest tasks for a different chamber or milestones that are already done
 
 Respond in JSON: {{"reasoning": "...", "task": "..."}}
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GROUNDING — THE ONLY ENTITIES THAT EXIST IN THIS ENVIRONMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Use ONLY these entity names. Anything else is a hallucination
+— if the agent's last thoughts mention something not in this
+list, IGNORE that mention and propose a task that targets one
+of the entities below instead.
+
+Chamber 1: trees (brown trunks), stone blocks (gray, 2-block
+  pillars), chickens (white, small), sheep (white, bigger),
+  dirt floor. The red bedrock-textured block in the north
+  wall is "Door 1" (locked).
+Chamber 2: purple anvils (2 total, sitting on top of GRAY
+  stone pedestals — together each forms a 2-block-tall
+  pillar). Only the PURPLE top block is interactive; the
+  gray pedestal below is inert. Floor is bedrock.
+Chamber 3: 3 isolation cells (one per agent), each with one
+  BLUE cube switch on the south wall. A north communal room
+  the agents must regroup in.
+Chamber 4: 3 zombies (hostile mobs). Agents arrive holding
+  a diamond sword in Slot1 and wearing a diamond chestplate.
+Chamber 5: 1 boss zombie (60 HP, deals 3 damage per hit).
+
+ENTITIES THAT DO NOT EXIST and MUST NEVER appear in your task:
+  redstone, lever, button, valve, gear, pickaxe, ore, ladder,
+  rail, plank, chest, furnace, crafting table, bed, torch,
+  pickaxe, lectern, sign. If the agent mentioned any of these
+  in their thoughts, that is a perception error — propose a
+  task on a REAL entity instead.
+
+TASK NAMING RULES:
+  - Use plain-English descriptions of REAL entities only.
+  - Verbs allowed: Dig, MoveForward, MoveBackward, TurnLeft,
+    TurnRight, LookUp, LookDown, Jump, Slot1..Slot8.
+  - DO NOT invent items, blocks, or interactions.
+  - DO NOT propose "Equip the sword" — gear auto-equips on
+    anvil break, no Slot1 action needed.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 Guidance by chamber (use only what applies):
 - Ch1, no digs yet:                "Dig a tree (move to nearest wood block and use Dig)"
 - Ch1, no animals killed:          "Find and attack a chicken or sheep"
@@ -23,7 +62,7 @@ Guidance by chamber (use only what applies):
 - Ch2, 1 anvil broken:             "Move to the chestplate anvil and dig it together with a teammate"
 - Ch2, both anvils broken:         "Wait — Door 2 is opening, you'll be teleported to Chamber 3 shortly"
 NOTE for Ch2: there are EXACTLY 2 anvils total (one sword, one chestplate). Solo digging makes ZERO progress (DECAY cancels SOLO_DIG_RATE). 2+ agents punching the same anvil within ~1 second = +3 hp/tick. When an anvil breaks, EVERY agent automatically receives the gear (sword auto-wielded, chestplate auto-equipped) — no pickup or Slot1 action needed.
-- Ch3, in isolation cell:          "Announce your cell in chat, then press the switch"
+- Ch3, in isolation cell:          "Announce your cell in chat, then press the BLUE switch on the south wall"
 - Ch3, door opened, in cell:       "Walk out of your cell into the communal room"
 - Ch3, in communal, teammates not: "Wait near the north door for teammates"
 - Ch4, zombies present:            "Attack the nearest zombie with your sword"

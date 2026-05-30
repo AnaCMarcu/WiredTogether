@@ -2210,17 +2210,25 @@ async def run(args):
             for _ev in _milestone_events_this_step:
                 metric.record_milestone_event(_ev)
                 _mid = _ev.get("milestone", "")
-                _ev_step = _ev.get("step", step)
+                # IMPORTANT: _ev["step"] is the Lua `step_counter` (Luanti
+                # server ticks since mod load) — NOT the Python env-step
+                # counter. Mixing the two in milestone_log breaks any
+                # x-axis comparison against env-step-indexed series like
+                # chamber_entry_steps. Always use the Python env step
+                # (which is the polling step where the event surfaced)
+                # for downstream metrics. Lua tick stays in the raw
+                # event dict captured by record_milestone_event() for
+                # debugging.
                 _contribs_ev = _ev.get("contributors", [])
-                coop_metric.observe_milestone(_ev_step, _mid, _contribs_ev)
+                coop_metric.observe_milestone(step, _mid, _contribs_ev)
                 if _mid in _KILL_TARGETS:
                     # Credit the (first-listed) contributor as the killer; the
                     # joint-kill matrix is computed from recent damage events
                     # so the rest of the pair info is recovered there.
                     _killer = _contribs_ev[0] if _contribs_ev else None
-                    coop_metric.observe_kill(_ev_step, _killer, _KILL_TARGETS[_mid])
+                    coop_metric.observe_kill(step, _killer, _KILL_TARGETS[_mid])
                 ep_logger.log_event({
-                    "step": _ev_step,
+                    "step": step,
                     "type": "milestone",
                     "id": _mid,
                     "contributors": _contribs_ev,
