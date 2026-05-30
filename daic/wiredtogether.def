@@ -28,7 +28,14 @@ From: python:3.12-slim-bookworm
         libxext6 libxrender1 libxxf86vm1 libxi6 libxcursor1 libxrandr2 libxinerama1 \
         libsm6 libglib2.0-0 \
         libfreetype6 libsndfile1 \
-        build-essential
+        build-essential \
+        xvfb
+    # xvfb pulls in /usr/bin/Xvfb + /usr/bin/xvfb-run. Required because most
+    # DAIC GPU nodes don't grant the user access to /dev/dri/renderD* and
+    # Luanti's Irrlicht→EGL pipeline then refuses to fall back to software
+    # rendering. _common.sh's xvfb-run wrapper gives Luanti a software X
+    # surface via llvmpipe so rendering works on any node regardless of
+    # /dev/dri permissions.
     rm -rf /var/lib/apt/lists/*
 
     pip install --no-cache-dir --upgrade pip wheel setuptools
