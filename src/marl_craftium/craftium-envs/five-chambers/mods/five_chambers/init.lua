@@ -138,6 +138,21 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
         local pos  = (i >= 0)
             and five_chambers.ch1_spawn_pos(i)
             or  {x=5, y=five_chambers.FLOOR_Y + 1, z=5}
+        -- Force-load the target chunk before set_pos. Without this, if the
+        -- player ended ep N far from the Ch1 spawn (typically in Ch2/Ch3),
+        -- the Ch1 chunk around `pos` may not be in the loaded set when
+        -- set_pos is called — Luanti then silently no-ops the teleport,
+        -- the player stays at the old position, and the per-agent
+        -- spawn_pos / M1 distance check at the next globalstep computes
+        -- a large distance and fires M1 spuriously at ep N+1 step 1.
+        -- Observed in exp15 ep2: agent_0 (close to spawn target) was
+        -- teleported fine and didn't fire M1, but agent_1/agent_2 (far
+        -- from spawn target) failed silently and fired M1 at step 1
+        -- with no real movement.
+        minetest.load_area(
+            {x=pos.x - 2, y=pos.y - 2, z=pos.z - 2},
+            {x=pos.x + 2, y=pos.y + 2, z=pos.z + 2}
+        )
         p:set_pos(pos)
         p:set_hp(20, {type="set_hp", from="mod"})
 
