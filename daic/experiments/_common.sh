@@ -102,9 +102,29 @@ run_exp() {
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || true
     echo "============================"
 
+    # Headless-display strategy:
+    # Luanti renders frames through Irrlicht → EGL, independently of SDL.
+    # SDL_VIDEODRIVER=offscreen silences the SDL side but Irrlicht still
+    # tries to grab /dev/dri/renderD* for EGL hardware acceleration.
+    # On DAIC nodes where the user lacks the `render` / `video` group on
+    # those devices ("Permission denied" + "Not allowed to force software
+    # rendering when API explicitly selects a hardware device"), MT client 0
+    # exits with code 1 and the run dies with `Server socket listen timeout
+    # reached`. Observed pattern: 13/14 experiments in the 2026-05-30
+    # batch failed this way; the lone survivor (exp15) landed on a node
+    # where the user happened to have render-device permissions.
+    #
+    # Fix is two layered:
+    #   1. --bind /dev/dri so the container sees the host's render nodes
+    #      when SLURM grants access.
+    #   2. xvfb-run wrapper around python so Irrlicht/EGL has a working
+    #      software X surface (llvmpipe) even on nodes where GPU device
+    #      access is denied. Xvfb owns its own framebuffer; EGL can render
+    #      into it without ever touching /dev/dri.
     apptainer exec --nv \
         --bind /tmp:/tmp \
         --bind /tudelft.net:/tudelft.net \
+        --bind /dev/dri:/dev/dri \
         --env PYTHONPATH="$REPO/src" \
         --env PYTHONUNBUFFERED=1 \
         --env PYTHONIOENCODING=utf-8 \
@@ -121,11 +141,9 @@ run_exp() {
         --env WIREDTOGETHER_RUNS_ROOT="$REPO/runs" \
         --env SDL_VIDEODRIVER=dummy \
         --env SDL_AUDIODRIVER=dummy \
-        --env DISPLAY= \
         --env LIBGL_ALWAYS_SOFTWARE=1 \
         --env MESA_GL_VERSION_OVERRIDE=3.3 \
         --env GALLIUM_DRIVER=llvmpipe \
-        --env EGL_PLATFORM=surfaceless \
         --env MESA_LOADER_DRIVER_OVERRIDE=llvmpipe \
         --env WANDB_API_KEY="${WANDB_API_KEY:-}" \
         --env WANDB_MODE="${WANDB_MODE:-online}" \
@@ -133,6 +151,30 @@ run_exp() {
         --env WANDB_SILENT=true \
         --pwd "$WORK_DIR" \
         "$IMG" \
+        sh -c '
+            # Resolve Xvfb invocation. xvfb-run is the convenient wrapper
+            # (auto-picks a free display, cleans up on exit) but some
+            # apptainer images only ship the raw Xvfb binary. Try both
+            # in order; fall back to no-wrapper as last resort so we at
+            # least produce a diagnostic in run.log rather than a silent
+            # hang on missing-binary.
+            # POSIX sh, not bash — the container has no bash on PATH.
+            if command -v xvfb-run >/dev/null 2>&1; then
+                exec xvfb-run -a -s "-screen 0 1024x768x24 -nolisten tcp" "$@"
+            elif command -v Xvfb >/dev/null 2>&1; then
+                Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &
+                _xvfb_pid=$!
+                trap "kill $_xvfb_pid 2>/dev/null || true" EXIT
+                export DISPLAY=:99
+                sleep 1
+                exec "$@"
+            else
+                echo "[WARN] Neither xvfb-run nor Xvfb found in image — Luanti will need real GPU access (/dev/dri permissions) on this node." >&2
+                unset DISPLAY
+                export EGL_PLATFORM=surfaceless
+                exec "$@"
+            fi
+        ' sh \
         python -u "$REPO/src/mindforge/multi_agent_craftium.py" \
             --num-agents 3 \
             --episodes 3 \
