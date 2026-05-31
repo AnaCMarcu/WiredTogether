@@ -655,44 +655,449 @@ class CraftiumMetric:
 
     # ─── Plots ─────────────────────────────────────────────────────────
 
+    def _plots_dir(self) -> str:
+        """Return (and lazily create) the per-run plots subdirectory.
+
+        Centralises the choice so JSON / txt / log artifacts stay in the
+        run root while every .png lives under ``<run_root>/plots/``. The
+        directory is created on first call; subsequent calls just return
+        the path.
+        """
+        path = os.path.join(self.target_folder, "plots")
+        os.makedirs(path, exist_ok=True)
+        return path
+
     def _save_plots(self):
         if not self.ts_data["timesteps"]:
             return
         self._plot_cumulative_returns()
+        self._plot_returns_curve()
         self._plot_milestones()
         self._plot_track_rewards()
         self._plot_reward_decomposition()
         self._write_steps_to_milestone_txt()
         self._plot_communication_frequency()
+        self._plot_comm_curve()
         self._plot_hebbian_bonds()
         self._plot_rl_losses()
 
-    def _plot_cumulative_returns(self):
+    def _plot_returns_curve(self):
+        """RL-paper-style learning curve: mean ± std across EPISODES.
+
+        X-axis: within-episode step (0 .. max_ep_len).
+        Y-axis: within-episode cumulative team return (summed across the
+                N agents at each step, re-zeroed at the start of each ep).
+        Solid line: mean across the N episodes at each within-episode step.
+        Shaded band: ± 1 std across episodes.
+        Thin lines: per-episode trajectories (for context).
+
+        This is the canonical learning-curve framing for single-seed
+        multi-episode RL runs — "what does a typical episode look like,
+        and how much do episodes differ from each other?". For multi-seed
+        plots, aggregate across seeds in a separate post-hoc script.
+
+        Falls back to a "no episodes yet" placeholder if end_episode()
+        hasn't been called (e.g. mid-ep1 crash dump).
+        """
         ts = self.ts_data["timesteps"]
-        fig, ax = plt.subplots(figsize=(10, 5))
+        series = self.ts_data["cumulative_returns"]  # per-agent cumulative across whole run
+        ep_lens = getattr(self, "episode_lengths", []) or []
+        if not ts or not series or not ep_lens:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.text(
+                0.5, 0.5,
+                "No completed episodes yet — learning curve unavailable.",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=11, color="#666666",
+            )
+            ax.set_axis_off()
+            fig.savefig(
+                os.path.join(self._plots_dir(), "returns_curve.png"),
+                dpi=150,
+            )
+            plt.close(fig)
+            return
+
+        T = min(len(s) for s in series)
+        arr = np.array([s[:T] for s in series], dtype=float)  # (n_agents, T)
+        # Sum across agents to get a team cumulative-return-over-the-run series.
+        team_cum = arr.sum(axis=0)  # (T,)
+        # Convert to per-step deltas so we can re-cumulate within each episode.
+        deltas = np.diff(team_cum, prepend=0.0)  # (T,)
+
+        # Slice into episode-aligned trajectories, re-cumulating each.
+        ep_curves = []  # list of (ep_len,) arrays
+        idx = 0
+        for ep_len in ep_lens:
+            seg = deltas[idx: idx + int(ep_len)]
+            if seg.size == 0:
+                break
+            ep_curves.append(np.cumsum(seg))
+            idx += int(ep_len)
+        if not ep_curves:
+            return
+
+        # Pad episodes to a common length with NaN so nanmean/nanstd
+        # handle ragged eps correctly (some may be shorter if truncated).
+        max_len = max(c.size for c in ep_curves)
+        padded = np.full((len(ep_curves), max_len), np.nan)
+        for i, c in enumerate(ep_curves):
+            padded[i, : c.size] = c
+        mean = np.nanmean(padded, axis=0)
+        std = np.nanstd(padded, axis=0, ddof=0)
+        x = np.arange(1, max_len + 1)
+
+        fig, ax = plt.subplots(figsize=(10, 4.5))
+        # Thin per-episode curves for context.
+        cmap = plt.get_cmap("tab10")
+        for i, c in enumerate(ep_curves):
+            ax.plot(np.arange(1, c.size + 1), c,
+                    color=cmap(i % 10), alpha=0.30,
+                    linewidth=0.9, label=f"ep{i+1}")
+        # Mean across episodes + std band.
+        ax.fill_between(
+            x, mean - std, mean + std,
+            color="#1f77b4", alpha=0.20,
+            label=f"± 1 std (across {len(ep_curves)} episodes)",
+        )
+        ax.plot(x, mean, color="#1f77b4", linewidth=2.2,
+                label=f"mean (across {len(ep_curves)} episodes)")
+
+        ax.set_xlabel("Within-episode step")
+        ax.set_ylabel("Cumulative team return")
+        ax.set_title(
+            f"Learning curve — mean ± std across {len(ep_curves)} episodes"
+        )
+        ax.legend(fontsize=8, loc="best", framealpha=0.9)
+        ax.grid(color="#e5e5e5", linewidth=0.5)
+        ax.set_axisbelow(True)
+        ax.axhline(0, color="#888888", linewidth=0.5)
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "returns_curve.png"),
+            dpi=150,
+        )
+        plt.close(fig)
+
+    def _plot_comm_curve(self):
+        """RL-paper-style communication-rate curve: mean ± std across EPISODES.
+
+        X-axis: within-episode step.
+        Y-axis: smoothed messages-per-step rate.
+        Solid line: mean across episodes at each within-episode step.
+        Shaded band: ± 1 std across episodes.
+        Thin lines: per-episode smoothed trajectories.
+
+        Same framing as _plot_returns_curve — answers "what does a typical
+        episode's comm rate look like, and how much do episodes differ?".
+        """
+        ccps = self.comm_counts_per_step
+        ep_lens = getattr(self, "episode_lengths", []) or []
+        if not ccps or not ep_lens:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.text(
+                0.5, 0.5,
+                "No completed episodes yet — comm curve unavailable.",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=11, color="#666666",
+            )
+            ax.set_axis_off()
+            fig.savefig(
+                os.path.join(self._plots_dir(), "comm_curve.png"),
+                dpi=150,
+            )
+            plt.close(fig)
+            return
+
+        arr = np.array(ccps, dtype=float)
+
+        # Slice into per-episode series; smooth within each episode so the
+        # smoothing kernel never crosses an episode boundary (which would
+        # bleed late-ep N traffic into early ep N+1).
+        ep_series = []
+        idx = 0
+        for ep_len in ep_lens:
+            seg = arr[idx: idx + int(ep_len)]
+            if seg.size == 0:
+                break
+            ep_series.append(seg)
+            idx += int(ep_len)
+        if not ep_series:
+            return
+
+        # Smoothing window: clip to the shortest episode so convolution
+        # produces at least one valid value per episode.
+        window = max(1, min(50, min(s.size for s in ep_series)))
+        smoothed = []
+        for s in ep_series:
+            if window > 1:
+                k = np.ones(window) / window
+                smoothed.append(np.convolve(s, k, mode="valid"))
+            else:
+                smoothed.append(s.copy())
+
+        max_len = max(c.size for c in smoothed)
+        padded = np.full((len(smoothed), max_len), np.nan)
+        for i, c in enumerate(smoothed):
+            padded[i, : c.size] = c
+        mean = np.nanmean(padded, axis=0)
+        std = np.nanstd(padded, axis=0, ddof=0)
+        x = np.arange(1, max_len + 1) + (window // 2)  # window-center offset
+
+        fig, ax = plt.subplots(figsize=(10, 4.5))
+        cmap = plt.get_cmap("tab10")
+        for i, c in enumerate(smoothed):
+            ax.plot(
+                np.arange(1, c.size + 1) + (window // 2), c,
+                color=cmap(i % 10), alpha=0.30, linewidth=0.9,
+                label=f"ep{i+1}",
+            )
+        ax.fill_between(
+            x, mean - std, mean + std,
+            color="#2ca02c", alpha=0.20,
+            label=f"± 1 std (across {len(smoothed)} episodes)",
+        )
+        ax.plot(
+            x, mean, color="#2ca02c", linewidth=2.2,
+            label=f"mean (across {len(smoothed)} episodes)",
+        )
+
+        ax.set_xlabel("Within-episode step")
+        ax.set_ylabel(f"Messages per step (smoothed, window={window})")
+        ax.set_title(
+            f"Communication rate — mean ± std across {len(smoothed)} episodes"
+        )
+        ax.legend(fontsize=8, loc="best", framealpha=0.9)
+        ax.grid(color="#e5e5e5", linewidth=0.5)
+        ax.set_axisbelow(True)
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "comm_curve.png"),
+            dpi=150,
+        )
+        plt.close(fig)
+
+    def _plot_cumulative_returns(self):
+        """Two-panel per-episode return plot.
+
+        Left:  grouped bars showing each agent's return for each episode
+               (one cluster per episode, one bar per agent). Lets you see
+               which episode each agent did well/poorly in at a glance.
+        Right: per-agent mean ± std across episodes (error bar). Single-
+               number summary for each agent, std captures cross-episode
+               variability within this seed.
+
+        Falls back to a single-panel "no per-episode data yet" plot if
+        end_episode() hasn't been called yet (e.g., a crashed run before
+        ep1 finished).
+        """
+        n_eps = len(self.per_episode_returns[0]) if self.per_episode_returns else 0
+        if n_eps == 0:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.text(
+                0.5, 0.5,
+                "No completed episodes yet — per-episode plot unavailable.",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=11, color="#666666",
+            )
+            ax.set_axis_off()
+            fig.savefig(
+                os.path.join(self._plots_dir(), "cumulative_returns.png"),
+                dpi=150,
+            )
+            plt.close(fig)
+            return
+
+        cmap = plt.get_cmap("tab10")
+        agent_colors = [cmap(i % 10) for i in range(self.num_agents)]
+        ep_indices = list(range(1, n_eps + 1))
+
+        fig, (ax_l, ax_r) = plt.subplots(1, 2, figsize=(13, 4.5),
+                                          gridspec_kw={"width_ratios": [2.5, 1]})
+
+        # ── Left: grouped bars per episode ──
+        bar_w = 0.8 / max(1, self.num_agents)
         for i in range(self.num_agents):
-            ax.plot(ts, self.ts_data["cumulative_returns"][i], label=f"Agent {i}")
-        for pt in self.phase_transitions:
-            ax.axvline(x=pt["step"], color="red", linestyle="--", alpha=0.7, linewidth=1.5)
-        ax.set_xlabel("Timestep")
-        ax.set_ylabel("Cumulative Return")
-        ax.set_title("Cumulative Return per Agent")
-        ax.legend()
-        fig.savefig(os.path.join(self.target_folder, "cumulative_returns.png"), dpi=150)
+            xs = [ep + (i - (self.num_agents - 1) / 2) * bar_w
+                  for ep in ep_indices]
+            ys = self.per_episode_returns[i]
+            ax_l.bar(xs, ys, bar_w, color=agent_colors[i],
+                     edgecolor="black", linewidth=0.4,
+                     label=f"agent_{i}")
+        ax_l.set_xticks(ep_indices)
+        ax_l.set_xticklabels([f"ep{e}" for e in ep_indices])
+        ax_l.set_xlabel("Episode")
+        ax_l.set_ylabel("Return")
+        ax_l.set_title(f"Return per Episode (n={n_eps})")
+        ax_l.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_l.set_axisbelow(True)
+        ax_l.legend(fontsize=8, loc="best", framealpha=0.9)
+        ax_l.axhline(0, color="#888888", linewidth=0.5)
+
+        # ── Right: per-agent mean ± std across episodes ──
+        means = [statistics.fmean(self.per_episode_returns[i]) if self.per_episode_returns[i] else 0.0
+                 for i in range(self.num_agents)]
+        stds = [statistics.pstdev(self.per_episode_returns[i]) if len(self.per_episode_returns[i]) >= 2 else 0.0
+                for i in range(self.num_agents)]
+        x_pos = list(range(self.num_agents))
+        ax_r.bar(x_pos, means, yerr=stds, capsize=5,
+                 color=[agent_colors[i] for i in range(self.num_agents)],
+                 edgecolor="black", linewidth=0.4,
+                 error_kw=dict(ecolor="#222222", lw=1.2))
+        # Annotate each bar with the mean ± std value.
+        for i, (m, s) in enumerate(zip(means, stds)):
+            ax_r.text(i, m + max(s, 0) + 2,
+                      f"{m:.1f}\n±{s:.1f}",
+                      ha="center", va="bottom", fontsize=8)
+        ax_r.set_xticks(x_pos)
+        ax_r.set_xticklabels([f"a{i}" for i in range(self.num_agents)])
+        ax_r.set_xlabel("Agent")
+        ax_r.set_ylabel("Mean Return ± std")
+        ax_r.set_title("Per-agent mean ± std")
+        ax_r.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_r.set_axisbelow(True)
+        ax_r.axhline(0, color="#888888", linewidth=0.5)
+
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "cumulative_returns.png"),
+            dpi=150,
+        )
         plt.close(fig)
 
     def _plot_milestones(self):
-        ts = self.ts_data["timesteps"]
-        fig, ax = plt.subplots(figsize=(10, 5))
-        for i in range(self.num_agents):
-            ax.plot(ts, self.ts_data["milestone_count"][i], label=f"Agent {i}", alpha=0.7)
-        ax.plot(ts, self.ts_data["total_milestones"],
-                label="Joint (unique)", linewidth=2, color="black")
-        ax.set_xlabel("Timestep")
-        ax.set_ylabel("Milestones Achieved")
-        ax.set_title("Five-Chambers Milestone Progress")
-        ax.legend()
-        fig.savefig(os.path.join(self.target_folder, "milestones.png"), dpi=150)
+        """Gantt-style milestone timeline.
+
+        X-axis: env step.
+        Y-axis: every milestone in canonical order, grouped into chamber
+                bands (Ch1 at bottom → Ch5 → comm at top).
+        Markers: one per (agent, milestone, step) — colored by agent.
+        Episode boundaries: vertical dashed lines.
+
+        Reads from self.milestone_events (rich, includes contributor + step)
+        rather than the cumulative-count series, so you can see WHICH
+        milestone fired WHEN for WHICH agent — the actual story of the
+        run, not just a count.
+        """
+        # Y-axis ordering: walk TRACKS in canonical order so chambers
+        # stack bottom-up. Each entry gets a row index; we also remember
+        # which chamber each row belongs to for the background bands.
+        y_labels = []
+        y_chamber = []  # parallel: chamber name per row, for banding
+        for track in TRACK_ORDER:
+            for mid, _ in TRACKS[track]:
+                y_labels.append(mid)
+                y_chamber.append(track)
+        y_index = {mid: i for i, mid in enumerate(y_labels)}
+
+        # Chamber band colors. Lightly shaded horizontal stripes so the
+        # reader can see at a glance which chamber a milestone lives in
+        # without reading the y-tick label.
+        chamber_band_colors = {
+            "ch1_solo":     "#f4f0ff",
+            "ch2_anvils":   "#fff4e6",
+            "ch3_switches": "#e8f8ff",
+            "ch4_combat":   "#ffeeee",
+            "ch5_boss":     "#fff0c2",
+            "communication":"#eaeaea",
+        }
+
+        # Agent marker colors. Use a small categorical palette that
+        # stays readable when 3-6 agents overlap.
+        cmap = plt.get_cmap("tab10")
+        agent_colors = {i: cmap(i % 10) for i in range(self.num_agents)}
+
+        # Figure size scales with the milestone count so labels stay
+        # readable for the full 33-row layout (5 chambers + comm).
+        fig_h = max(6.5, 0.32 * len(y_labels))
+        fig, ax = plt.subplots(figsize=(13, fig_h))
+
+        # Background chamber bands. Draw rectangles from x=0 to the
+        # rightmost event x so they span the whole plot.
+        x_max = max(
+            (ev.get("step", 0) for ev in self.milestone_events),
+            default=self.timestep,
+        )
+        x_max = max(x_max, 1)
+        chamber_first_last = {}
+        for row_i, ch in enumerate(y_chamber):
+            if ch not in chamber_first_last:
+                chamber_first_last[ch] = [row_i, row_i]
+            chamber_first_last[ch][1] = row_i
+        for ch, (lo, hi) in chamber_first_last.items():
+            ax.axhspan(
+                lo - 0.5, hi + 0.5,
+                color=chamber_band_colors.get(ch, "#ffffff"),
+                zorder=0,
+            )
+            # Chamber label at the right edge of the band.
+            ax.text(
+                x_max * 1.005, (lo + hi) / 2, ch,
+                fontsize=8, va="center", ha="left",
+                color="#555555", style="italic",
+            )
+
+        # Episode boundary verticals (only if we tracked them).
+        if getattr(self, "episode_lengths", None):
+            cum = 0
+            for ep_i, ep_len in enumerate(self.episode_lengths):
+                cum += int(ep_len)
+                ax.axvline(
+                    cum, color="#888888", linestyle="--",
+                    linewidth=0.8, zorder=1,
+                )
+                ax.text(
+                    cum, len(y_labels) - 0.2, f" ep{ep_i+1} end",
+                    fontsize=7, color="#666666", va="top",
+                )
+
+        # Scatter every milestone event. Larger dot + slight jitter on y
+        # if multiple agents hit the same milestone at the same step, so
+        # they don't fully overlap.
+        agents_seen = set()
+        for ev in self.milestone_events:
+            mid = ev.get("milestone_id") or ev.get("milestone")
+            if mid not in y_index:
+                continue
+            row = y_index[mid]
+            step = ev.get("step")
+            contrib = ev.get("contributor", "")
+            agent_id = _agent_id_from_name(contrib)
+            if not (0 <= agent_id < self.num_agents):
+                continue
+            # Tiny vertical jitter per agent so 3 agents on same (step, mid)
+            # are visually distinct rather than stacked.
+            y_jitter = (agent_id - (self.num_agents - 1) / 2) * 0.12
+            ax.scatter(
+                step, row + y_jitter,
+                s=42,
+                color=agent_colors[agent_id],
+                edgecolors="black",
+                linewidths=0.4,
+                zorder=3,
+                label=f"agent_{agent_id}" if agent_id not in agents_seen else None,
+            )
+            agents_seen.add(agent_id)
+
+        ax.set_yticks(range(len(y_labels)))
+        ax.set_yticklabels(y_labels, fontsize=8)
+        ax.set_xlabel("Env step")
+        ax.set_xlim(0, x_max * 1.08)
+        ax.set_ylim(-0.7, len(y_labels) - 0.3)
+        ax.set_title(
+            "Five-Chambers Milestone Timeline (markers = fire events; "
+            "rows grouped by chamber)"
+        )
+        ax.grid(axis="x", color="#dddddd", linewidth=0.5, zorder=1)
+        ax.set_axisbelow(True)
+        if agents_seen:
+            ax.legend(loc="upper left", fontsize=8, framealpha=0.9)
+
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "milestones.png"),
+            dpi=150,
+        )
         plt.close(fig)
 
     def _plot_track_rewards(self):
@@ -716,7 +1121,7 @@ class CraftiumMetric:
         ax.set_xticks(x)
         ax.set_xticklabels([f"Agent {i}" for i in range(self.num_agents)])
         ax.legend(loc="upper right", fontsize=8)
-        fig.savefig(os.path.join(self.target_folder, "track_rewards.png"), dpi=150)
+        fig.savefig(os.path.join(self._plots_dir(), "track_rewards.png"), dpi=150)
         plt.close(fig)
 
     def _plot_reward_decomposition(self):
@@ -751,7 +1156,7 @@ class CraftiumMetric:
         ax.set_xticks(x)
         ax.set_xticklabels([f"Agent {i}" for i in range(self.num_agents)])
         ax.legend(loc="upper right", fontsize=8)
-        fig.savefig(os.path.join(self.target_folder, "reward_decomposition.png"), dpi=150)
+        fig.savefig(os.path.join(self._plots_dir(), "reward_decomposition.png"), dpi=150)
         plt.close(fig)
 
     def _write_steps_to_milestone_txt(self):
@@ -836,25 +1241,86 @@ class CraftiumMetric:
             ax.legend(lines1 + lines2, labels1 + labels2, fontsize=8, loc="best")
 
         fig.tight_layout()
-        fig.savefig(os.path.join(self.target_folder, "rl_losses.png"), dpi=150)
+        fig.savefig(os.path.join(self._plots_dir(), "rl_losses.png"), dpi=150)
         plt.close(fig)
 
     def _plot_communication_frequency(self):
-        if not self.comm_counts_per_step:
-            return
-        fig, ax = plt.subplots(figsize=(10, 4))
-        window = min(50, len(self.comm_counts_per_step))
-        if window > 1:
-            smoothed = np.convolve(
-                self.comm_counts_per_step, np.ones(window) / window, mode="valid"
+        """Two-panel per-episode communication plot.
+
+        Left:  grouped bars of messages-sent per episode per agent.
+        Right: per-agent mean ± std across episodes.
+
+        Falls back to a "no data" placeholder if no episode finished yet.
+        """
+        n_eps = len(self.comm_count_per_episode[0]) if self.comm_count_per_episode else 0
+        if n_eps == 0:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.text(
+                0.5, 0.5,
+                "No completed episodes yet — per-episode plot unavailable.",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=11, color="#666666",
             )
-            ax.plot(range(len(smoothed)), smoothed)
-        else:
-            ax.plot(self.comm_counts_per_step)
-        ax.set_xlabel("Timestep")
-        ax.set_ylabel("Messages per Step (smoothed)")
-        ax.set_title("Communication Frequency")
-        fig.savefig(os.path.join(self.target_folder, "communication_frequency.png"), dpi=150)
+            ax.set_axis_off()
+            fig.savefig(
+                os.path.join(self._plots_dir(), "communication_frequency.png"),
+                dpi=150,
+            )
+            plt.close(fig)
+            return
+
+        cmap = plt.get_cmap("tab10")
+        agent_colors = [cmap(i % 10) for i in range(self.num_agents)]
+        ep_indices = list(range(1, n_eps + 1))
+
+        fig, (ax_l, ax_r) = plt.subplots(1, 2, figsize=(13, 4.5),
+                                          gridspec_kw={"width_ratios": [2.5, 1]})
+
+        # ── Left: grouped bars per episode ──
+        bar_w = 0.8 / max(1, self.num_agents)
+        for i in range(self.num_agents):
+            xs = [ep + (i - (self.num_agents - 1) / 2) * bar_w
+                  for ep in ep_indices]
+            ys = self.comm_count_per_episode[i]
+            ax_l.bar(xs, ys, bar_w, color=agent_colors[i],
+                     edgecolor="black", linewidth=0.4,
+                     label=f"agent_{i}")
+        ax_l.set_xticks(ep_indices)
+        ax_l.set_xticklabels([f"ep{e}" for e in ep_indices])
+        ax_l.set_xlabel("Episode")
+        ax_l.set_ylabel("Messages sent")
+        ax_l.set_title(f"Communication Volume per Episode (n={n_eps})")
+        ax_l.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_l.set_axisbelow(True)
+        ax_l.legend(fontsize=8, loc="best", framealpha=0.9)
+
+        # ── Right: per-agent mean ± std across episodes ──
+        means = [statistics.fmean(self.comm_count_per_episode[i]) if self.comm_count_per_episode[i] else 0.0
+                 for i in range(self.num_agents)]
+        stds = [statistics.pstdev(self.comm_count_per_episode[i]) if len(self.comm_count_per_episode[i]) >= 2 else 0.0
+                for i in range(self.num_agents)]
+        x_pos = list(range(self.num_agents))
+        ax_r.bar(x_pos, means, yerr=stds, capsize=5,
+                 color=[agent_colors[i] for i in range(self.num_agents)],
+                 edgecolor="black", linewidth=0.4,
+                 error_kw=dict(ecolor="#222222", lw=1.2))
+        for i, (m, s) in enumerate(zip(means, stds)):
+            ax_r.text(i, m + max(s, 0) + max(means + [1]) * 0.02,
+                      f"{m:.0f}\n±{s:.0f}",
+                      ha="center", va="bottom", fontsize=8)
+        ax_r.set_xticks(x_pos)
+        ax_r.set_xticklabels([f"a{i}" for i in range(self.num_agents)])
+        ax_r.set_xlabel("Agent")
+        ax_r.set_ylabel("Mean messages ± std")
+        ax_r.set_title("Per-agent mean ± std")
+        ax_r.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_r.set_axisbelow(True)
+
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "communication_frequency.png"),
+            dpi=150,
+        )
         plt.close(fig)
 
     def _plot_hebbian_bonds(self):
@@ -891,7 +1357,7 @@ class CraftiumMetric:
         ax.set_ylabel("Bond Strength")
         ax.set_title("Hebbian Social Graph — Bond Evolution (mean view)")
         ax.legend()
-        fig.savefig(os.path.join(self.target_folder, "graph_bond_evolution.png"), dpi=150)
+        fig.savefig(os.path.join(self._plots_dir(), "graph_bond_evolution.png"), dpi=150)
         plt.close(fig)
 
     def _plot_hebbian_asymmetry(self):
@@ -955,7 +1421,7 @@ class CraftiumMetric:
         fig.suptitle("Asymmetric Hebbian Bonds Over One Episode",
                      fontsize=13, y=1.02)
         fig.savefig(
-            os.path.join(self.target_folder, "graph_bond_asymmetry.png"),
+            os.path.join(self._plots_dir(), "graph_bond_asymmetry.png"),
             dpi=150, bbox_inches="tight",
         )
         plt.close(fig)
