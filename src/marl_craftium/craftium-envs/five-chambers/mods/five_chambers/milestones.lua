@@ -30,13 +30,13 @@ five_chambers.MILESTONE_DEFS = {
     -- but don't get this bonus; Hebbian's job is to amplify the
     -- "follow the leader" pattern that creates.
     m_door1_open         = { track="ch1_solo",  reward=50,  once=true },
-    -- Ch2 anvil cooperation
+    -- Ch2 anvil cooperation. Ch2 has exactly 2 anvils: m8 (Row A, drops
+    -- sword) + m11 (Row B, drops chestplate). m9/m10/m12/m13 were a
+    -- LEGACY 6-anvil design and can never fire (anvil_positions() in
+    -- anvil.lua only registers state for m8 and m11). Removed so plots
+    -- and prompts don't show 4 permanently-OPEN ghost milestones.
     m8_anvil_A1          = { track="ch2_anvils", reward=40, once=true },
-    m9_anvil_A2          = { track="ch2_anvils", reward=40, once=true },
-    m10_anvil_A3         = { track="ch2_anvils", reward=40, once=true },
     m11_anvil_B1         = { track="ch2_anvils", reward=40, once=true },
-    m12_anvil_B2         = { track="ch2_anvils", reward=40, once=true },
-    m13_anvil_B3         = { track="ch2_anvils", reward=40, once=true },
     m14_sword_equipped   = { track="ch2_gear",  reward=50,  once=true },
     m15_chestplate_equipped = { track="ch2_gear", reward=30, once=true },
     -- Ch3 switch puzzle
