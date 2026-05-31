@@ -161,6 +161,7 @@ class CustomAgent(BaseChatAgent):
         current_chamber=None,
         visited_chambers=None,
         completed_milestones=None,
+        milestone_progress=None,
         chamber_state=None,
         bond_weights=None,
         bond_deltas=None,
@@ -282,6 +283,7 @@ class CustomAgent(BaseChatAgent):
                 player_status_text=player_status_text,
                 current_chamber=current_chamber,
                 completed_milestones=completed_milestones,
+                milestone_progress=milestone_progress,
                 do_question_answers=False,
             )
             self.metric.log(f"Agent {self.name}: New task: {task}")
@@ -420,6 +422,14 @@ class CustomAgent(BaseChatAgent):
             "visited_chambers": (
                 ", ".join(visited_chambers) if visited_chambers else "(none yet)"
             ),
+            # Per-chamber milestone-progress block: what THIS agent fired,
+            # what teammates fired (so we don't redundantly re-chase
+            # team-shared milestones like M_door1_open), and what's still
+            # OPEN per chamber. Computed in multi_agent_craftium.py via
+            # format_milestone_progress(). Empty placeholder when unknown
+            # (e.g. before metric is populated).
+            "milestone_progress": milestone_progress
+                or "(no milestone data yet)",
         }
         self.belief_system.task_beliefs = belief_parts["task_beliefs"]
         self.metric.log(f"Agent {self.name} beliefs: {beliefs}")

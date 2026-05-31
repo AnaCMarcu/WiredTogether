@@ -97,6 +97,74 @@ STAGE_REWARDS = {
 
 TRACK_ORDER = list(TRACKS.keys())
 
+
+# Chambers as the prompt sees them → track name in TRACKS.
+_PROMPT_CHAMBER_TO_TRACK = {
+    "ch1":           "ch1_solo",
+    "ch2":           "ch2_anvils",
+    "ch3":           "ch3_switches",
+    "ch3_communal":  "ch3_switches",
+    "ch4":           "ch4_combat",
+    "ch5":           "ch5_boss",
+}
+
+
+def format_milestone_progress(current_chamber, agent_completed, team_completed):
+    """Format a milestone-progress block for the agent prompts.
+
+    Used by BOTH the curriculum LLM (so it can pick a task targeting an
+    open milestone) and the action LLM (so it can pick an action that
+    advances an open milestone). Tells the model:
+
+      - exactly which milestones THIS agent has already fired,
+      - which ones a teammate fired (so we don't redundantly chase
+        team-shared milestones like M_door1_open),
+      - which ones are still open per chamber,
+      - which chamber the agent is CURRENTLY in (so it focuses there).
+
+    Returns a multi-line plain-string block, ready to drop into a
+    ``{milestone_progress}`` placeholder. Communication milestones
+    (m_comm_*) are stage-agnostic chatter rewards and are intentionally
+    excluded — they fire automatically whenever agents talk.
+    """
+    agent_completed = set(agent_completed or [])
+    team_completed  = set(team_completed  or [])
+    current_track   = _PROMPT_CHAMBER_TO_TRACK.get(current_chamber)
+
+    chamber_label = {
+        "ch1_solo":     "Ch1",
+        "ch2_anvils":   "Ch2",
+        "ch3_switches": "Ch3",
+        "ch4_combat":   "Ch4",
+        "ch5_boss":     "Ch5",
+    }
+
+    lines = []
+    for track in TRACK_ORDER:
+        if track == "communication":
+            continue
+        label = chamber_label.get(track, track)
+        all_mids   = [mid for mid, _ in TRACKS[track]]
+        you_done   = [m for m in all_mids if m in agent_completed]
+        team_only  = [
+            m for m in all_mids
+            if m in team_completed and m not in agent_completed
+        ]
+        remaining  = [m for m in all_mids if m not in team_completed]
+
+        marker = "  ← YOU ARE HERE" if track == current_track else ""
+        parts = [f"  {label}{marker}:"]
+        if you_done:
+            parts.append(f"[you done] {', '.join(you_done)}")
+        if team_only:
+            parts.append(f"[team done, you didn't fire] {', '.join(team_only)}")
+        if remaining:
+            parts.append(f"[OPEN] {', '.join(remaining)}")
+        else:
+            parts.append("[chamber complete]")
+        lines.append(" ".join(parts))
+    return "\n".join(lines)
+
 # Two milestones fired by different agents within this many steps count as co-completion.
 _CO_COMPLETION_WINDOW = 5
 
@@ -672,6 +740,7 @@ class CraftiumMetric:
             return
         self._plot_cumulative_returns()
         self._plot_returns_curve()
+        self._plot_chamber_returns()
         self._plot_milestones()
         self._plot_track_rewards()
         self._plot_reward_decomposition()
@@ -680,6 +749,151 @@ class CraftiumMetric:
         self._plot_comm_curve()
         self._plot_hebbian_bonds()
         self._plot_rl_losses()
+
+    def _plot_chamber_returns(self):
+        """Per-chamber mean ± std return across episodes.
+
+        Left panel:  grouped bars per chamber, one bar per agent (showing
+                     that agent's mean across episodes for that chamber's
+                     reward track), with error bars = std across episodes.
+        Right panel: single bar per chamber for the TEAM-TOTAL (sum across
+                     agents, mean ± std across episodes). Headline view.
+
+        Uses self.track_rewards_per_episode (which is per-agent, per-
+        episode, per-track), which is reset cleanly at end_episode().
+        """
+        if not self.track_rewards_per_episode or not any(self.track_rewards_per_episode):
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.text(
+                0.5, 0.5,
+                "No completed episodes yet — per-chamber plot unavailable.",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=11, color="#666666",
+            )
+            ax.set_axis_off()
+            fig.savefig(
+                os.path.join(self._plots_dir(), "chamber_returns.png"),
+                dpi=150,
+            )
+            plt.close(fig)
+            return
+
+        # Track order is the canonical chamber progression + comm at the
+        # end so the bars read left-to-right in playthrough order.
+        tracks = list(TRACK_ORDER)
+        track_labels = {
+            "ch1_solo":      "Ch1",
+            "ch2_anvils":    "Ch2",
+            "ch3_switches":  "Ch3",
+            "ch4_combat":    "Ch4",
+            "ch5_boss":      "Ch5",
+            "communication": "Comm",
+        }
+        labels = [track_labels.get(t, t) for t in tracks]
+        n_eps = max(
+            (len(self.track_rewards_per_episode[i])
+             for i in range(self.num_agents)),
+            default=0,
+        )
+
+        # Per-(agent, chamber) mean/std across episodes.
+        per_agent_mean = [[] for _ in range(self.num_agents)]
+        per_agent_std  = [[] for _ in range(self.num_agents)]
+        for i in range(self.num_agents):
+            agent_eps = self.track_rewards_per_episode[i]
+            for t in tracks:
+                vals = [d.get(t, 0.0) for d in agent_eps]
+                per_agent_mean[i].append(
+                    statistics.fmean(vals) if vals else 0.0
+                )
+                per_agent_std[i].append(
+                    statistics.pstdev(vals) if len(vals) >= 2 else 0.0
+                )
+
+        # Team-total per chamber per episode → mean / std across episodes.
+        team_means = []
+        team_stds  = []
+        for t in tracks:
+            ep_sums = []
+            for ep_idx in range(n_eps):
+                total = 0.0
+                for i in range(self.num_agents):
+                    if ep_idx < len(self.track_rewards_per_episode[i]):
+                        total += self.track_rewards_per_episode[i][ep_idx].get(t, 0.0)
+                ep_sums.append(total)
+            team_means.append(statistics.fmean(ep_sums) if ep_sums else 0.0)
+            team_stds.append(
+                statistics.pstdev(ep_sums) if len(ep_sums) >= 2 else 0.0
+            )
+
+        cmap = plt.get_cmap("tab10")
+        agent_colors = [cmap(i % 10) for i in range(self.num_agents)]
+        fig, (ax_l, ax_r) = plt.subplots(1, 2, figsize=(14, 5),
+                                          gridspec_kw={"width_ratios": [3, 2]})
+
+        # ── Left: grouped bars per chamber per agent ──
+        bar_w = 0.8 / max(1, self.num_agents)
+        x_chambers = np.arange(len(tracks))
+        for i in range(self.num_agents):
+            xs = x_chambers + (i - (self.num_agents - 1) / 2) * bar_w
+            ax_l.bar(
+                xs,
+                per_agent_mean[i],
+                bar_w,
+                yerr=per_agent_std[i],
+                capsize=3,
+                color=agent_colors[i],
+                edgecolor="black",
+                linewidth=0.4,
+                label=f"agent_{i}",
+                error_kw=dict(ecolor="#222222", lw=1.0),
+            )
+        ax_l.set_xticks(x_chambers)
+        ax_l.set_xticklabels(labels)
+        ax_l.set_xlabel("Chamber")
+        ax_l.set_ylabel("Reward (mean ± std across episodes)")
+        ax_l.set_title(
+            f"Per-agent return per chamber (n={n_eps} episode{'s' if n_eps != 1 else ''})"
+        )
+        ax_l.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_l.set_axisbelow(True)
+        ax_l.axhline(0, color="#888888", linewidth=0.5)
+        ax_l.legend(fontsize=8, loc="best", framealpha=0.9)
+
+        # ── Right: team total per chamber ──
+        ax_r.bar(
+            x_chambers,
+            team_means,
+            yerr=team_stds,
+            capsize=5,
+            color="#4c72b0",
+            edgecolor="black",
+            linewidth=0.4,
+            error_kw=dict(ecolor="#222222", lw=1.2),
+        )
+        # Annotate each bar with the team-total mean ± std.
+        max_h = max([m + s for m, s in zip(team_means, team_stds)] + [1.0])
+        for x, m, s in zip(x_chambers, team_means, team_stds):
+            ax_r.text(
+                x, m + max(s, 0) + max_h * 0.02,
+                f"{m:.0f}\n±{s:.0f}",
+                ha="center", va="bottom", fontsize=8,
+            )
+        ax_r.set_xticks(x_chambers)
+        ax_r.set_xticklabels(labels)
+        ax_r.set_xlabel("Chamber")
+        ax_r.set_ylabel("Team total reward (mean ± std across episodes)")
+        ax_r.set_title("Team total per chamber")
+        ax_r.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_r.set_axisbelow(True)
+        ax_r.axhline(0, color="#888888", linewidth=0.5)
+
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "chamber_returns.png"),
+            dpi=150,
+        )
+        plt.close(fig)
 
     def _plot_returns_curve(self):
         """RL-paper-style learning curve: mean ± std across EPISODES.

@@ -185,6 +185,7 @@ class AutoCurriculum:
         player_status_text=None,
         current_chamber=None,
         completed_milestones=None,
+        milestone_progress=None,
     ):
         completed = self.get_completed_tasks()
         failed = self.get_failed_tasks()
@@ -217,6 +218,14 @@ class AutoCurriculum:
                 or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
             current_chamber=current_chamber or "Unknown",
             completed_milestones=self._format_milestones(completed_milestones),
+            # Per-chamber milestone-progress block (you-done / team-done /
+            # OPEN per chamber). Computed in multi_agent_craftium.py via
+            # format_milestone_progress(). Lets the curriculum LLM pick a
+            # task that targets a specific OPEN milestone in the agent's
+            # current chamber without inferring what's still left from
+            # the completed list alone.
+            milestone_progress=milestone_progress
+                or "(no milestone data yet)",
             inventory=picked_object or "empty",
         )
 

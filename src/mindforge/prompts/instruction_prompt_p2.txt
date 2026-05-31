@@ -25,6 +25,9 @@ Position: {position_text}
 Chamber: {current_chamber}   (this is your CURRENT room — trust this, not what the image looks like; bedrock walls and stone blocks appear in every chamber)
 Chamber state: {chamber_state}   (live state of the puzzle in your current room — e.g. anvil HP and who is currently punching it. Trust this over the image.)
 Visited chambers so far this episode: {visited_chambers}   (you have ONLY been in these — never claim to be in a chamber not in this list, regardless of what the image looks like)
+Milestone progress:
+{milestone_progress}
+(This is the AUTHORITATIVE list of what your team has and has NOT achieved per chamber. The line marked "← YOU ARE HERE" is your current chamber — your action should advance one of the [OPEN] milestones on that line. Don't waste actions on milestones already in [you done].)
 Status: {player_status_text}
 Critique: {critique}
 Error: {error}

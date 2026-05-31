@@ -36,7 +36,7 @@ from agent_modules.belief_system import BeliefSystem
 from agent_modules.critic import Critic
 from agent_modules.skill_manager import SkillManager
 from agent_modules.episodic_memory_manager import EpisodicMemoryManager
-from agent_modules.craftium_metric import CraftiumMetric
+from agent_modules.craftium_metric import CraftiumMetric, format_milestone_progress
 from agent_modules.social_module import SocialModule
 from mindforge.env.communication_rewards import CommunicationTracker
 from mindforge.env.cooperation_metric import CooperationMetric
@@ -488,6 +488,7 @@ async def agent_do_action(
     current_chamber=None,
     visited_chambers=None,
     completed_milestones=None,
+    milestone_progress=None,
     chamber_state=None,
     bond_weights=None,
     bond_deltas=None,
@@ -528,6 +529,7 @@ async def agent_do_action(
         current_chamber=current_chamber,
         visited_chambers=visited_chambers,
         completed_milestones=completed_milestones,
+        milestone_progress=milestone_progress,
         chamber_state=chamber_state,
         bond_weights=bond_weights,
         bond_deltas=bond_deltas,
@@ -551,6 +553,7 @@ async def agent_do_action(
                 current_chamber=current_chamber,
                 visited_chambers=visited_chambers,
                 completed_milestones=completed_milestones,
+                milestone_progress=milestone_progress,
                 chamber_state=chamber_state,
                 bond_weights=bond_weights,
                 bond_deltas=bond_deltas,
@@ -1619,6 +1622,21 @@ async def run(args):
                     "Prioritize safety alongside your role tasks.]\n\n"
                     if current_phase != "exploration" else ""
                 )
+                # Milestone-progress block: per-agent done + team done +
+                # still-open per chamber. Plumbed to both the curriculum LLM
+                # (task selection) and the action LLM (action selection)
+                # via beliefs so neither has to re-derive what's still left.
+                _agent_done = metric._agent_milestones.get(
+                    f"agent_{agent_id}", set()
+                )
+                _team_done = set().union(
+                    *metric._agent_milestones.values()
+                ) if metric._agent_milestones else set()
+                _milestone_progress = format_milestone_progress(
+                    environment.get_chamber(agent_id),
+                    _agent_done,
+                    _team_done,
+                )
                 content, last_action, error_count = await agent_do_action(
                     agent, agent_id, frame_image, comms_for_agent, reward_text,
                     _phase_prefix + instruction_prompt, environment,
@@ -1629,9 +1647,8 @@ async def run(args):
                     player_status_text=environment.get_player_status_text(agent_id),
                     current_chamber=environment.get_chamber(agent_id),
                     visited_chambers=sorted(_visited_chambers[agent_id]),
-                    completed_milestones=metric._agent_milestones.get(
-                        f"agent_{agent_id}", set()
-                    ),
+                    completed_milestones=_agent_done,
+                    milestone_progress=_milestone_progress,
                     chamber_state=environment.get_chamber_state(agent_id),
                     bond_weights=_bond_weights.get(agent_id),
                     bond_deltas=_bond_deltas.get(agent_id),

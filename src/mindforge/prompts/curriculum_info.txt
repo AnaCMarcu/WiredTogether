@@ -6,6 +6,10 @@ Inventory: {picked_object}
 Nearby blocks: Infer from image
 Nearby entities: Infer from image
 
+Milestone progress per chamber (AUTHORITATIVE — trust this over any
+inference from the completed-tasks list below):
+{milestone_progress}
+
 Completed tasks so far: {completed_tasks}
 Failed tasks that are too hard: {failed_tasks}
 Last task: {last_task}

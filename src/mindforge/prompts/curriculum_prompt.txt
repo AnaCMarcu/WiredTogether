@@ -6,11 +6,21 @@ Completed milestones for this agent: {completed_milestones}
 Inventory (wielded + main slots): {inventory}
 Position: {position_text}
 
+You will receive a per-chamber milestone-progress block in the user prompt
+showing what THIS agent fired, what teammates fired, and what is still
+[OPEN] per chamber. Use that block as the AUTHORITATIVE state — do not
+infer remaining work from {completed_milestones} alone. The line marked
+"← YOU ARE HERE" is the current chamber.
+
 Suggest ONE specific next task appropriate to the current chamber and progress.
-The task MUST target the next unfinished milestone for the current chamber.
-Use {completed_milestones} to identify which chamber milestones are still open,
-and pick a concrete action that directly advances one of those open milestones.
-Do not suggest tasks for a different chamber or milestones that are already done.
+The task MUST target an [OPEN] milestone on the "← YOU ARE HERE" line.
+Prefer milestones that:
+  1. Are in the current chamber (the "← YOU ARE HERE" line).
+  2. Are listed as [OPEN] for the whole team (not yet fired by anyone),
+     OR are listed as [team done, you didn't fire] for milestones that
+     give per-agent rewards (e.g. M1 move_5 fires per-agent).
+Do NOT suggest tasks for milestones already in [you done] OR for chambers
+the agent hasn't yet entered (unless the goal is to reach the next door).
 
 Respond in JSON: {{"reasoning": "...", "task": "..."}}
 
