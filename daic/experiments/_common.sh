@@ -159,7 +159,13 @@ run_exp() {
             # least produce a diagnostic in run.log rather than a silent
             # hang on missing-binary.
             # POSIX sh, not bash — the container has no bash on PATH.
-            if command -v xvfb-run >/dev/null 2>&1; then
+            # xvfb-run also requires xauth at runtime; if xauth is missing
+            # (the Debian xvfb package does NOT pull it in by default), we
+            # MUST skip the xvfb-run branch even though it exists, because
+            # it will exit with "xauth command not found" before ever
+            # starting Xvfb. The manual-Xvfb branch below has no such
+            # dependency and works fine without xauth.
+            if command -v xvfb-run >/dev/null 2>&1 && command -v xauth >/dev/null 2>&1; then
                 exec xvfb-run -a -s "-screen 0 1024x768x24 -nolisten tcp" "$@"
             elif command -v Xvfb >/dev/null 2>&1; then
                 Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &
@@ -169,7 +175,7 @@ run_exp() {
                 sleep 1
                 exec "$@"
             else
-                echo "[WARN] Neither xvfb-run nor Xvfb found in image — Luanti will need real GPU access (/dev/dri permissions) on this node." >&2
+                echo "[WARN] Neither xvfb-run+xauth nor Xvfb found in image — Luanti will need real GPU access (/dev/dri permissions) on this node." >&2
                 unset DISPLAY
                 export EGL_PLATFORM=surfaceless
                 exec "$@"

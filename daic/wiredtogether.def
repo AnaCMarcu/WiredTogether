@@ -29,13 +29,19 @@ From: python:3.12-slim-bookworm
         libsm6 libglib2.0-0 \
         libfreetype6 libsndfile1 \
         build-essential \
-        xvfb
-    # xvfb pulls in /usr/bin/Xvfb + /usr/bin/xvfb-run. Required because most
-    # DAIC GPU nodes don't grant the user access to /dev/dri/renderD* and
-    # Luanti's Irrlicht→EGL pipeline then refuses to fall back to software
-    # rendering. _common.sh's xvfb-run wrapper gives Luanti a software X
-    # surface via llvmpipe so rendering works on any node regardless of
-    # /dev/dri permissions.
+        xvfb xauth
+    # xvfb pulls in /usr/bin/Xvfb + /usr/bin/xvfb-run. xauth is a separate
+    # package that the Debian xvfb package does NOT pull in by default —
+    # but xvfb-run invokes it at startup and exits with "xauth command not
+    # found" without it. Both are required for the convenience wrapper.
+    # _common.sh also has a manual-Xvfb fallback path that doesn't need
+    # xauth, as a belt-and-braces safety net.
+    #
+    # All this is necessary because most DAIC GPU nodes don't grant the
+    # user access to /dev/dri/renderD* and Luanti's Irrlicht→EGL pipeline
+    # then refuses to fall back to software rendering. xvfb-run gives
+    # Luanti a software X surface via llvmpipe so rendering works on any
+    # node regardless of /dev/dri permissions.
     rm -rf /var/lib/apt/lists/*
 
     pip install --no-cache-dir --upgrade pip wheel setuptools
