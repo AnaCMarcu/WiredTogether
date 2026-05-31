@@ -16,6 +16,6 @@
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
-run_exp "quick_test" "$MODEL_9B" \
+run_exp "fast" "$MODEL_9B" \
     --episodes 3 \
     --max-steps 100
