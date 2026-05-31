@@ -889,6 +889,20 @@ async def run(args):
     if save_gif:
         os.makedirs(gif_dir, exist_ok=True)
 
+    # Intermediate (per-gif_interval) checkpoint gifs land here — kept
+    # OFF the slow PRB share by default. The wrapper (_common.sh)
+    # exports WIREDTOGETHER_INTERMEDIATE_GIF_DIR pointing at the local
+    # /tmp work dir; absent that env var we fall back to a sibling of
+    # gif_dir. Either way, only the FINAL per-episode gif lives under
+    # <run_dir>/gifs/; everything in intermediate_gif_dir is salvaged
+    # to a parallel run_artifacts/ tree after the job ends.
+    intermediate_gif_dir = (
+        os.environ.get("WIREDTOGETHER_INTERMEDIATE_GIF_DIR")
+        or os.path.join(os.getcwd(), "intermediate_gifs")
+    )
+    if save_gif:
+        os.makedirs(intermediate_gif_dir, exist_ok=True)
+
     event_logger = logging.getLogger(EVENT_LOGGER_NAME)
     event_logger.disabled = True
     logging.basicConfig(
@@ -1298,14 +1312,21 @@ async def run(args):
         frames_list = []
 
         def _save_gif_checkpoint(step_num):
-            """Write a GIF for each agent from frames collected so far."""
+            """Write a GIF for each agent from frames collected so far.
+
+            Intermediate (mid-episode) checkpoint gifs go to
+            intermediate_gif_dir — kept off the PRB share so the runs/
+            tree stays small (the final per-episode gif still lands in
+            <run_dir>/gifs/ via the end-of-episode block).
+            """
             for i in range(num_agents):
                 agent_frames = [
                     PIL.Image.fromarray(f[i]) for f in frames_list if f[i] is not None
                 ]
                 if agent_frames:
                     gif_path = (
-                        f"{gif_dir}/{run_id}_{role_configs[i]['agent_name']}_ep{episode+1}"
+                        f"{intermediate_gif_dir}/{run_id}_"
+                        f"{role_configs[i]['agent_name']}_ep{episode+1}"
                         f"_step{step_num}.gif"
                     )
                     os.makedirs(os.path.dirname(gif_path), exist_ok=True)

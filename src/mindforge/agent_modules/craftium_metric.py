@@ -31,7 +31,7 @@ MILESTONE_TRACK = {
     "m6_kill_2_animals":       "ch1_solo",
     "m7_dig_3_stone":          "ch1_solo",
     "m8_anvil_A1":             "ch2_anvils",
-    "m11_anvil_B1":            "ch2_anvils",
+    "m9_anvil_B1":             "ch2_anvils",
     "m14_sword_equipped":      "ch2_anvils",
     "m15_chestplate_equipped": "ch2_anvils",
     "m16_enter_cell":          "ch3_switches",
@@ -66,7 +66,7 @@ TRACKS = {
         # were a LEGACY design and have been removed from Lua's
         # MILESTONE_DEFS — keep them out here too so plots and the
         # milestone-progress prompt block don't show ghost OPEN entries.
-        ("m8_anvil_A1",  40.0), ("m11_anvil_B1", 40.0),
+        ("m8_anvil_A1",  40.0), ("m9_anvil_B1", 40.0),
         ("m14_sword_equipped", 50.0), ("m15_chestplate_equipped", 30.0),
     ],
     "ch3_switches": [

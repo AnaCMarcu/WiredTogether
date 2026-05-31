@@ -36,7 +36,9 @@ five_chambers.MILESTONE_DEFS = {
     -- anvil.lua only registers state for m8 and m11). Removed so plots
     -- and prompts don't show 4 permanently-OPEN ghost milestones.
     m8_anvil_A1          = { track="ch2_anvils", reward=40, once=true },
-    m11_anvil_B1         = { track="ch2_anvils", reward=40, once=true },
+    -- Renamed from m11 to close the m8/m11 gap left by removing the
+    -- legacy 6-anvil m9/m10/m12/m13 entries.
+    m9_anvil_B1          = { track="ch2_anvils", reward=40, once=true },
     m14_sword_equipped   = { track="ch2_gear",  reward=50,  once=true },
     m15_chestplate_equipped = { track="ch2_gear", reward=30, once=true },
     -- Ch3 switch puzzle

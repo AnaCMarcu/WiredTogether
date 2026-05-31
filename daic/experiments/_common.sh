@@ -54,8 +54,13 @@ run_exp() {
     shift 2
 
     local RUN_DIR="$REPO/runs/legacy/${EXP_NAME}/seed_${SEED}"
+    # Heavy artifacts (craftium debug.txt, wandb offline-runs, intermediate
+    # per-100-step gifs) live in a PARALLEL tree so the runs/ dir stays
+    # small and fast to scp. Mirror the same exp/seed structure for easy
+    # cross-referencing.
+    local ARTIFACTS_DIR="$REPO/run_artifacts/legacy/${EXP_NAME}/seed_${SEED}"
     local WORK_DIR="/tmp/$USER/${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
-    mkdir -p "$RUN_DIR" "$WORK_DIR"
+    mkdir -p "$RUN_DIR" "$ARTIFACTS_DIR" "$WORK_DIR"
 
     # Clear stale luanti/minetest processes from previous failed runs on this
     # compute node. Best-effort; only affects this user's procs.
@@ -142,6 +147,7 @@ run_exp() {
         --env WANDB_MODE="${WANDB_MODE:-online}" \
         --env WANDB_DIR="$WORK_DIR" \
         --env WANDB_SILENT=true \
+        --env WIREDTOGETHER_INTERMEDIATE_GIF_DIR="$WORK_DIR/intermediate_gifs" \
         --pwd "$WORK_DIR" \
         "$IMG" \
         sh -c '
@@ -191,10 +197,25 @@ run_exp() {
     # Salvage craftium's per-run dirs (debug.txt, gifs, etc.) back to PRB.
     # If wandb ran in offline mode, this also captures wandb/offline-run-*
     # which you can later upload with `wandb sync <dir>`.
-    echo "── archiving $WORK_DIR -> $RUN_DIR/work_artifacts/ ──"
-    mkdir -p "$RUN_DIR/work_artifacts"
+    # Split salvage:
+    #   - $WORK_DIR/intermediate_gifs/ → $ARTIFACTS_DIR/intermediate_gifs/
+    #     (separately so they're easy to find / delete)
+    #   - everything else (craftium debug.txt, wandb offline-runs, etc.)
+    #     → $ARTIFACTS_DIR/work_artifacts/
+    # The runs/<exp>/seed_<N>/ tree stays small (just plots, episodes/,
+    # gifs/ with FINAL per-episode gifs only, config.json, log.txt).
+    if [ -d "$WORK_DIR/intermediate_gifs" ]; then
+        echo "── archiving intermediate gifs -> $ARTIFACTS_DIR/intermediate_gifs/ ──"
+        mkdir -p "$ARTIFACTS_DIR/intermediate_gifs"
+        rsync -r --no-perms --no-owner --no-group --no-times \
+            "$WORK_DIR/intermediate_gifs/" "$ARTIFACTS_DIR/intermediate_gifs/" \
+            2>&1 | tail -3 || true
+    fi
+    echo "── archiving $WORK_DIR -> $ARTIFACTS_DIR/work_artifacts/ ──"
+    mkdir -p "$ARTIFACTS_DIR/work_artifacts"
     rsync -r --no-perms --no-owner --no-group --no-times \
-        "$WORK_DIR/" "$RUN_DIR/work_artifacts/" 2>&1 | tail -5 || true
+        --exclude='intermediate_gifs/' \
+        "$WORK_DIR/" "$ARTIFACTS_DIR/work_artifacts/" 2>&1 | tail -5 || true
 
     # Auto-sync any offline-mode wandb runs to wandb.ai. Two cases this
     # catches:
@@ -206,12 +227,12 @@ run_exp() {
     # we just rsync'd it into work_artifacts/wandb/. python -m wandb sync
     # reads ~/.netrc the same way wandb.init() does, so the auth is
     # already in place — no env-pass needed.
-    if [ "$WANDB" = "1" ] && ls "$RUN_DIR/work_artifacts/wandb/offline-run-"* >/dev/null 2>&1; then
+    if [ "$WANDB" = "1" ] && ls "$ARTIFACTS_DIR/work_artifacts/wandb/offline-run-"* >/dev/null 2>&1; then
         echo "── auto-syncing offline wandb runs to wandb.ai ──"
         apptainer exec --nv \
             --bind /tudelft.net:/tudelft.net \
             "$IMG" \
-            python -m wandb sync "$RUN_DIR/work_artifacts/wandb/offline-run-"* \
+            python -m wandb sync "$ARTIFACTS_DIR/work_artifacts/wandb/offline-run-"* \
             2>&1 | tail -20 || echo "[wandb] auto-sync failed (will need a manual retry)"
     fi
 

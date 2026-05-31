@@ -50,7 +50,7 @@ function five_chambers.anvil_positions()
         },
         {
             pos          = {x = cx, y = y, z = c.z0 + 5},
-            milestone_id = "m11_anvil_B1",
+            milestone_id = "m9_anvil_B1",
             row          = "B",  -- drops chestplates
         },
     }
