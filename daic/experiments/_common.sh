@@ -28,30 +28,24 @@ fi
 # ── Weights & Biases ──────────────────────────────────────────────────────
 # Enabled by default. Opt out with `WANDB=0 sbatch ...`.
 #
-# API key resolution order:
-#   1. $WANDB_API_KEY in the launching shell
-#   2. $WORKSPACE/secrets/wandb_api_key (one line, no trailing newline)
-#   3. ~/.netrc (wandb finds this itself; we just need to mount $HOME)
-# If none are found we fall back to offline mode (WANDB_MODE=offline) so the
-# run still produces local wandb dirs you can `wandb sync` later. To disable
-# wandb entirely, set WANDB=0.
+# Auth lives in ~/.netrc (per-user, chmod-able, auto-mounted into the
+# container by apptainer). To set it up once:
+#     cat > ~/.netrc <<EOF
+#     machine api.wandb.ai
+#       login user
+#       password <YOUR-KEY>
+#     EOF
+#     chmod 600 ~/.netrc
+#
+# wandb.init() reads ~/.netrc automatically — we don't need to pass
+# WANDB_API_KEY via env. If ~/.netrc is missing or the key is invalid,
+# wandb's own init throws and our python-side wrapper catches it; the
+# end-of-job salvage hook below will still capture any offline-mode
+# dirs and auto-sync them so the data survives.
 WANDB="${WANDB:-1}"
 WANDB_PROJECT="${WANDB_PROJECT:-wired-together}"
 WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-}"  # comma-separated, appended to auto tags
-
-if [ "$WANDB" = "1" ]; then
-    if [ -z "${WANDB_API_KEY:-}" ] && [ -f "$WORKSPACE/secrets/wandb_api_key" ]; then
-        WANDB_API_KEY="$(cat "$WORKSPACE/secrets/wandb_api_key")"
-        export WANDB_API_KEY
-    fi
-    if [ -z "${WANDB_API_KEY:-}" ]; then
-        # No key found — fall back to offline mode rather than fail loudly.
-        # `wandb sync $WORK_DIR/wandb/offline-run-*` after the job uploads them.
-        export WANDB_MODE="${WANDB_MODE:-offline}"
-        echo "[wandb] No API key found — falling back to WANDB_MODE=offline."
-        echo "[wandb] Run \`wandb sync\` on the offline-run-* dirs to upload later."
-    fi
-fi
+WANDB_MODE="${WANDB_MODE:-online}"        # default online; offline if env-forced
 
 # Usage: run_exp <EXP_NAME> <LLM_MODEL_PATH> [extra python args...]
 run_exp() {
@@ -145,7 +139,6 @@ run_exp() {
         --env MESA_GL_VERSION_OVERRIDE=3.3 \
         --env GALLIUM_DRIVER=llvmpipe \
         --env MESA_LOADER_DRIVER_OVERRIDE=llvmpipe \
-        --env WANDB_API_KEY="${WANDB_API_KEY:-}" \
         --env WANDB_MODE="${WANDB_MODE:-online}" \
         --env WANDB_DIR="$WORK_DIR" \
         --env WANDB_SILENT=true \
@@ -202,9 +195,24 @@ run_exp() {
     mkdir -p "$RUN_DIR/work_artifacts"
     rsync -r --no-perms --no-owner --no-group --no-times \
         "$WORK_DIR/" "$RUN_DIR/work_artifacts/" 2>&1 | tail -5 || true
-    if [ "${WANDB_MODE:-online}" = "offline" ]; then
-        echo "── wandb offline runs archived. Upload with:"
-        echo "       wandb sync $RUN_DIR/work_artifacts/wandb/offline-run-*"
+
+    # Auto-sync any offline-mode wandb runs to wandb.ai. Two cases this
+    # catches:
+    #   1. The whole job ran in offline mode (e.g. login node had no key,
+    #      or network was unreachable when wandb.init fired).
+    #   2. The job started online, lost the network mid-run, fell back to
+    #      offline for the remainder.
+    # In both cases an offline-run-* dir lands under $WORK_DIR/wandb/ and
+    # we just rsync'd it into work_artifacts/wandb/. python -m wandb sync
+    # reads ~/.netrc the same way wandb.init() does, so the auth is
+    # already in place — no env-pass needed.
+    if [ "$WANDB" = "1" ] && ls "$RUN_DIR/work_artifacts/wandb/offline-run-"* >/dev/null 2>&1; then
+        echo "── auto-syncing offline wandb runs to wandb.ai ──"
+        apptainer exec --nv \
+            --bind /tudelft.net:/tudelft.net \
+            "$IMG" \
+            python -m wandb sync "$RUN_DIR/work_artifacts/wandb/offline-run-"* \
+            2>&1 | tail -20 || echo "[wandb] auto-sync failed (will need a manual retry)"
     fi
 
     echo "── $EXP_NAME (seed=$SEED) python exit: $EXIT_CODE ──"

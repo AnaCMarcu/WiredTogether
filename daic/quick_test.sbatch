@@ -2,7 +2,7 @@
 #SBATCH --job-name=fast
 #SBATCH --partition=general
 #SBATCH --qos=short
-#SBATCH --time=1:00:00
+#SBATCH --time=2:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
@@ -17,5 +17,5 @@
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 run_exp "quick_test" "$MODEL_9B" \
-    --episodes 1 \
+    --episodes 3 \
     --max-steps 100
