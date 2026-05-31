@@ -180,6 +180,10 @@ class CraftiumEnvironmentInterface:
 
         # Milestone event file polling (see §4.6, poll_milestone_events())
         self._milestone_file_offset = 0  # byte offset into milestone_events.jsonl
+        # Anvil-coop diagnostic event file polling (Lua's anvil.lua globalstep
+        # writes to anvil_coop_events.jsonl when ≥2 agents punch the same anvil
+        # within ACTIVE_WINDOW ticks). No reward; pure analysis signal.
+        self._anvil_coop_file_offset = 0
 
         # Per-agent invalid-action warning, surfaced to the LLM via
         # get_chamber_state() on the NEXT prompt so the policy can see that
@@ -187,6 +191,15 @@ class CraftiumEnvironmentInterface:
         # in slurm .err and the LLM keeps emitting 'Mine' / 'Attack' / etc.).
         # Cleared once read.
         self._invalid_action_warning = {}  # agent_name -> str
+
+        # Per-anvil HP history (last 4 reads) so _read_ch2_anvil_state()
+        # can surface a "Δhp last 3 steps" delta in the LLM prompt. Keyed
+        # by the kind string from anvils.txt ("A" or "B"), value is a
+        # collections.deque of recent HP samples. The "Δhp" signal lets
+        # the LLM see whether its punches are landing — without it, solo
+        # punching (HP unchanged) and paired punching (HP rising) look
+        # identical in chamber_state.
+        self._anvil_hp_history = {}
 
     # ------------------------------------------------------------------
     # Core interface
@@ -207,6 +220,11 @@ class CraftiumEnvironmentInterface:
         self._macro_queue = {}
         self._pitch = {}
         self._futile_actions = {}
+        # Clear the per-anvil HP history so the "Δhp_last3" signal
+        # doesn't bridge the episode boundary (which would surface a
+        # huge negative delta when ep N+1 starts with fresh anvils at
+        # HP=0 vs ep N's last reading).
+        self._anvil_hp_history = {}
         self.reset_log_offset()
         return self._observations
 
@@ -516,7 +534,13 @@ class CraftiumEnvironmentInterface:
         if chamber == "ch1":
             return prefix + self._read_ch1_door_state()
         if chamber == "ch2":
-            return prefix + self._read_ch2_anvil_state()
+            # Anvil HP + active punchers + Door 2 status.
+            parts = [self._read_ch2_anvil_state(), self._read_ch2_door_state()]
+            return prefix + " | ".join(p for p in parts if p)
+        if chamber == "ch3":
+            return prefix + self._read_ch3_state(agentId)
+        if chamber == "ch4":
+            return prefix + self._read_ch4_door_state()
         return prefix or ""
 
     def _read_ch1_door_state(self) -> str:
@@ -539,7 +563,14 @@ class CraftiumEnvironmentInterface:
 
     def _read_ch2_anvil_state(self) -> str:
         """Parse {world_path}/anvils.txt (written by player_state.lua) into
-        a compact human-readable line."""
+        a compact human-readable line, including a per-anvil HP delta
+        over the last 3 reads.
+
+        The delta is the key closed-loop signal for the LLM: after a
+        punch, the agent reads chamber_state on the next prompt — if Δhp
+        moved up, its coordination is working; if Δhp is 0, only ONE
+        agent is punching and they need a teammate.
+        """
         try:
             world_path = self._get_world_path()
         except AttributeError:
@@ -550,18 +581,134 @@ class CraftiumEnvironmentInterface:
                 raw = f.read()
         except (FileNotFoundError, OSError):
             return ""
+
+        from collections import deque
+
         parts = []
         for line in raw.strip().splitlines():
             fields = line.split("|")
             if len(fields) < 3:
                 continue
             kind, hp_str, names = fields[0], fields[1], fields[2]
-            n_active = len([n for n in names.split(",") if n])
-            who = (f" punchers: {names}") if names else " (idle)"
-            parts.append(f"{kind} anvil={hp_str} hp{who}")
+            try:
+                hp = int(hp_str)
+            except (TypeError, ValueError):
+                hp = None
+
+            # Track HP history (last 4 samples) per anvil kind. Δhp is
+            # computed against the oldest sample in the window (i.e., HP
+            # change over the last ~3 calls / ~3 env steps). Using
+            # deque(maxlen=4) keeps memory bounded.
+            delta_str = ""
+            if hp is not None:
+                hist = self._anvil_hp_history.setdefault(
+                    kind, deque(maxlen=4)
+                )
+                old = hist[0] if hist else hp
+                hist.append(hp)
+                delta = hp - old
+                if delta > 0:
+                    delta_str = f" Δhp_last3={delta:+d} (coop working — keep punching)"
+                elif delta < 0:
+                    delta_str = f" Δhp_last3={delta:+d} (decay — at least 2 agents must punch within ~1s)"
+                else:
+                    delta_str = " Δhp_last3=0 (no progress — need ≥2 punchers on this anvil at the same time)"
+
+            # Render the active-puncher set explicitly so the LLM sees
+            # WHICH teammates are punching, not just a count. Empty
+            # `names` from Lua means no agents are within the active
+            # window — render "(idle)" so the agent knows to start.
+            puncher_names = [n.strip() for n in names.split(",") if n.strip()]
+            if puncher_names:
+                who = " punchers: " + ", ".join(puncher_names)
+            else:
+                who = " (idle)"
+
+            parts.append(f"{kind} anvil={hp_str} hp{delta_str}{who}")
+
         if not parts:
             return ""
         return "Anvils — " + "; ".join(parts)
+
+    def _door_state_file_exists(self, filename: str) -> bool:
+        """True iff `{world_path}/<filename>` exists. Used as a presence-
+        based flag for door-open events (Lua writes the file on open,
+        clear_state_files() deletes it at episode reset).
+        """
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            return False
+        return os.path.exists(os.path.join(world_path, filename))
+
+    def _read_ch2_door_state(self) -> str:
+        """Door 2 (Ch2→Ch3) status line. Door 2 opens 20 steps after BOTH
+        anvils have been broken (see tick_door2 in doors.lua)."""
+        if self._door_state_file_exists("door2_state.txt"):
+            return ("Door 2: OPEN — walk north (positive Z) through Door 2 "
+                    "to be teleported into your Chamber 3 isolation cell.")
+        return ("Door 2: LOCKED — break BOTH purple anvils (M8 + M9) to "
+                "open it. Each anvil needs at least 2 agents punching it "
+                "within ~1 second to break (solo dig makes zero progress).")
+
+    def _read_ch3_state(self, agentId: int) -> str:
+        """Ch3 isolation-cell + communal status.
+
+        Tells the agent both (a) whether their own cell door is OPEN (so
+        they can walk out) and (b) whether Door 3 (communal → Ch4) is
+        open. Switch rotational mapping: switch in cell i opens the door
+        of cell (i+1) mod N; so agent_i's cell is unlocked by the agent
+        whose cell index is (i-1) mod N.
+        """
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            return ""
+
+        # Read the cell-doors file produced by open_cell_door().
+        open_cells = set()
+        cell_doors_path = os.path.join(world_path, "cell_doors_state.txt")
+        try:
+            with open(cell_doors_path, "r") as f:
+                for line in f.read().strip().splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    head = line.split(":", 1)[0].strip()
+                    try:
+                        open_cells.add(int(head))
+                    except ValueError:
+                        continue
+        except (FileNotFoundError, OSError):
+            pass
+
+        my_cell_open = agentId in open_cells
+        cell_line = (
+            "Your cell door (cell %d): OPEN — walk north out of your cell "
+            "into the communal room." % agentId
+            if my_cell_open
+            else "Your cell door (cell %d): LOCKED — a teammate must press "
+                 "their switch to free you (rotational wiring: switch in "
+                 "cell %d opens your door)." % (agentId, (agentId - 1) % self.num_agents)
+        )
+
+        door3_line = (
+            "Door 3 (communal → Ch4): OPEN — walk north to enter Chamber 4."
+            if self._door_state_file_exists("door3_state.txt")
+            else "Door 3 (communal → Ch4): LOCKED — all %d agents must be "
+                 "in the communal room together to open it."
+                 % self.num_agents
+        )
+        return cell_line + " | " + door3_line
+
+    def _read_ch4_door_state(self) -> str:
+        """Door 4 (Ch4→Ch5) status line."""
+        if self._door_state_file_exists("door4_state.txt"):
+            return ("Door 4: OPEN — walk north into Chamber 5 to fight "
+                    "the boss zombie.")
+        return ("Door 4: LOCKED — kill all 3 zombies in Chamber 4 to open "
+                "it (use Dig while facing each zombie; the diamond sword "
+                "from Ch2 makes this much faster).")
 
     def consume_futile(self, agentId: int) -> int:
         """Pop and return the count of pitch-cap-redirected actions since
@@ -986,6 +1133,63 @@ class CraftiumEnvironmentInterface:
             self._milestone_file_offset = os.path.getsize(path)
         except OSError:
             self._milestone_file_offset = 0
+
+    def poll_anvil_coop_events(self) -> list:
+        """Read any new anvil-coop diagnostic events since the last call.
+
+        Returns a list of dicts each with keys: step, anvil, row,
+        n_active, active. NO reward attached — these are for post-hoc
+        analysis of "did the team try to coordinate at the anvils?".
+        The Lua side (anvil.lua globalstep) edge-triggers one event per
+        anvil per ~ACTIVE_WINDOW ticks when ≥2 agents are punching.
+
+        Mirrors poll_milestone_events()'s file-offset bookkeeping so
+        repeated calls never re-read the same lines, and a smaller
+        file size (episode reset / file cleared) auto-rewinds the
+        offset to 0.
+        """
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            return []
+        path = os.path.join(world_path, "anvil_coop_events.jsonl")
+        if not os.path.exists(path):
+            self._anvil_coop_file_offset = 0
+            return []
+        try:
+            if os.path.getsize(path) < self._anvil_coop_file_offset:
+                self._anvil_coop_file_offset = 0
+        except OSError:
+            return []
+        new_events = []
+        try:
+            with open(path, "r") as f:
+                f.seek(self._anvil_coop_file_offset)
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        new_events.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+                self._anvil_coop_file_offset = f.tell()
+        except OSError:
+            pass
+        return new_events
+
+    def reset_anvil_coop_offset(self):
+        """Anchor the anvil-coop event reader to current EOF (post env.reset())."""
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            self._anvil_coop_file_offset = 0
+            return
+        path = os.path.join(world_path, "anvil_coop_events.jsonl")
+        try:
+            self._anvil_coop_file_offset = os.path.getsize(path)
+        except OSError:
+            self._anvil_coop_file_offset = 0
 
     def _get_server_log_path(self):
         """Resolve and cache the path to the server's stderr.txt."""

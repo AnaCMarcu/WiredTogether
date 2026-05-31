@@ -23,4 +23,4 @@ Keep beliefs relevant to coordination in the current and next chamber.
 Drop stale facts that are no longer useful (e.g. Ch1 milestones once we're
 all in Ch2).
 
-IMPORTANT you MUST respond in the following JSON object format. EX: {{"beliefs": "..."}}
+Respond ONLY in JSON: {{"beliefs": "..."}}

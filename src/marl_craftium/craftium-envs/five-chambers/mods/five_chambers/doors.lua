@@ -205,6 +205,27 @@ function five_chambers.open_door_at(x, z)
     vm:write_to_map(true)  -- true = update lighting
 end
 
+-- Atomically write `content` to `{world_path}/<filename>`. Used to
+-- surface door-open events to Python via state-file IPC — the chamber-
+-- state composer on the Python side reads these files and appends a
+-- "Door X: OPEN — walk north" line to the LLM prompt so the agent has
+-- a text signal of the unlock event, not just the visual delta in the
+-- rendered frame. Generic helper so doors 1-4 + cell doors all use the
+-- same path (state_files.lua's clear_state_files() must drop every
+-- filename written by callers of this helper).
+local function _write_door_state_file(filename, content)
+    local wp = minetest.get_worldpath()
+    if not wp then return end
+    local tmp = wp .. "/" .. filename .. ".tmp"
+    local dst = wp .. "/" .. filename
+    local f = io.open(tmp, "w")
+    if f then
+        f:write(content)
+        f:close()
+        os.rename(tmp, dst)
+    end
+end
+
 -- Opens Door 1 (Ch1 → Ch2). Idempotent. Called by milestones.lua when a
 -- "real" Ch1 milestone fires (M2/M3/M4/M5/M6/M7) and by the Ch1 timeout
 -- globalstep below as a fallback.
@@ -218,15 +239,7 @@ function five_chambers.open_door1()
     -- chamber_state field on the next prompt. Without this they have
     -- no signal that the door unlocked (the visual delta is subtle —
     -- a red bedrock-textured block becomes air at the same coords).
-    local wp = minetest.get_worldpath()
-    local tmp = wp .. "/door1_state.tmp"
-    local dst = wp .. "/door1_state.txt"
-    local f = io.open(tmp, "w")
-    if f then
-        f:write("open\n")
-        f:close()
-        os.rename(tmp, dst)
-    end
+    _write_door_state_file("door1_state.txt", "open\n")
 end
 
 -- Called when all anvils have been broken at least once; starts the countdown.
@@ -248,6 +261,8 @@ function five_chambers.tick_door2()
         local d2 = five_chambers.DOOR2_POS
         five_chambers.open_door_at(d2.x, d2.z)
         minetest.log("action", "[five_chambers] Door 2 opened.")
+        -- Surface to Python (same pattern as door1_state.txt).
+        _write_door_state_file("door2_state.txt", "open\n")
     end
 end
 
@@ -275,6 +290,20 @@ function five_chambers.open_cell_door(cell_i)
     five_chambers.open_door_at(
         five_chambers.cell_x_center(cell_i),
         five_chambers.CH3_FRONT_WALL_Z)
+
+    -- Surface to Python: rewrite the full per-cell map each time a door
+    -- opens. File format is one line per agent index, "<i>:open" sorted
+    -- numerically. Python reads this and tells each agent "Your cell
+    -- door is OPEN/LOCKED" in chamber_state.
+    local lines = {}
+    for i = 0, (five_chambers.NUM_AGENTS - 1) do
+        if five_chambers.door_state.cell_doors[i] then
+            table.insert(lines, tostring(i) .. ":open")
+        end
+    end
+    table.sort(lines)
+    _write_door_state_file("cell_doors_state.txt",
+        table.concat(lines, "\n") .. "\n")
 end
 
 -- Checks if all NUM_AGENTS agents are simultaneously in the communal room.
@@ -300,6 +329,7 @@ function five_chambers.check_door3()
         five_chambers.fire_milestone("m19_all_in_communal", names)
         minetest.log("action",
             "[five_chambers] All agents in communal — Door 3 opened.")
+        _write_door_state_file("door3_state.txt", "open\n")
     end
 end
 
@@ -316,6 +346,7 @@ function five_chambers.open_door4()
     local d4 = five_chambers.DOOR4_POS
     five_chambers.open_door_at(d4.x, d4.z)
     minetest.log("action", "[five_chambers] Door 4 opened.")
+    _write_door_state_file("door4_state.txt", "open\n")
 end
 
 -- ── Ch2→Ch3 transition globalstep ────────────────────────────────

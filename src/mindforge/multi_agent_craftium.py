@@ -60,8 +60,14 @@ def parse_args():
                         help="Number of agents in five-chambers (all share the agent role)")
     parser.add_argument("--episodes", type=int, default=1,
                         help="Number of episodes to run")
-    parser.add_argument("--max-steps", type=int, default=1000,
-                        help="Maximum steps per episode")
+    parser.add_argument("--max-steps", type=int, default=1500,
+                        help="Maximum steps per episode (default 1500 — fits the "
+                             "DAIC 36h SLURM budget). Ch1 timeout fires at 50%% "
+                             "(step 750), leaving ~750 steps for Ch2-Ch5. "
+                             "Override with a larger value (e.g. 2500) when "
+                             "running on qos=long / --time=72:00:00 to give "
+                             "agents more headroom for organic Ch2-Ch3 "
+                             "coordination.")
     parser.add_argument("--obs-width", type=int, default=320,
                         help="Observation width in pixels")
     parser.add_argument("--obs-height", type=int, default=180,
@@ -1187,6 +1193,7 @@ async def run(args):
 
         environment.reset()
         environment.reset_milestone_offset()
+        environment.reset_anvil_coop_offset()
         # Re-signal the Minetest server with the current phase (important on resume
         # or whenever the world is freshly reset).
         environment._write_phase_file(current_phase)
@@ -1995,6 +2002,13 @@ async def run(args):
             # _milestone_events_this_step and re-consumed in Phase 3b below
             # for metrics / logging without re-reading the JSONL file.
             _milestone_events_this_step = environment.poll_milestone_events()
+            # Anvil coop-detected diagnostic events (NO reward attached —
+            # purely for analysis). Forward to metric so they end up in
+            # final_metrics.json + the milestones.png plot's lower-priority
+            # marker row. Lua emits one event per anvil per ACTIVE_WINDOW
+            # tick gap.
+            for _coop_ev in environment.poll_anvil_coop_events():
+                metric.record_anvil_coop_event(_coop_ev)
             for _ev in _milestone_events_this_step:
                 _rw = float(_ev.get("reward", 0))
                 if _rw == 0.0:

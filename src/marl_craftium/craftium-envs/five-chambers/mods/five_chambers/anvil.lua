@@ -129,6 +129,10 @@ function five_chambers.init_anvils()
             milestone_id = info.milestone_id,
             row          = info.row,
             first_break  = false,
+            -- Edge-trigger cooldown for the coop-detected diagnostic.
+            -- nil → never logged this episode yet. Reset by init_anvils
+            -- which runs in the episode-reset handler in init.lua.
+            coop_logged_at = nil,
         }
     end
 end
@@ -151,6 +155,46 @@ minetest.register_globalstep(function(dtime)
             end
         end
         local n = #active
+
+        -- Edge-triggered coop detector: when ≥2 agents are punching the
+        -- same anvil within W ticks, emit a diagnostic log line + a
+        -- JSONL event row (NO reward — purely for post-hoc analysis).
+        -- Edge-trigger prevents a 1-tick coop window from spamming N
+        -- duplicate events; coop_logged_at acts as a cooldown so the
+        -- next event for the same anvil requires another W-tick gap.
+        if n >= 2 and (tick - (state.coop_logged_at or -99999)) > W then
+            state.coop_logged_at = tick
+            local active_str = table.concat(active, ",")
+            minetest.log("action", string.format(
+                "[five_chambers] anvil_coop: anvil=%s row=%s n=%d active=[%s] step=%d",
+                key, tostring(state.row), n, active_str, tick))
+            if io and io.stderr then
+                io.stderr:write(string.format(
+                    "[ANVIL_COOP] anvil=%s n=%d active=%s step=%d\n",
+                    key, n, active_str, tick))
+                io.stderr:flush()
+            end
+            -- Append a JSONL line to anvil_coop_events.jsonl. Python's
+            -- poll_anvil_coop_events() reads this and forwards to the
+            -- metric. We build JSON manually (no LuaJIT JSON dep) the
+            -- same way state_files.lua does for milestone events.
+            local wp = minetest.get_worldpath()
+            if wp then
+                local parts = {}
+                for _, name in ipairs(active) do
+                    table.insert(parts, '"' .. name .. '"')
+                end
+                local json_line = string.format(
+                    '{"step":%d,"anvil":"%s","row":"%s","n_active":%d,"active":[%s]}\n',
+                    tick, key, tostring(state.row), n,
+                    table.concat(parts, ","))
+                local jf = io.open(wp .. "/anvil_coop_events.jsonl", "a")
+                if jf then
+                    jf:write(json_line)
+                    jf:close()
+                end
+            end
+        end
 
         local dig_rate
         if     n == 0 then dig_rate = 0

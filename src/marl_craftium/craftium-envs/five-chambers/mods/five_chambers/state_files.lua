@@ -85,4 +85,18 @@ function five_chambers.clear_state_files()
     -- Must be cleared at episode reset because the door re-locks via
     -- relock_all_doors() and agents shouldn't see a stale "open" flag.
     os.remove(world_path .. "/door1_state.txt")
+    -- Doors 2-4 + per-cell doors — same lifecycle as door1_state.txt.
+    -- All are written by the corresponding open_doorN() / open_cell_door()
+    -- calls in doors.lua and re-locked by relock_all_doors() at episode
+    -- start. Clearing the state files here matches that lifecycle so
+    -- agents don't see stale "open" flags from the previous episode.
+    os.remove(world_path .. "/door2_state.txt")
+    os.remove(world_path .. "/door3_state.txt")
+    os.remove(world_path .. "/door4_state.txt")
+    os.remove(world_path .. "/cell_doors_state.txt")
+    -- Anvil coop-detected diagnostic JSONL (anvil.lua globalstep). No
+    -- reward attached — purely for post-hoc analysis of "did the team
+    -- ever try to coordinate?". Cleared per-episode so each episode's
+    -- file contains only that episode's events.
+    os.remove(world_path .. "/anvil_coop_events.jsonl")
 end

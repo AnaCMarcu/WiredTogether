@@ -269,6 +269,13 @@ class CraftiumMetric:
         self.milestone_events = []                  # flat log: (milestone, contributor) pairs
         self._agent_milestones = {}                 # agent_name -> set of milestone ids
         self.first_milestone_step = {}              # mid -> first global step (any agent)
+        # Anvil-coop diagnostic events (NO reward). One entry per detected
+        # coop window; populated by record_anvil_coop_event() from the
+        # Lua-side anvil.lua globalstep. Shape: list of
+        # {step, anvil, row, n_active, active}. Surfaced in final_metrics.json
+        # and as an extra marker row in milestones.png so we can compare
+        # "attempted coop" across LLM-only / +Hebbian / +MAPPO conditions.
+        self.anvil_coop_events = []
         self.track_rewards = {                      # per-agent, per-track reward sum
             i: {track: 0.0 for track in TRACKS}
             for i in range(num_agents)
@@ -440,6 +447,28 @@ class CraftiumMetric:
                     "milestone": mid,
                 })
         self._last_milestone_step[agent_id] = self.timestep
+
+    def record_anvil_coop_event(self, ev: dict):
+        """Record an anvil-coop diagnostic event from poll_anvil_coop_events().
+
+        ev = {"step": int (lua tick), "anvil": str, "row": str,
+              "n_active": int, "active": [str, ...]}
+
+        NO reward is attached — this is purely diagnostic. The event
+        is stored with the Python env step (self.timestep) for X-axis
+        consistency with other metrics, plus the raw Lua step from the
+        source dict so post-hoc analysis can correlate with anvil HP
+        evolution at Lua-tick granularity.
+        """
+        record = {
+            "step":     self.timestep,
+            "lua_step": ev.get("step", 0),
+            "anvil":    ev.get("anvil", ""),
+            "row":      ev.get("row", ""),
+            "n_active": int(ev.get("n_active", 0)),
+            "active":   list(ev.get("active", [])),
+        }
+        self.anvil_coop_events.append(record)
 
     def record_communication(self, source_agent: str, message: str, target: str = None):
         preview = message[:100] if message else ""
@@ -690,6 +719,8 @@ class CraftiumMetric:
             "steps_to_milestone":   self.steps_to_milestone_table(),
             "milestones_per_agent": self.milestones_per_agent(),
             "milestone_events":     self.milestone_events,
+            "anvil_coop_events":    list(self.anvil_coop_events),
+            "anvil_coop_attempts":  len(self.anvil_coop_events),
             "specialization_index": {
                 str(i): self.specialization_index(i) for i in range(self.num_agents)
             },
@@ -1292,6 +1323,28 @@ class CraftiumMetric:
             )
             agents_seen.add(agent_id)
 
+        # Overlay anvil-coop diagnostic events on the m8 / m9 anvil rows.
+        # Distinct marker (gray X) so they don't get confused with real
+        # milestone fires. Captures "the team tried to coordinate at this
+        # anvil at this step" — meaningful even when no anvil actually
+        # broke this episode.
+        m8_row = y_index.get("m8_anvil_A1")
+        m9_row = y_index.get("m9_anvil_B1")
+        coop_x, coop_y = [], []
+        for ev in getattr(self, "anvil_coop_events", []):
+            row = m8_row if ev.get("row") == "A" else m9_row
+            if row is None:
+                continue
+            coop_x.append(ev.get("step", 0))
+            coop_y.append(row)
+        if coop_x:
+            ax.scatter(
+                coop_x, coop_y,
+                marker="x", s=28, linewidths=1.0,
+                color="#666666", alpha=0.55, zorder=2,
+                label="coop attempts (≥2 agents punching, diagnostic)",
+            )
+
         ax.set_yticks(range(len(y_labels)))
         ax.set_yticklabels(y_labels, fontsize=8)
         ax.set_xlabel("Env step")
@@ -1299,7 +1352,7 @@ class CraftiumMetric:
         ax.set_ylim(-0.7, len(y_labels) - 0.3)
         ax.set_title(
             "Five-Chambers Milestone Timeline (markers = fire events; "
-            "rows grouped by chamber)"
+            "gray X = anvil coop attempts; rows grouped by chamber)"
         )
         ax.grid(axis="x", color="#dddddd", linewidth=0.5, zorder=1)
         ax.set_axisbelow(True)
