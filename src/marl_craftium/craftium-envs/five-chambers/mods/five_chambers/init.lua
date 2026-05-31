@@ -138,22 +138,68 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
         local pos  = (i >= 0)
             and five_chambers.ch1_spawn_pos(i)
             or  {x=5, y=five_chambers.FLOOR_Y + 1, z=5}
-        -- Force-load the target chunk before set_pos. Without this, if the
-        -- player ended ep N far from the Ch1 spawn (typically in Ch2/Ch3),
-        -- the Ch1 chunk around `pos` may not be in the loaded set when
-        -- set_pos is called — Luanti then silently no-ops the teleport,
-        -- the player stays at the old position, and the per-agent
-        -- spawn_pos / M1 distance check at the next globalstep computes
-        -- a large distance and fires M1 spuriously at ep N+1 step 1.
-        -- Observed in exp15 ep2: agent_0 (close to spawn target) was
-        -- teleported fine and didn't fire M1, but agent_1/agent_2 (far
-        -- from spawn target) failed silently and fired M1 at step 1
-        -- with no real movement.
+
+        -- Robust teleport-back-to-Ch1. Observed failure mode in exp15:
+        -- chamber_entry_steps['ch2'] = 0 for ep2 AND ep3 → none of the
+        -- 3 agents were teleported back to Ch1 between episodes; they
+        -- stayed at their ep-end Ch2 positions. With agents stuck in
+        -- Ch2, no Ch1 milestone (M1..M7, M_door1_open) can fire — the
+        -- ep2/ep3 milestone log is empty except for the spurious step-1
+        -- M1 fires that come from the distance check finding the agent
+        -- 13+ blocks from the recorded spawn_pos. So set_pos has been
+        -- silently failing entirely, not just timing-asymmetric.
+        --
+        -- Suspected cause: the Ch1 spawn chunk isn't fully loaded at
+        -- the moment of set_pos. Fix is belt-and-braces:
+        --   1. load_area over a generous radius around the target.
+        --   2. call set_pos once.
+        --   3. log pre/post positions so debug.txt shows whether the
+        --      teleport actually took effect this episode.
+        --   4. schedule a verification on the next tick; if the player
+        --      drifted >2 blocks from the target, re-set_pos. Handles
+        --      both the chunk-load race AND any client-side prediction
+        --      that fights the server position.
+        local pre = p:get_pos()
         minetest.load_area(
-            {x=pos.x - 2, y=pos.y - 2, z=pos.z - 2},
-            {x=pos.x + 2, y=pos.y + 2, z=pos.z + 2}
+            {x = pos.x - 5, y = pos.y - 5, z = pos.z - 5},
+            {x = pos.x + 5, y = pos.y + 5, z = pos.z + 5}
         )
         p:set_pos(pos)
+        local post = p:get_pos()
+        local pre_s  = pre  and string.format("(%.1f,%.1f,%.1f)", pre.x,  pre.y,  pre.z)  or "nil"
+        local post_s = post and string.format("(%.1f,%.1f,%.1f)", post.x, post.y, post.z) or "nil"
+        minetest.log("action", string.format(
+            "[five_chambers] reset-teleport %s: pre=%s -> target=(%d,%d,%d) post=%s",
+            name, pre_s, pos.x, pos.y, pos.z, post_s))
+        if io and io.stderr then
+            io.stderr:write(string.format(
+                "[RESET_TP] %s pre=%s target=(%d,%d,%d) post=%s\n",
+                name, pre_s, pos.x, pos.y, pos.z, post_s))
+            io.stderr:flush()
+        end
+        -- Schedule a verification + retry on the next tick. minetest.after
+        -- captures by closure so the target pos and player name survive
+        -- across the tick boundary.
+        local _target = pos
+        local _name   = name
+        minetest.after(0.5, function()
+            local pl = minetest.get_player_by_name(_name)
+            if not pl then return end
+            local cur = pl:get_pos()
+            if not cur then return end
+            local dx = cur.x - _target.x
+            local dz = cur.z - _target.z
+            if math.sqrt(dx*dx + dz*dz) > 2.0 then
+                -- Drifted: re-teleport.
+                pl:set_pos(_target)
+                if io and io.stderr then
+                    io.stderr:write(string.format(
+                        "[RESET_TP] %s RETRY (was at (%.1f,%.1f,%.1f))\n",
+                        _name, cur.x, cur.y, cur.z))
+                    io.stderr:flush()
+                end
+            end
+        end)
         p:set_hp(20, {type="set_hp", from="mod"})
 
         -- Wipe inventory: main hotbar, armor slots, craft grid, craft preview.
