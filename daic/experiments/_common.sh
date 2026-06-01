@@ -120,10 +120,21 @@ run_exp() {
     #      software X surface (llvmpipe) even on nodes where GPU device
     #      access is denied. Xvfb owns its own framebuffer; EGL can render
     #      into it without ever touching /dev/dri.
+    # NOTE: /dev/dri is deliberately NOT bound. The image ships only the Mesa
+    # EGL vendor (50_mesa.json), and on DAIC nodes the job has CUDA access
+    # (/dev/nvidia* via --nv) but NOT render-device permission on
+    # /dev/dri/renderD*. If /dev/dri is bound, Mesa enumerates those render
+    # nodes, fails to open them ("Permission denied"), and refuses software
+    # fallback ("Not allowed to force software rendering when API explicitly
+    # selects a hardware device") -> Luanti can't create a GL context and the
+    # run dies at reset() with "Server socket listen timeout". With /dev/dri
+    # absent, Mesa has no hardware device to grab and renders purely on CPU via
+    # llvmpipe (LIBGL_ALWAYS_SOFTWARE=1 + GALLIUM_DRIVER=llvmpipe below), which
+    # works on EVERY node regardless of render-group membership. CUDA is
+    # unaffected — it uses /dev/nvidia*, not /dev/dri.
     apptainer exec --nv \
         --bind /tmp:/tmp \
         --bind /tudelft.net:/tudelft.net \
-        --bind /dev/dri:/dev/dri \
         --env PYTHONPATH="$REPO/src" \
         --env PYTHONUNBUFFERED=1 \
         --env PYTHONIOENCODING=utf-8 \
