@@ -1,15 +1,3 @@
-"""Main loop for running Mindforge agents in Five Chambers (Craftium).
-
-Homogeneous agents progress cooperatively through five enclosed chambers,
-using LLM-based action selection, episodic memory, belief systems, and auto-curriculum.
-Milestones M1–M28 are tracked via JSONL polling from the Lua mod.
-
-Usage:
-    cd src/mindforge
-    python multi_agent_craftium.py
-    python multi_agent_craftium.py --num-agents 6 --episodes 3 --max-steps 1000
-"""
-
 import argparse
 import asyncio
 import os
@@ -41,7 +29,6 @@ from agent_modules.social_module import SocialModule
 from mindforge.env.communication_rewards import CommunicationTracker
 from mindforge.env.cooperation_metric import CooperationMetric
 from mindforge.env.episode_logger import EpisodeLogger
-from rlvr.passive_logger import attach_if_enabled as _rlvr_attach_if_enabled
 from mindforge.run_layout import RunPaths
 import json as _json
 
@@ -178,11 +165,11 @@ def parse_args():
                         help="Initial bond weight W_0 (default 0.1 = warm start)")
     parser.add_argument("--hebbian-no-comm-bond", action="store_true",
                         help="Set δ_comm=0 (spatial-only, for RQ4 ablation)")
-    # ── Phase B+ thesis comparison: prompt-side reward propagation + interpretability ──
-    parser.add_argument("--reward-propagation", action="store_true",
-                        help="Inject per-teammate reward-propagation deltas "
-                             "into the LLM action-selection prompt (the L2 "
-                             "variant). Requires --hebbian.")
+    # ── Phase B+ thesis comparison: interpretability sidecar ──
+    # (`--reward-propagation` was removed alongside the deleted rlvr module
+    #  that provided per_teammate_contributions / attribute_source_events /
+    #  format_propagation_prompt. Reintroduce here if a local replacement
+    #  for those helpers is added.)
     parser.add_argument("--interpretability", action="store_true",
                         help="Emit interpretability.jsonl with per-step "
                              "(agent, bond_row, action, comm_target, "
@@ -906,6 +893,24 @@ async def run(args):
         os.environ.get("WIREDTOGETHER_INTERMEDIATE_GIF_DIR")
         or os.path.join(os.getcwd(), "intermediate_gifs")
     )
+    # Guard: checkpoint media must NEVER land inside the run's gif_dir —
+    # otherwise per-gif_interval gifs+mp4s bloat runs/ and slow the pull.
+    # If a launch misconfigures the env var to point at (or into) gif_dir,
+    # redirect to a cwd-local sibling and warn. Keeps the "only the FINAL
+    # per-episode gif under <run_dir>/gifs/" invariant true regardless of
+    # how the job was launched.
+    _abs_gif_dir = os.path.abspath(gif_dir)
+    _abs_intermediate = os.path.abspath(intermediate_gif_dir)
+    if (_abs_intermediate == _abs_gif_dir
+            or _abs_intermediate.startswith(_abs_gif_dir + os.sep)):
+        _redirected = os.path.join(os.getcwd(), "intermediate_gifs")
+        if os.path.abspath(_redirected).startswith(_abs_gif_dir + os.sep):
+            # cwd itself is inside the run — last-resort sibling of the run.
+            _redirected = str(run_paths.root.parent / "intermediate_gifs")
+        print(f"[GIF] WARNING: intermediate_gif_dir resolved inside the run "
+              f"({intermediate_gif_dir}); redirecting checkpoint media to "
+              f"{_redirected} to keep runs/ small.")
+        intermediate_gif_dir = _redirected
     if save_gif:
         os.makedirs(intermediate_gif_dir, exist_ok=True)
 
@@ -1276,9 +1281,6 @@ async def run(args):
         comm_tracker = CommunicationTracker(agent_ids=list(range(num_agents)))
         coop_metric = CooperationMetric(agent_ids=list(range(num_agents)))
         ep_logger = EpisodeLogger(run_dir=metric.target_folder, episode=episode + 1)
-        # RLVR/GRPO Stage-1 passive observer — no-op unless RLVR_PASSIVE_LOG=1.
-        # See docs/rlvr_grpo_plan.md §5.1 and src/rlvr/passive_logger.py.
-        _rlvr_attach_if_enabled(ep_logger, metric.target_folder)
         # Phase B+ reward-propagation cache: per-teammate contributions from
         # the previous step. Surfaced in this step's prompt so the LLM sees
         # ``+2.5 from agent_1 (m17_switch_pressed)`` on the step right after
@@ -1533,22 +1535,10 @@ async def run(args):
                     }
 
             # ── Phase B+ §1: per-teammate reward-propagation prompt lines ──
-            # Uses the contributions cached from the *previous* step (since
-            # diffuse_rewards runs after actions). First step → empty cache →
-            # empty strings. The role label included in _bond_strings is
-            # reused here so the LLM sees consistent teammate labelling.
+            # Disabled — the rlvr.reward_propagation module was removed.
+            # Keep an empty dict so callers still find a value to look up;
+            # they pass it through to the LLM prompt as an empty string.
             _propagation_strings: dict[int, str] = {}
-            if args.reward_propagation and hebbian_config.enabled:
-                from rlvr.reward_propagation import format_propagation_prompt
-                _role_names = {
-                    j: ROLE_NAMES[j % len(ROLE_NAMES)] for j in range(num_agents)
-                }
-                for i in range(num_agents):
-                    _propagation_strings[i] = format_propagation_prompt(
-                        contributions=_last_propagation_contribs.get(i, {}),
-                        source_events=_last_milestone_sources,
-                        role_names=_role_names,
-                    )
 
             # Update each agent's visited-chambers set BEFORE the action loop,
             # so the prompt the LLM sees this step reflects its full history
@@ -1689,34 +1679,10 @@ async def run(args):
                 step_contents[agent_id] = content
 
                 # ── Phase B+ §2: interpretability sidecar emission ──
-                # One record per (env step, agent) captures bond_row,
-                # chosen action, comm target, thoughts, propagated deltas.
-                # Default ON whenever Hebbian is enabled (the cheap part of
-                # the run); pass --interpretability to force on for
-                # non-Hebbian runs.
-                if _interpretability_enabled and _interp_path is not None:
-                    import json as _interp_json
-                    from rlvr.reward_propagation import (
-                        build_interpretability_record,
-                    )
-                    _bond_row_i = []
-                    if hebbian_config.enabled:
-                        # Read full W row (raw weights, not normalised) so the
-                        # JSON reflects what the prompt showed via _bond_strings.
-                        _bond_row_i = [
-                            float(hebbian_graph.get_weight(agent_id, j))
-                            for j in range(num_agents)
-                        ]
-                    _interp_record = build_interpretability_record(
-                        step=step, agent_id=agent_id,
-                        chamber=environment.get_chamber(agent_id),
-                        bond_row=_bond_row_i,
-                        parsed_action=content,
-                        propagated_contribs=_last_propagation_contribs.get(agent_id),
-                        propagated_sources=_last_milestone_sources,
-                    )
-                    with _interp_path.open("a", encoding="utf-8") as _f:
-                        _f.write(_interp_json.dumps(_interp_record) + "\n")
+                # Disabled — rlvr.reward_propagation was removed (it provided
+                # build_interpretability_record). If we want to bring back
+                # the per-step interpretability JSONL, that record builder
+                # would need to be reimplemented locally.
 
                 # Attach the PRE-step V_global(s_t) to the transition that
                 # select_action just opened. This is the fix for the
@@ -2064,27 +2030,11 @@ async def run(args):
             )
             diffused_rewards = hebbian_graph.diffuse_rewards(step_rewards_raw)
 
-            # ── Phase B+ §1: cache per-teammate contributions for NEXT step's
-            #    prompt. We compute the decomposition only when the prompt-side
-            #    feature is on (avoid the overhead in non-L2 runs).
-            if args.reward_propagation and hebbian_config.enabled:
-                from rlvr.reward_propagation import (
-                    attribute_source_events,
-                    per_teammate_contributions,
-                )
-                _coactivity = hebbian_graph._last_coactivity
-                if _coactivity is not None:
-                    for i in range(num_agents):
-                        _last_propagation_contribs[i] = per_teammate_contributions(
-                            agent_id=i,
-                            raw_rewards=list(step_rewards_raw),
-                            w_bar_row=hebbian_graph.get_normalized_weights(i),
-                            coactivity_row=_coactivity[i],
-                            gamma=hebbian_config.reward_diffusion_gamma,
-                        )
-                _last_milestone_sources = attribute_source_events(
-                    _milestone_events_this_step,
-                )
+            # ── Phase B+ §1: per-teammate reward-propagation cache ──
+            # Disabled — rlvr.reward_propagation was removed (it provided
+            # per_teammate_contributions + attribute_source_events). The
+            # cache stays empty so the prompt-side propagation block is
+            # always blank; downstream readers handle that fine.
 
             # ── Reward decomposition: split each agent's diffused reward into
             #    its source streams. Each stream is read directly from the
@@ -2507,7 +2457,15 @@ async def run(args):
                         loop=0,
                     )
                     print(f"[{run_id}] Saved GIF: {gif_path}")
-                    _frames_to_mp4(agent_frames, gif_path.replace(".gif", ".mp4"))
+                    # Final video (mp4) is heavy — keep it OUT of runs/
+                    # (which holds only the final gif) and route it to the
+                    # artifacts tree alongside the checkpoint media.
+                    _final_mp4 = os.path.join(
+                        intermediate_gif_dir,
+                        f"{run_id}_{role_configs[i]['agent_name']}_ep{episode+1}.mp4",
+                    )
+                    os.makedirs(os.path.dirname(_final_mp4), exist_ok=True)
+                    _frames_to_mp4(agent_frames, _final_mp4)
 
     print(f"[{run_id}] Experiment complete! Timesteps logged: {metric.timestep}")
     # Attach run config for reproducibility before saving
@@ -2581,13 +2539,6 @@ if __name__ == "__main__":
     import functools
     print = functools.partial(print, flush=True)
     args = parse_args()
-    if args.reward_propagation and not args.hebbian:
-        parser_msg = (
-            "--reward-propagation requires --hebbian to be set "
-            "(the propagation lines decompose the diffused-reward signal "
-            "produced by the Hebbian graph)"
-        )
-        raise SystemExit(parser_msg)
     if args.social_module != "none" and not args.hebbian:
         # The social module reads from bond_weights / bond_deltas, which
         # are only populated when the Hebbian graph is enabled. Without
