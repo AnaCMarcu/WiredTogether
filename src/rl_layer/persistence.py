@@ -3,9 +3,14 @@
 Layout under ``<lora_save_dir>/<adapter_name>/``:
 
   adapter_config.json + adapter_model.safetensors  (LoRA weights, peft format)
-  action_head.pt
   value_head.pt
   rl_state.pt    — optimizer + step counters + recent-window buffers + RMS
+
+NOTE: ``action_head.pt`` is no longer written. The actor is the LLM itself
+(constrained-generation scoring over the candidate action strings) — there
+is no separate classifier head to persist. Legacy checkpoints that still
+contain ``action_head.pt`` are tolerated: load logs a warning and ignores
+the file rather than crashing.
 
 The class methods on ``RLLayer`` are thin wrappers around these functions.
 """
@@ -18,8 +23,6 @@ from typing import Optional, TYPE_CHECKING
 
 import torch
 
-from rl_layer.heads import ActionHead
-
 if TYPE_CHECKING:
     from rl_layer.rl_layer import RLLayer
 
@@ -27,14 +30,14 @@ logger = logging.getLogger(__name__)
 
 
 def save_rl_layer(rl: "RLLayer", path: Optional[str] = None) -> None:
-    """Save LoRA adapter, heads, optimizer state, and running buffers."""
+    """Save LoRA adapter, value head, optimizer state, and running buffers."""
     if not rl.config.enabled:
         return
     save_dir = Path(path or rl.config.lora_save_dir) / rl._adapter_name
     save_dir.mkdir(parents=True, exist_ok=True)
 
     rl.model.save_pretrained(str(save_dir))
-    torch.save(rl.action_head.state_dict(), save_dir / "action_head.pt")
+    # No action_head.pt — the actor is now LLM constrained-generation.
     torch.save(rl.value_head.state_dict(), save_dir / "value_head.pt")
 
     rms = rl._reward_rms
@@ -56,7 +59,7 @@ def save_rl_layer(rl: "RLLayer", path: Optional[str] = None) -> None:
 
 
 def load_rl_layer(rl: "RLLayer", path: Optional[str] = None) -> None:
-    """Restore heads + optimizer + RMS + recent-window state. LoRA loaded at init."""
+    """Restore value head + optimizer + RMS + recent-window state. LoRA loaded at init."""
     if not rl.config.enabled:
         return
     load_dir = Path(path or rl.config.lora_save_dir) / rl._adapter_name
@@ -66,45 +69,22 @@ def load_rl_layer(rl: "RLLayer", path: Optional[str] = None) -> None:
     state_path = load_dir / "rl_state.pt"
 
     if ah_path.exists():
-        _restore_action_head(rl, ah_path)
+        # Legacy checkpoint from the pre-refactor action_head path. The
+        # actor is now LLM constrained-generation — there's no classifier
+        # head to restore. Log and ignore (do NOT delete the file; the
+        # user may want to roll back).
+        logger.warning(
+            "RLLayer agent %d: legacy action_head.pt found at %s — "
+            "ignoring (the actor is now LLM constrained-generation, "
+            "no classifier head to restore).",
+            rl.agent_id, ah_path,
+        )
     if vh_path.exists():
         rl.value_head.load_state_dict(
             torch.load(vh_path, map_location=rl._device, weights_only=True)
         )
     if state_path.exists():
         _restore_rl_state(rl, state_path)
-
-
-def _restore_action_head(rl: "RLLayer", ah_path: Path) -> None:
-    """Action head load with size-mismatch handling.
-
-    If the checkpoint was saved with a different action count (e.g. before
-    macros were added), reinitialise the head from scratch rather than crash.
-    LoRA + value head are preserved.
-    """
-    saved_state = torch.load(ah_path, map_location=rl._device, weights_only=True)
-    saved_n_actions = saved_state["net.weight"].shape[0]
-    current_n_actions = len(rl.config.actions)
-    if saved_n_actions != current_n_actions:
-        logger.warning(
-            "RLLayer agent %d: action head size mismatch — "
-            "checkpoint has %d actions, config has %d. "
-            "Reinitialising action head (LoRA weights preserved).",
-            rl.agent_id, saved_n_actions, current_n_actions,
-        )
-        hidden_size = rl.model.config.hidden_size
-        rl.action_head = ActionHead(hidden_size, current_n_actions).to(
-            device=rl._device, dtype=torch.float32
-        )
-        # Rebuild optimizer with the new head's parameters.
-        trainable = (
-            list(filter(lambda p: p.requires_grad, rl.model.parameters()))
-            + list(rl.action_head.parameters())
-            + list(rl.value_head.parameters())
-        )
-        rl.optimizer = torch.optim.Adam(trainable, lr=rl.config.lr)
-    else:
-        rl.action_head.load_state_dict(saved_state)
 
 
 def _restore_rl_state(rl: "RLLayer", state_path: Path) -> None:

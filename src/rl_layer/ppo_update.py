@@ -56,16 +56,21 @@ def run_ppo_update(
     all_info: Dict = {}
     # GradScaler off: model weights are FP16/BF16 directly so unscaling would fail.
     scaler = torch.amp.GradScaler("cuda", enabled=False)
-    for _ in range(rl.config.ppo_epochs):
+    # Sanity invariant: on the FIRST PPO epoch's FIRST batch, mean(ratio)
+    # must be ~1.0 because old_log_probs were produced by the SAME
+    # _score_actions path that's about to recompute new_log_probs (no
+    # gradient step has happened yet). If they diverge, the candidate-set
+    # tokenization or scoring is inconsistent between select_action and
+    # action_level_ppo_step — surface that loudly so we don't silently
+    # train on a broken ratio.
+    _first_batch_checked = False
+    for epoch_i in range(rl.config.ppo_epochs):
         for batch in rl.buffer.sample_batches(
             rl.config.mini_batch_size, extra_transitions=social_transitions,
         ):
             with torch.amp.autocast(rl._device.type, dtype=rl._dtype):
                 loss, info = action_level_ppo_step(
-                    model=rl.model,
-                    action_head=rl.action_head,
-                    value_head=rl.value_head,
-                    tokenizer=rl.tokenizer,
+                    rl_layer=rl,
                     batch=batch,
                     clip_eps=rl.config.clip_eps,
                     value_clip_eps=rl.config.value_clip_eps,
@@ -74,8 +79,24 @@ def run_ppo_update(
                     device=rl._device,
                     max_length=rl.config.rl_prompt_max_tokens,
                     value_loss_enabled=not rl._use_centralized,
-                    action_mask=getattr(rl, "_action_mask", None),
                 )
+            if epoch_i == 0 and not _first_batch_checked and info.get("n_kept", 0) > 0:
+                _first_batch_checked = True
+                r_mean = float(info.get("ratio_mean", 1.0))
+                if abs(r_mean - 1.0) > 0.05:
+                    logger.warning(
+                        "RLLayer agent %d first-epoch mean(ratio)=%.4f deviates "
+                        "from 1.0 — tokenization/scoring may be inconsistent "
+                        "between select_action and action_level_ppo_step. "
+                        "Verify _candidate_token_ids match the candidate "
+                        "ordering used at sample time.",
+                        rl.agent_id, r_mean,
+                    )
+                else:
+                    logger.info(
+                        "RLLayer agent %d first-epoch mean(ratio)=%.4f (OK)",
+                        rl.agent_id, r_mean,
+                    )
             rl.optimizer.zero_grad()
             scaler.scale(loss).backward()
             scaler.unscale_(rl.optimizer)

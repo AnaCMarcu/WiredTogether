@@ -26,8 +26,10 @@ from typing import Dict, List, Optional
 
 import torch
 
+import torch.nn.functional as F
+
 from rl_layer.config import RLConfig
-from rl_layer.heads import ActionHead, RunningMeanStd, ValueHead
+from rl_layer.heads import RunningMeanStd, ValueHead
 from rl_layer.trajectory_buffer import RolloutBuffer
 
 logger = logging.getLogger(__name__)
@@ -127,18 +129,24 @@ class RLLayer:
             self.model.gradient_checkpointing_enable()
             logger.info("RLLayer: gradient checkpointing enabled")
 
-        # ── Heads — always float32 ──
-        # pooled hidden states are upcast to float32 (in _encode_prompt and mappo.py)
-        # to prevent NaN from fp16 overflow, so heads must also be float32.
+        # ── Value head — float32 ──
+        # pooled hidden states are upcast to float32 (in _encode_prompt and
+        # ippo.action_level_ppo_step) to prevent NaN from fp16 overflow, so
+        # the head must also be float32. (ActionHead was removed: the policy
+        # is now pi(a|s) = softmax over LLM sequence-log-probs of valid
+        # action strings, computed in _score_actions — see GLAM-style
+        # constrained generation. No classifier head needed.)
         hidden_size = self.model.config.hidden_size
-        n_actions = len(config.actions)
-        self.action_head = ActionHead(hidden_size, n_actions).to(device=self._device, dtype=torch.float32)
         self.value_head = ValueHead(hidden_size, config.value_hidden).to(device=self._device, dtype=torch.float32)
 
-        # ── Optimizer (LoRA params + heads) ──
+        # ── Optimizer (LoRA adapter + value head only) ──
+        # ActionHead's parameters are gone; the LoRA adapter alone parametrises
+        # the actor (via the LLM's own logits at the candidate-action tokens).
+        # Net VRAM: <= the head-based path because (a) no head params + optim
+        # state and (b) candidate scoring uses no_grad sampling + tiny 1-2
+        # token incremental forwards off a reused prompt-KV cache.
         trainable = (
             list(filter(lambda p: p.requires_grad, self.model.parameters()))
-            + list(self.action_head.parameters())
             + list(self.value_head.parameters())
         )
         self.optimizer = torch.optim.Adam(trainable, lr=config.lr)
@@ -146,25 +154,47 @@ class RLLayer:
         # ── Rollout buffer ──
         self.buffer = RolloutBuffer(max_size=config.buffer_size)
 
-        # ── Action-index mapping ──
+        # ── Action-index mapping (canonical, indexes into config.actions) ──
         self._action_to_idx = {a: i for i, a in enumerate(config.actions)}
         self._idx_to_action = {i: a for i, a in enumerate(config.actions)}
 
-        # ── Action mask: True = allowed, False = masked out ──
-        # When mask_slot_actions is set, every action whose name starts with
-        # "Slot" is masked from the policy. The env auto-equips the correct
-        # tool before Dig, so explicit slot selects waste exploration.
-        if getattr(config, "mask_slot_actions", False):
-            mask = torch.ones(len(config.actions), dtype=torch.bool, device=self._device)
-            for idx, name in enumerate(config.actions):
-                if name.startswith("Slot"):
-                    mask[idx] = False
-            self._action_mask = mask  # (A,)
-            n_masked = int((~mask).sum().item())
-            logger.info("RLLayer: masking %d slot actions out of %d total",
-                        n_masked, len(config.actions))
-        else:
-            self._action_mask = None
+        # ── Candidate set: actions minus Slot* (the only masking) ──
+        # Membership in this set IS the masking — no separate _action_mask
+        # tensor anymore. Stored as an ordered tuple so the candidate-index
+        # used by Categorical is stable across select_action and the PPO
+        # update path.
+        self._candidate_actions: tuple = self._build_candidate_actions()
+        # Reverse map: index into config.actions → index within candidate set
+        # (or -1 if masked out). Used by ippo to look up the action_idx that
+        # was stored in the buffer (a config.actions index) inside the new
+        # softmax distribution that's defined over the candidate set.
+        self._full_idx_to_cand_idx = {
+            self._action_to_idx[a]: c
+            for c, a in enumerate(self._candidate_actions)
+        }
+        logger.info(
+            "RLLayer: candidate action set = %d / %d total (mask_slot_actions=%s)",
+            len(self._candidate_actions), len(config.actions),
+            getattr(config, "mask_slot_actions", False),
+        )
+
+        # ── Pre-tokenize candidate action strings (one tensor of ids per
+        #    candidate). Done once at init so the SAME token sequence is
+        #    used for scoring at sampling time AND at update time — this
+        #    is the consistency that makes ratio = exp(new_lp − old_lp)
+        #    equal 1.0 on the first PPO epoch (sanity check in ppo_update).
+        #
+        # We tokenize without special tokens. Whether the BPE tokenizer
+        # prefixes a leading-space marker depends on the model; using the
+        # same `add_special_tokens=False` call at score time keeps the
+        # encoding deterministic.
+        self._candidate_token_ids: tuple = tuple(
+            torch.tensor(
+                self.tokenizer(a, add_special_tokens=False)["input_ids"],
+                dtype=torch.long, device=self._device,
+            )
+            for a in self._candidate_actions
+        )
 
         # ── Reward normaliser ──
         self._reward_rms = RunningMeanStd() if config.normalize_rewards else None
@@ -191,6 +221,11 @@ class RLLayer:
         back to vanilla LLM).  In "token" mode the RL layer is still active
         for token-level optimisation but does not override action selection.
 
+        The actor is now LLM constrained-generation: each candidate action
+        string is scored by summing the model's token log-probabilities of
+        emitting that string as a continuation of the prompt. We sample a
+        Categorical over those scores. No classifier head is involved.
+
         Returns
         -------
         dict with keys ``action``, ``thoughts``, ``communication``
@@ -202,8 +237,9 @@ class RLLayer:
 
         self.model.eval()
         with torch.no_grad():
-            pooled = self._encode_prompt(prompt_text)  # (1, H)
-            action_logits = self.action_head(pooled)    # (1, A)
+            cand_logp, pooled = self._score_actions(
+                prompt_text, self._candidate_actions, with_grad=False,
+            )
             # Skip the per-agent value head when the centralised critic is in
             # charge — the main loop will populate old_value_global + joint_state
             # via set_pending_value_global() after all agents have acted.
@@ -213,22 +249,25 @@ class RLLayer:
                 value = self.value_head(pooled).squeeze(-1)  # (1,)
                 value_scalar = value.item()
 
-            # Apply the action mask (masked logits → -inf so they're
-            # never sampled). Categorical renormalises automatically.
-            if self._action_mask is not None:
-                action_logits = action_logits.masked_fill(
-                    ~self._action_mask.unsqueeze(0), float("-inf")
-                )
-            dist = torch.distributions.Categorical(logits=action_logits)
-            action_idx = dist.sample()  # (1,)
-            log_prob = dist.log_prob(action_idx)
+            # Categorical over the candidate set. The softmax in
+            # Categorical renormalises the summed-log-prob scores into a
+            # proper distribution.
+            dist = torch.distributions.Categorical(logits=cand_logp)
+            cand_idx = dist.sample()              # scalar tensor in [0, C)
+            log_prob = dist.log_prob(cand_idx)    # scalar tensor
 
-        action_name = self._idx_to_action[action_idx.item()]
+        cand_idx_int = int(cand_idx.item())
+        action_name = self._candidate_actions[cand_idx_int]
+        # The buffer stores the index into config.actions (the canonical
+        # space), NOT the candidate-set index. ippo's action_level_ppo_step
+        # uses _full_idx_to_cand_idx to round-trip back to the candidate
+        # softmax. This keeps existing Transition fields untouched.
+        full_action_idx = self._action_to_idx[action_name]
 
         # Store in buffer (reward comes later via store_reward)
         self.buffer.store_action(
             prompt_text=prompt_text,
-            action_idx=action_idx.item(),
+            action_idx=full_action_idx,
             log_prob=log_prob.item(),
             value=value_scalar,
         )
@@ -376,8 +415,154 @@ class RLLayer:
 
     # ── Internal ──
 
+    def _build_candidate_actions(self) -> tuple:
+        """Return the ordered tuple of action strings the policy can emit.
+
+        Excludes Slot* actions when config.mask_slot_actions is True. This
+        replaces the old _action_mask tensor — membership in this tuple IS
+        the masking. The ordering matches the iteration order of
+        config.actions, so candidate_set[c] gives a deterministic mapping
+        into the canonical action space via _action_to_idx.
+        """
+        mask_slot = getattr(self.config, "mask_slot_actions", False)
+        return tuple(
+            a for a in self.config.actions
+            if not (mask_slot and a.startswith("Slot"))
+        )
+
+    def _score_actions(
+        self,
+        prompt_text: str,
+        candidate_strings,
+        with_grad: bool,
+    ) -> "tuple[torch.Tensor, torch.Tensor]":
+        """Sum the LLM's token log-probs of each candidate as a prompt continuation.
+
+        Returns (cand_log_probs (C,) float32, pooled_hidden (1, H) float32).
+
+        The pooled hidden state is the prompt's last-token representation,
+        for the value head to read (IPPO mode). In MAPPO mode the caller
+        ignores the value head, so the returned hidden state costs nothing
+        extra (it's already computed by the prompt forward).
+
+        Implementation:
+          1. Tokenize the prompt ONCE; forward through the model with
+             use_cache=True so we can reuse past_key_values across all
+             candidate scoring forwards.
+          2. The prompt forward's last-position logits already give us the
+             conditional distribution over the FIRST candidate token. No
+             extra forward needed for single-token candidates.
+          3. For multi-token candidates, do ONE incremental forward feeding
+             cand_ids[:-1] as input with past_key_values=prompt_kv. The
+             resulting tail logits at position i predict cand_ids[i+1].
+
+        VRAM accounting (vs the old action-head path):
+          - No new optimizer parameters (head removed).
+          - Sampling (with_grad=False) runs under torch.no_grad — same as
+            the old _encode_prompt + action_head forward.
+          - Update path (with_grad=True) replaces ONE classifier forward
+            with C tiny (1-2 token) incremental forwards through the
+            base model + LoRA. Since the prompt's KV cache is reused, the
+            per-candidate cost is O(K_cand) tokens of attention, not
+            O(L_prompt + K_cand). At C ≈ 22 candidates and K_cand ≤ 3,
+            this is comparable to or cheaper than the old head's
+            embedding-table-sized matmul.
+          - No new model copies. No extra activation graph beyond the
+            prompt forward + per-candidate tail forwards (gradient
+            checkpointing still applies).
+
+        Args
+        ----
+        prompt_text : str
+            The full LLM prompt (system + user, exactly what _encode_prompt
+            would receive).
+        candidate_strings : sequence of str
+            Action strings to score. Each must already be in
+            self._candidate_actions so its pre-tokenized IDs are cached.
+        with_grad : bool
+            True at update time (gradient flows through LoRA → tail
+            forwards → log_softmax → ratio). False at sampling time.
+        """
+        # Resolve pre-tokenized candidate IDs from the cache. Re-tokenizing
+        # at every call would risk drift between sampling and update.
+        cand_ids_list = []
+        for s in candidate_strings:
+            cand_idx_in_full = self._candidate_actions.index(s)
+            cand_ids_list.append(self._candidate_token_ids[cand_idx_in_full])
+
+        ctx = torch.enable_grad() if with_grad else torch.no_grad()
+        with ctx:
+            # 1) Prompt forward — emit logits, last hidden state, and KV cache.
+            enc = self.tokenizer(
+                prompt_text,
+                return_tensors="pt",
+                truncation=True,
+                max_length=self.config.rl_prompt_max_tokens,
+            ).to(self._device)
+            out = self.model(
+                **enc,
+                output_hidden_states=True,
+                use_cache=True,
+            )
+            last_hidden_all = out.hidden_states[-1]  # (1, L, H)
+            seq_last = int(enc.attention_mask.sum(dim=1).item() - 1)
+            pooled = last_hidden_all[:, seq_last, :].float()  # (1, H)
+
+            # Last-position logits predict the FIRST candidate token.
+            # log_softmax once over the vocab; we index it for each cand.
+            last_logits = out.logits[:, -1, :].float()  # (1, V)
+            last_logp = F.log_softmax(last_logits, dim=-1)  # (1, V)
+            past_kv = out.past_key_values
+
+            # 2) Per-candidate scoring via cached KV + tiny tail forwards.
+            cand_log_probs = []
+            for ids in cand_ids_list:
+                if ids.numel() == 0:
+                    # Degenerate (empty action name) — score as 0 log-prob.
+                    cand_log_probs.append(
+                        torch.zeros((), device=self._device, dtype=torch.float32)
+                    )
+                    continue
+                first_id = int(ids[0].item())
+                total = last_logp[0, first_id]
+                if ids.numel() > 1:
+                    # Forward (ids[0], ..., ids[-2]) with prompt KV cache.
+                    tail_input = ids[:-1].unsqueeze(0)  # (1, K-1)
+                    tail_out = self.model(
+                        input_ids=tail_input,
+                        past_key_values=past_kv,
+                        use_cache=False,
+                    )
+                    tail_logits = tail_out.logits.float()  # (1, K-1, V)
+                    tail_logp = F.log_softmax(tail_logits, dim=-1)
+                    # tail_logp[0, i, :] predicts the token after
+                    # tail_input[0, i] = ids[i], which is ids[i+1].
+                    for i in range(ids.numel() - 1):
+                        tok_id = int(ids[i + 1].item())
+                        total = total + tail_logp[0, i, tok_id]
+                cand_log_probs.append(total)
+
+            cand_log_probs = torch.stack(cand_log_probs).to(torch.float32)  # (C,)
+
+            # OPTIONAL length-normalisation hook (default OFF — sequence
+            # length is constant within candidate set for short action
+            # strings, so this rarely matters; flip via config when the
+            # action vocab gets longer/shorter mixes).
+            if getattr(self.config, "length_normalize_action_logp", False):
+                lengths = torch.tensor(
+                    [max(1, int(ids.numel())) for ids in cand_ids_list],
+                    dtype=torch.float32, device=self._device,
+                )
+                cand_log_probs = cand_log_probs / lengths
+
+        return cand_log_probs, pooled
+
     def _encode_prompt(self, prompt_text: str) -> torch.Tensor:
-        """Tokenize prompt and return pooled last-token hidden state (1, H)."""
+        """Tokenize prompt and return pooled last-token hidden state (1, H).
+
+        Kept for the GAE bootstrap path (`ppo_update._bootstrap_last_value`)
+        which only needs the value head, not the candidate scores.
+        """
         enc = self.tokenizer(
             prompt_text,
             return_tensors="pt",

@@ -31,72 +31,94 @@ def _normalize(x: torch.Tensor, eps: float = 1e-5) -> torch.Tensor:
 # ── Action-level PPO update ──
 
 def action_level_ppo_step(
-    model: nn.Module,               # base LM (with LoRA active)
-    action_head: nn.Module,         # linear: hidden_size → n_actions
-    value_head: nn.Module,          # linear: hidden_size → 1
-    tokenizer,
+    rl_layer,                       # RLLayer instance (owns LoRA model + value head + scorer)
     batch: List[Transition],
     clip_eps: float,
     value_clip_eps: float,
     entropy_coef: float,
     value_coef: float,
     device: torch.device,
-    max_length: int = 512,
+    max_length: int = 512,          # accepted for API symmetry; ignored (rl_layer carries cfg)
     value_loss_enabled: bool = True,
-    action_mask: Optional[torch.Tensor] = None,  # (A,) bool, True = allowed
 ) -> Tuple[torch.Tensor, dict]:
-    """Single PPO mini-batch update.  Returns scalar loss + info dict.
+    """Single PPO mini-batch update. Returns scalar loss + info dict.
+
+    Surgical-swap version (no ActionHead, no action_mask tensor): the policy
+    is the LLM's own sequence-log-prob over the CANDIDATE action strings,
+    computed by ``rl_layer._score_actions``. The candidate set IS the mask
+    (membership = allowed). For each transition we:
+
+      1. Score the FULL candidate set via _score_actions (with gradients) so
+         we get a proper softmax normaliser.
+      2. Build Categorical(logits=cand_log_probs) and take log_prob at the
+         stored action's INDEX WITHIN THE CANDIDATE SET (the buffer stores
+         the canonical index; we round-trip via rl_layer._full_idx_to_cand_idx).
+      3. ratio = exp(new − old), then the EXACT existing surr1/surr2/clip
+         policy loss + entropy + diagnostics dict.
 
     When ``value_loss_enabled`` is False (MAPPO mode with a centralised critic),
-    the per-agent value head is bypassed entirely — no forward, no value loss —
-    so the optimizer only updates the actor (LoRA + action head). The critic
-    is updated separately by ``CentralizedCritic.update``.
+    the per-agent value head is bypassed entirely. The critic is updated
+    separately by ``CentralizedCritic.update``.
+
+    A transition whose stored canonical action_idx is NOT in the current
+    candidate set (e.g. checkpoint resumed after mask_slot_actions toggled)
+    is dropped from the batch with a warning rather than crashing.
     """
 
-    prompts = [t.prompt_text for t in batch]
-    action_idxs = torch.tensor([t.action_idx for t in batch], device=device)
-    old_log_probs = torch.tensor([t.old_log_prob for t in batch],
-                                 dtype=torch.float32, device=device)
-    advantages = torch.tensor([t.advantage for t in batch],
-                              dtype=torch.float32, device=device)
+    candidate_set = rl_layer._candidate_actions
+    full_to_cand = rl_layer._full_idx_to_cand_idx
 
-    # Advantages are already normalized over the full rollout in compute_gae().
-    # Do NOT normalize here — per-mini-batch normalization would destroy the
-    # signal about which parts of the rollout were better than others.
+    cand_idxs_in_set: List[int] = []   # one per surviving transition
+    kept_transitions: List[Transition] = []
+    new_log_probs_list = []
+    entropy_terms = []
+    pooled_list = []   # only populated when value_loss_enabled
 
-    # Tokenize prompts — cap at max_length to bound activation memory.
-    # At 512 tokens the RL prompt fits comfortably; model_max_length (32768)
-    # would make the padded batch 64× larger and OOM during backprop.
-    enc = tokenizer(
-        prompts,
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-        max_length=max_length,
-    ).to(device)
-
-    # Forward pass – get last hidden state
-    outputs = model(**enc, output_hidden_states=True)
-    # Use last token of each sequence (like causal LM pooling)
-    seq_lengths = (enc.attention_mask.sum(dim=1) - 1).to(device)  # (B,)
-    last_hidden = outputs.hidden_states[-1]  # (B, L, H)
-    batch_idx = torch.arange(last_hidden.size(0), device=device)
-    pooled = last_hidden[batch_idx, seq_lengths].float()  # (B, H) — upcast to fp32 to prevent NaN from fp16 overflow
-
-    # Action head → policy distribution over discrete actions
-    action_logits = action_head(pooled)  # (B, n_actions)
-    # Apply the same action mask used at sampling time so that log-prob /
-    # entropy computation is consistent with the policy that produced the
-    # behaviour. Without this the ratio = exp(new − old) would be biased.
-    if action_mask is not None:
-        action_logits = action_logits.masked_fill(
-            ~action_mask.unsqueeze(0), float("-inf")
+    for tr in batch:
+        cand_idx = full_to_cand.get(tr.action_idx, -1)
+        if cand_idx < 0:
+            # Action no longer in the candidate set — skip rather than
+            # let it poison the loss. Unusual; only happens on a
+            # mask_slot_actions config change between ckpt save and load.
+            continue
+        cand_logp, pooled = rl_layer._score_actions(
+            tr.prompt_text, candidate_set, with_grad=True,
         )
-    action_dist = torch.distributions.Categorical(logits=action_logits)
-    new_log_probs = action_dist.log_prob(action_idxs)
-    entropy = action_dist.entropy().mean()
+        dist = torch.distributions.Categorical(logits=cand_logp)
+        idx_t = torch.tensor(cand_idx, device=device)
+        new_log_probs_list.append(dist.log_prob(idx_t))
+        entropy_terms.append(dist.entropy())
+        if value_loss_enabled:
+            pooled_list.append(pooled)
+        kept_transitions.append(tr)
+        cand_idxs_in_set.append(cand_idx)
 
-    # ── PPO clipped policy loss ──
+    if not kept_transitions:
+        # Degenerate mini-batch (all transitions filtered). Return a
+        # zero-grad loss + empty info so the outer loop can no-op
+        # gracefully without aborting the whole update.
+        zero = torch.zeros((), device=device, requires_grad=True)
+        return zero, {
+            "policy_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0,
+            "clip_frac": 0.0, "ratio_max": 1.0, "ratio_mean": 1.0,
+            "adv_mean": 0.0, "adv_std": 0.0, "adv_min": 0.0, "adv_max": 0.0,
+            "frac_pos_advantage": 0.5, "value_loss": 0.0,
+            "n_kept": 0, "n_dropped": len(batch),
+        }
+
+    old_log_probs = torch.tensor(
+        [t.old_log_prob for t in kept_transitions],
+        dtype=torch.float32, device=device,
+    )
+    advantages = torch.tensor(
+        [t.advantage for t in kept_transitions],
+        dtype=torch.float32, device=device,
+    )
+
+    new_log_probs = torch.stack(new_log_probs_list).to(torch.float32)  # (B,)
+    entropy = torch.stack(entropy_terms).mean()
+
+    # ── PPO clipped policy loss (IDENTICAL math to the previous version) ──
     ratio = (new_log_probs - old_log_probs).exp()
     surr1 = ratio * advantages
     surr2 = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * advantages
@@ -129,14 +151,22 @@ def action_level_ppo_step(
         "adv_min":    adv_min,
         "adv_max":    adv_max,
         "frac_pos_advantage": frac_pos_advantage,
+        "n_kept":     len(kept_transitions),
+        "n_dropped":  len(batch) - len(kept_transitions),
     }
 
     if value_loss_enabled:
-        returns = torch.tensor([t.returns for t in batch],
-                               dtype=torch.float32, device=device)
-        old_values = torch.tensor([t.old_value for t in batch],
-                                  dtype=torch.float32, device=device)
-        new_values = value_head(pooled).squeeze(-1)  # (B,)
+        returns = torch.tensor(
+            [t.returns for t in kept_transitions],
+            dtype=torch.float32, device=device,
+        )
+        old_values = torch.tensor(
+            [t.old_value for t in kept_transitions],
+            dtype=torch.float32, device=device,
+        )
+        # pooled_list has one (1, H) tensor per kept transition; stack to (B, H).
+        pooled_batch = torch.cat(pooled_list, dim=0)  # (B, H)
+        new_values = rl_layer.value_head(pooled_batch).squeeze(-1)  # (B,)
         value_clipped = old_values + torch.clamp(
             new_values - old_values, -value_clip_eps, value_clip_eps
         )
