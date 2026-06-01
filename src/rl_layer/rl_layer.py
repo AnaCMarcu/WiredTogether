@@ -187,13 +187,24 @@ class RLLayer:
         #    is the consistency that makes ratio = exp(new_lp − old_lp)
         #    equal 1.0 on the first PPO epoch (sanity check in ppo_update).
         #
-        # We tokenize without special tokens. Whether the BPE tokenizer
-        # prefixes a leading-space marker depends on the model; using the
-        # same `add_special_tokens=False` call at score time keeps the
-        # encoding deterministic.
+        # We tokenize each candidate as " <name>" (leading space) for two
+        # reasons:
+        #  1. BPE tokenizers (Qwen, LLaMA, GPT2) emit DIFFERENT tokens for
+        #     "Dig" at sentence start vs " Dig" mid-sentence. The natural
+        #     continuation of a prompt is the mid-sentence variant, so
+        #     using the leading-space form makes log-probs comparable
+        #     across single-token and multi-token candidates.
+        #  2. Without the leading space, short common words like "Sneak"
+        #     / "Jump" / "Drop" / "TurnRight" get artificially high
+        #     log-probs (they match the LLM's natural sentence-start
+        #     prior), while multi-token / less common words ("MoveForward",
+        #     "ApproachTarget") get penalised — observed in the first
+        #     test run as the agent only picking short words.
+        # add_special_tokens=False keeps us from adding BOS/EOS tokens
+        # that would also drift the encoding.
         self._candidate_token_ids: tuple = tuple(
             torch.tensor(
-                self.tokenizer(a, add_special_tokens=False)["input_ids"],
+                self.tokenizer(" " + a, add_special_tokens=False)["input_ids"],
                 dtype=torch.long, device=self._device,
             )
             for a in self._candidate_actions
@@ -541,48 +552,33 @@ class RLLayer:
 
         Returns (cand_log_probs (C,) float32, pooled_hidden (1, H) float32).
 
-        The pooled hidden state is the prompt's last-token representation,
-        for the value head to read (IPPO mode). In MAPPO mode the caller
-        ignores the value head, so the returned hidden state costs nothing
-        extra (it's already computed by the prompt forward).
+        Implementation: ONE batched forward over [prompt + cand_i] rows
+        (right-padded), then read per-token log-probs at the candidate
+        positions. The KV-cached approach (one prompt forward + per-
+        candidate tail forwards using past_key_values) was abandoned
+        because gradient checkpointing silently demotes use_cache=True
+        to False, returning past_kv=None and making the tail forwards
+        score the candidate WITHOUT prompt context — broken scores for
+        multi-token candidates plus extra graph state in the per-
+        candidate loop that OOM'd the GPU.
 
-        Implementation:
-          1. Tokenize the prompt ONCE; forward through the model with
-             use_cache=True so we can reuse past_key_values across all
-             candidate scoring forwards.
-          2. The prompt forward's last-position logits already give us the
-             conditional distribution over the FIRST candidate token. No
-             extra forward needed for single-token candidates.
-          3. For multi-token candidates, do ONE incremental forward feeding
-             cand_ids[:-1] as input with past_key_values=prompt_kv. The
-             resulting tail logits at position i predict cand_ids[i+1].
-
-        VRAM accounting (vs the old action-head path):
-          - No new optimizer parameters (head removed).
-          - Sampling (with_grad=False) runs under torch.no_grad — same as
-            the old _encode_prompt + action_head forward.
-          - Update path (with_grad=True) replaces ONE classifier forward
-            with C tiny (1-2 token) incremental forwards through the
-            base model + LoRA. Since the prompt's KV cache is reused, the
-            per-candidate cost is O(K_cand) tokens of attention, not
-            O(L_prompt + K_cand). At C ≈ 22 candidates and K_cand ≤ 3,
-            this is comparable to or cheaper than the old head's
-            embedding-table-sized matmul.
-          - No new model copies. No extra activation graph beyond the
-            prompt forward + per-candidate tail forwards (gradient
-            checkpointing still applies).
+        The full-forward version is correct under any combination of
+        eval / train mode and grad_ckpt on/off. Per-candidate cost is
+        O(L+K) per row; batched as (C, L+K_max) it's a single forward
+        pass through the model + LoRA. With C ≈ 22 candidates and
+        K_cand ≤ 3, the batched activation footprint is ~C × L × H,
+        which fits when grad_ckpt is enabled (the typical setup).
 
         Args
         ----
         prompt_text : str
-            The full LLM prompt (system + user, exactly what _encode_prompt
-            would receive).
+            The full LLM prompt.
         candidate_strings : sequence of str
             Action strings to score. Each must already be in
             self._candidate_actions so its pre-tokenized IDs are cached.
         with_grad : bool
-            True at update time (gradient flows through LoRA → tail
-            forwards → log_softmax → ratio). False at sampling time.
+            True at update time (gradient flows through LoRA → log-prob
+            extraction → ratio). False at sampling time.
         """
         # Resolve pre-tokenized candidate IDs from the cache. Re-tokenizing
         # at every call would risk drift between sampling and update.
@@ -597,56 +593,79 @@ class RLLayer:
         # loop activated, producing inconsistent logits across calls.
         self.model.set_adapter(self._adapter_name)
 
+        # Tokenize the prompt ONCE.
+        enc = self.tokenizer(
+            prompt_text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=self.config.rl_prompt_max_tokens,
+        ).to(self._device)
+        prompt_ids = enc.input_ids[0]                          # (L_pad,) — may include left-pad
+        prompt_attn = enc.attention_mask[0]                    # (L_pad,)
+        # Strip any left-padding so concatenation with candidates lands at
+        # contiguous real positions [0, L). With padding_side="left", real
+        # tokens are right-aligned in the encoded tensor; we keep only
+        # those.
+        real_mask = prompt_attn.bool()
+        prompt_ids_real = prompt_ids[real_mask]                # (L,)
+        prompt_len = int(prompt_ids_real.numel())
+
+        # Build right-padded batch [prompt + cand_i + pad] per row.
+        C = len(cand_ids_list)
+        seq_lens = [prompt_len + int(ids.numel()) for ids in cand_ids_list]
+        max_len = max(seq_lens) if seq_lens else prompt_len
+        pad_id = (
+            self.tokenizer.pad_token_id
+            if self.tokenizer.pad_token_id is not None
+            else 0
+        )
+        batch_ids = torch.full(
+            (C, max_len), pad_id, dtype=torch.long, device=self._device,
+        )
+        batch_attn = torch.zeros(
+            (C, max_len), dtype=torch.long, device=self._device,
+        )
+        for ci, ids in enumerate(cand_ids_list):
+            row = torch.cat([prompt_ids_real, ids.to(self._device)], dim=0)
+            L_row = int(row.numel())
+            batch_ids[ci, :L_row] = row
+            batch_attn[ci, :L_row] = 1
+
         ctx = torch.enable_grad() if with_grad else torch.no_grad()
         with ctx:
-            # 1) Prompt forward — emit logits, last hidden state, and KV cache.
-            enc = self.tokenizer(
-                prompt_text,
-                return_tensors="pt",
-                truncation=True,
-                max_length=self.config.rl_prompt_max_tokens,
-            ).to(self._device)
             out = self.model(
-                **enc,
+                input_ids=batch_ids,
+                attention_mask=batch_attn,
                 output_hidden_states=True,
-                use_cache=True,
+                use_cache=False,
             )
-            last_hidden_all = out.hidden_states[-1]  # (1, L, H)
-            seq_last = int(enc.attention_mask.sum(dim=1).item() - 1)
-            pooled = last_hidden_all[:, seq_last, :].float()  # (1, H)
+            all_logits = out.logits.float()                   # (C, max_len, V)
+            all_logp = F.log_softmax(all_logits, dim=-1)      # (C, max_len, V)
 
-            # Last-position logits predict the FIRST candidate token.
-            # log_softmax once over the vocab; we index it for each cand.
-            last_logits = out.logits[:, -1, :].float()  # (1, V)
-            last_logp = F.log_softmax(last_logits, dim=-1)  # (1, V)
-            past_kv = out.past_key_values
+            # Pool last-prompt-position hidden state for the value head.
+            # All rows share the same prompt at positions [0, L), so row 0
+            # is canonical.
+            last_hidden = out.hidden_states[-1]                # (C, max_len, H)
+            pooled = last_hidden[0:1, prompt_len - 1, :].float()  # (1, H)
 
-            # 2) Per-candidate scoring via cached KV + tiny tail forwards.
+            # For each candidate, sum log-probs at positions that predict
+            # its tokens. Causal LM convention: logits at position p
+            # predict the token at position p+1. So the logit at position
+            # (prompt_len - 1) predicts cand_ids[0]; (prompt_len) predicts
+            # cand_ids[1]; and so on.
             cand_log_probs = []
-            for ids in cand_ids_list:
-                if ids.numel() == 0:
-                    # Degenerate (empty action name) — score as 0 log-prob.
+            for ci, ids in enumerate(cand_ids_list):
+                K = int(ids.numel())
+                if K == 0:
                     cand_log_probs.append(
                         torch.zeros((), device=self._device, dtype=torch.float32)
                     )
                     continue
-                first_id = int(ids[0].item())
-                total = last_logp[0, first_id]
-                if ids.numel() > 1:
-                    # Forward (ids[0], ..., ids[-2]) with prompt KV cache.
-                    tail_input = ids[:-1].unsqueeze(0)  # (1, K-1)
-                    tail_out = self.model(
-                        input_ids=tail_input,
-                        past_key_values=past_kv,
-                        use_cache=False,
-                    )
-                    tail_logits = tail_out.logits.float()  # (1, K-1, V)
-                    tail_logp = F.log_softmax(tail_logits, dim=-1)
-                    # tail_logp[0, i, :] predicts the token after
-                    # tail_input[0, i] = ids[i], which is ids[i+1].
-                    for i in range(ids.numel() - 1):
-                        tok_id = int(ids[i + 1].item())
-                        total = total + tail_logp[0, i, tok_id]
+                total = torch.zeros((), device=self._device, dtype=torch.float32)
+                for i in range(K):
+                    pos = prompt_len - 1 + i
+                    tok_id = int(ids[i].item())
+                    total = total + all_logp[ci, pos, tok_id]
                 cand_log_probs.append(total)
 
             cand_log_probs = torch.stack(cand_log_probs).to(torch.float32)  # (C,)
