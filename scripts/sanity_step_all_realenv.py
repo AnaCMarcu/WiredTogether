@@ -50,7 +50,9 @@ def check(cond, msg):
 
 
 def _dist(a, b):
-    if not a or not b:
+    # positions are numpy arrays — guard with `is None`, not truthiness
+    # (`not <array>` raises "truth value of an array is ambiguous").
+    if a is None or b is None:
         return None
     return math.sqrt(sum((float(x) - float(y)) ** 2 for x, y in zip(a, b)))
 
