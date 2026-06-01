@@ -47,7 +47,33 @@ class RLLayer:
         Determines which LoRA adapter is loaded/saved.
     agent_id : int
         Numeric agent identifier.
+
+    Notes
+    -----
+    The base LLM is **shared across all RLLayer instances** within a
+    process: the first construction loads ``AutoModelForCausalLM`` and
+    wraps it as a multi-adapter PeftModel; subsequent constructions reuse
+    that single base and register their own LoRA adapter on it via
+    ``model.add_adapter(...)``. Each agent activates its own adapter
+    before every forward pass (``_score_actions`` / ``_encode_prompt``)
+    via ``model.set_adapter(...)``, and the per-agent optimizer is built
+    from parameters whose name contains its adapter token, so
+    ``agent_i.optimizer.step()`` only mutates adapter_i's LoRA weights +
+    its own value head.
+
+    This brings 3-agent Qwen-9B from 3 × 18 GB (OOM on V100) to
+    1 × 18 GB + 3 × ~1 MB LoRA + 3 small value heads — well within the
+    32 GB ceiling.
     """
+
+    # ── Process-wide shared base model + tokenizer (class state) ──
+    # First constructor populates these; subsequent constructors reuse them.
+    # Keyed loosely by model_path so a config switch within the same
+    # process triggers a clean reload (defensive — we don't actually do
+    # this in production but it prevents stale state in tests).
+    _shared_model = None
+    _shared_tokenizer = None
+    _shared_model_path: Optional[str] = None
 
     def __init__(self, config: RLConfig, role: str, agent_id: int,
                  centralized_critic: "Optional[object]" = None):
@@ -74,60 +100,29 @@ class RLLayer:
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._dtype = getattr(torch, config.dtype)
 
-        # ── Load tokenizer + base model ──
-        from transformers import AutoTokenizer, AutoModelForCausalLM
-        from peft import LoraConfig, get_peft_model, PeftModel
+        # ── Acquire shared base model + tokenizer (load on first call) ──
+        self.tokenizer = self._get_or_load_shared_base(config)
+        self.model = RLLayer._shared_model
 
-        logger.info("RLLayer: loading tokenizer from %s", config.model_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            config.model_path, trust_remote_code=True,
-        )
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-        # Left-padding is standard for decoder-only (causal) models in batched
-        # inference.  It keeps real tokens right-aligned so causal attention
-        # naturally ignores the left-side padding without needing a separate mask
-        # check.  Combined with explicit pad_token_id on the model config this
-        # suppresses the "attention_mask cannot be inferred" warning that fires
-        # when pad_token_id == eos_token_id.
-        self.tokenizer.padding_side = "left"
-
-        logger.info("RLLayer: loading base model from %s", config.model_path)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            config.model_path,
-            dtype=self._dtype,
-            trust_remote_code=True,
-        ).to(self._device)
-
-        # ── LoRA adapter ──
+        # ── Register or look up this agent's LoRA adapter on the shared base ──
         adapter_name = role if config.lora_per_role else "shared"
-        adapter_path = Path(config.lora_save_dir) / adapter_name
-
-        if (adapter_path / "adapter_config.json").exists():
-            logger.info("RLLayer: loading existing LoRA adapter from %s", adapter_path)
-            self.model = PeftModel.from_pretrained(
-                self.model, str(adapter_path), adapter_name=adapter_name,
-            )
-        else:
-            logger.info("RLLayer: initialising new LoRA adapter '%s'", adapter_name)
-            lora_cfg = LoraConfig(
-                r=config.lora_rank,
-                lora_alpha=config.lora_alpha,
-                lora_dropout=config.lora_dropout,
-                target_modules=["q_proj", "v_proj"],  # standard for most LLMs
-                bias="none",
-                task_type="CAUSAL_LM",
-            )
-            self.model = get_peft_model(self.model, lora_cfg, adapter_name=adapter_name)
-
-        self.model.print_trainable_parameters()
         self._adapter_name = adapter_name
+        self._ensure_adapter(adapter_name, config)
+        # Activate this adapter on the shared model so any immediate forward
+        # uses the right LoRA. Every public forward in this class re-sets
+        # before computing (cheap; idempotent if already active), so cross-
+        # agent calls in the main loop don't corrupt each other.
+        self.model.set_adapter(adapter_name)
 
         # Gradient checkpointing: recompute activations during backward instead of
         # storing them all live.  Reduces peak VRAM by ~40-50% at ~33% compute cost.
-        if config.gradient_checkpointing:
-            self.model.gradient_checkpointing_enable()
-            logger.info("RLLayer: gradient checkpointing enabled")
+        # Apply only once per shared model — idempotent enable is safe.
+        if config.gradient_checkpointing and not getattr(
+            RLLayer._shared_model, "_grad_ckpt_enabled", False
+        ):
+            RLLayer._shared_model.gradient_checkpointing_enable()
+            RLLayer._shared_model._grad_ckpt_enabled = True
+            logger.info("RLLayer: gradient checkpointing enabled on shared base")
 
         # ── Value head — float32 ──
         # pooled hidden states are upcast to float32 (in _encode_prompt and
@@ -139,17 +134,25 @@ class RLLayer:
         hidden_size = self.model.config.hidden_size
         self.value_head = ValueHead(hidden_size, config.value_hidden).to(device=self._device, dtype=torch.float32)
 
-        # ── Optimizer (LoRA adapter + value head only) ──
-        # ActionHead's parameters are gone; the LoRA adapter alone parametrises
-        # the actor (via the LLM's own logits at the candidate-action tokens).
-        # Net VRAM: <= the head-based path because (a) no head params + optim
-        # state and (b) candidate scoring uses no_grad sampling + tiny 1-2
-        # token incremental forwards off a reused prompt-KV cache.
-        trainable = (
-            list(filter(lambda p: p.requires_grad, self.model.parameters()))
-            + list(self.value_head.parameters())
-        )
+        # ── Optimizer: ONLY this agent's LoRA adapter + value head ──
+        # The shared model holds adapters for every agent; we must select
+        # only this agent's params so agent_i.optimizer.step() doesn't
+        # walk onto agent_j's gradients (zero anyway, but Adam moments
+        # would still get a "saw this param" entry).
+        # PEFT names LoRA params like
+        #   base_model.model.[...].lora_A.<adapter_name>.weight
+        # so a substring match on ".<adapter_name>." is exact.
+        adapter_tag = "." + adapter_name + "."
+        adapter_params = [
+            p for n, p in self.model.named_parameters()
+            if adapter_tag in n and p.requires_grad
+        ]
+        trainable = adapter_params + list(self.value_head.parameters())
         self.optimizer = torch.optim.Adam(trainable, lr=config.lr)
+        logger.info(
+            "RLLayer agent %d: optimizer over %d LoRA params (adapter='%s') + value head",
+            agent_id, len(adapter_params), adapter_name,
+        )
 
         # ── Rollout buffer ──
         self.buffer = RolloutBuffer(max_size=config.buffer_size)
@@ -415,6 +418,104 @@ class RLLayer:
 
     # ── Internal ──
 
+    @classmethod
+    def _get_or_load_shared_base(cls, config: RLConfig):
+        """Return the process-wide tokenizer, loading the base LLM lazily.
+
+        The base ``AutoModelForCausalLM`` and tokenizer are cached on the
+        class so every RLLayer in this process points at the SAME base
+        weights (3 × 18 GB → 1 × 18 GB for Qwen-9B on a V100). The first
+        construction does the heavy load + wraps the base as a PeftModel
+        with a placeholder adapter; subsequent constructions call
+        ``_ensure_adapter`` to register their own LoRA on the shared base.
+        """
+        if (
+            cls._shared_model is not None
+            and cls._shared_tokenizer is not None
+            and cls._shared_model_path == config.model_path
+        ):
+            return cls._shared_tokenizer
+
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        from peft import LoraConfig, get_peft_model
+
+        logger.info("RLLayer: loading shared tokenizer from %s", config.model_path)
+        tokenizer = AutoTokenizer.from_pretrained(
+            config.model_path, trust_remote_code=True,
+        )
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.padding_side = "left"
+
+        logger.info("RLLayer: loading shared base model from %s", config.model_path)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        base = AutoModelForCausalLM.from_pretrained(
+            config.model_path,
+            dtype=getattr(torch, config.dtype),
+            trust_remote_code=True,
+        ).to(device)
+
+        # Wrap in a PeftModel with a SENTINEL adapter named "__bootstrap__".
+        # Real per-agent adapters are added later via _ensure_adapter; the
+        # bootstrap adapter exists so get_peft_model has something to
+        # initialise around (PeftModel requires at least one adapter at
+        # construction time). It's never activated for inference/update.
+        boot_lora = LoraConfig(
+            r=config.lora_rank,
+            lora_alpha=config.lora_alpha,
+            lora_dropout=config.lora_dropout,
+            target_modules=["q_proj", "v_proj"],
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        peft_model = get_peft_model(base, boot_lora, adapter_name="__bootstrap__")
+        cls._shared_model = peft_model
+        cls._shared_tokenizer = tokenizer
+        cls._shared_model_path = config.model_path
+        return tokenizer
+
+    def _ensure_adapter(self, adapter_name: str, config: RLConfig) -> None:
+        """Register this agent's LoRA on the shared base if not already present.
+
+        If a saved adapter exists at ``<lora_save_dir>/<adapter_name>/``,
+        load it via ``model.load_adapter``. Otherwise add a fresh LoRA
+        with ``model.add_adapter``. After this call the adapter is
+        registered on the shared model and can be activated via
+        ``model.set_adapter(adapter_name)``.
+
+        Idempotent: re-calling with an already-registered name is a no-op
+        (handles the test/restart paths where the same class state
+        survives across RLLayer constructions).
+        """
+        from peft import LoraConfig
+
+        model = RLLayer._shared_model
+        # PEFT keeps a dict of adapter configs; presence == registered.
+        if adapter_name in getattr(model, "peft_config", {}):
+            return
+
+        adapter_path = Path(config.lora_save_dir) / adapter_name
+        if (adapter_path / "adapter_config.json").exists():
+            logger.info(
+                "RLLayer agent %d: loading existing LoRA adapter '%s' from %s",
+                self.agent_id, adapter_name, adapter_path,
+            )
+            model.load_adapter(str(adapter_path), adapter_name=adapter_name)
+        else:
+            logger.info(
+                "RLLayer agent %d: initialising new LoRA adapter '%s'",
+                self.agent_id, adapter_name,
+            )
+            lora_cfg = LoraConfig(
+                r=config.lora_rank,
+                lora_alpha=config.lora_alpha,
+                lora_dropout=config.lora_dropout,
+                target_modules=["q_proj", "v_proj"],
+                bias="none",
+                task_type="CAUSAL_LM",
+            )
+            model.add_adapter(adapter_name, lora_cfg)
+
     def _build_candidate_actions(self) -> tuple:
         """Return the ordered tuple of action strings the policy can emit.
 
@@ -490,6 +591,12 @@ class RLLayer:
             cand_idx_in_full = self._candidate_actions.index(s)
             cand_ids_list.append(self._candidate_token_ids[cand_idx_in_full])
 
+        # Activate THIS agent's LoRA adapter. The shared base model carries
+        # an adapter per agent; without this set_adapter call a forward
+        # could end up using whichever adapter the LAST agent in the main
+        # loop activated, producing inconsistent logits across calls.
+        self.model.set_adapter(self._adapter_name)
+
         ctx = torch.enable_grad() if with_grad else torch.no_grad()
         with ctx:
             # 1) Prompt forward — emit logits, last hidden state, and KV cache.
@@ -563,6 +670,7 @@ class RLLayer:
         Kept for the GAE bootstrap path (`ppo_update._bootstrap_last_value`)
         which only needs the value head, not the candidate scores.
         """
+        self.model.set_adapter(self._adapter_name)
         enc = self.tokenizer(
             prompt_text,
             return_tensors="pt",

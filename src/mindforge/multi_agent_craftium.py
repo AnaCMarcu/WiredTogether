@@ -1667,8 +1667,20 @@ async def run(args):
                         )
                         return _i, {"action": "NoOp", "thoughts": "", "communication": ""}
 
+                # Agents mid-macro replay their queued primitive WITHOUT an
+                # LLM call (matching the turn-based macro-skip), so the
+                # env-side action stream AND comm volume stay identical
+                # across stepping modes — important for a clean turn-based
+                # vs --simultaneous A/B. The queued primitive is pulled
+                # inside step_all() via _resolve_action_for_agent; None
+                # content => the shared loop body skips comm routing for
+                # that agent (exactly as the turn-based macro-skip does).
+                _sim_macro = [
+                    _i for _i in _sim_alive if environment.is_macro_running(_i)
+                ]
+                _sim_deciding = [_i for _i in _sim_alive if _i not in _sim_macro]
                 _sim_results = await asyncio.gather(
-                    *[_sim_select(_i) for _i in _sim_alive]
+                    *[_sim_select(_i) for _i in _sim_deciding]
                 )
                 _sim_actions = {}
                 for _i, _content in _sim_results:
@@ -1676,6 +1688,9 @@ async def run(args):
                     _sim_actions[_i] = (
                         _content.get("action", "NoOp") if _content else "NoOp"
                     )
+                for _i in _sim_macro:
+                    _sim_contents[_i] = None
+                    _sim_actions[_i] = "NoOp"
                 environment.step_all(_sim_actions)
                 # step_all produced ONE _step_rewards set — drain it once
                 # (turn-based drains once per agent inside its loop instead).

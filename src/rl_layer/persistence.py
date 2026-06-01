@@ -30,13 +30,29 @@ logger = logging.getLogger(__name__)
 
 
 def save_rl_layer(rl: "RLLayer", path: Optional[str] = None) -> None:
-    """Save LoRA adapter, value head, optimizer state, and running buffers."""
+    """Save THIS agent's LoRA adapter, value head, optimizer state, etc.
+
+    The shared PeftModel holds adapters for every agent; we must restrict
+    the save to this agent's adapter via ``selected_adapters=[name]`` so
+    multi-agent checkpoints don't repeatedly write every adapter from
+    every RLLayer's save() call.
+    """
     if not rl.config.enabled:
         return
     save_dir = Path(path or rl.config.lora_save_dir) / rl._adapter_name
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    rl.model.save_pretrained(str(save_dir))
+    # Make sure THIS agent's adapter is the active one when peft serialises.
+    rl.model.set_adapter(rl._adapter_name)
+    try:
+        rl.model.save_pretrained(
+            str(save_dir),
+            selected_adapters=[rl._adapter_name],
+        )
+    except TypeError:
+        # Older PEFT versions don't support selected_adapters; fall back
+        # to saving all adapters (wasteful but correct).
+        rl.model.save_pretrained(str(save_dir))
     # No action_head.pt — the actor is now LLM constrained-generation.
     torch.save(rl.value_head.state_dict(), save_dir / "value_head.pt")
 
