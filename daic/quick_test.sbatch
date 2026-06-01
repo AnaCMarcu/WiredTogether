@@ -17,7 +17,7 @@
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 run_exp "fast" "$MODEL_9B" \
-    --episodes 3 \
+    --episodes 2 \
     --max-steps 100 \
     --hebbian \
     --hebbian-ltp 0.01 \
