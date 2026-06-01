@@ -2457,15 +2457,9 @@ async def run(args):
                         loop=0,
                     )
                     print(f"[{run_id}] Saved GIF: {gif_path}")
-                    # Final video (mp4) is heavy — keep it OUT of runs/
-                    # (which holds only the final gif) and route it to the
-                    # artifacts tree alongside the checkpoint media.
-                    _final_mp4 = os.path.join(
-                        intermediate_gif_dir,
-                        f"{run_id}_{role_configs[i]['agent_name']}_ep{episode+1}.mp4",
-                    )
-                    os.makedirs(os.path.dirname(_final_mp4), exist_ok=True)
-                    _frames_to_mp4(agent_frames, _final_mp4)
+                    # Final per-episode mp4 lives next to the final gif in
+                    # run/gifs/ (checkpoint media still goes to artifacts).
+                    _frames_to_mp4(agent_frames, gif_path.replace(".gif", ".mp4"))
 
     print(f"[{run_id}] Experiment complete! Timesteps logged: {metric.timestep}")
     # Attach run config for reproducibility before saving
