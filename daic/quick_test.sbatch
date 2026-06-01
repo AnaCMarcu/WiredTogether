@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
 #SBATCH --gres=gpu:1
-#SBATCH --output=fast%j.out
-#SBATCH --error=fast%j.err
+#SBATCH --output=slurm_logs/fast%j.out
+#SBATCH --error=slurm_logs/fast%j.err
 
 # 200-step LLM-only smoke test. Uses the same apptainer + wandb + env
 # setup as the real experiments via _common.sh (pre-flight pkill, /tmp

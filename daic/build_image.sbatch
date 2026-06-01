@@ -6,8 +6,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16GB
-#SBATCH --output=build_%j.out
-#SBATCH --error=build_%j.err
+#SBATCH --output=slurm_logs/build_%j.out
+#SBATCH --error=slurm_logs/build_%j.err
 
 set -eu
 

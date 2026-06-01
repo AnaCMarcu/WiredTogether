@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
 #SBATCH --gres=gpu:1
-#SBATCH --output=exp6_ippo_hebbian_%j.out
-#SBATCH --error=exp6_ippo_hebbian_%j.err
+#SBATCH --output=slurm_logs/exp6_ippo_hebbian_%j.out
+#SBATCH --error=slurm_logs/exp6_ippo_hebbian_%j.err
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 

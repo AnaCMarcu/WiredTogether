@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8GB
 #SBATCH --gres=gpu:1
-#SBATCH --output=smoke_%j.out
-#SBATCH --error=smoke_%j.err
+#SBATCH --output=slurm_logs/smoke_%j.out
+#SBATCH --error=slurm_logs/smoke_%j.err
 
 set -eu
 

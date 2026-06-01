@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
 #SBATCH --gres=gpu:1
-#SBATCH --output=exp9_llm_2b_social_prompt_%j.out
-#SBATCH --error=exp9_llm_2b_social_prompt_%j.err
+#SBATCH --output=slurm_logs/exp9_llm_2b_social_prompt_%j.out
+#SBATCH --error=slurm_logs/exp9_llm_2b_social_prompt_%j.err
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 

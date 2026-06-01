@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=1GB
-#SBATCH --output=slurm_%j.out
-#SBATCH --error=slurm_%j.err
+#SBATCH --output=slurm_logs/slurm_%j.out
+#SBATCH --error=slurm_logs/slurm_%j.err
 
 srun python3 script.py

@@ -6,8 +6,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=12GB
-#SBATCH --output=hebb-tier11-%A_%a.out
-#SBATCH --error=hebb-tier11-%A_%a.err
+#SBATCH --output=slurm_logs/hebb-tier11-%A_%a.out
+#SBATCH --error=slurm_logs/hebb-tier11-%A_%a.err
 
 # ── DAIC port of hebbian-marl/scripts/slurm/hebb_tier11.sh ──
 # Tier 11: same 3 variants × 5 seeds as tier 9 but with force_coop=True

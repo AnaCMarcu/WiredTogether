@@ -6,8 +6,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8GB
-#SBATCH --output=hebb_build_%j.out
-#SBATCH --error=hebb_build_%j.err
+#SBATCH --output=slurm_logs/hebb_build_%j.out
+#SBATCH --error=slurm_logs/hebb_build_%j.err
 
 set -eu
 

@@ -6,8 +6,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=12GB
-#SBATCH --output=hebb-tier9-%A_%a.out
-#SBATCH --error=hebb-tier9-%A_%a.err
+#SBATCH --output=slurm_logs/hebb-tier9-%A_%a.out
+#SBATCH --error=slurm_logs/hebb-tier9-%A_%a.err
 
 # ── DAIC port of hebbian-marl/scripts/slurm/hebb_tier9.sh ──
 # Tier 9 sweep: 3 variants × 5 seeds (indices 0-14).
