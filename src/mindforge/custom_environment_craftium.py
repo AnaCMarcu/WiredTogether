@@ -228,6 +228,239 @@ class CraftiumEnvironmentInterface:
         self.reset_log_offset()
         return self._observations
 
+    def _resolve_action_for_agent(self, agentId: int, action_str: str) -> str:
+        """Per-agent action preprocessing shared by step_all() (and, eventually,
+        step()).
+
+        Runs the same guards step() has always run *before* it builds the
+        underlying action dict: macro dispatch, invalid-action clamping, the
+        idle-loop guard, position-stuck / escape-queue handling, respawn pitch
+        reset, and the camera pitch cap. It mutates the identical per-agent
+        state dicts step() mutates (_macro_queue, _escape_queue,
+        _consecutive_idle, _last_xz, _stuck_move_steps, _pitch,
+        _futile_actions, _invalid_action_warning) and returns the resolved
+        PRIMITIVE action name.
+
+        NOTE: this is intentionally a verbatim lift of step()'s preprocessing
+        block. step() is left untouched until the --simultaneous path is
+        parity-validated; once it is, step() should be migrated to call this
+        helper so there is a single source of truth. The N=1 identity tier of
+        scripts/parity_test_stepping.py is what licenses that later migration.
+        """
+        import logging as _logging
+
+        agent_name = f"agent_{agentId}"
+
+        # ── Macro dispatch ────────────────────────────────────────────────────
+        if action_str in _MACRO_ACTIONS:
+            self._macro_queue[agent_name] = [[a, n] for a, n in _MACRO_ACTIONS[action_str]]
+            _logging.info("Agent %d macro '%s' queued: %s", agentId, action_str, _MACRO_ACTIONS[action_str])
+
+        if self._macro_queue.get(agent_name) and not self._escape_queue.get(agent_name):
+            seg = self._macro_queue[agent_name][0]
+            action_str = seg[0]
+            seg[1] -= 1
+            if seg[1] <= 0:
+                self._macro_queue[agent_name].pop(0)
+
+        if action_str not in ACTION_MAP:
+            _logging.warning(
+                f"Invalid action: '{action_str}', clamping to NoOp. "
+                f"Valid actions: {VALID_ACTIONS}"
+            )
+            self._invalid_action_warning[agent_name] = (
+                f"WARNING: Your previous action '{action_str}' is NOT a "
+                f"valid action — it was silently clamped to NoOp. Valid "
+                f"actions are: {VALID_ACTIONS}. Do not emit invalid action "
+                f"names; use 'Dig' (not 'Mine' or 'Attack'), 'TurnRight' "
+                f"(not 'Turn'), etc."
+            )
+            action_str = "NoOp"
+
+        if action_str in self._IDLE_ACTIONS:
+            self._consecutive_idle[agent_name] = (
+                self._consecutive_idle.get(agent_name, 0) + 1
+            )
+            if self._consecutive_idle[agent_name] >= self._MAX_CONSECUTIVE_IDLE:
+                _logging.warning(
+                    f"Agent {agentId} idle for {self._consecutive_idle[agent_name]} "
+                    f"steps, forcing MoveForward"
+                )
+                action_str = "MoveForward"
+                self._consecutive_idle[agent_name] = 0
+        else:
+            self._consecutive_idle[agent_name] = 0
+
+        if self._escape_queue.get(agent_name):
+            esc_action, esc_ticks = self._escape_queue[agent_name][0]
+            esc_ticks -= 1
+            if esc_ticks <= 0:
+                self._escape_queue[agent_name].pop(0)
+            else:
+                self._escape_queue[agent_name][0] = (esc_action, esc_ticks)
+            action_str = esc_action
+        else:
+            _movement_actions = frozenset({
+                "MoveForward", "MoveBackward", "MoveLeft", "MoveRight", "Jump"
+            })
+            if action_str in _movement_actions:
+                try:
+                    pos = self.env.env._positions[agentId]
+                    cur_xz = (pos[0], pos[2]) if pos is not None else None
+                except (AttributeError, IndexError, TypeError):
+                    cur_xz = None
+
+                if cur_xz is not None:
+                    last_xz = self._last_xz.get(agent_name)
+                    if last_xz is not None:
+                        dx = abs(cur_xz[0] - last_xz[0])
+                        dz = abs(cur_xz[1] - last_xz[1])
+                        if dx < self._STUCK_THRESHOLD_XZ and dz < self._STUCK_THRESHOLD_XZ:
+                            self._stuck_move_steps[agent_name] = (
+                                self._stuck_move_steps.get(agent_name, 0) + 1
+                            )
+                        else:
+                            self._stuck_move_steps[agent_name] = 0
+                            self._last_xz[agent_name] = cur_xz
+                    else:
+                        self._last_xz[agent_name] = cur_xz
+                        self._stuck_move_steps[agent_name] = 0
+
+                    if self._stuck_move_steps.get(agent_name, 0) >= self._STUCK_MAX_STEPS:
+                        _logging.warning(
+                            f"Agent {agentId} stuck at xz={cur_xz} for "
+                            f"{self._stuck_move_steps[agent_name]} steps — use Escape macro"
+                        )
+                        self._stuck_move_steps[agent_name] = 0
+                        self._last_xz[agent_name] = None
+            else:
+                self._stuck_move_steps[agent_name] = 0
+
+        if self._terminations.get(agent_name, False):
+            self._pitch[agent_name] = 0
+
+        pitch = self._pitch.get(agent_name, 0)
+        if action_str == "LookDown":
+            if pitch >= self._PITCH_MAX_DOWN:
+                _logging.debug(f"Agent {agentId} pitch cap hit (down={pitch}), redirecting LookDown → NoOp")
+                action_str = "NoOp"
+                self._futile_actions[agent_name] = (
+                    self._futile_actions.get(agent_name, 0) + 1
+                )
+            else:
+                self._pitch[agent_name] = pitch + 1
+        elif action_str == "LookUp":
+            if pitch <= -self._PITCH_MAX_UP:
+                _logging.debug(f"Agent {agentId} pitch cap hit (up={-pitch}), redirecting LookUp → NoOp")
+                action_str = "NoOp"
+                self._futile_actions[agent_name] = (
+                    self._futile_actions.get(agent_name, 0) + 1
+                )
+            else:
+                self._pitch[agent_name] = pitch - 1
+
+        return action_str
+
+    def step_all(self, actions: dict):
+        """Simultaneous-move step: ALL agents act on the same underlying tick(s).
+
+        Parameters
+        ----------
+        actions : dict[int, str]
+            Maps agentId -> action name for every live agent. Terminated
+            agents (absent from ``self.env.agents``) are skipped.
+
+        Returns
+        -------
+        (observations, resolved) : (dict, dict[int, str])
+            ``observations`` is the post-step obs dict; ``resolved`` maps each
+            agentId to the primitive action that actually fired (after macro /
+            clamp / escape resolution), for logging + RL bookkeeping.
+
+        Contrast with step(): step() advances the underlying env once per
+        agent (acting agent moves, the rest NoOp), so an N-agent outer step
+        costs N underlying ticks and later agents observe the world already
+        moved by earlier ones. step_all advances the env ONCE for all agents
+        (with Jump/Dig tick-expansion), so every agent observes the same s_t
+        and acts on it. This is a deliberate turn-based -> simultaneous-move
+        change and is only reached when the caller opts in via --simultaneous.
+        """
+        live = list(self.env.agents)
+
+        # 1. Resolve every agent's primitive via the shared preprocessing.
+        resolved: dict[int, str] = {}
+        for agentId, raw in actions.items():
+            ag = f"agent_{agentId}"
+            if ag not in live:
+                continue  # terminated — no action this step
+            resolved[agentId] = self._resolve_action_for_agent(agentId, raw)
+
+        # 2. Auto-equip pre-tick: switch every Dig-er to its best tool in ONE
+        #    combined tick (step() does this per-agent; here it is batched).
+        equip = {}
+        for agentId, act in resolved.items():
+            if act == "Dig":
+                best_slot = self._find_best_tool(agentId)
+                if best_slot is not None:
+                    sid = ACTION_MAP.get(f"Slot{best_slot}")
+                    if sid is not None:
+                        equip[f"agent_{agentId}"] = sid
+        if equip:
+            equip_actions = {
+                ag: equip.get(ag, ACTION_MAP["NoOp"]) for ag in live
+            }
+            self.env.step(equip_actions)
+
+        # 3. Build a per-agent sub-tick schedule. Jump expands to
+        #    [Jump, MoveForward] (vault pairing); Dig repeats for its sustained
+        #    tick budget; everything else is a single tick. Agents with shorter
+        #    schedules NoOp-fill the remaining ticks so longer actions (Dig)
+        #    still complete.
+        schedules: dict[str, list] = {}
+        for agentId, act in resolved.items():
+            ag = f"agent_{agentId}"
+            if act == "Jump":
+                schedules[ag] = ["Jump", "MoveForward"]
+            else:
+                schedules[ag] = [act] * self._SUSTAINED_TICKS.get(act, 1)
+        max_ticks = max((len(s) for s in schedules.values()), default=1)
+
+        total_rewards = {ag: 0.0 for ag in live}
+        observations = self._observations
+        terminations = self._terminations
+        truncations = self._truncations
+        infos = self._infos
+        for t in range(max_ticks):
+            tick_actions = {}
+            for ag in self.env.agents:  # re-read each tick; agents can drop on death
+                seq = schedules.get(ag)
+                act = seq[t] if (seq and t < len(seq)) else "NoOp"
+                tick_actions[ag] = ACTION_MAP[act]
+            observations, rewards, terminations, truncations, infos = self.env.step(tick_actions)
+            for ag, rew in rewards.items():
+                if ag in total_rewards:
+                    total_rewards[ag] += rew
+            # Stop once every agent has terminated/truncated.
+            if all(
+                terminations.get(ag, False) or truncations.get(ag, False)
+                for ag in live
+            ):
+                break
+
+        # 4. Commit state — mirrors step()'s tail exactly.
+        self._observations = observations
+        self._terminations = terminations
+        self._truncations = truncations
+        self._infos = infos
+        self.tail_server_log()
+        self._step_rewards = dict(total_rewards)
+        for ag, rew in total_rewards.items():
+            self._rewards[ag] = self._rewards.get(ag, 0.0) + rew
+        for agentId, act in resolved.items():
+            self._last_actions[f"agent_{agentId}"] = act
+
+        return self._observations, resolved
+
     def step(self, action_str: str, agentId: int):
         """Execute one action for one agent, NoOp for the rest, then step the env.
 
