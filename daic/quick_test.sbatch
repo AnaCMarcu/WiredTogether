@@ -10,20 +10,30 @@
 #SBATCH --output=slurm_logs/fast%j.out
 #SBATCH --error=slurm_logs/fast%j.err
 
-# 200-step LLM-only smoke test. Uses the same apptainer + wandb + env
-# setup as the real experiments via _common.sh (pre-flight pkill, /tmp
-# cwd, EGL software fallback, model paths, wandb wiring, archive rsync).
+# 200-step MAPPO+Hebbian smoke test (action-level MAPPO with centralized
+# critic + Hebbian social plasticity, NO social-module prompt block).
+# Exercises the full RL update path on a tiny episode budget so we can
+# verify plumbing (gradient steps fire, critic loss not NaN, wandb gets
+# rl/* metrics) in ~30 min instead of waiting for a real 36h job.
+#
+# Uses the same apptainer + wandb + env setup as the real experiments
+# via _common.sh (pre-flight pkill, /tmp cwd, EGL software fallback,
+# model paths, wandb wiring, archive rsync).
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 run_exp "fast" "$MODEL_9B" \
     --episodes 2 \
     --max-steps 100 \
+    --rl \
+    --rl-critic-mode centralized \
+    --rl-model-path "$MODEL_9B" \
+    --rl-update-interval 64 \
+    --rl-lr 3e-4 \
     --hebbian \
     --hebbian-ltp 0.01 \
     --hebbian-ltd 0.005 \
     --hebbian-decay 0.005 \
     --hebbian-beta 1.0 \
     --hebbian-rho 0.3 \
-    --hebbian-gamma 0.2 \
-    --social-module prompt
+    --hebbian-gamma 0.2
