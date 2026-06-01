@@ -73,6 +73,7 @@ class ActionSelection:
 
     async def generate_thoughts_and_comm(
         self,
+        messages,
         task,
         last_action,
         critique,
@@ -116,10 +117,22 @@ class ActionSelection:
             teammate_names = ", ".join(
                 f"agent_{j}" for j in range(num_agents) if j != self_idx
             )
+        # Mirror the non-RL select_action path: append messages[0].content[0]
+        # so the LLM sees the fresh per-step env observation block (what the
+        # agent perceives this round + incoming communications). Without
+        # this the model has only the static beliefs/task fields and free-
+        # associates off the raw image — observed in the first run as
+        # confident hallucinations of bosses/conveyors/diamonds in Ch1.
+        per_step_observation = ""
+        if messages and getattr(messages[0], "content", None):
+            try:
+                per_step_observation = messages[0].content[0]
+            except (IndexError, TypeError):
+                per_step_observation = ""
         content = await llm_call(
             comm_client,
             system_prompt=self.system_prompt,
-            user_prompt=instruction_prompt_p2_thoughts,
+            user_prompt=instruction_prompt_p2_thoughts + per_step_observation,
             frame=last_frame,
             cancellation_token=cancellation_token,
             log_prefix=f"Agent {agent_name} rl_thoughts: ",

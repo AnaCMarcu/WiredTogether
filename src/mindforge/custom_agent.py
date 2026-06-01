@@ -477,6 +477,7 @@ class CustomAgent(BaseChatAgent):
             )
             _pre_thoughts, _pre_comm, _pre_comm_target = (
                 await self.action_selection.generate_thoughts_and_comm(
+                    messages=messages,
                     task=task,
                     last_action=last_action,
                     critique=critique,
