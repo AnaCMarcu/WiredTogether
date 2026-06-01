@@ -171,6 +171,13 @@ run_exp() {
                 _xvfb_pid=$!
                 trap "kill $_xvfb_pid 2>/dev/null || true" EXIT
                 export DISPLAY=:99
+                # Belt-and-braces for Luanti builds compiled EGL-only that
+                # ignore DISPLAY and try to grab /dev/dri/renderD* directly:
+                # force EGL to use the surfaceless platform (CPU-side via
+                # llvmpipe) so the renderer succeeds without GPU device
+                # permissions even when it bypasses Xvfb.
+                export EGL_PLATFORM=surfaceless
+                export __EGL_VENDOR_LIBRARY_FILENAMES="${__EGL_VENDOR_LIBRARY_FILENAMES:-/usr/share/glvnd/egl_vendor.d/50_mesa.json}"
                 sleep 1
                 exec "$@"
             else
