@@ -18,4 +18,12 @@ source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/dai
 
 run_exp "fast" "$MODEL_9B" \
     --episodes 3 \
-    --max-steps 100
+    --max-steps 100 \
+    --hebbian \
+    --hebbian-ltp 0.01 \
+    --hebbian-ltd 0.005 \
+    --hebbian-decay 0.005 \
+    --hebbian-beta 1.0 \
+    --hebbian-rho 0.3 \
+    --hebbian-gamma 0.2 \
+    --social-module prompt
