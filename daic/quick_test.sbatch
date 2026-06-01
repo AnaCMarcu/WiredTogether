@@ -28,7 +28,7 @@ run_exp "fast_rl" "$MODEL_9B" \
     --rl \
     --rl-critic-mode centralized \
     --rl-model-path "$MODEL_9B" \
-    --rl-update-interval 64 \
+    --rl-update-interval 16 \
     --rl-lr 3e-4 \
     --hebbian \
     --hebbian-ltp 0.01 \
