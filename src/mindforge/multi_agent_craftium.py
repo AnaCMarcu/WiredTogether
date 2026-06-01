@@ -61,6 +61,13 @@ def parse_args():
                         help="Observation height in pixels")
     parser.add_argument("--no-communication", action="store_true",
                         help="Disable inter-agent communication entirely.")
+    parser.add_argument("--simultaneous", action="store_true",
+                        help="Simultaneous-move stepping: all agents choose "
+                             "actions concurrently on the shared state s_t "
+                             "and the env advances once via step_all(), vs "
+                             "the default turn-based round-robin. Stage 1: "
+                             "LLM agents only — not yet supported with --rl "
+                             "or macro actions.")
     parser.add_argument("--sleep-time", type=float, default=0.0,
                         help="Seconds to sleep between LLM calls (rate-limit protection)")
     parser.add_argument("--belief-interval", type=int, default=5,
@@ -803,6 +810,14 @@ def _should_transition_to_survival(episode: int, global_step: int, args) -> bool
 # Main episode loop
 # ===========================
 async def run(args):
+    # Stage 1 of --simultaneous is LLM-only: the RL reward/critic
+    # bookkeeping (store_reward, V_global attach, MAPPO update) is not yet
+    # wired for the simultaneous path. Fail fast rather than run wrong.
+    if getattr(args, "simultaneous", False) and getattr(args, "rl", False):
+        raise SystemExit(
+            "--simultaneous does not yet support --rl (Stage 1 is LLM-only). "
+            "Run without --rl, or wait for the Stage 2 RL integration."
+        )
     num_agents = args.num_agents
     num_episodes = args.episodes
     max_steps = args.max_steps
@@ -1589,6 +1604,86 @@ async def run(args):
                 )
                 v_global_t = centralized_critic.evaluate(joint_state_t)
 
+            # ── Simultaneous-move selection (Stage 1: LLM-only, no macros) ──
+            # All living agents choose actions CONCURRENTLY on the shared
+            # pre-step state s_t, then a single step_all() advances the env
+            # once for everyone. The turn-based loop below selects+steps one
+            # agent at a time instead. Comm routing, Hebbian and metric
+            # bookkeeping run in the shared loop body either way — only
+            # selection+stepping moves up here.
+            _sim_contents: dict = {}
+            if args.simultaneous:
+                _sim_alive = [
+                    _i for _i in range(num_agents)
+                    if not environment._terminations.get(f"agent_{_i}", False)
+                ]
+
+                async def _sim_select(_i):
+                    _ag = agents[_i]
+                    try:
+                        _frame = environment.get_pil_image(_i)
+                        _formatted = [
+                            f"{m.source}: {m.content}"
+                            for m in agent_communications[_i]
+                            if m.source != _ag.name
+                        ]
+                        _mm = MultiModalMessage(
+                            content=[
+                                f"Communications from other agents: {_formatted}.\n",
+                                Image.from_pil(_frame),
+                            ],
+                            source="user",
+                        )
+                        _ag_done = metric._agent_milestones.get(f"agent_{_i}", set())
+                        _tm_done = (
+                            set().union(*metric._agent_milestones.values())
+                            if metric._agent_milestones else set()
+                        )
+                        _mp = format_milestone_progress(
+                            environment.get_chamber(_i), _ag_done, _tm_done
+                        )
+                        _content, _ = await _ag.on_messages(
+                            [_mm], CancellationToken(),
+                            communication=_formatted,
+                            error=None, error_count=agents_error_count[_i],
+                            picked_object=environment.pickedup_object(agentId=_i),
+                            reward_text=environment.get_reward_summary(_i),
+                            social_bonds=_bond_strings.get(_i),
+                            propagation_summary=_propagation_strings.get(_i, ""),
+                            position_text=environment.get_position_text(_i),
+                            player_status_text=environment.get_player_status_text(_i),
+                            current_chamber=environment.get_chamber(_i),
+                            visited_chambers=sorted(_visited_chambers[_i]),
+                            completed_milestones=_ag_done,
+                            milestone_progress=_mp,
+                            chamber_state=environment.get_chamber_state(_i),
+                            bond_weights=_bond_weights.get(_i),
+                            bond_deltas=_bond_deltas.get(_i),
+                        )
+                        return _i, _content
+                    except Exception as _exc:
+                        logging.error(
+                            "simultaneous select failed for agent %d: %s", _i, _exc
+                        )
+                        return _i, {"action": "NoOp", "thoughts": "", "communication": ""}
+
+                _sim_results = await asyncio.gather(
+                    *[_sim_select(_i) for _i in _sim_alive]
+                )
+                _sim_actions = {}
+                for _i, _content in _sim_results:
+                    _sim_contents[_i] = _content
+                    _sim_actions[_i] = (
+                        _content.get("action", "NoOp") if _content else "NoOp"
+                    )
+                environment.step_all(_sim_actions)
+                # step_all produced ONE _step_rewards set — drain it once
+                # (turn-based drains once per agent inside its loop instead).
+                for _i in range(num_agents):
+                    _r_env = environment.get_step_reward(_i)
+                    step_rewards_raw[_i] += _r_env
+                    _step_envstep_reward[_i] += _r_env
+
             for agent_id, agent in enumerate(agents):
                 agent_name = f"agent_{agent_id}"
 
@@ -1596,7 +1691,10 @@ async def run(args):
                     continue
 
                 # ── Macro skip: advance macro queue without calling the LLM ──
-                if environment.is_macro_running(agent_id):
+                # (turn-based only — under --simultaneous, step_all() already
+                # advanced every agent this step, so there is no per-agent
+                # macro tick to skip; macros are a Stage-3 item there.)
+                if not args.simultaneous and environment.is_macro_running(agent_id):
                     environment.step("NoOp", agentId=agent_id)
                     # Drain rewards for ALL agents — multi-contributor milestones
                     # (m22 all_mobs_killed, m19 all_in_communal, etc.) credit
@@ -1655,28 +1753,38 @@ async def run(args):
                     _agent_done,
                     _team_done,
                 )
-                content, last_action, error_count = await agent_do_action(
-                    agent, agent_id, frame_image, comms_for_agent, reward_text,
-                    _phase_prefix + instruction_prompt, environment,
-                    error_count=error_count,
-                    social_bonds=_bond_strings.get(agent_id),
-                    propagation_summary=_propagation_strings.get(agent_id, ""),
-                    position_text=environment.get_position_text(agent_id),
-                    player_status_text=environment.get_player_status_text(agent_id),
-                    current_chamber=environment.get_chamber(agent_id),
-                    visited_chambers=sorted(_visited_chambers[agent_id]),
-                    completed_milestones=_agent_done,
-                    milestone_progress=_milestone_progress,
-                    chamber_state=environment.get_chamber_state(agent_id),
-                    bond_weights=_bond_weights.get(agent_id),
-                    bond_deltas=_bond_deltas.get(agent_id),
-                )
-                agents_error_count[agent_id] = error_count
-                for _i in range(num_agents):
-                    _r_env = environment.get_step_reward(_i)
-                    step_rewards_raw[_i] += _r_env
-                    _step_envstep_reward[_i] += _r_env
-                step_contents[agent_id] = content
+                if args.simultaneous:
+                    # Action was chosen concurrently and applied via step_all()
+                    # in the pre-loop block; rewards were drained once there.
+                    # Just consume the pre-computed content for this agent.
+                    content = _sim_contents.get(agent_id)
+                    last_action = environment._last_actions.get(
+                        f"agent_{agent_id}", "NoOp"
+                    )
+                    step_contents[agent_id] = content
+                else:
+                    content, last_action, error_count = await agent_do_action(
+                        agent, agent_id, frame_image, comms_for_agent, reward_text,
+                        _phase_prefix + instruction_prompt, environment,
+                        error_count=error_count,
+                        social_bonds=_bond_strings.get(agent_id),
+                        propagation_summary=_propagation_strings.get(agent_id, ""),
+                        position_text=environment.get_position_text(agent_id),
+                        player_status_text=environment.get_player_status_text(agent_id),
+                        current_chamber=environment.get_chamber(agent_id),
+                        visited_chambers=sorted(_visited_chambers[agent_id]),
+                        completed_milestones=_agent_done,
+                        milestone_progress=_milestone_progress,
+                        chamber_state=environment.get_chamber_state(agent_id),
+                        bond_weights=_bond_weights.get(agent_id),
+                        bond_deltas=_bond_deltas.get(agent_id),
+                    )
+                    agents_error_count[agent_id] = error_count
+                    for _i in range(num_agents):
+                        _r_env = environment.get_step_reward(_i)
+                        step_rewards_raw[_i] += _r_env
+                        _step_envstep_reward[_i] += _r_env
+                    step_contents[agent_id] = content
 
                 # ── Phase B+ §2: interpretability sidecar emission ──
                 # Disabled — rlvr.reward_propagation was removed (it provided
