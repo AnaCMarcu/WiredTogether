@@ -1679,9 +1679,16 @@ async def run(args):
                     _i for _i in _sim_alive if environment.is_macro_running(_i)
                 ]
                 _sim_deciding = [_i for _i in _sim_alive if _i not in _sim_macro]
-                _sim_results = await asyncio.gather(
-                    *[_sim_select(_i) for _i in _sim_deciding]
-                )
+                # SEQUENTIAL, not asyncio.gather: the agents still all decide
+                # on the shared pre-step state s_t before step_all() runs, so
+                # simultaneous-move semantics hold — but interleaving their
+                # on_messages coroutines corrupts the shared in-process model/
+                # tokenizer state and yields NaN logits (CUDA assert). The
+                # in-process LLM serializes on one GPU regardless, so this
+                # costs no speed and matches the turn-based order that works.
+                _sim_results = []
+                for _i in _sim_deciding:
+                    _sim_results.append(await _sim_select(_i))
                 _sim_actions = {}
                 for _i, _content in _sim_results:
                     _sim_contents[_i] = _content

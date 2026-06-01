@@ -47,7 +47,16 @@ class AgentResponse(BaseModel):
 
 class TargetedCommunicationResponse(BaseModel):
     """All comm is targeted: communication_target is a required string (not Optional)
-    so the schema enforcer guarantees the model always picks a recipient."""
+    so the schema enforcer guarantees the model always picks a recipient.
+
+    ``thoughts`` is required too: in RL mode the action is chosen by the
+    constrained-generation scorer (no freeform LLM output), so this is the
+    only LLM-produced reasoning text we get per step. Without it the run
+    log just shows a hard-coded placeholder ('RL policy (step N): selected
+    X') and we have no insight into why the LLM picked any particular
+    teammate or message phrasing.
+    """
+    thoughts: str
     communication: str
     communication_target: str
 

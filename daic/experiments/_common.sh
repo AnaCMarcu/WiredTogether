@@ -147,6 +147,7 @@ run_exp() {
         --env WANDB_MODE="${WANDB_MODE:-online}" \
         --env WANDB_DIR="$WORK_DIR" \
         --env WANDB_SILENT=true \
+        --env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
         --env WIREDTOGETHER_INTERMEDIATE_GIF_DIR="$WORK_DIR/intermediate_gifs" \
         --pwd "$WORK_DIR" \
         "$IMG" \

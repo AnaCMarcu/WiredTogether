@@ -228,17 +228,28 @@ class RLLayer:
     def enabled(self) -> bool:
         return self.config.enabled
 
-    def select_action(self, prompt_text: str) -> Optional[Dict]:
+    def select_action(
+        self,
+        prompt_text: str,
+        thoughts_prefix: Optional[str] = None,
+    ) -> Optional[Dict]:
         """Run the LoRA-adapted model and return an action dict.
 
         Returns ``None`` if RL is disabled or mode is "token" (caller falls
         back to vanilla LLM).  In "token" mode the RL layer is still active
         for token-level optimisation but does not override action selection.
 
-        The actor is now LLM constrained-generation: each candidate action
+        The actor is LLM constrained-generation: each candidate action
         string is scored by summing the model's token log-probabilities of
         emitting that string as a continuation of the prompt. We sample a
         Categorical over those scores. No classifier head is involved.
+
+        When ``thoughts_prefix`` is given (a one-sentence rationale produced
+        by an EARLIER LLM call), it is appended to the scoring prompt so
+        the policy is ``p(action | prompt, thoughts)`` — i.e. thoughts
+        DRIVE the action, not the other way around. The augmented prompt
+        is what we store in the buffer; the PPO update re-scores with the
+        same augmented prompt so the ratio stays consistent.
 
         Returns
         -------
@@ -249,10 +260,23 @@ class RLLayer:
         if self.config.mode == "token":
             return None  # token-opt only — let LLM choose actions
 
+        if thoughts_prefix:
+            # Append the LLM's pre-action reasoning to the prompt so the
+            # constrained scorer conditions on it. The "Action:" suffix is
+            # a soft prefix that biases the model toward emitting an
+            # action token next — this is the same shape as p2 prompts
+            # use, just without the JSON wrapper (the actual action
+            # selection is the argmax over the candidate set).
+            scoring_prompt = (
+                f"{prompt_text}\n\nThoughts: {thoughts_prefix}\nAction:"
+            )
+        else:
+            scoring_prompt = prompt_text
+
         self.model.eval()
         with torch.no_grad():
             cand_logp, pooled = self._score_actions(
-                prompt_text, self._candidate_actions, with_grad=False,
+                scoring_prompt, self._candidate_actions, with_grad=False,
             )
             # Skip the per-agent value head when the centralised critic is in
             # charge — the main loop will populate old_value_global + joint_state
@@ -278,30 +302,29 @@ class RLLayer:
         # softmax. This keeps existing Transition fields untouched.
         full_action_idx = self._action_to_idx[action_name]
 
-        # Store in buffer (reward comes later via store_reward)
+        # Store the AUGMENTED prompt (with thoughts) so the PPO update
+        # re-scores against the same context. If we stored the bare
+        # prompt_text here, the update's _score_actions would see no
+        # thoughts and the ratio would drift away from 1.0 on epoch 1.
         self.buffer.store_action(
-            prompt_text=prompt_text,
+            prompt_text=scoring_prompt,
             action_idx=full_action_idx,
             log_prob=log_prob.item(),
             value=value_scalar,
         )
         self.step_count += 1
 
-        logger.info("RLLayer step=%d action=%s prompt:\n%s", self.step_count, action_name, prompt_text)
+        logger.info("RLLayer step=%d action=%s prompt:\n%s", self.step_count, action_name, scoring_prompt)
 
-        # Communication is left empty here as a placeholder. The RL action
-        # head doesn't pick words — it only picks discrete actions. The
-        # natural-language message is produced by a SEPARATE LLM call in
-        # custom_agent.on_messages → action_selection.generate_communication
-        # (uses prompts/rl_communication_prompt.txt and is conditioned on
-        # the chosen action + task + frame), which then overwrites
-        # content["communication"] and content["communication_target"]
-        # before the main loop reads them. So this empty string is never
-        # what the env sees in production — it's just a structural
-        # placeholder for the schema.
+        # Communication + thoughts are produced by an EARLIER LLM call
+        # (action_selection.generate_thoughts_and_comm) before this method
+        # runs; the caller threads `thoughts_prefix` into our scoring
+        # prompt so the policy is conditioned on them. The empty strings
+        # here are structural placeholders the caller overwrites with the
+        # real values before the main loop reads them.
         return {
             "action": action_name,
-            "thoughts": f"RL policy (step {self.step_count}): selected {action_name}",
+            "thoughts": thoughts_prefix or "",
             "communication": "",
         }
 
@@ -639,36 +662,50 @@ class RLLayer:
                 output_hidden_states=True,
                 use_cache=False,
             )
-            all_logits = out.logits.float()                   # (C, max_len, V)
-            all_logp = F.log_softmax(all_logits, dim=-1)      # (C, max_len, V)
+
+            # ── Slice + gather + logsumexp (avoid materializing softmax) ──
+            # We only need log-probs at the positions that predict
+            # candidate tokens. Slicing the window cuts the V-dimensional
+            # tensor down to (C, K_max, V); using gather+logsumexp instead
+            # of log_softmax+index means we never RETAIN a full-vocab
+            # softmax output in the autograd graph for backward. Memory
+            # footprint for the log-prob computation goes from
+            # (C, max_len, V) ≈ 6.87 GB to (C, K_max) ≈ <1 KB live across
+            # backward; the V-sized intermediates inside logsumexp are
+            # temporary and freed before backward.
+            #
+            # log p(tok | context) = logit[tok] − logsumexp(logits, dim=-1)
+            K_max = max((int(ids.numel()) for ids in cand_ids_list), default=1)
+            window_start = prompt_len - 1
+            window_end = window_start + K_max
+            window_logits = out.logits[:, window_start:window_end, :]  # (C, K_max, V) — model dtype
+
+            # Build the (C, K_max) target tensor and a mask for padded
+            # candidate positions (when K_i < K_max).
+            target_ids = torch.zeros((C, K_max), dtype=torch.long, device=self._device)
+            mask = torch.zeros((C, K_max), dtype=torch.bool, device=self._device)
+            for ci, ids in enumerate(cand_ids_list):
+                K = int(ids.numel())
+                if K > 0:
+                    target_ids[ci, :K] = ids.to(self._device)
+                    mask[ci, :K] = True
+
+            # Gather logit at each (candidate, position) → (C, K_max)
+            gathered = window_logits.gather(
+                dim=-1, index=target_ids.unsqueeze(-1)
+            ).squeeze(-1)
+            # logsumexp over the vocab dim (fp32 for stability) → (C, K_max)
+            lse = torch.logsumexp(window_logits.float(), dim=-1)
+            # Per-token log-prob; masked-fill pad positions to 0 so they
+            # contribute nothing to the sum below.
+            log_p = (gathered.float() - lse).masked_fill(~mask, 0.0)
+            cand_log_probs = log_p.sum(dim=1).to(torch.float32)  # (C,)
 
             # Pool last-prompt-position hidden state for the value head.
             # All rows share the same prompt at positions [0, L), so row 0
             # is canonical.
             last_hidden = out.hidden_states[-1]                # (C, max_len, H)
             pooled = last_hidden[0:1, prompt_len - 1, :].float()  # (1, H)
-
-            # For each candidate, sum log-probs at positions that predict
-            # its tokens. Causal LM convention: logits at position p
-            # predict the token at position p+1. So the logit at position
-            # (prompt_len - 1) predicts cand_ids[0]; (prompt_len) predicts
-            # cand_ids[1]; and so on.
-            cand_log_probs = []
-            for ci, ids in enumerate(cand_ids_list):
-                K = int(ids.numel())
-                if K == 0:
-                    cand_log_probs.append(
-                        torch.zeros((), device=self._device, dtype=torch.float32)
-                    )
-                    continue
-                total = torch.zeros((), device=self._device, dtype=torch.float32)
-                for i in range(K):
-                    pos = prompt_len - 1 + i
-                    tok_id = int(ids[i].item())
-                    total = total + all_logp[ci, pos, tok_id]
-                cand_log_probs.append(total)
-
-            cand_log_probs = torch.stack(cand_log_probs).to(torch.float32)  # (C,)
 
             # OPTIONAL length-normalisation hook (default OFF — sequence
             # length is constant within candidate set for short action

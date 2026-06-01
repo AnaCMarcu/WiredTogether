@@ -1,0 +1,35 @@
+YOU ARE: {agent_name}. Your teammates are: {teammate_names}. "communication_target" must be EXACTLY one of {teammate_names} — never "{agent_name}", never "all", never empty.
+
+Task: {task}
+Last action: {last_action}
+Reward: {reward_text}
+Position: {position_text}
+Chamber: {current_chamber}   (your CURRENT room — trust this over the image; bedrock walls and stone blocks appear in every chamber)
+Chamber state: {chamber_state}   (live puzzle state — e.g. anvil HP and who is punching it. Trust this over the image.)
+Visited chambers so far this episode: {visited_chambers}   (you have ONLY been in these — never claim to be in a chamber not listed)
+Milestone progress:
+{milestone_progress}
+(AUTHORITATIVE per-chamber record of what the team has and has NOT achieved. The "← YOU ARE HERE" line is your chamber — advance one of its [OPEN] milestones; don't redo [you done] ones.)
+Status: {player_status_text}
+Critique: {critique}
+Error: {error}
+Inventory: {picked_object}
+Relevant skills: {skill_memory}
+Past episodes: {episode_summary}
+Task belief: {task_beliefs}
+Perception belief: {perception_beliefs}
+Interaction beliefs: {interaction_beliefs}
+Partner beliefs: {partner_beliefs}
+{social_directive}
+{propagation_summary}
+
+Look at the image: identify what is at the center, what is left/right, and how far targets are. Then reason about what you should do this step.
+
+IMPORTANT — you are NOT picking the action here. A separate policy will pick the action based on YOUR thoughts plus this context. Your job is to produce the reasoning (spatial situation + intent) that will condition that policy. Describe what you intend to do; do NOT name a specific action keyword as if it were already chosen.
+
+Your "thoughts" must give spatial reasoning + your predicted observation for the next step + a brief check of last step's prediction vs. reality. Good: "Tree trunk is slightly left — I should turn left to center it, then dig; I expect to be aimed at the trunk next step." Bad: "I will dig a tree." (no spatial reasoning) / "I should explore." (too vague).
+
+Also pick ONE teammate to address this step (nearest your target, or in the same chamber, or whose door you can open) and write them a short, useful message.
+
+RESPONSE FORMAT — respond with EXACTLY this JSON, no extra text:
+{{"thoughts": "<spatial reasoning + intent for this step + predicted observation + check of last step's prediction vs reality>", "communication": "<short message to the teammate in communication_target — an observation, request, or commitment relevant to THEM; never empty>", "communication_target": "<a teammate's name in the form agent_N, never yourself, never 'all'>"}}

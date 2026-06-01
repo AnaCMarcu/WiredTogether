@@ -462,7 +462,39 @@ class CustomAgent(BaseChatAgent):
             import logging as _log
             _log.debug("Agent %s RL prompt:\n%s", self.name, rl_prompt)
             self.metric.log(f"Agent {self.name} RL prompt: {rl_prompt[:500]}")
-            rl_content = self.rl_layer.select_action(rl_prompt)
+            # ── Thoughts FIRST, then action conditioned on them ──
+            # The LLM produces a one-sentence rationale + the message; the
+            # rationale is then threaded into the scoring prompt so the
+            # constrained-generation policy is p(action | prompt, thoughts).
+            # Reverse order (action first, then post-hoc thoughts) was the
+            # bug: thoughts that don't drive the action are decorative.
+            try:
+                _self_idx_for_thoughts = int(str(self.name).split("_")[-1])
+            except (ValueError, IndexError):
+                _self_idx_for_thoughts = -1
+            _teammates_for_thoughts = ", ".join(
+                f"agent_{j}" for j in range(self.num_agents) if j != _self_idx_for_thoughts
+            )
+            _pre_thoughts, _pre_comm, _pre_comm_target = (
+                await self.action_selection.generate_thoughts_and_comm(
+                    task=task,
+                    last_action=last_action,
+                    critique=critique,
+                    error=error,
+                    skill_memory=skill_memory,
+                    episode_summary=episode_summary,
+                    picked_object=picked_object,
+                    beliefs=beliefs,
+                    last_frame=last_frame,
+                    cancellation_token=cancellation_token,
+                    agent_name=self.name,
+                    num_agents=self.num_agents,
+                    teammate_names=_teammates_for_thoughts,
+                )
+            )
+            rl_content = self.rl_layer.select_action(
+                rl_prompt, thoughts_prefix=_pre_thoughts,
+            )
 
         # Resolve "who am I, who are my teammates" so the prompt can tell the
         # LLM both — without this, communication_target degenerates to self-
@@ -476,19 +508,12 @@ class CustomAgent(BaseChatAgent):
         )
 
         if rl_content is not None:
-            comm, comm_target = await self.action_selection.generate_communication(
-                action=rl_content["action"],
-                task=task,
-                last_action=last_action,
-                picked_object=picked_object,
-                last_frame=last_frame,
-                cancellation_token=cancellation_token,
-                agent_name=self.name,
-                num_agents=self.num_agents,
-                teammate_names=teammate_names,
-            )
-            rl_content["communication"] = comm
-            rl_content["communication_target"] = comm_target
+            # rl_content["thoughts"] was already set by select_action to the
+            # pre-action thoughts we generated above; we attach the matching
+            # comm + target here (same LLM call, same context).
+            rl_content["thoughts"] = _pre_thoughts
+            rl_content["communication"] = _pre_comm
+            rl_content["communication_target"] = _pre_comm_target
             content = rl_content
         else:
             content = await self.action_selection.select_action(
