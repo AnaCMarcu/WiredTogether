@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=fast
+#SBATCH --job-name=fast_rl
 #SBATCH --partition=general
 #SBATCH --qos=short
 #SBATCH --time=2:00:00
@@ -22,7 +22,7 @@
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
-run_exp "fast" "$MODEL_9B" \
+run_exp "fast_rl" "$MODEL_9B" \
     --episodes 2 \
     --max-steps 100 \
     --rl \
