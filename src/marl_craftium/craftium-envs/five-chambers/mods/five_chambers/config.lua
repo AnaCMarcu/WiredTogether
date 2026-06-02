@@ -97,7 +97,8 @@ five_chambers.CH1_SHEEP_POSITIONS = {
 -- pure time-based gate, not a milestone gate: Ch1 is a fixed practice
 -- window for solo skills, then the team is moved on regardless of
 -- whether any Ch1 milestone fired.
-five_chambers.DOOR1_X = 7
+-- Centered on the new 9-wide Ch2 (x0=2, x1=10 → center x=6).
+five_chambers.DOOR1_X = 6
 -- Lua tick rate is 20Hz; one env step = 3 Lua ticks. 1200 ticks =
 -- 400 env steps ≈ 60 seconds of wall time at full env throughput.
 -- The value is overridable from Python via the CH1_TIMEOUT_TICKS env
@@ -106,42 +107,52 @@ five_chambers.DOOR1_X = 7
 -- available; we still guard the conversion in case the var is unset.
 local _env_ticks = tonumber(os and os.getenv and os.getenv("CH1_TIMEOUT_TICKS") or "")
 five_chambers.CH1_TIMEOUT_TICKS = _env_ticks or 1200
--- Where agents land when the Ch1 timeout fires. Spread along z=CH2.z0+2,
--- centred on DOOR1_X so they appear just inside Ch2's south wall.
+-- Where agents land when the Ch1 timeout fires. Spread along z=CH2.z0+2
+-- inside the new 9-wide Ch2 (x ∈ [2..10]); x=3/6/9 keeps the team
+-- spaced two blocks apart and centred on DOOR1_X.
 five_chambers.CH2_FALLBACK_SPAWNS_3 = {
     [0] = {x=3,  y=11, z=19},
-    [1] = {x=7,  y=11, z=19},
-    [2] = {x=11, y=11, z=19},
+    [1] = {x=6,  y=11, z=19},
+    [2] = {x=9,  y=11, z=19},
 }
 
--- Chamber 2 bounds (anvil coop, 14×14)
-five_chambers.CH2 = { x0=0, x1=13, z0=17, z1=30 }
+-- Chamber 2 bounds (anvil coop, 9×9). Shrunk from the original 14×14 to
+-- keep agents close to the two anvils (anvil-A at (6,_,19), anvil-B at
+-- (6,_,22) — both inside the new footprint) and reduce wandering. The
+-- Ch3+ chambers were shifted south by 5 to keep the layout contiguous.
+five_chambers.CH2 = { x0=2, x1=10, z0=17, z1=25 }
 
--- Door 2: opens 20 steps after 6th anvil break
-five_chambers.DOOR2_POS    = { x=7, z=31 }
+-- Door 2: opens 20 steps after 6th anvil break. Sits in Ch2's new north
+-- wall (z=26), centred on the new chamber width (x=6).
+five_chambers.DOOR2_POS    = { x=6, z=26 }
 five_chambers.DOOR2_DELAY  = 20
 
 -- Chamber 3 (switch puzzle) — width scales with NUM_AGENTS
 -- Width = 4*N+1 blocks; X: 0..(4N)
--- Cells: Z:33–35; communal room: Z:37–49; north wall at Z=50
-five_chambers.CH3_Z0           = 32
-five_chambers.CH3_CELL_Z0      = 33
-five_chambers.CH3_CELL_Z1      = 35
-five_chambers.CH3_FRONT_WALL_Z = 36
-five_chambers.CH3_COMMUNAL_Z0  = 37
-five_chambers.CH3_COMMUNAL_Z1  = 49
-five_chambers.CH3_NORTH_WALL_Z = 50
+-- Cells: Z:28–30; communal room: Z:32–44; north wall at Z=45
+-- (Shifted south by 5 from the original z0=32 layout when Ch2 shrank
+-- from 14-deep to 9-deep. CH2.z1 is now 25, CH3 starts immediately
+-- after Ch2's north wall at z=26 → CH3_Z0=27.)
+five_chambers.CH3_Z0           = 27
+five_chambers.CH3_CELL_Z0      = 28
+five_chambers.CH3_CELL_Z1      = 30
+five_chambers.CH3_FRONT_WALL_Z = 31
+five_chambers.CH3_COMMUNAL_Z0  = 32
+five_chambers.CH3_COMMUNAL_Z1  = 44
+five_chambers.CH3_NORTH_WALL_Z = 45
 -- Door 3 sits at the middle of Ch3's north wall. Ch3 width = 4*N+1 (x: 0..4N),
 -- so the centre is at x = 2*N. This keeps the door inside Ch3 for any
 -- NUM_AGENTS up to 5 (Ch4 spans x=1..11, so 2*N must stay <= 11).
 five_chambers.DOOR3_X          = 2 * five_chambers.NUM_AGENTS
 
--- Chamber 4 (combat, 11×11)
-five_chambers.CH4     = { x0=1, x1=11, z0=52, z1=62 }
-five_chambers.DOOR4_POS = { x=6, z=63 }
+-- Chamber 4 (combat, 11×11). Shifted south by 5 to align with the
+-- shrunk Ch3 (CH3_NORTH_WALL_Z=45 → Ch4 starts at z=47, +1 for the wall).
+five_chambers.CH4     = { x0=1, x1=11, z0=47, z1=57 }
+five_chambers.DOOR4_POS = { x=6, z=58 }
 
--- Chamber 5 (boss, 9×9)
-five_chambers.CH5 = { x0=2, x1=10, z0=64, z1=72 }
+-- Chamber 5 (boss, 9×9). Shifted south by 5 to align with the shrunk
+-- Ch4 (z1=57 → Ch5 starts at z=59).
+five_chambers.CH5 = { x0=2, x1=10, z0=59, z1=67 }
 
 -- Anvil mechanic (plan §4)
 -- Two anvils total in Ch2: one drops swords, one drops chestplates. Both

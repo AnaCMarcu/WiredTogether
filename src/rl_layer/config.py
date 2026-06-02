@@ -110,3 +110,10 @@ class RLConfig:
     # primary cause of policy collapse onto Slot5 spam. With masking, the
     # categorical distribution renormalises over the remaining 18 actions.
     mask_slot_actions: bool = True
+
+    # Mask the 4 macro actions (TurnAround/ScanArea/ApproachTarget/Escape) from
+    # the policy distribution. Auto-enabled under --simultaneous, where the
+    # macro reward-deferral flush is not wired (a macro spans multiple outer
+    # steps and its accumulated RL reward would be lost). Off by default so the
+    # turn-based path keeps macros available.
+    mask_macro_actions: bool = False

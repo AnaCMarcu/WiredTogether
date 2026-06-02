@@ -1081,12 +1081,53 @@ class CraftiumEnvironmentInterface:
         Returns True if the file was written, False if the world path was
         not yet resolved (e.g., called before reset()).
         """
+        return self._write_force_teleport_flag(1)
+
+    def force_ch2_teleport(self) -> bool:
+        """Signal the Lua side to force-fire the Ch2→Ch3 teleport now.
+
+        Same mechanism as ``force_ch1_teleport`` (write
+        ``ch2_force_teleport.txt``, doors.lua polls + teleports each agent
+        to its own Ch3 cell). Fired by the Python step loop at the 40%
+        max_steps mark so agents who never broke the Ch2 anvils still get
+        a chance to see Ch3+. Honest cooperation measurement is preserved
+        in the milestone log — the timer doesn't credit any anvil/door
+        milestone, only relocates the agents.
+        """
+        return self._write_force_teleport_flag(2)
+
+    def force_ch3_teleport(self) -> bool:
+        """Signal the Lua side to force-fire the Ch3→Ch4 teleport now.
+
+        Writes ``ch3_force_teleport.txt``; doors.lua teleports every agent
+        to a Ch4 spawn. Fired by the Python step loop at the 60% max_steps
+        mark. Same milestone-honesty caveat as ``force_ch2_teleport``.
+        """
+        return self._write_force_teleport_flag(3)
+
+    def force_ch4_teleport(self) -> bool:
+        """Signal the Lua side to force-fire the Ch4→Ch5 teleport now.
+
+        Writes ``ch4_force_teleport.txt``; doors.lua teleports every agent
+        to a Ch5 spawn. Fired by the Python step loop at the 80% max_steps
+        mark. Same milestone-honesty caveat as ``force_ch2_teleport``.
+        """
+        return self._write_force_teleport_flag(4)
+
+    def _write_force_teleport_flag(self, chamber_from: int) -> bool:
+        """Atomically write ``ch{N}_force_teleport.txt`` under world_path.
+
+        Common helper for force_ch1/2/3/4_teleport. Returns False if the
+        world path is not yet resolved (called before reset()) or if the
+        atomic write fails.
+        """
         try:
             world_path = self._get_world_path()
         except AttributeError:
             return False
-        tmp = os.path.join(world_path, "ch1_force_teleport.tmp")
-        dst = os.path.join(world_path, "ch1_force_teleport.txt")
+        fname_base = f"ch{chamber_from}_force_teleport"
+        tmp = os.path.join(world_path, f"{fname_base}.tmp")
+        dst = os.path.join(world_path, f"{fname_base}.txt")
         try:
             with open(tmp, "w") as f:
                 f.write("1")
@@ -1094,7 +1135,10 @@ class CraftiumEnvironmentInterface:
             return True
         except OSError as e:
             import logging as _log
-            _log.warning("[CH1_TIMEOUT] force_ch1_teleport failed: %s", e)
+            _log.warning(
+                "[CH%d_TIMEOUT] _write_force_teleport_flag failed: %s",
+                chamber_from, e,
+            )
             return False
 
     def _write_phase_file(self, phase: str) -> None:
@@ -1245,20 +1289,23 @@ class CraftiumEnvironmentInterface:
         "[PHASE]",       # phase transitions
         "[MILESTONE]",   # five_chambers milestone events
         "[ANVIL]", "[SWITCH]", "[DOOR]", "[MOB]", "[BOSS]",
-        # Ch1 timeout teleport diagnostics (doors.lua). The tailer
-        # surfaces these as "  [SRV] [CH1_TIMEOUT] ..." so it's visible
+        # Per-chamber timeout teleport diagnostics (doors.lua). The tailer
+        # surfaces these as "  [SRV] [CH{N}_TIMEOUT] ..." so it's visible
         # whether the lua side fired the teleport after Python wrote the
-        # force-flag file.
+        # force-flag file for each chamber's 20% time budget.
         "[CH1_TIMEOUT]", "[CH1_TIMEOUT_DIAG]",
+        "[CH2_TIMEOUT]", "[CH3_TIMEOUT]", "[CH4_TIMEOUT]",
     )
 
     # Python mirror of Lua get_chamber_for_pos (keep in sync with config.lua).
+    # Ch2 shrunk from 14-deep (z=17..30) to 9-deep (z=17..25) and Ch3/Ch4/Ch5
+    # shifted south by 5 to keep the layout contiguous.
     _CHAMBER_BOUNDS = {
         "ch1": lambda p: 0  <= p[2] <= 15,
-        "ch2": lambda p: 17 <= p[2] <= 30,
-        "ch3": lambda p: 32 <= p[2] <= 50,
-        "ch4": lambda p: 52 <= p[2] <= 62,
-        "ch5": lambda p: 64 <= p[2] <= 72,
+        "ch2": lambda p: 17 <= p[2] <= 25,
+        "ch3": lambda p: 27 <= p[2] <= 45,
+        "ch4": lambda p: 47 <= p[2] <= 57,
+        "ch5": lambda p: 59 <= p[2] <= 67,
     }
 
     def get_agent_position(self, agentId: int):

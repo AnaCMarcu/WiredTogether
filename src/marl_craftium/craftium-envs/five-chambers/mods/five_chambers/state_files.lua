@@ -99,4 +99,13 @@ function five_chambers.clear_state_files()
     -- ever try to coordinate?". Cleared per-episode so each episode's
     -- file contains only that episode's events.
     os.remove(world_path .. "/anvil_coop_events.jsonl")
+    -- Per-chamber force-teleport flag files. Normally consumed (deleted
+    -- by Lua) at the moment they're written, but if Python wrote a flag
+    -- near the very end of one episode and Lua didn't poll before reset,
+    -- the next episode would fire that teleport on tick 1. Clear at reset
+    -- to guarantee each episode starts with a clean flag set.
+    os.remove(world_path .. "/ch1_force_teleport.txt")
+    os.remove(world_path .. "/ch2_force_teleport.txt")
+    os.remove(world_path .. "/ch3_force_teleport.txt")
+    os.remove(world_path .. "/ch4_force_teleport.txt")
 end

@@ -560,9 +560,12 @@ class RLLayer:
         into the canonical action space via _action_to_idx.
         """
         mask_slot = getattr(self.config, "mask_slot_actions", False)
+        mask_macro = getattr(self.config, "mask_macro_actions", False)
+        _macro_names = {"TurnAround", "ScanArea", "ApproachTarget", "Escape"}
         return tuple(
             a for a in self.config.actions
             if not (mask_slot and a.startswith("Slot"))
+            and not (mask_macro and a in _macro_names)
         )
 
     def _score_actions(

@@ -100,6 +100,38 @@ function five_chambers.ch2_fallback_spawn_pos(i)
     }
 end
 
+-- Returns the Ch4 fallback spawn position for agent index i.
+-- Used by the Ch3→Ch4 timeout teleport. Spread agents along the south
+-- edge of Ch4 (z = CH4.z0 + 2) so they appear just inside the door.
+function five_chambers.ch4_fallback_spawn_pos(i)
+    local N = five_chambers.NUM_AGENTS
+    local c = five_chambers.CH4
+    local x_min = c.x0 + 2
+    local x_max = c.x1 - 2
+    local frac  = (N == 1) and 0.5 or (i / (N - 1))
+    return {
+        x = math.floor(x_min + frac * (x_max - x_min) + 0.5),
+        y = five_chambers.FLOOR_Y + 1,
+        z = c.z0 + 2,
+    }
+end
+
+-- Returns the Ch5 fallback spawn position for agent index i.
+-- Used by the Ch4→Ch5 timeout teleport. Spread agents along the south
+-- edge of Ch5 (z = CH5.z0 + 2).
+function five_chambers.ch5_fallback_spawn_pos(i)
+    local N = five_chambers.NUM_AGENTS
+    local c = five_chambers.CH5
+    local x_min = c.x0 + 2
+    local x_max = c.x1 - 2
+    local frac  = (N == 1) and 0.5 or (i / (N - 1))
+    return {
+        x = math.floor(x_min + frac * (x_max - x_min) + 0.5),
+        y = five_chambers.FLOOR_Y + 1,
+        z = c.z0 + 2,
+    }
+end
+
 -- Safe node-set: only replaces a block if it is currently air or the
 -- target node (idempotent). Useful for leaf/drop placement that must
 -- not overwrite bedrock containment walls.

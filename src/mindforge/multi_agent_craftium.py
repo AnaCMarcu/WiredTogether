@@ -92,7 +92,9 @@ def parse_args():
     parser.add_argument("--ch1-timeout-steps", type=int, default=400,
                         help="Lua-side Ch1-timeout fallback budget, in env steps. "
                              "The Python primary now fires unconditionally at "
-                             "50%% of --max-steps (regardless of Door 1 state). "
+                             "20%% of --max-steps (each chamber gets 20%% of the "
+                             "episode; Ch1→Ch2, Ch2→Ch3, Ch3→Ch4, Ch4→Ch5 are "
+                             "all on the same 20%% timer). "
                              "This flag only sizes the Lua-side backstop in case "
                              "Python's force-flag never reaches the world (mod "
                              "I/O error, etc.). Default 400 → 60000 Lua ticks.")
@@ -135,6 +137,13 @@ def parse_args():
                         help="Learning rate for RL optimiser")
     parser.add_argument("--rl-auto-token-opt", action="store_true",
                         help="Let agents self-trigger token-level optimisation")
+    parser.add_argument("--rl-mask-macros", action="store_true",
+                        help="Mask the 4 macro actions (TurnAround/ScanArea/"
+                             "ApproachTarget/Escape) from the RL policy. "
+                             "Auto-enabled under --simultaneous (the macro "
+                             "reward-deferral flush isn't wired there); set "
+                             "it explicitly on turn-based --rl runs to keep "
+                             "the action space identical for a clean A/B.")
     parser.add_argument("--rl-mode", type=str, default="action",
                         choices=["action", "token"],
                         help="RL mode: 'action' = MAPPO action head, "
@@ -810,14 +819,15 @@ def _should_transition_to_survival(episode: int, global_step: int, args) -> bool
 # Main episode loop
 # ===========================
 async def run(args):
-    # Stage 1 of --simultaneous is LLM-only: the RL reward/critic
-    # bookkeeping (store_reward, V_global attach, MAPPO update) is not yet
-    # wired for the simultaneous path. Fail fast rather than run wrong.
-    if getattr(args, "simultaneous", False) and getattr(args, "rl", False):
-        raise SystemExit(
-            "--simultaneous does not yet support --rl (Stage 1 is LLM-only). "
-            "Run without --rl, or wait for the Stage 2 RL integration."
-        )
+    # --simultaneous + --rl (Stage 2): the RL reward/critic bookkeeping
+    # (select_action, V_global attach, store_reward, MAPPO + centralised-
+    # critic updates) all lives in the SHARED post-selection phases, so it
+    # runs in the simultaneous path unchanged. The ONE incompatibility is
+    # MACRO actions — the macro reward-deferral flush is gated off under
+    # --simultaneous, so a macro's accumulated RL reward would be lost. We
+    # therefore MASK macros from the RL policy under --simultaneous
+    # (rl_config.mask_macro_actions below) so the policy never selects one.
+    # Macros stay available in the turn-based path.
     num_agents = args.num_agents
     num_episodes = args.episodes
     max_steps = args.max_steps
@@ -1001,11 +1011,17 @@ async def run(args):
     _ch1_lua_ticks = (args.ch1_timeout_steps
                       * _LUA_TICKS_PER_ENV_STEP * _LUA_SAFETY_FACTOR)
     os.environ["CH1_TIMEOUT_TICKS"] = str(_ch1_lua_ticks)
-    print(f"[FEATURES] Ch1 timeout:        50% of --max-steps = "
-          f"{max(1, args.max_steps // 2)} env steps "
-          f"(Python primary, unconditional — fires even if Door 1 opened). "
-          f"Lua fallback at {_ch1_lua_ticks} ticks "
-          f"({_LUA_TICKS_PER_ENV_STEP}×{_LUA_SAFETY_FACTOR}/step safety margin).")
+    _per_chamber_pct = 0.2
+    print(
+        f"[FEATURES] Chamber timer:      each chamber gets "
+        f"{int(_per_chamber_pct * 100)}% of --max-steps = "
+        f"{max(1, int(args.max_steps * _per_chamber_pct))} env steps. "
+        f"Triggers at "
+        f"{', '.join(f'Ch{n}→Ch{n+1}@{int(_per_chamber_pct * n * 100)}%' for n in (1, 2, 3, 4))}. "
+        f"(Python primary, unconditional — fires even if the door opened "
+        f"organically.) Lua fallback at {_ch1_lua_ticks} ticks "
+        f"({_LUA_TICKS_PER_ENV_STEP}×{_LUA_SAFETY_FACTOR}/step safety margin)."
+    )
 
     environment = CraftiumEnvironmentInterface(
         num_agents=num_agents,
@@ -1047,6 +1063,12 @@ async def run(args):
         rl_prompt_max_tokens=args.rl_prompt_max_tokens,
         lora_save_dir=rl_save_dir,
         critic_mode=args.rl_critic_mode,
+        # Mask the 4 macro actions from the policy under --simultaneous (the
+        # macro reward-deferral flush is not wired for that path, so a
+        # macro's accumulated reward would be lost), or when explicitly
+        # requested via --rl-mask-macros for action-space parity in a
+        # turn-based vs --simultaneous A/B.
+        mask_macro_actions=args.rl_mask_macros or args.simultaneous,
     )
     if rl_config.enabled:
         print(f"RL layer ENABLED: model={rl_config.model_path}, "
@@ -1365,50 +1387,74 @@ async def run(args):
                     print(f"  Saved GIF checkpoint: {gif_path}")
                     _frames_to_mp4(agent_frames, gif_path.replace(".gif", ".mp4"))
 
-        # Per-episode flag so we only fire the Ch1→Ch2 force-teleport once
-        # per episode (the lua side also dedupes via door1_force_teleported,
+        # Per-episode flags so each chamber→next force-teleport fires at most
+        # once per episode (the Lua side also dedupes via door{N}_force_teleported,
         # but resetting here keeps the Python state in sync after env.reset).
-        _ch1_force_teleport_fired = False
+        _force_teleport_fired = {1: False, 2: False, 3: False, 4: False}
+
+        # Per-chamber timer config: each chamber gets 20% of max_steps. The
+        # Ch1→Ch2 trigger fires at step 20% (end of Ch1's budget), Ch2→Ch3 at
+        # 40%, Ch3→Ch4 at 60%, Ch4→Ch5 at 80%. Honest milestone measurement
+        # is preserved — the teleport only relocates agents, never credits a
+        # door/anvil milestone. The "chamber_entry_step" record will show
+        # which chambers were reached organically vs by timer rescue.
+        _CHAMBER_PCT = 0.2
+        _chamber_trigger_steps = {
+            n: max(1, int(max_steps * _CHAMBER_PCT * n))
+            for n in (1, 2, 3, 4)
+        }
+        _expected_chamber_after = {1: "ch1", 2: "ch2", 3: "ch3_cell", 4: "ch4"}
+        _force_fn = {
+            1: environment.force_ch1_teleport,
+            2: environment.force_ch2_teleport,
+            3: environment.force_ch3_teleport,
+            4: environment.force_ch4_teleport,
+        }
+
         for step in range(max_steps):
             global_step += 1
             logging.info(f"ep={episode+1} step={step+1}/{max_steps} global_step={global_step}")
 
-            # Python-driven Ch1→Ch2 force teleport. Fires once per episode at
-            # the 50%-of-episode-length midpoint, unconditionally — even if
-            # Door 1 was opened and some/all agents already advanced. Verb
-            # is informational only:
-            #   0 advanced  → RESCUE
-            #   1..N-1      → REGROUP (some leaders get pulled back to cluster
-            #                  the team at the Ch2 fallback spawn for anvil coop)
-            #   N           → NUDGE  (all already past — Lua still re-pins
-            #                  them to Ch2 fallback spawns; harmless if they
-            #                  were already in Ch2, regressive if any reached
-            #                  Ch3+ — accept that trade by request)
-            _ch1_trigger_step = max(1, max_steps // 2)
-            if (not _ch1_force_teleport_fired
-                    and step + 1 >= _ch1_trigger_step):
+            # Python-driven per-chamber force-teleport. Each chamber gets
+            # 20% of the episode; once that budget is up, force-advance the
+            # team to the next chamber's spawn. Verb is informational only:
+            #   0 advanced past the source chamber → RESCUE
+            #   1..N-1                              → REGROUP
+            #   N                                   → NUDGE
+            # The teleport always relocates ALL connected agents — agents
+            # who were already further along will be pulled back to cluster
+            # the team. This is intentional: keeps coop puzzles solvable.
+            for _from_ch in (1, 2, 3, 4):
+                _trigger_step = _chamber_trigger_steps[_from_ch]
+                if (_force_teleport_fired[_from_ch]
+                        or step + 1 < _trigger_step):
+                    continue
                 try:
                     _trigger_chambers = [
                         environment.get_chamber(_i) for _i in range(num_agents)
                     ]
                 except Exception:
                     _trigger_chambers = []
+                _src_label = _expected_chamber_after[_from_ch]
                 _n_advanced = sum(
                     1 for _c in _trigger_chambers
-                    if _c is not None and _c != "ch1"
+                    if _c is not None and _c != _src_label and (
+                        # Ch3 has two sub-labels (cell/communal) — both count as still-in-Ch3
+                        _from_ch != 3 or not str(_c).startswith("ch3")
+                    )
                 )
-                if environment.force_ch1_teleport():
-                    _ch1_force_teleport_fired = True
+                if _force_fn[_from_ch]():
+                    _force_teleport_fired[_from_ch] = True
                     if _n_advanced == 0:
                         _verb = "RESCUE"
                     elif _n_advanced >= num_agents:
                         _verb = "NUDGE"
                     else:
                         _verb = "REGROUP"
-                    print(f"[CH1_TIMEOUT] {_verb} at ep={episode+1} "
+                    print(f"[CH{_from_ch}_TIMEOUT] {_verb} at ep={episode+1} "
                           f"step={step+1} "
-                          f"(threshold=50%={_ch1_trigger_step}, "
-                          f"n_advanced={_n_advanced}, "
+                          f"(threshold={int(_CHAMBER_PCT * _from_ch * 100)}%="
+                          f"{_trigger_step}, n_advanced={_n_advanced}, "
                           f"chambers={_trigger_chambers})")
 
             if step % log_interval == 0:
@@ -2653,9 +2699,32 @@ async def run(args):
             )
     except Exception as _e:
         logging.warning("[wandb] final summary failed: %s", _e)
-    _wb.finish()
 
+    # Final cleanup with a hard watchdog. environment.close() can block on a
+    # Minetest client's wait_close() (upstream craftium), and wandb's
+    # finish() can stall on sync — either one leaves the SLURM job idling
+    # until its wall-clock limit even though all results (metrics, gifs,
+    # checkpoint) are already persisted above. Arm a SIGALRM: if cleanup
+    # hangs past the timeout we force-exit, and SLURM's cgroup reaps any
+    # surviving Minetest processes.
+    import signal as _sig_done
+    def _force_exit_on_hang(signum, frame):
+        print("[shutdown] final cleanup exceeded 120s — forcing exit "
+              "(results already saved).", flush=True)
+        os._exit(0)
+    try:
+        _sig_done.signal(_sig_done.SIGALRM, _force_exit_on_hang)
+        _sig_done.alarm(120)
+    except (ValueError, AttributeError, OSError):
+        pass  # SIGALRM unavailable (non-main-thread / non-Unix) — skip it
+
+    _wb.finish()
     environment.close()
+
+    try:
+        _sig_done.alarm(0)  # cleanup finished in time — cancel the watchdog
+    except (ValueError, AttributeError, OSError):
+        pass
 
 
 if __name__ == "__main__":

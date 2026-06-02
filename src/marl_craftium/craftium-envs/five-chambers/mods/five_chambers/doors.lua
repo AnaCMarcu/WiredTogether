@@ -28,8 +28,11 @@ five_chambers.door_state = {
     door1_force_teleported = false,  -- did the Ch1 timeout already fire?
     door2_open = false,
     door2_countdown = -1,
+    door2_force_teleported = false,  -- did the Ch2 timeout already fire?
     door3_open = false,
+    door3_force_teleported = false,  -- did the Ch3 timeout already fire?
     door4_open = false,
+    door4_force_teleported = false,  -- did the Ch4 timeout already fire?
     cell_doors = {},   -- cell_doors[i] = true when cell i door is open
 }
 
@@ -154,8 +157,11 @@ function five_chambers.init_doors()
     five_chambers.door_state.door1_force_teleported = false
     five_chambers.door_state.door2_open             = false
     five_chambers.door_state.door2_countdown        = -1
+    five_chambers.door_state.door2_force_teleported = false
     five_chambers.door_state.door3_open             = false
+    five_chambers.door_state.door3_force_teleported = false
     five_chambers.door_state.door4_open             = false
+    five_chambers.door_state.door4_force_teleported = false
     five_chambers.door_state.cell_doors             = {}
     five_chambers.ch2_transitioned                  = {}
     five_chambers.ch2_transitioned_count            = 0
@@ -554,6 +560,81 @@ minetest.register_globalstep(function(dtime)
                 "[CH1_TIMEOUT] %s idx=%d -> (%d,%d,%d)\n",
                 name, idx, dest.x, dest.y, dest.z))
             io.stderr:flush()
+        end
+    end
+end)
+
+-- ── Per-chamber force-teleport globalstep (Ch2/Ch3/Ch4 -> next chamber) ──
+--
+-- Each chamber gets 20% of the episode (see _CHAMBER_PCT in
+-- multi_agent_craftium.py). When Python decides a chamber's budget is up,
+-- it writes ch{N}_force_teleport.txt to the world dir. Lua polls for the
+-- file, teleports every connected agent to the next chamber's spawn, and
+-- removes the flag. One-shot per episode (gated by door{N}_force_teleported,
+-- which init_doors() resets each reset).
+--
+-- Door state is NOT changed by this teleport — we just relocate the players.
+-- That preserves milestone honesty: doors only count as "open" when they
+-- were opened by the agents' actions, not by the timer.
+local _per_chamber_timeout_specs = {
+    {
+        from         = 2,
+        flag_name    = "ch2_force_teleport.txt",
+        spawn_fn     = function(i) return five_chambers.cell_teleport_pos(i) end,
+        log_tag      = "CH2_TIMEOUT",
+        dest_label   = "Ch3 cell",
+    },
+    {
+        from         = 3,
+        flag_name    = "ch3_force_teleport.txt",
+        spawn_fn     = function(i) return five_chambers.ch4_fallback_spawn_pos(i) end,
+        log_tag      = "CH3_TIMEOUT",
+        dest_label   = "Ch4",
+    },
+    {
+        from         = 4,
+        flag_name    = "ch4_force_teleport.txt",
+        spawn_fn     = function(i) return five_chambers.ch5_fallback_spawn_pos(i) end,
+        log_tag      = "CH4_TIMEOUT",
+        dest_label   = "Ch5",
+    },
+}
+
+minetest.register_globalstep(function(_dtime)
+    local world_path = minetest.get_worldpath() or ""
+    if world_path == "" then return end
+    for _, spec in ipairs(_per_chamber_timeout_specs) do
+        local already_key = "door" .. spec.from .. "_force_teleported"
+        if not five_chambers.door_state[already_key] then
+            local flag_path = world_path .. "/" .. spec.flag_name
+            local f = io.open(flag_path, "r")
+            if f then
+                f:close()
+                os.remove(flag_path)
+                five_chambers.door_state[already_key] = true
+                local connected = minetest.get_connected_players() or {}
+                if io and io.stderr then
+                    io.stderr:write(string.format(
+                        "[%s] forced teleport to %s -- players=%d\n",
+                        spec.log_tag, spec.dest_label, #connected))
+                    io.stderr:flush()
+                end
+                for _, player in ipairs(connected) do
+                    local name = player:get_player_name()
+                    local idx  = five_chambers.agent_index(name)
+                    if idx >= 0 then
+                        local dest = spec.spawn_fn(idx)
+                        player:set_pos(dest)
+                        if io and io.stderr then
+                            io.stderr:write(string.format(
+                                "[%s] %s idx=%d -> (%d,%d,%d)\n",
+                                spec.log_tag, name, idx,
+                                dest.x, dest.y, dest.z))
+                            io.stderr:flush()
+                        end
+                    end
+                end
+            end
         end
     end
 end)
