@@ -163,7 +163,7 @@ run_exp() {
     python -u "$PROJECT_DIR/src/mindforge/multi_agent_craftium.py" \
         --num-agents 3 \
         --episodes 3 \
-        --max-steps 1500 \
+        --max-steps 1000 \
         --warmup-time 300 \
         --seed "$SEED" \
         --experiment-id "$EXP_NAME" \

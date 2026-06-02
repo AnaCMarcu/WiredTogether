@@ -29,7 +29,7 @@ export LLM_MODEL_PATH="$MODEL_2B"
 python -u multi_agent_craftium.py \
     --num-agents 3 \
     --episodes 3 \
-    --max-steps 1500 \
+    --max-steps 1000 \
     --warmup-time 300 \
     --hebbian \
     --hebbian-ltp 0.01 \
