@@ -68,8 +68,13 @@ def run_ppo_update(
         for batch in rl.buffer.sample_batches(
             rl.config.mini_batch_size, extra_transitions=social_transitions,
         ):
+            # action_level_ppo_step now owns the backward path (per-transition
+            # gradient accumulation, to bound peak memory to ONE forward
+            # graph regardless of mini_batch_size). We zero grads up front,
+            # the function accumulates, then we clip + step here.
+            rl.optimizer.zero_grad()
             with torch.amp.autocast(rl._device.type, dtype=rl._dtype):
-                loss, info = action_level_ppo_step(
+                info = action_level_ppo_step(
                     rl_layer=rl,
                     batch=batch,
                     clip_eps=rl.config.clip_eps,
@@ -79,6 +84,7 @@ def run_ppo_update(
                     device=rl._device,
                     max_length=rl.config.rl_prompt_max_tokens,
                     value_loss_enabled=not rl._use_centralized,
+                    scaler=scaler,
                 )
             if epoch_i == 0 and not _first_batch_checked and info.get("n_kept", 0) > 0:
                 _first_batch_checked = True
@@ -97,12 +103,15 @@ def run_ppo_update(
                         "RLLayer agent %d first-epoch mean(ratio)=%.4f (OK)",
                         rl.agent_id, r_mean,
                     )
-            rl.optimizer.zero_grad()
-            scaler.scale(loss).backward()
-            scaler.unscale_(rl.optimizer)
-            nn.utils.clip_grad_norm_(rl.model.parameters(), rl.config.max_grad_norm)
-            scaler.step(rl.optimizer)
-            scaler.update()
+            # Gradients are already accumulated by per-transition backward
+            # inside action_level_ppo_step. Just unscale, clip, and step.
+            if info.get("n_kept", 0) > 0:
+                scaler.unscale_(rl.optimizer)
+                nn.utils.clip_grad_norm_(
+                    rl.model.parameters(), rl.config.max_grad_norm,
+                )
+                scaler.step(rl.optimizer)
+                scaler.update()
             all_info = info  # keep last batch info
 
     rl._update_count += 1
