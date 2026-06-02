@@ -9,6 +9,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/exp8_llm_9b_hebbian_%j.out
 #SBATCH --error=slurm_logs/exp8_llm_9b_hebbian_%j.err
+#SBATCH --exclude=cor1
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
@@ -22,4 +23,4 @@ run_exp "exp8_llm_9b_hebbian" "$MODEL_9B" \
     --hebbian-decay 0.005 \
     --hebbian-beta 1.0 \
     --hebbian-rho 0.3 \
-    --hebbian-gamma 0.2
+    --hebbian-gamma 0.2 --simultaneous

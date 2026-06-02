@@ -9,6 +9,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/exp5_ippo_%j.out
 #SBATCH --error=slurm_logs/exp5_ippo_%j.err
+#SBATCH --exclude=cor1
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 

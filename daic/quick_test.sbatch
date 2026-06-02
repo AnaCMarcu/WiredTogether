@@ -9,6 +9,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/fast%j.out
 #SBATCH --error=slurm_logs/fast%j.err
+#SBATCH --exclude=cor1
 
 # 200-step MAPPO+Hebbian smoke test (action-level MAPPO with centralized
 # critic + Hebbian social plasticity, NO social-module prompt block).
@@ -27,12 +28,13 @@
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
-run_exp "fast_rl2" "$MODEL_9B" \
+run_exp "fast_rl2" "$MODEL_2B" \
     --episodes 2 \
     --max-steps 100 \
+    --simultaneous \
     --rl \
     --rl-critic-mode centralized \
-    --rl-model-path "$MODEL_9B" \
+    --rl-model-path "$MODEL_2B" \
     --rl-update-interval 16 \
     --rl-lr 3e-4 \
     --hebbian \

@@ -8,6 +8,7 @@
 #SBATCH --mem=16GB
 #SBATCH --output=slurm_logs/sanity_stepall_%j.out
 #SBATCH --error=slurm_logs/sanity_stepall_%j.err
+#SBATCH --exclude=cor1
 
 # Real-Luanti sanity check for CraftiumEnvironmentInterface.step_all()
 # (simultaneous-move stepping). NO GPU / NO LLM: step_all is pure env and

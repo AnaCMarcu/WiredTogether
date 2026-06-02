@@ -9,6 +9,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/exp15_llm_roles_%j.out
 #SBATCH --error=slurm_logs/exp15_llm_roles_%j.err
+#SBATCH --exclude=cor1
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
@@ -16,4 +17,4 @@ source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/dai
 # counterpart to exp1_llm; completes the 2x2 ablation (role × hebbian).
 run_exp "exp15_llm_roles" "$MODEL_2B" \
     --team-mode heterogeneous \
-    --roles hunter,harvester,scouter
+    --roles hunter,harvester,scouter --simultaneous

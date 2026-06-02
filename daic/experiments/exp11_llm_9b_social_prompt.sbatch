@@ -9,6 +9,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/exp11_llm_9b_social_prompt_%j.out
 #SBATCH --error=slurm_logs/exp11_llm_9b_social_prompt_%j.err
+#SBATCH --exclude=cor1
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
@@ -21,4 +22,4 @@ run_exp "exp11_llm_9b_social_prompt" "$MODEL_9B" \
     --hebbian-beta 1.0 \
     --hebbian-rho 0.3 \
     --hebbian-gamma 0.2 \
-    --social-module prompt
+    --social-module prompt --simultaneous

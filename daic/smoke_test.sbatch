@@ -9,6 +9,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/smoke_%j.out
 #SBATCH --error=slurm_logs/smoke_%j.err
+#SBATCH --exclude=cor1
 
 set -eu
 

@@ -9,10 +9,11 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/exp7_llm_9b_%j.out
 #SBATCH --error=slurm_logs/exp7_llm_9b_%j.err
+#SBATCH --exclude=cor1
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,9b}"
 
 # Plain LLM agents at 9B scale. Model-size ablation companion to exp1 (2B).
-run_exp "exp7_llm_9b" "$MODEL_9B"
+run_exp "exp7_llm_9b" "$MODEL_9B" --simultaneous
