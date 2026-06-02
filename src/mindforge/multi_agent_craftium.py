@@ -85,8 +85,12 @@ def parse_args():
                              "bundled with its other artifacts. Pass an "
                              "explicit path (e.g. /scratch/$USER/gifs) to "
                              "override.")
-    parser.add_argument("--gif-interval", type=int, default=100,
-                        help="Save a checkpoint GIF every N steps (default 100). 0 = only save at episode end.")
+    parser.add_argument("--gif-interval", type=int, default=300,
+                        help="Save a checkpoint GIF every N steps (default 300). 0 = only save at episode end. "
+                             "Raised from 100 after exp3_mappo crashed mid-ep3 (job 12616286): the GIF+MP4 dump "
+                             "every 100 steps × 3 agents × 320×180 frames spiked memory enough to OOM-kill one of "
+                             "the luanti client processes via SLURM cgroup. 300 cuts the dump rate by 3× and "
+                             "leaves more headroom in the per-job memory cap.")
     parser.add_argument("--warmup-time", type=int, default=60,
                         help="Minimum seconds before checking if media loaded (default 60). "
                              "Smart detection exits early once all clients show game world.")
