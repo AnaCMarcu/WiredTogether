@@ -16,4 +16,4 @@ source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/dai
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,9b}"
 
 # Plain LLM agents at 9B scale. Model-size ablation companion to exp1 (2B).
-run_exp "exp7_llm_9b" "$MODEL_9B" --simultaneous
+run_exp "exp7_llm_9b_new" "$MODEL_9B" --simultaneous
