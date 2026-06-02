@@ -1,6 +1,12 @@
 import os
 from agent_modules.llm_call import llm_call
-from agent_modules.util import AgentResponse, TargetedCommunicationResponse, create_model_client, safe_format
+from agent_modules.util import (
+    AgentResponse,
+    TargetedCommunicationResponse,
+    create_model_client,
+    normalize_agent_target,
+    safe_format,
+)
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
@@ -69,6 +75,15 @@ class ActionSelection:
             picked_object=picked_object,
             **beliefs,
         )
+        # Canonicalize "agent0"/"Agent_1"/"agent 2"/etc -> "agent_<N>" at
+        # the LLM-response boundary so every downstream consumer (metric,
+        # routing parser, social module, RL buffer) sees one identity
+        # per agent. Without this, exp1_llm's milestone_log contributors
+        # double-counted the same agent under "agent_0" and "agent0".
+        if isinstance(content, dict) and "communication_target" in content:
+            content["communication_target"] = normalize_agent_target(
+                content["communication_target"]
+            )
         return content
 
     async def generate_thoughts_and_comm(
@@ -150,5 +165,5 @@ class ActionSelection:
         return (
             content.get("thoughts", ""),
             content.get("communication", ""),
-            content.get("communication_target", None),
+            normalize_agent_target(content.get("communication_target", None)),
         )

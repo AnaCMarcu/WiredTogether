@@ -31,6 +31,34 @@ model = os.environ.get("LLM_MODEL", "google/gemini-2.5-flash")
 ST_MODEL_NAME = os.environ.get("ST_MODEL_NAME", "all-MiniLM-L6-v2")
 
 
+# ─── Agent-ID normalization ────────────────────────────────────────────
+
+_AGENT_ID_RE = re.compile(r"^\s*agent_?(\d+)\s*$", re.IGNORECASE)
+
+
+def normalize_agent_target(s):
+    """Canonicalize an LLM-emitted agent name to the form ``agent_<N>``.
+
+    The LLM sometimes drops the underscore (``agent0``), capitalizes
+    (``Agent_1``), or pads with spaces. Without normalization the same
+    teammate ends up indexed under two distinct keys downstream — observed
+    in ``exp1_llm/seed_42`` where milestone_log contributors contained
+    BOTH ``agent_0`` and ``agent0`` for the same agent, double-counting
+    per-agent contribution metrics.
+
+    Returns the canonical ``agent_<N>`` string when ``s`` parses cleanly,
+    otherwise returns the input unchanged (so the existing routing-layer
+    fallback in multi_agent_craftium.py can still rescue unparseable
+    targets like ``all`` / ``none`` / ``self``).
+    """
+    if not isinstance(s, str):
+        return s
+    m = _AGENT_ID_RE.match(s)
+    if m is None:
+        return s
+    return f"agent_{int(m.group(1))}"
+
+
 # ─── Pydantic response schemas ─────────────────────────────────────────
 
 class AgentResponse(BaseModel):
