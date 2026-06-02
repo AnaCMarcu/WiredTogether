@@ -16,4 +16,4 @@ source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/dai
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,2b,baseline}"
 
 # Plain LLM agents — no RL training, no Hebbian. Floor of the comparison.
-run_exp "exp1_llm" "$MODEL_2B" --simultaneous
+run_exp "exp1_llm_2B" "$MODEL_2B" --simultaneous
