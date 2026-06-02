@@ -51,26 +51,14 @@ ACTION_MAP = {
 
 VALID_ACTIONS = [k for k in ACTION_MAP if k != "Inventory"]
 
-# Macro actions: multi-step sequences executed without LLM calls until complete.
-# Each value is a list of (primitive_action, repeat_count) pairs consumed one
-# step at a time by step().  is_macro_running() exposes queue state to the loop.
-_MACRO_ACTIONS = {
-    # Rotate ~180° (9 × ~20° at _MOUSE_MOV=1.0)
-    "TurnAround":     [("TurnRight", 9)],
-    # Full 360° scan to locate teammates or resources (18 steps)
-    "ScanArea":       [("TurnRight", 18)],
-    # Coarse heading fix + approach: 3 TurnRight then 8 MoveForward (11 steps)
-    "ApproachTarget": [("TurnRight", 3), ("MoveForward", 8)],
-    # Manual unstick: same sequence the auto-escape used (23 steps total)
-    "Escape": [
-        ("Jump", 3),
-        ("MoveBackward", 5),
-        ("TurnRight", 4),
-        ("Jump", 3),
-        ("MoveForward", 8),
-    ],
-}
-VALID_ACTIONS = VALID_ACTIONS + list(_MACRO_ACTIONS.keys())
+# Macro actions REMOVED (2026-06): agents use ONLY primitive actions. Macros
+# were long fixed sequences (9-23 steps) the policy committed to with no
+# perception / decision / communication in between — ~30% of env-time on
+# autopilot, directly harming coordination. Kept as an EMPTY dict so the
+# (now-dead) macro dispatch in step()/_resolve_action_for_agent is a
+# guaranteed no-op without touching that critical stepping code. With no
+# keys, VALID_ACTIONS stays primitives-only (no append below).
+_MACRO_ACTIONS: dict = {}
 
 
 class CraftiumEnvironmentInterface:

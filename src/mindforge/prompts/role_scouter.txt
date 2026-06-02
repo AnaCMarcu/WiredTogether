@@ -38,7 +38,8 @@ PROPOSE THE NEXT TASK:
 - Otherwise propose the most useful action for the current chamber.
 
 Phrase each task as a scheme: include the ACTION and the EXPECTED OBSERVATION. Examples:
-  "Use ScanArea; expect to identify at least one purple anvil or one teammate position."
+  "Turn in place (several TurnRight, reading each frame); expect to identify at least one
+   purple anvil or one teammate position."
   "Send a message announcing your cell letter; expect a teammate to reply with theirs."
   "Press your switch (Dig the blue cube in your cell); expect a [SYSTEM] broadcast that a
    teammate's door opened."

@@ -36,9 +36,10 @@ from rl_layer import RLConfig, RLLayer, HebbianConfig, HebbianSocialGraph
 
 ROLE_NAMES = ["agent", "hunter", "harvester", "scouter"]
 
-# Macro action names — used to detect when a macro was selected so the RL
-# buffer defers store_reward() until the macro completes.
-_MACRO_NAMES = frozenset({"TurnAround", "ScanArea", "ApproachTarget", "Escape"})
+# Macro actions removed — agents use only primitives. Kept as an EMPTY set so
+# the (now-dead) macro reward-deferral / macro-skip paths are guaranteed
+# no-ops without restructuring the step loop.
+_MACRO_NAMES = frozenset()
 
 
 def parse_args():
@@ -137,13 +138,6 @@ def parse_args():
                         help="Learning rate for RL optimiser")
     parser.add_argument("--rl-auto-token-opt", action="store_true",
                         help="Let agents self-trigger token-level optimisation")
-    parser.add_argument("--rl-mask-macros", action="store_true",
-                        help="Mask the 4 macro actions (TurnAround/ScanArea/"
-                             "ApproachTarget/Escape) from the RL policy. "
-                             "Auto-enabled under --simultaneous (the macro "
-                             "reward-deferral flush isn't wired there); set "
-                             "it explicitly on turn-based --rl runs to keep "
-                             "the action space identical for a clean A/B.")
     parser.add_argument("--rl-mode", type=str, default="action",
                         choices=["action", "token"],
                         help="RL mode: 'action' = MAPPO action head, "
@@ -819,15 +813,12 @@ def _should_transition_to_survival(episode: int, global_step: int, args) -> bool
 # Main episode loop
 # ===========================
 async def run(args):
-    # --simultaneous + --rl (Stage 2): the RL reward/critic bookkeeping
-    # (select_action, V_global attach, store_reward, MAPPO + centralised-
-    # critic updates) all lives in the SHARED post-selection phases, so it
-    # runs in the simultaneous path unchanged. The ONE incompatibility is
-    # MACRO actions — the macro reward-deferral flush is gated off under
-    # --simultaneous, so a macro's accumulated RL reward would be lost. We
-    # therefore MASK macros from the RL policy under --simultaneous
-    # (rl_config.mask_macro_actions below) so the policy never selects one.
-    # Macros stay available in the turn-based path.
+    # --simultaneous + --rl: the RL reward/critic bookkeeping (select_action,
+    # V_global attach, store_reward, MAPPO + centralised-critic updates) all
+    # lives in the SHARED post-selection phases, so it runs in the simultaneous
+    # path unchanged. (Macro actions — which would have needed special
+    # reward-deferral handling here — were removed entirely; the action space
+    # is primitives only.)
     num_agents = args.num_agents
     num_episodes = args.episodes
     max_steps = args.max_steps
@@ -1063,12 +1054,6 @@ async def run(args):
         rl_prompt_max_tokens=args.rl_prompt_max_tokens,
         lora_save_dir=rl_save_dir,
         critic_mode=args.rl_critic_mode,
-        # Mask the 4 macro actions from the policy under --simultaneous (the
-        # macro reward-deferral flush is not wired for that path, so a
-        # macro's accumulated reward would be lost), or when explicitly
-        # requested via --rl-mask-macros for action-space parity in a
-        # turn-based vs --simultaneous A/B.
-        mask_macro_actions=args.rl_mask_macros or args.simultaneous,
     )
     if rl_config.enabled:
         print(f"RL layer ENABLED: model={rl_config.model_path}, "

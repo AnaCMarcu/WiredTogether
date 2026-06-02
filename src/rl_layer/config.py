@@ -88,19 +88,15 @@ class RLConfig:
     token_opt_epochs: int = 2
 
     # ── Action space (must match VALID_ACTIONS in custom_environment_craftium.py) ──
-    # Primitive actions first (indices 0-21), macros appended at the end (22-26)
-    # so existing checkpoints retain correct primitive indices.
-    # Macros execute over multiple environment ticks; the RL buffer receives a
-    # single store_action() when the macro is chosen and one store_reward() with
-    # the accumulated total once is_macro_running() returns False.
+    # Primitives ONLY (indices 0-21). The 4 macro actions were removed: agents
+    # commit to single-tick primitives and re-decide every step (macros spent
+    # ~30% of env-time on autopilot with no perception/comm, harming coordination).
     actions: tuple = (
         "NoOp", "MoveForward", "MoveBackward", "MoveLeft", "MoveRight",
         "Jump", "Sneak", "Dig", "Place",
         "Slot1", "Slot2", "Slot3", "Slot4", "Slot5",
         "TurnRight", "TurnLeft", "LookDown", "LookUp",
         "Drop", "Slot6", "Slot7", "Slot8",
-        # ── Macro actions (multi-step, rewards accumulated across ticks) ──
-        "TurnAround", "ScanArea", "ApproachTarget", "Escape",
     )
 
     # Mask Slot*-prefixed actions out of the policy distribution.
@@ -110,10 +106,3 @@ class RLConfig:
     # primary cause of policy collapse onto Slot5 spam. With masking, the
     # categorical distribution renormalises over the remaining 18 actions.
     mask_slot_actions: bool = True
-
-    # Mask the 4 macro actions (TurnAround/ScanArea/ApproachTarget/Escape) from
-    # the policy distribution. Auto-enabled under --simultaneous, where the
-    # macro reward-deferral flush is not wired (a macro spans multiple outer
-    # steps and its accumulated RL reward would be lost). Off by default so the
-    # turn-based path keeps macros available.
-    mask_macro_actions: bool = False

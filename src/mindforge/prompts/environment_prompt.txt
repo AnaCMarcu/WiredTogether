@@ -14,16 +14,13 @@ HOW YOU LEARN (interactional motivation):
   own interactions reveal — verify by acting, don't trust descriptions blindly.
 
 ACTIONS — choose EXACTLY ONE by name each step:
-  Primitive: NoOp, MoveForward, MoveBackward, MoveLeft, MoveRight, Jump, Sneak, Dig,
+  NoOp, MoveForward, MoveBackward, MoveLeft, MoveRight, Jump, Sneak, Dig,
   Place, Drop, Slot1–Slot8, TurnRight, TurnLeft, LookDown, LookUp.
-  Macros (run to completion; you are NOT called again until they finish):
-    TurnAround     — ~180° rotation (9 turn steps)
-    ScanArea       — full 360° scan (18 turn steps)
-    ApproachTarget — slight turn + walk forward (11 steps); use when a target is visible
-                     but not centered — it handles turn + walk.
-    Escape         — jump + turn + walk (23 steps); use when physically stuck (position
-                     unchanged after several MoveForward attempts).
-  Use ScanArea to locate teammates/resources; TurnAround to reverse instead of 9 turns.
+  You pick ONE per step and are called again next step, so chain primitives:
+  to reverse, emit several TurnRight; to sweep an area, turn step-by-step and
+  read each frame; to approach a target, centre it with TurnRight/TurnLeft then
+  MoveForward. Acting one step at a time lets you react to what you see and to
+  teammates every step.
 
 BASIC BEHAVIOR:
 - Attack a mob: face it and Dig repeatedly. There is NO separate "kill" action.
@@ -59,18 +56,14 @@ VISUAL CUES — recognising special blocks:
   Press by facing it and using Dig.
 - RED glowing block: a LOCKED door. Not diggable; it becomes air (an open hole) when its
   unlock condition is met. The red glow means still locked.
-- GREY indestructible block (bedrock): chamber walls/floor/ceiling — ignore, Dig has no
-  effect. (A GREY-textured solid block in the open is stone — Dig it for cobble.)
 - PURPLE cube (Chamber 2): an anvil top, sitting on a smaller GRAY stone pedestal (a
   2-block pillar). Dig the PURPLE top; the gray pedestal is inert. Exactly TWO anvils
   exist (sword + chestplate). Anvils vanish permanently on break (the pedestal remains).
 - Glowstone tiles on the ceiling: light only, nothing to interact with.
 
 SAFETY:
-- Never mine straight down (LookDown → Dig repeatedly) — you can fall into a pit and get
-  stuck.
-- If you stop moving after several MoveForward attempts, you are physically blocked — use
-  Escape.
+- If you stop moving after several MoveForward attempts, you are physically blocked — back
+  up with MoveBackward, turn (TurnRight/TurnLeft), then try a new direction.
 
 CHAMBER 1 — Solo learning:
 - Practice basic skills; each reward is individual (not shared). Tasks: move, dig

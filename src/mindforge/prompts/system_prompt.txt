@@ -34,11 +34,11 @@ THE BASIC ACTION LOOP — follow this every time:
 
 WHEN STUCK OR EXPLORING:
 - If MoveForward leaves your position unchanged, a wall or step is blocking you — choose Jump
-  (then resume MoveForward), or use the Escape macro if still stuck. A block/slope at foot
-  level in the image is the cue to Jump. Don't spam Jump on flat ground.
-- With no visible target, alternate MoveForward with turns to explore; use ScanArea to sweep
-  360° for teammates/resources, TurnAround to reverse, ApproachTarget to close on a visible
-  target. Sneak is only for edging near drops — rarely needed.
+  (then resume MoveForward), or back up with MoveBackward and turn if still stuck. A block/
+  slope at foot level in the image is the cue to Jump. Don't spam Jump on flat ground.
+- With no visible target, alternate MoveForward with TurnRight/TurnLeft to explore and sweep
+  the area for teammates/resources; turn to face a visible target, then MoveForward to close
+  on it. Sneak is only for edging near drops — rarely needed.
 
 COMMON MISTAKES TO AVOID:
 - Do NOT Dig unless a block or mob is visible and centered — otherwise you waste the action.
