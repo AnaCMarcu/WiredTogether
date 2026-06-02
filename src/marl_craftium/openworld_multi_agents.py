@@ -100,7 +100,23 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
             or (_pkg_env if os.path.isdir(_pkg_env) else _local_env)
         )
 
+        # Unique MT server port per job, INDEPENDENT of the reproducibility
+        # seed. craftium falls back to random.randint(49152, 65535) when
+        # mt_server_port is None, but multi_agent_craftium.py calls
+        # random.seed(seed) for reproducibility — so two jobs with the SAME
+        # seed draw the SAME "random" port (e.g. 52800 for seed 42) and collide
+        # ("Server socket listen timeout") when they land on the same node.
+        # Derive the port from SLURM_JOB_ID (unique per job), falling back to an
+        # UNSEEDED SystemRandom draw for local/non-SLURM runs.
+        _jobid = os.environ.get("SLURM_JOB_ID", "")
+        if _jobid.isdigit():
+            _mt_port = 49152 + int(_jobid) % 16000
+        else:
+            import random as _random
+            _mt_port = _random.SystemRandom().randint(49152, 65535)
+
         return dict(
+            mt_server_port=_mt_port,
             env_dir=env_dir,
             game_id="VoxeLibre",
             num_agents=num_agents,
@@ -171,8 +187,6 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         Dict[str, bool],
         Dict[str, Dict[str, Any]],
     ]:
-        # Always send actions for ALL agents — MarlCraftiumEnv expects exactly
-        # num_agents actions every step. NoOp for terminated agents.
         action_list = [
             _discrete_to_dict(actions.get(agent, 0))
             for agent in self.possible_agents

@@ -7,6 +7,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
 #SBATCH --gres=gpu:1
+#SBATCH --exclude=cor1
 #SBATCH --output=slurm_logs/sim_smoke_%j.out
 #SBATCH --error=slurm_logs/sim_smoke_%j.err
 

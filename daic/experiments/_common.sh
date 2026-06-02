@@ -61,13 +61,22 @@ run_exp() {
     local ARTIFACTS_DIR="$REPO/run_artifacts/legacy/${EXP_NAME}/seed_${SEED}"
     local WORK_DIR="/tmp/$USER/${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
     mkdir -p "$RUN_DIR" "$ARTIFACTS_DIR" "$WORK_DIR"
+    # Empty dir bind-mounted OVER /dev/dri (below) to hide all GPU render nodes
+    # so Mesa is forced onto CPU/llvmpipe on every node — see the apptainer block.
+    mkdir -p "$WORK_DIR/empty_dri"
 
-    # Clear stale luanti/minetest processes from previous failed runs on this
-    # compute node. Best-effort; only affects this user's procs.
-    echo "── pre-flight: clearing stale luanti/minetest procs (best-effort) ──"
-    pkill -9 -u "$USER" -f "minetest" 2>/dev/null || true
-    pkill -9 -u "$USER" -f "luanti"   2>/dev/null || true
-    sleep 5
+    # The node-wide `pkill -9 -u $USER -f minetest/luanti` pre-flight was
+    # REMOVED. It cleared stale procs from crashed jobs, but it ALSO killed the
+    # Minetest server + clients of any OTHER of this user's jobs on the same
+    # node — causing both startup collisions ("2 jobs, same node fails") and
+    # mid-run "Connection closed by peer: is MT down?" deaths at random points
+    # (whenever a sibling job happened to start). SLURM's cgroup cleanup already
+    # reaps a job's own procs when it ends, and each job now uses a UNIQUE
+    # mt_server_port (openworld_multi_agents.py) + a unique /tmp work dir, so a
+    # lingering stale proc can no longer block or collide with a new job. If
+    # genuinely orphaned procs ever pile up, reap them by hand from an
+    # interactive session on that node: `pkill -9 -u $USER -f luanti`.
+    echo "── pre-flight: (node-wide minetest/luanti pkill intentionally skipped — would kill sibling jobs) ──"
 
     # Compose wandb flags. Tags include exp name + seed automatically;
     # WANDB_EXTRA_TAGS can append more (e.g., "ablation_A,prompt_v2").
@@ -120,21 +129,22 @@ run_exp() {
     #      software X surface (llvmpipe) even on nodes where GPU device
     #      access is denied. Xvfb owns its own framebuffer; EGL can render
     #      into it without ever touching /dev/dri.
-    # NOTE: /dev/dri is deliberately NOT bound. The image ships only the Mesa
-    # EGL vendor (50_mesa.json), and on DAIC nodes the job has CUDA access
-    # (/dev/nvidia* via --nv) but NOT render-device permission on
-    # /dev/dri/renderD*. If /dev/dri is bound, Mesa enumerates those render
-    # nodes, fails to open them ("Permission denied"), and refuses software
-    # fallback ("Not allowed to force software rendering when API explicitly
-    # selects a hardware device") -> Luanti can't create a GL context and the
-    # run dies at reset() with "Server socket listen timeout". With /dev/dri
-    # absent, Mesa has no hardware device to grab and renders purely on CPU via
-    # llvmpipe (LIBGL_ALWAYS_SOFTWARE=1 + GALLIUM_DRIVER=llvmpipe below), which
-    # works on EVERY node regardless of render-group membership. CUDA is
-    # unaffected — it uses /dev/nvidia*, not /dev/dri.
+    # Mask /dev/dri with an EMPTY directory so Luanti/Mesa never sees a GPU
+    # render node. On DAIC, GPU jobs get CUDA (/dev/nvidia* via --nv) but NOT
+    # render-device permission on /dev/dri/renderD* (per the docs, GPUs are
+    # compute-only). Apptainer mounts the host /dev by DEFAULT, so simply not
+    # binding /dev/dri is NOT enough — on some nodes the render nodes are still
+    # visible, Mesa grabs one, fails to open it ("Permission denied"), and
+    # refuses software fallback ("Not allowed to force software rendering when
+    # API explicitly selects a hardware device") -> Luanti can't create a GL
+    # context and the run dies at reset() with "Server socket listen timeout".
+    # Bind-mounting an empty dir OVER /dev/dri hides every render node on EVERY
+    # node, so Mesa falls back to CPU llvmpipe (LIBGL_ALWAYS_SOFTWARE=1 +
+    # GALLIUM_DRIVER=llvmpipe below). CUDA is unaffected — it uses /dev/nvidia*.
     apptainer exec --nv \
         --bind /tmp:/tmp \
         --bind /tudelft.net:/tudelft.net \
+        --bind "$WORK_DIR/empty_dri:/dev/dri" \
         --env PYTHONPATH="$REPO/src" \
         --env PYTHONUNBUFFERED=1 \
         --env PYTHONIOENCODING=utf-8 \
