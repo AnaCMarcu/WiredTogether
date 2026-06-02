@@ -65,6 +65,7 @@ python -u multi_agent_craftium.py \
     --seed "$SEED" \
     --experiment-id "$EXP_NAME" \
     --tag "$EXP_NAME" \
+    --simultaneous \
     2>&1 | tee "$RUN_DIR/run.log"
 
 EXIT_CODE=${PIPESTATUS[0]}

@@ -26,4 +26,4 @@ run_exp "exp6_ippo_hebbian" "$MODEL_2B" \
     --hebbian-decay 0.005 \
     --hebbian-beta 1.0 \
     --hebbian-rho 0.3 \
-    --hebbian-gamma 0.2
+    --hebbian-gamma 0.2 --simultaneous

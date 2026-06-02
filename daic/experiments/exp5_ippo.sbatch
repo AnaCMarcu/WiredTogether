@@ -20,4 +20,4 @@ run_exp "exp5_ippo" "$MODEL_2B" \
     --rl-critic-mode independent \
     --rl-model-path "$MODEL_2B" \
     --rl-update-interval 64 \
-    --rl-lr 3e-4
+    --rl-lr 3e-4 --simultaneous

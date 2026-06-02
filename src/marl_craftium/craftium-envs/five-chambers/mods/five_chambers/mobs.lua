@@ -227,7 +227,18 @@ minetest.register_globalstep(function(dtime)
         if five_chambers.agent_index(name) >= 0 then
             local pos = player:get_pos()
             if pos and five_chambers.get_chamber_for_pos(pos) == "ch4" then
-                five_chambers.fire_milestone("m20_enter_ch4", {name})
+                -- Suppress m20_enter_ch4 when the Ch3→Ch4 timeout
+                -- teleport already fired this episode: agents were
+                -- force-relocated, not earned. Mob spawning still
+                -- proceeds (the chamber is in use either way).
+                if five_chambers.door_state
+                   and five_chambers.door_state.door3_force_teleported then
+                    minetest.log("action",
+                        "[five_chambers] m20_enter_ch4 suppressed for "
+                        .. name .. " (Ch3 timeout teleport fired this episode)")
+                else
+                    five_chambers.fire_milestone("m20_enter_ch4", {name})
+                end
                 if not five_chambers.mob_state.ch4_triggered then
                     five_chambers.mob_state.ch4_triggered = true
                     five_chambers.spawn_ch4_mobs()
@@ -421,7 +432,17 @@ minetest.register_globalstep(function(dtime)
         if five_chambers.agent_index(name) >= 0 then
             local pos = player:get_pos()
             if pos and five_chambers.get_chamber_for_pos(pos) == "ch5" then
-                five_chambers.fire_milestone("m24_enter_ch5", {name})
+                -- Suppress m24_enter_ch5 when the Ch4→Ch5 timeout
+                -- teleport already fired this episode: agents were
+                -- force-relocated, not earned. Boss still spawns.
+                if five_chambers.door_state
+                   and five_chambers.door_state.door4_force_teleported then
+                    minetest.log("action",
+                        "[five_chambers] m24_enter_ch5 suppressed for "
+                        .. name .. " (Ch4 timeout teleport fired this episode)")
+                else
+                    five_chambers.fire_milestone("m24_enter_ch5", {name})
+                end
                 if not five_chambers.mob_state.ch5_triggered then
                     five_chambers.mob_state.ch5_triggered = true
                     five_chambers.spawn_boss()

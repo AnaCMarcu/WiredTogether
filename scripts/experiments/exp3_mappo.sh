@@ -21,4 +21,4 @@ run_exp "exp3_mappo" "$MODEL_2B" \
     --rl-critic-mode centralized \
     --rl-model-path "$MODEL_2B" \
     --rl-update-interval 64 \
-    --rl-lr 3e-4
+    --rl-lr 3e-4 --simultaneous

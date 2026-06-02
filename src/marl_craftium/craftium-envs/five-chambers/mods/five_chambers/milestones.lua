@@ -166,9 +166,15 @@ function five_chambers.fire_milestone(milestone_id, contributors)
     -- (m_door1_open's once=true would also dedup per-agent, but the
     -- guard avoids a second redundant open_door1() call when a later
     -- agent fires their own first m2..m7).
+    --
+    -- Also suppress when the Ch1→Ch2 timeout teleport already fired:
+    -- the team got past Door 1 by force-relocate, not by unlocking it,
+    -- so this bonus has not been earned even if an m2..m7 milestone
+    -- fires later from digging inside Ch2.
     if _CH1_UNLOCK_MILESTONES[milestone_id]
        and five_chambers.door_state
-       and not five_chambers.door_state.door1_open then
+       and not five_chambers.door_state.door1_open
+       and not five_chambers.door_state.door1_force_teleported then
         five_chambers.open_door1()
         five_chambers.fire_milestone("m_door1_open", {actual[1]})
     end

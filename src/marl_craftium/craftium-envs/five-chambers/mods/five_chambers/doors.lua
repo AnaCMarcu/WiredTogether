@@ -377,7 +377,20 @@ minetest.register_globalstep(function(dtime)
                 five_chambers.ch2_transitioned[idx] = true
                 five_chambers.ch2_transitioned_count =
                     five_chambers.ch2_transitioned_count + 1
-                five_chambers.fire_milestone("m16_enter_cell", {name})
+                -- Suppress m16_enter_cell when the Ch2→Ch3 timeout
+                -- teleport already fired this episode: the agents were
+                -- force-relocated rather than entering via Door 2 on
+                -- their own, so this is not an honest entry milestone.
+                -- The teleport itself remains for layout continuity;
+                -- the milestone reward is what we withhold.
+                if five_chambers.door_state
+                   and five_chambers.door_state.door2_force_teleported then
+                    minetest.log("action",
+                        "[five_chambers] m16_enter_cell suppressed for "
+                        .. name .. " (Ch2 timeout teleport fired this episode)")
+                else
+                    five_chambers.fire_milestone("m16_enter_cell", {name})
+                end
                 minetest.log("action",
                     "[five_chambers] " .. name .. " teleported to Ch3 cell " .. idx)
 

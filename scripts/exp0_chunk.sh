@@ -153,6 +153,7 @@ python multi_agent_craftium.py \
     --seed "$SEED" \
     --checkpoint-dir "$CKPT_ROOT" \
     --checkpoint-interval 200 \
+    --simultaneous \
     "${RESUME_ARGS[@]}" \
     "${COND_ARGS[@]}"
 
