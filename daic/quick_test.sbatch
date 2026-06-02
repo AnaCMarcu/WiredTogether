@@ -32,15 +32,15 @@ run_exp "fast_rl2" "$MODEL_2B" \
     --episodes 2 \
     --max-steps 100 \
     --simultaneous \
-    --rl \
-    --rl-critic-mode centralized \
-    --rl-model-path "$MODEL_2B" \
-    --rl-update-interval 16 \
-    --rl-lr 3e-4 \
-    --hebbian \
-    --hebbian-ltp 0.01 \
-    --hebbian-ltd 0.005 \
-    --hebbian-decay 0.005 \
-    --hebbian-beta 1.0 \
-    --hebbian-rho 0.3 \
-    --hebbian-gamma 0.2
+    # --rl \
+    # --rl-critic-mode centralized \
+    # --rl-model-path "$MODEL_2B" \
+    # --rl-update-interval 16 \
+    # --rl-lr 3e-4 \
+    # --hebbian \
+    # --hebbian-ltp 0.01 \
+    # --hebbian-ltd 0.005 \
+    # --hebbian-decay 0.005 \
+    # --hebbian-beta 1.0 \
+    # --hebbian-rho 0.3 \
+    # --hebbian-gamma 0.2
