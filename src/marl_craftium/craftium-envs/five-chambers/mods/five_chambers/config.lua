@@ -161,15 +161,25 @@ five_chambers.CH5 = { x0=2, x1=10, z0=59, z1=67 }
 -- this prevents the policy from learning "punching purple = bad" when an
 -- agent tries the anvil alone. Cooperation still required to make progress
 -- (PAIR=4 → +3/tick; TRIO=8 → +7/tick), it just isn't actively punished.
--- ACTIVE_WINDOW raised from 6 → 18 ticks (~1s, 6 env steps) so that
--- round-robin per-agent action selection doesn't constantly miss the
--- coordination window — agents acting in sequence have more margin.
-five_chambers.ANVIL_MAX_HP  = 30
+--
+-- ANVIL_MAX_HP lowered from 30 → 20 to cut pair-coop time from 10 → 7
+-- Lua ticks (~0.35 s). exp1/exp3/exp6/exp7 audits showed no anvil milestones
+-- ever firing despite teams reaching Ch2 — the failure mode is upstream
+-- (agents not picking Dig on the SAME anvil at the SAME time), but reducing
+-- the HP requirement lowers the duration of synchronization needed.
+--
+-- ACTIVE_WINDOW raised from 18 → 30 ticks (~1.5 s ≈ 10 env steps) so
+-- asynchronous coop has more slack: under round-robin stepping each agent
+-- only acts every 3rd env step, so a 6-step window forced two agents to
+-- both pick Dig within the same agent's two-action cycle. 10 env steps
+-- of slack means an agent's Dig stays active across 3+ of their own
+-- decisions, giving the coop pattern more time to form.
+five_chambers.ANVIL_MAX_HP  = 20  -- was 30; cuts pair-coop break time
 five_chambers.SOLO_DIG_RATE = 1
 five_chambers.PAIR_DIG_RATE = 4
 five_chambers.TRIO_DIG_RATE = 8
 five_chambers.DECAY_RATE    = 1   -- was 2 (made solo digging net negative)
-five_chambers.ACTIVE_WINDOW = 18  -- was 6 (~0.3s); 18 ticks ≈ 1s, 6 env steps
+five_chambers.ACTIVE_WINDOW = 30  -- was 18 (~1s); 30 ticks ≈ 1.5s, 10 env steps
 five_chambers.DIGGER_RADIUS = 3
 
 -- Boss (plan §5)

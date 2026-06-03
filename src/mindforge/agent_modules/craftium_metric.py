@@ -138,7 +138,14 @@ def format_milestone_progress(current_chamber, agent_completed, team_completed):
         "ch5_boss":     "Ch5",
     }
 
-    lines = []
+    # Collapsed view: the CURRENT chamber gets the full per-milestone detail
+    # (its [OPEN] ids are what the curriculum and action LLMs actually need to
+    # decide what to do next); every other chamber compresses to a one-word
+    # status so the block stays short instead of listing all 5 rooms' ids
+    # every step. Falls back to a detail line for the first incomplete chamber
+    # if the current chamber is unknown.
+    current_line = None
+    others = []
     for track in TRACK_ORDER:
         if track == "communication":
             continue
@@ -151,18 +158,35 @@ def format_milestone_progress(current_chamber, agent_completed, team_completed):
         ]
         remaining  = [m for m in all_mids if m not in team_completed]
 
-        marker = "  ← YOU ARE HERE" if track == current_track else ""
-        parts = [f"  {label}{marker}:"]
-        if you_done:
-            parts.append(f"[you done] {', '.join(you_done)}")
-        if team_only:
-            parts.append(f"[team done, you didn't fire] {', '.join(team_only)}")
-        if remaining:
-            parts.append(f"[OPEN] {', '.join(remaining)}")
+        is_current = (track == current_track) or (
+            current_track is None and current_line is None and remaining
+        )
+        if is_current:
+            parts = [f"  {label} (YOU ARE HERE):"]
+            if you_done:
+                parts.append(f"[you done] {', '.join(you_done)}")
+            if team_only:
+                parts.append(f"[team done, you didn't fire] {', '.join(team_only)}")
+            if remaining:
+                parts.append(f"[OPEN] {', '.join(remaining)}")
+            else:
+                parts.append("[chamber complete]")
+            current_line = " ".join(parts)
         else:
-            parts.append("[chamber complete]")
-        lines.append(" ".join(parts))
-    return "\n".join(lines)
+            done_ct = len(all_mids) - len(remaining)
+            if not remaining:
+                status = "complete"
+            elif done_ct == 0:
+                status = "not started"
+            else:
+                status = f"{done_ct}/{len(all_mids)} done"
+            others.append(f"{label}: {status}")
+
+    block = current_line or ""
+    if others:
+        sep = "\n  " if block else "  "
+        block += f"{sep}Other chambers: " + "; ".join(others)
+    return block
 
 # Two milestones fired by different agents within this many steps count as co-completion.
 _CO_COMPLETION_WINDOW = 5

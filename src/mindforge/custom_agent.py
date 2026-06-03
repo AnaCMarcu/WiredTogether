@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections import deque
 from typing import Sequence
 
 from autogen_agentchat.agents import BaseChatAgent
@@ -15,6 +16,64 @@ from agent_modules.episodic_memory_manager import EpisodicMemoryManager
 from agent_modules.craftium_metric import CraftiumMetric as Metric
 from agent_modules.skill_manager import SkillManager
 from agent_modules.social_module import SocialModule
+
+
+# Phase 2: reward-based milestone success.
+# get_reward_summary() returns the reward accumulated since the last read
+# (effectively this step, since it's read once per agent per step) as the
+# string "Reward: X.XX / Status: Alive|Dead|Episode ended". Across all 28
+# Five-Chambers milestones the SMALLEST reward is 10 (m1_move_5) and comm
+# rewards are <=2, so a step reward >= this threshold means a real milestone
+# fired THIS step. This lets us detect task success every step in code —
+# no LLM critic call, no waiting for the critic interval. See milestones.lua.
+MILESTONE_REWARD_THRESHOLD = 10.0
+
+# How many recent (action -> reward) pairs to keep and hand to the critic.
+# The critic only runs every critic_interval (~20) steps and otherwise sees
+# just the single final step, so a window that did real work but ended on a
+# quiet step is indistinguishable from one that did nothing. The rolling log
+# gives it the whole gap: the action trajectory (to spot stuck/circling
+# patterns for a better critique) and any milestone reward that fired
+# mid-window even when the final step's Reward is 0.
+CRITIC_HISTORY_WINDOW = 20
+
+
+def _parse_step_reward(reward_text):
+    """Parse the per-step reward + death flag from a get_reward_summary() string.
+
+    Returns (reward_value | None, is_dead). reward_value is None when the
+    string is missing/unparseable (e.g. "N/A"), so callers can distinguish
+    "no reward info" from "reward 0".
+    """
+    if not reward_text or not isinstance(reward_text, str):
+        return None, False
+    is_dead = "Dead" in reward_text
+    # Format is "Reward: <float> / Status: <status>"; grab the float after
+    # the first "Reward:".
+    try:
+        after = reward_text.split("Reward:", 1)[1]
+        token = after.strip().split()[0].rstrip("/")
+        return float(token), is_dead
+    except (IndexError, ValueError):
+        return None, is_dead
+
+
+def _render_step_log(step_log):
+    """Render the rolling (action, reward) buffer for the critic prompt.
+
+    Oldest -> newest, compact: "MoveForward(0) TurnLeft(0) Dig(50*) ...".
+    A trailing "*" flags a step whose reward was a milestone (>= threshold),
+    so the critic can see a real objective fired mid-window even if the final
+    step's Reward is 0. Returns a friendly placeholder when empty.
+    """
+    if not step_log:
+        return "(no recent steps yet)"
+    parts = []
+    for action, reward in step_log:
+        flag = "*" if (reward is not None and reward >= MILESTONE_REWARD_THRESHOLD) else ""
+        rtxt = f"{reward:.0f}" if reward is not None else "?"
+        parts.append(f"{action or 'NoOp'}({rtxt}{flag})")
+    return " ".join(parts)
 
 
 # Per-chamber object whitelist. Substituted into the `Chamber:` field of
@@ -60,20 +119,81 @@ _CHAMBER_OBJECT_WHITELIST = {
 }
 
 
-def _describe_chamber(chamber):
-    """Return a self-contained `Chamber:` line: name + visible-objects whitelist.
+# Per-chamber ROOM FACTS — objective + mechanics for the CURRENT room only.
+# These used to live as static per-chamber sections in environment_prompt.txt,
+# where all five rooms were in the system prompt every step even though the
+# agent is only ever in one. Moved here so _describe_chamber injects just the
+# room the agent is standing in (the {current_chamber} field, refreshed each
+# step). Milestone IDs are intentionally NOT listed — the dynamic
+# {milestone_progress} block already enumerates them. Coordination is stated as
+# mechanics/facts, not imperatives (the agent decides whether to coordinate).
+_CHAMBER_FACTS = {
+    "ch1": (
+        "Solo learning — each reward is individual (not shared). Dig trees/stone, "
+        "collect drops, kill chickens/sheep. The RED locked Door 1 in the north wall "
+        "unlocks the moment ANY agent fires a Ch1 milestone (dig 3 blocks, pick up 3 "
+        "items, dig 5 wood, kill an animal, or dig 3 stone); the first to unlock it earns "
+        "a bonus, and once open every agent can walk north through it. Safety net: if the "
+        "whole team is still in Ch1 at the episode halfway point, everyone is teleported to "
+        "Ch2 but unearned Ch1 rewards are forfeit."
+    ),
+    "ch2": (
+        "Cooperative gear production. Two purple anvils at the centre: Row A (front, Z~19) "
+        "drops a DIAMOND SWORD on break, Row B (back, Z~22) drops a DIAMOND CHESTPLATE. An "
+        "anvil only breaks when TWO agents Dig the SAME anvil at the same time, within 3 "
+        "blocks of each other (three is faster); a single digger makes zero progress. Gear "
+        "AUTO-EQUIPS across the whole team on break (no pickup) and both pieces are needed "
+        "to survive Ch4/Ch5. chamber_state reports each anvil's HP, its change over the "
+        "last 3 steps (Δhp_last3), and a punchers list (who else is digging it). Door 2 "
+        "opens once both anvils are broken (chamber_state shows Door 2 OPEN/LOCKED; walk "
+        "north when OPEN)."
+    ),
+    "ch3": (
+        "Communication puzzle. You are teleported into a SEALED CELL by id (agent_0=Cell A, "
+        "agent_1=B, agent_2=C) and cannot see teammates. Each cell has ONE blue switch cube "
+        "on the south wall (press by facing it and using Dig, bare hands work). Switches are "
+        "wired rotationally: A opens B's door, B opens C's, C opens A's — you CANNOT open "
+        "your own door, only a teammate can free you. Targeted communication is the only "
+        "channel here. chamber_state shows your cell door LOCKED/OPEN (the only proof a "
+        "teammate's press worked; a \"[SYSTEM] Switch X was pressed.\" broadcast also "
+        "fires); walk north when it reads OPEN."
+    ),
+    "ch3_communal": (
+        "The communal regroup room (no puzzle objects). Door 3 to Ch4 opens once all agents "
+        "are in the communal room together; chamber_state shows Door 3 LOCKED/OPEN — walk "
+        "north when OPEN."
+    ),
+    "ch4": (
+        "Combat — 3 zombies. Attack with your wielded diamond sword (Slot1 if needed); the "
+        "chestplate reduces incoming damage. The door to Ch5 opens when all 3 zombies are "
+        "dead, and a team bonus is awarded if all 3 agents are still alive at the clear."
+    ),
+    "ch5": (
+        "Boss fight — one strong zombie, 60 HP, 3 damage per hit; it takes damage from every "
+        "agent attacking it. The episode ends when the boss is defeated, with a large bonus "
+        "if all 3 agents are alive at defeat."
+    ),
+}
 
-    Substituted directly into the ``{current_chamber}`` placeholder in
-    instruction_prompt_p2.txt. Each value is a single line of text so the
-    surrounding prompt format stays unchanged.
+
+def _describe_chamber(chamber):
+    """Return a self-contained `Chamber:` block: name + visible-objects whitelist
+    + this room's objective/mechanics (ROOM FACTS).
+
+    Substituted into the ``{current_chamber}`` placeholder in
+    instruction_prompt_p2.txt. Multi-line: the whitelist (negative grounding to
+    fight hallucination) followed by the current room's facts, so the agent
+    carries ONLY the chamber it is standing in rather than all five.
     """
     if not chamber:
         return ("Unknown (position not yet locked — assume Ch1; only "
                 "trees / stone / animals / locked red Door 1 are valid targets)")
     whitelist = _CHAMBER_OBJECT_WHITELIST.get(chamber)
-    if whitelist is None:
-        return chamber
-    return f"{chamber} — VISIBLE HERE: {whitelist}."
+    facts = _CHAMBER_FACTS.get(chamber)
+    head = f"{chamber} — VISIBLE HERE: {whitelist}." if whitelist else chamber
+    if facts:
+        return f"{head}\nROOM FACTS: {facts}"
+    return head
 
 
 class CustomAgent(BaseChatAgent):
@@ -106,6 +226,9 @@ class CustomAgent(BaseChatAgent):
         self.belief_interval = belief_interval
         self.critic_interval = critic_interval
         self._call_count = 0  # incremented each on_messages call
+        # Rolling (last_action, step_reward) buffer handed to the critic so it
+        # sees the whole window since its last run, not just the final step.
+        self._step_log = deque(maxlen=CRITIC_HISTORY_WINDOW)
 
         self.action_selection = (
             action_selection if action_selection else ActionSelection()
@@ -184,6 +307,31 @@ class CustomAgent(BaseChatAgent):
 
         task = self.auto_curriculum.current_task
 
+        # Phase 2: reward-based milestone success, computed every step from the
+        # reward already passed in (no env re-read, no LLM critic call). A step
+        # reward >= MILESTONE_REWARD_THRESHOLD means a real milestone fired NOW,
+        # so success is caught the moment it happens instead of waiting for the
+        # next critic tick. milestone_event surfaces it to the action/thoughts
+        # prompt so the policy knows the objective is done and moves on.
+        _step_reward, _is_dead = _parse_step_reward(reward_text)
+        reward_success = (
+            _step_reward is not None
+            and _step_reward >= MILESTONE_REWARD_THRESHOLD
+            and not _is_dead
+        )
+        milestone_event = (
+            f"*** MILESTONE COMPLETED this step (reward {_step_reward:.0f}). "
+            f"That objective is DONE — do not repeat it; advance to the next "
+            f"OPEN milestone for this chamber. ***"
+            if reward_success else ""
+        )
+
+        # Append this step's (action -> reward) to the rolling buffer BEFORE the
+        # critic runs, so the newest entry is included in the window it judges.
+        # (last_action is the action taken last step; _step_reward is the reward
+        # it produced — a coherent pair.)
+        self._step_log.append((last_action, _step_reward))
+
         self.metric.log(
             f"Agent {self.name}: Error count: {error_count}, error: {error}, held object: {picked_object}"
         )
@@ -206,6 +354,7 @@ class CustomAgent(BaseChatAgent):
                     reward_text=reward_text,
                     position_text=position_text,
                     player_status_text=player_status_text,
+                    recent_history=_render_step_log(self._step_log),
                 )
                 # Cache the result for skipped steps
                 self._cached_success = success
@@ -217,6 +366,12 @@ class CustomAgent(BaseChatAgent):
                 # Reuse cached critic result from the last evaluation
                 success = getattr(self, "_cached_success", None)
                 critique = getattr(self, "_cached_critique", None)
+
+            # Phase 2 reward fast-path: a milestone firing THIS step is
+            # ground-truth success regardless of the critic interval or its
+            # (possibly stale) cached verdict. Caught every step.
+            if reward_success:
+                success = True
 
             if success:
                 skill_name, skill_description, already_exists = (
@@ -254,10 +409,23 @@ class CustomAgent(BaseChatAgent):
                     success=success,
                 )
                 self._episode_summary_dirty = True
-        # Generate new task if there is no current task
-        # or if the agent has failed more than 5 times in a row (then append last task to failed tasks)
-        # or if task was succeded ( then append last task to completed tasks)
-        if success or self.auto_curriculum.current_task is None or error_count > 10:
+        # Generate new task if there is no current task, the task succeeded,
+        # the agent failed too many times, OR the agent just changed chamber.
+        # Without the chamber-change trigger a stale task for the PREVIOUS
+        # chamber persists across forced teleports / organic transitions — e.g.
+        # a "dig the purple anvil" (Ch2) task lingering into the Ch5 boss room,
+        # which makes the agent waste steps reconciling the contradiction it can
+        # see (boss in view vs. "dig the anvil" instruction). The chamber-timer
+        # rotates rooms every 20% of the episode, far faster than the
+        # success/failure cycle that would otherwise refresh the task.
+        _chamber_changed = (
+            current_chamber is not None
+            and getattr(self, "_last_chamber", None) is not None
+            and current_chamber != self._last_chamber
+        )
+        self._last_chamber = current_chamber
+        if (success or self.auto_curriculum.current_task is None
+                or error_count > 10 or _chamber_changed):
             if success:
                 self.auto_curriculum.completed_tasks.append(
                     self.auto_curriculum.current_task
@@ -400,7 +568,7 @@ class CustomAgent(BaseChatAgent):
             # (every existing run pre-Phase-B+).
             "propagation_summary": propagation_summary or "",
             "position_text": position_text or "Unknown",
-            "player_status_text": player_status_text or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
+            "player_status_text": player_status_text or "Health: ?/20 | Time: Unknown",
             # Substitute the chamber name PLUS an explicit object whitelist
             # ("VISIBLE HERE: ... NO X, NO Y here") so the action LLM has a
             # concrete negative-grounding signal to override its image
@@ -430,6 +598,11 @@ class CustomAgent(BaseChatAgent):
             # (e.g. before metric is populated).
             "milestone_progress": milestone_progress
                 or "(no milestone data yet)",
+            # Phase 2: one-shot banner shown ONLY on the step a milestone
+            # reward fires. Empty string otherwise so the {milestone_event}
+            # placeholder collapses to a blank line. Tells the action/thoughts
+            # policy the current objective just completed — stop repeating it.
+            "milestone_event": milestone_event,
         }
         self.belief_system.task_beliefs = belief_parts["task_beliefs"]
         self.metric.log(f"Agent {self.name} beliefs: {beliefs}")
@@ -443,12 +616,16 @@ class CustomAgent(BaseChatAgent):
                 comm_text = "\n".join(
                     f"  {c}" for c in communication if c
                 )
+            # One-shot milestone banner (Phase 2): empty unless a milestone
+            # reward fired this step, in which case it precedes Position.
+            _ms_prefix = f"{milestone_event}\n" if milestone_event else ""
             rl_prompt = (
                 f"Task: {task}\n"
                 f"Last action: {last_action}\n"
                 f"Reward: {reward_text or 'N/A'}\n"
+                f"{_ms_prefix}"
                 f"Position: {position_text or 'Unknown'}\n"
-                f"Status: {player_status_text or 'Health: ?/20 | Hunger: ?/20 | Time: Unknown'}\n"
+                f"Status: {player_status_text or 'Health: ?/20 | Time: Unknown'}\n"
                 f"Critique: {critique}\n"
                 f"Error: {error}\n"
                 f"Communications:\n{comm_text or '  (none)'}\n"

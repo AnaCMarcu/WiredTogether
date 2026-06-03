@@ -215,7 +215,7 @@ class AutoCurriculum:
             picked_object=picked_object,
             position_text=position_text or "Unknown",
             player_status_text=player_status_text
-                or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
+                or "Health: ?/20 | Time: Unknown",
             current_chamber=current_chamber or "Unknown",
             completed_milestones=self._format_milestones(completed_milestones),
             # Per-chamber milestone-progress block (you-done / team-done /

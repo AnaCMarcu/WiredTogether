@@ -173,10 +173,16 @@ function five_chambers.fire_milestone(milestone_id, contributors)
     -- fires later from digging inside Ch2.
     if _CH1_UNLOCK_MILESTONES[milestone_id]
        and five_chambers.door_state
-       and not five_chambers.door_state.door1_open
-       and not five_chambers.door_state.door1_force_teleported then
-        five_chambers.open_door1()
-        five_chambers.fire_milestone("m_door1_open", {actual[1]})
+       and not five_chambers.door_state.door1_open then
+        if five_chambers.door_state.door1_force_teleported then
+            minetest.log("action",
+                "[five_chambers] m_door1_open suppressed for "
+                .. actual[1] .. " (Ch1 timeout teleport fired this episode; "
+                .. milestone_id .. " in Ch2 is not an honest Door 1 unlock)")
+        else
+            five_chambers.open_door1()
+            five_chambers.fire_milestone("m_door1_open", {actual[1]})
+        end
     end
 end
 

@@ -55,6 +55,21 @@ minetest.register_on_mods_loaded(function()
     end)
 end)
 
+-- ── HUD hiding (shared by join / respawn / global-step safety net) ──
+-- Hide every client HUD element whose pixels would occlude the agent's visual
+-- observation (hotbar, crosshair, healthbar, chat) plus the nametag. Idempotent
+-- — safe to call repeatedly; hud_set_flags is a no-op when already cleared.
+local function hide_player_hud(player)
+    if not player then return end
+    player:hud_set_flags({
+        hotbar    = false,
+        crosshair = false,
+        healthbar = false,
+        chat      = false,
+    })
+    player:set_nametag_attributes({color = {a = 0, r = 0, g = 0, b = 0}})
+end
+
 -- ── Player join ───────────────────────────────────────────────────
 
 minetest.register_on_joinplayer(function(player)
@@ -71,19 +86,36 @@ minetest.register_on_joinplayer(function(player)
     player:set_pos(spawn_pos)
     player:set_hp(20, {type="set_hp", from="mod"})
 
-    -- HUD: hide hotbar/crosshair/healthbar — keep what the RL obs needs.
-    player:hud_set_flags({
-        hotbar    = false,
-        crosshair = false,
-        healthbar = false,
-        chat      = false,
-    })
-    player:set_nametag_attributes({color={a=0, r=0, g=0, b=0}})
+    -- HUD: hide hotbar/crosshair/healthbar/nametag — keep what the RL obs needs.
+    hide_player_hud(player)
 
     -- Milestone tracking: record initial position for M1 and inventory for M3.
     five_chambers.init_player_milestone_state(name)
     five_chambers.record_spawn_pos(name, spawn_pos)
     -- Inventory is empty on first join; prev_inv_total defaults to 0.
+end)
+
+-- ── Player respawn ────────────────────────────────────────────────
+-- Re-apply the HUD-hide on respawn. Minetest RESETS hud flags to their
+-- defaults on death/respawn, so without this the hotbar/crosshair/healthbar
+-- reappear after the FIRST death (Ch4 zombies / Ch5 boss) and stay visible —
+-- a gray HUD panel occluding the bottom of the agent's observation for the
+-- rest of the episode. register_on_joinplayer only covers the initial spawn,
+-- which is why the box first shows up exactly when an agent enters Ch4 (the
+-- first combat chamber) and dies.
+minetest.register_on_respawnplayer(function(player)
+    -- Apply immediately AND again on the next server step. Minetest/VoxeLibre can
+    -- apply its default HUD state slightly AFTER on_respawnplayer callbacks run,
+    -- which would override a synchronous-only re-hide and leave the gray
+    -- hotbar/health panel occluding the view for the rest of the episode. The
+    -- deferred minetest.after(0) re-apply lands after the engine's reset, so the
+    -- hide sticks regardless of ordering.
+    hide_player_hud(player)
+    local pname = player:get_player_name()
+    minetest.after(0, function()
+        hide_player_hud(minetest.get_player_by_name(pname))
+    end)
+    return false  -- let the default respawn placement proceed
 end)
 
 -- ── Global step ───────────────────────────────────────────────────
@@ -93,6 +125,15 @@ minetest.register_globalstep(function(dtime)
     minetest.set_timeofday(0.5)
     -- Increment Lua-tick counter (runs at 20Hz; Python step = 3 Lua ticks).
     five_chambers.step_counter = five_chambers.step_counter + 1
+    -- Safety net: re-hide the HUD on all players ~once per second. Guarantees the
+    -- gray HUD panel can never persist for the rest of an episode even if some
+    -- respawn/teleport path slips past the on_respawnplayer re-hide. hud_set_flags
+    -- is a no-op when the flags are already cleared, so this adds no visible churn.
+    if five_chambers.step_counter % 20 == 0 then
+        for _, p in ipairs(minetest.get_connected_players()) do
+            hide_player_hud(p)
+        end
+    end
 end)
 
 -- ── Episode reset (Craftium channel) ─────────────────────────────

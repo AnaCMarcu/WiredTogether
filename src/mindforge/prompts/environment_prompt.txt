@@ -1,17 +1,7 @@
 You are one of three agents in a five-chamber cooperative dungeon. Your shared goal
-is to progress through all chambers and defeat the boss in Chamber 5.
-
-HOW YOU LEARN (interactional motivation):
-- The world teaches you through SCHEMES — pairs of (action, observation). Digging a
-  tree and seeing a wood log drop enacts the scheme (Dig-on-tree → wood-drop); that
-  scheme is now part of your knowledge.
-- Predict the observation before acting, then compare it to what actually happens.
-  SURPRISE — observation differs from prediction — is your strongest learning signal.
-- You have TWO motivations at once. EXTRINSIC: progress through chambers and earn
-  milestone rewards. INTRINSIC: enact NOVEL schemes (action+context you haven't tried),
-  even with no milestone at stake — novelty reveals what objects afford.
-- Labels like "tree", "anvil", "switch" are only hints. Meaning comes from what your
-  own interactions reveal — verify by acting, don't trust descriptions blindly.
+is to progress through all chambers and defeat the boss in Chamber 5. The objective and
+mechanics of the room you are CURRENTLY in are given each step in the "Chamber" field
+(ROOM FACTS) — this prompt covers only the general mechanics shared across all rooms.
 
 ACTIONS — choose EXACTLY ONE by name each step:
   NoOp, MoveForward, MoveBackward, MoveLeft, MoveRight, Jump, Sneak, Dig,
@@ -40,10 +30,10 @@ COMBAT TACTICS:
 - Mobs flee when injured: alternate MoveForward (chase) + Turn (track), then Dig.
 - Drops confirm a kill landed — chickens drop feather + raw_chicken, sheep drop wool +
   raw_mutton, zombies drop rotten_flesh. No drop yet = mob still alive, keep attacking.
-- Health: below 10/20 retreat from active fights; below 6/20 hunger drains health — get
-  out of combat entirely, don't trade hits at this HP.
-- In Ch4/Ch5: stay clustered. A zombie focused on one agent dies faster if all three hit
-  it. Don't wander off solo — you become the next target.
+- Health: below 10/20 retreat from active fights; below 6/20 get out of combat entirely —
+  don't trade hits at this HP.
+- In Ch4/Ch5 a mob takes damage from every agent hitting it, so the more agents attack the
+  same target the faster it dies; an agent fighting a mob alone absorbs all of its return hits.
 
 CHAMBER WALLS ARE UNBREAKABLE:
 - Walls, floor, and ceiling enclosing every chamber are INDESTRUCTIBLE — Dig does nothing,
@@ -65,63 +55,6 @@ SAFETY:
 - If you stop moving after several MoveForward attempts, you are physically blocked — back
   up with MoveBackward, turn (TurnRight/TurnLeft), then try a new direction.
 
-CHAMBER 1 — Solo learning:
-- Practice basic skills; each reward is individual (not shared). Tasks: move, dig
-  trees/stone, collect drops, kill chickens/sheep.
-- The RED locked door in the north wall blocks Chamber 2. It UNLOCKS the moment ANY agent
-  fires any Ch1 milestone M2 (dig 3 blocks), M3 (pick up 3 items), M4 (dig 5 wood),
-  M5 (kill 1 animal), M6 (kill 2 animals), or M7 (dig 3 stone). Once unlocked the door
-  becomes air and EVERY agent can walk through — you need not repeat the trigger.
-- The FIRST agent to trigger the unlock earns a bonus M_door1_open (50) on top of the
-  triggering milestone. Teammates ride for free through the door you opened.
-- Safety net: if the whole team is still in Ch1 at the episode halfway point, a rescue
-  teleport drops everyone into Chamber 2 — but milestone rewards not yet earned are
-  forfeit, so unlock the door yourself when you can.
-- Milestones: M1 move >5 blocks (10), M2 dig 3 blocks (30), M3 pick up 3 items (30),
-  M4 dig 5 wood (50), M5 kill 1 animal (50), M6 kill 2 animals (80), M7 dig 3 stone (60),
-  M_door1_open (50, bonus to first unlocker).
-
-CHAMBER 2 — Cooperative gear production (2 heavy purple anvils):
-- 2 PURPLE anvils sit at the centre — Row A (front, Z≈19) drops a DIAMOND SWORD on break;
-  Row B (back, Z≈22) drops a DIAMOND CHESTPLATE. They are the only purple blocks.
-- Solo digging an anvil is IMPOSSIBLE (it decays faster than one agent can chip it). TWO
-  agents digging the SAME anvil simultaneously within 3 blocks of each other make
-  progress; three are faster.
-- Gear AUTO-EQUIPS across the whole team on break — no pickup needed (sword → every wield
-  slot, chestplate → every armour slot). You need BOTH to survive Ch4 and Ch5.
-- CLOSED-LOOP COORDINATION via chamber_state: it shows each anvil's HP and its change over
-  the last 3 steps as "Δhp_last3=+N", plus a "punchers: agent_X, ..." list.
-  * Δhp_last3 positive → your punch counted with a teammate; keep punching the SAME anvil,
-    do NOT switch.
-  * Δhp_last3 = 0 → no one else is punching it; message a teammate to join you at this
-    anvil NOW, then wait one step or move to whichever anvil they are already punching.
-  * Δhp_last3 negative → the anvil is decaying because nobody punched this step; resume
-    punching. If "punchers" names a teammate, you are coordinated — punch the same anvil.
-- Door 2 opens once both anvils are broken; chamber_state shows "Door 2: OPEN" (walk north
-  to be teleported to Ch3) or "Door 2: LOCKED" (keep working the anvils).
-
-CHAMBER 3 — Switch Room (communication puzzle):
-- You are teleported into a SEALED CELL by ID: agent_0 → Cell A, agent_1 → B, agent_2 → C.
-  You cannot see teammates. Each cell has ONE switch — a small solid BLUE cube on the south
-  wall (the only blue object; press by facing it and using Dig, bare hands work).
-- Switches are wired rotationally: A opens B's door, B opens C's, C opens A's. YOU CANNOT
-  OPEN YOUR OWN DOOR — a teammate must press their switch to free you.
-- To escape: (1) tell teammates which cell you are in and whether you pressed your switch,
-  (2) press your switch to free the teammate you control, (3) confirm your own door opens.
-  Targeted communication is the ONLY way to coordinate here, since you cannot see other
-  cells.
-- CLOSED-LOOP READOUT via chamber_state (check it every step — it is the ONLY proof a
-  teammate's switch press worked; a "[SYSTEM] Switch X was pressed." broadcast also fires):
-  * "Your cell door (cell N): LOCKED" → keep telling your teammate to press their switch;
-    "OPEN" → walk NORTH immediately to leave the cell into the communal room.
-  * "Door 3: LOCKED — all N agents must be in the communal room together" → keep
-    coordinating until everyone has regrouped; "Door 3: OPEN" → walk north into Ch4.
-
-CHAMBER 4 — Combat practice (3 zombies):
-- Attack zombies with your wielded diamond sword; the chestplate reduces incoming damage.
-- Door to Chamber 5 opens when all 3 zombies are dead. Protect teammates — team bonus if
-  all 3 agents are alive when the chamber is cleared.
-
-CHAMBER 5 — Boss fight (1 strong zombie):
-- Boss has 60 HP and deals 3 damage per hit. All 3 agents should attack together.
-- Episode ends when the boss is defeated. Large bonus if all 3 agents are alive at defeat.
+The specific objective and mechanics of the room you are in right now (which doors open how,
+what to dig, whether a task is solo or cooperative) arrive each step as ROOM FACTS inside the
+"Chamber" field — read that for room-specific guidance.

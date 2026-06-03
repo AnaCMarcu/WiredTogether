@@ -62,13 +62,14 @@ def parse_args():
                         help="Observation height in pixels")
     parser.add_argument("--no-communication", action="store_true",
                         help="Disable inter-agent communication entirely.")
-    parser.add_argument("--simultaneous", action="store_true",
-                        help="Simultaneous-move stepping: all agents choose "
-                             "actions concurrently on the shared state s_t "
-                             "and the env advances once via step_all(), vs "
-                             "the default turn-based round-robin. Stage 1: "
-                             "LLM agents only — not yet supported with --rl "
-                             "or macro actions.")
+    parser.add_argument("--simultaneous", action=argparse.BooleanOptionalAction,
+                        default=True,
+                        help="Simultaneous-move stepping (DEFAULT ON): all agents "
+                             "choose actions concurrently on the shared state s_t "
+                             "and the env advances once via step_all(). Pass "
+                             "--no-simultaneous for the legacy turn-based "
+                             "round-robin (e.g. parity testing). Works with both "
+                             "LLM and --rl agents (macro actions were removed).")
     parser.add_argument("--sleep-time", type=float, default=0.0,
                         help="Seconds to sleep between LLM calls (rate-limit protection)")
     parser.add_argument("--belief-interval", type=int, default=5,
@@ -199,9 +200,12 @@ def parse_args():
                              "directive's ask_target also overwrites the "
                              "agent's communication_target at the routing "
                              "site. Requires --hebbian.")
-    parser.add_argument("--social-interval", type=int, default=1,
+    parser.add_argument("--social-interval", type=int, default=8,
                         help="Run the social-module deliberation every N "
-                             "steps (cached in between). 1 = every step.")
+                             "steps (cached in between). 1 = every step. "
+                             "Default 8: bonds/directives change slowly, so "
+                             "deliberating every step burned ~200 LLM calls/"
+                             "room/agent for no behavioral gain.")
     # ── Experiment tracking ──
     parser.add_argument("--experiment-id", type=str, default=None,
                         help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
@@ -243,24 +247,10 @@ def parse_args():
              "Order maps to agent_0, agent_1, ... so changing the order changes "
              "which physical spawn gets which role — keep it stable across runs.",
     )
-    # ── Phased difficulty ──
-    parser.add_argument("--survival-mode", action="store_true",
-                        help="Enable the phased difficulty system. Without this flag "
-                             "the run stays in exploration phase (current behavior).")
-    parser.add_argument("--survival-episode", type=int, default=1,
-                        help="Switch to survival at the start of this episode (1-indexed). "
-                             "Only active when --survival-mode is set. (default: 1)")
-    parser.add_argument("--survival-step", type=int, default=None,
-                        help="Switch to survival at this cumulative global step count. "
-                             "Whichever of --survival-episode / --survival-step triggers "
-                             "first wins. Only active when --survival-mode is set.")
-    parser.add_argument("--survival-gradual", action="store_true",
-                        help="Ramp difficulty: enable mobs first, then hunger "
-                             "--survival-gradual-delay steps later. "
-                             "Only active when --survival-mode is set.")
-    parser.add_argument("--survival-gradual-delay", type=int, default=500,
-                        help="Steps between mobs-only and full survival in gradual mode "
-                             "(default: 500). Only active when --survival-gradual is set.")
+    # (Survival-mode CLI was removed — the env is permanently in
+    # exploration mode: mobs passive in Ch1, hunger drain disabled. The
+    # five-chamber curriculum supplied its own difficulty progression via
+    # chamber-entry milestones, so the phased difficulty layer was redundant.)
     # ── Checkpoint / resume ──
     parser.add_argument("--checkpoint-dir", type=str, default=None,
                         help="Directory to write checkpoints into. "
@@ -291,7 +281,6 @@ def load_prompts():
     prompts = {
         "environment": _read(os.path.join(prompt_dir, "environment_prompt.txt")),
         "system_template": _read(os.path.join(prompt_dir, "system_prompt.txt")),
-        "instruction": _read(os.path.join(prompt_dir, "instruction_prompt_p2.txt")),
         "critic": _read(os.path.join(prompt_dir, "critic_prompt.txt")),
         "curriculum_questions": _read(os.path.join(prompt_dir, "curriculum_questions.txt")),
         "skill_description": _read(os.path.join(prompt_dir, "skill_description_prompt.txt")),
@@ -371,7 +360,7 @@ def build_role_configs(
 def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
                  rl_config=None, belief_interval=5, critic_interval=20,
                  centralized_critic=None, is_resume: bool = False,
-                 social_module_mode: str = "none", social_interval: int = 1):
+                 social_module_mode: str = "none", social_interval: int = 8):
     """Initialize all Mindforge agents.
 
     ``centralized_critic`` (when not None) is shared by all agents' RLLayers
@@ -484,7 +473,6 @@ async def agent_do_action(
     frame_image,
     communications: list,
     reward_text: str,
-    instruction_prompt,
     environment,
     error=None,
     error_count=0,
@@ -551,7 +539,7 @@ async def agent_do_action(
         if error_count < 5:
             content, last_action, error_count = await agent_do_action(
                 agent, agent_id, frame_image, communications, reward_text,
-                instruction_prompt, environment,
+                environment,
                 error=str(e), error_count=error_count + 1,
                 social_bonds=social_bonds,
                 propagation_summary=propagation_summary,
@@ -584,9 +572,7 @@ def save_checkpoint(
     hebbian_graph: "HebbianSocialGraph",
     frames_list=None,
     save_frames: bool = False,
-    current_phase: str = "exploration",
     global_step: int = 0,
-    gradual_trigger_step=None,
 ) -> None:
     """Serialize full run state to *checkpoint_dir* so a new SLURM job can resume.
 
@@ -653,10 +639,7 @@ def save_checkpoint(
             "run_id": run_id,
             "metric": metric_dict,
             "cli_args": vars(args),
-            # Phase state — restored in run() so a resumed job re-signals the server
-            "current_phase": current_phase,
             "global_step": global_step,
-            "gradual_trigger_step": gradual_trigger_step,
             # Team composition
             "team_mode": getattr(metric, "team_mode", "heterogeneous"),
             "homogeneous_role": getattr(metric, "homogeneous_role", "agent"),
@@ -770,13 +753,13 @@ def load_checkpoint(
             cur.failed_tasks = list(cur_state.get("failed_tasks", []))
             print(f"[CKPT] Restored curriculum for agent_{i}: task={cur.current_task!r}")
 
-    # Restore phase state — stashed on metric so run() can pick it up
-    metric._current_phase_ckpt = run_state.get("current_phase", "exploration")
-    metric._global_step_ckpt   = run_state.get("global_step", 0)
-    metric._gradual_trigger_step_ckpt = run_state.get("gradual_trigger_step", None)
+    # Restore cumulative step count — stashed on metric so run() can pick it up.
+    # (Phase-state restoration was removed when the survival mode was retired;
+    # legacy checkpoints with `current_phase` / `gradual_trigger_step` are
+    # silently ignored.)
+    metric._global_step_ckpt = run_state.get("global_step", 0)
 
-    print(f"[CKPT] Loaded checkpoint: ep={episode} step={step} run_id={run_id} "
-          f"phase={metric._current_phase_ckpt}")
+    print(f"[CKPT] Loaded checkpoint: ep={episode} step={step} run_id={run_id}")
     return {"episode": episode, "step": step, "run_id": run_id, "metric": metric}
 
 
@@ -790,27 +773,6 @@ def _frames_to_mp4(pil_frames: list, mp4_path: str, fps: int = 2) -> None:
         print(f"  Saved MP4: {mp4_path}")
     except Exception as exc:
         logging.warning("MP4 save failed (%s): %s", mp4_path, exc)
-
-
-def _should_transition_to_survival(episode: int, global_step: int, args) -> bool:
-    """Return True when the run should leave exploration phase.
-
-    episode     — 0-indexed current episode number
-    global_step — cumulative step count across all episodes
-    args        — parsed CLI namespace
-
-    Returns False immediately when --survival-mode is not set, so existing
-    runs with no new flags are completely unaffected.
-    """
-    if not args.survival_mode:
-        return False
-    # --survival-step fires on cumulative step count
-    if args.survival_step is not None and global_step >= args.survival_step:
-        return True
-    # --survival-episode fires at start of that episode (1-indexed → 0-indexed)
-    if episode + 1 >= args.survival_episode:
-        return True
-    return False
 
 
 # ===========================
@@ -956,7 +918,6 @@ async def run(args):
     # Load prompts
     prompts = load_prompts()
     environment_prompt = prompts["environment"]
-    instruction_prompt = prompts["instruction"]
 
     # Build system prompt with environment details baked in
     from agent_modules.util import safe_format
@@ -1124,15 +1085,6 @@ async def run(args):
     print(f"[FEATURES] Team mode:        {args.team_mode}  ({num_agents} agents)")
     _roles_str = ", ".join(f"agent_{i}={rc['name']}" for i, rc in enumerate(role_configs))
     print(f"[FEATURES] Role assignment:  {_roles_str}")
-    if args.survival_mode:
-        if args.survival_step is not None:
-            _surv_trigger = f"global_step >= {args.survival_step}"
-        else:
-            _surv_trigger = f"episode >= {args.survival_episode}"
-        _surv_type = "gradual (mobs first, hunger later)" if args.survival_gradual else "immediate full survival"
-        print(f"[FEATURES] Survival mode:    ENABLED — {_surv_type}  trigger: {_surv_trigger}")
-    else:
-        print(f"[FEATURES] Survival mode:    OFF  (exploration only — mobs passive, hunger frozen)")
     if hebbian_config.enabled:
         print(f"[FEATURES] Hebbian:          ENABLED  ltp={hebbian_config.ltp_lr}  "
               f"ltd={hebbian_config.ltd_lr}  gamma={hebbian_config.reward_diffusion_gamma}  "
@@ -1205,17 +1157,10 @@ async def run(args):
         )
         print(f"[CKPT] Resuming from episode {resume_episode} step {resume_step}")
 
-    # ── Phase state ──
-    # current_phase and global_step persist across episodes for the survival trigger.
-    current_phase = "exploration"
+    # Cumulative env-step counter (across episodes). Persists through resume.
     global_step = 0
-    _gradual_trigger_step = None   # set when survival_mobs_only is first written
-
-    # If resuming, restore phase state from checkpoint metric
     if args.resume:
-        current_phase = getattr(metric, "_current_phase_ckpt", "exploration")
         global_step = getattr(metric, "_global_step_ckpt", 0)
-        _gradual_trigger_step = getattr(metric, "_gradual_trigger_step_ckpt", None)
 
     for episode in range(resume_episode, num_episodes):
         print(f"\n{'='*60}")
@@ -1225,9 +1170,6 @@ async def run(args):
         environment.reset()
         environment.reset_milestone_offset()
         environment.reset_anvil_coop_offset()
-        # Re-signal the Minetest server with the current phase (important on resume
-        # or whenever the world is freshly reset).
-        environment._write_phase_file(current_phase)
 
         # ── Warm-up: wait for media to load ──
         # VoxeLibre media download can take 5-15 minutes on HPC nodes
@@ -1452,7 +1394,6 @@ async def run(args):
                 _wb.log({
                     "step/ep": episode + 1,
                     "step/step_in_ep": step + 1,
-                    "step/phase": current_phase,
                     **{
                         f"step/episode_return/agent_{i}": float(metric.episode_returns[i])
                         for i in range(num_agents)
@@ -1471,46 +1412,12 @@ async def run(args):
                     f"agent_{i}={environment.get_chamber(i) or '?'}"
                     for i in range(num_agents)
                 )
-                phase_tag = f" | phase={current_phase}" if args.survival_mode else ""
                 print(
                     f"[{run_id}] ep={episode+1} step={step+1}/{max_steps} | "
                     f"chambers: {chambers_str} | "
                     f"returns: {returns_str} | "
-                    f"tasks: {tasks_str}{phase_tag}"
+                    f"tasks: {tasks_str}"
                 )
-
-            # ── Phase transition check ────────────────────────────────────
-            if current_phase == "exploration" and _should_transition_to_survival(
-                episode, global_step, args
-            ):
-                new_phase = "survival_mobs_only" if args.survival_gradual else "survival"
-                current_phase = new_phase
-                _gradual_trigger_step = global_step
-                environment._write_phase_file(current_phase)
-                metric.record_phase_transition(global_step, episode + 1, current_phase)
-                _border = "!" * 60
-                print(f"\n{_border}")
-                print(f"[PHASE TRANSITION] → {current_phase}  ep={episode+1}  global_step={global_step}")
-                print(f"{_border}\n")
-                logging.info("[PHASE TRANSITION] → %s ep=%d global_step=%d",
-                             current_phase, episode + 1, global_step)
-
-            elif (
-                current_phase == "survival_mobs_only"
-                and args.survival_gradual
-                and _gradual_trigger_step is not None
-                and global_step >= _gradual_trigger_step + args.survival_gradual_delay
-            ):
-                current_phase = "survival"
-                environment._write_phase_file(current_phase)
-                metric.record_phase_transition(global_step, episode + 1, current_phase)
-                _border = "!" * 60
-                print(f"\n{_border}")
-                print(f"[PHASE TRANSITION] → {current_phase} (hunger enabled)  ep={episode+1}  global_step={global_step}")
-                print(f"{_border}\n")
-                logging.info("[PHASE TRANSITION] → %s (hunger) ep=%d global_step=%d",
-                             current_phase, episode + 1, global_step)
-            # ─────────────────────────────────────────────────────────────
 
             if environment.all_done():
                 print(f"  All agents done at step {step+1}")
@@ -1787,14 +1694,6 @@ async def run(args):
                 reward_text = environment.get_reward_summary(agent_id)
 
                 comms_for_agent = agent_communications[agent_id]
-                # Prepend a one-line survival notice to the instruction prompt so
-                # agents know the world has changed. Empty string in exploration
-                # phase — no effect on existing behavior.
-                _phase_prefix = (
-                    "[SURVIVAL MODE ACTIVE: hostile mobs now spawn, hunger drains. "
-                    "Prioritize safety alongside your role tasks.]\n\n"
-                    if current_phase != "exploration" else ""
-                )
                 # Milestone-progress block: per-agent done + team done +
                 # still-open per chamber. Plumbed to both the curriculum LLM
                 # (task selection) and the action LLM (action selection)
@@ -1822,7 +1721,7 @@ async def run(args):
                 else:
                     content, last_action, error_count = await agent_do_action(
                         agent, agent_id, frame_image, comms_for_agent, reward_text,
-                        _phase_prefix + instruction_prompt, environment,
+                        environment,
                         error_count=error_count,
                         social_bonds=_bond_strings.get(agent_id),
                         propagation_summary=_propagation_strings.get(agent_id, ""),
@@ -2237,6 +2136,35 @@ async def run(args):
                     "hebbian_diffuse": _hebb,
                 }
 
+            # ── Per-step reward log line ──────────────────────────────────
+            # Surface every non-zero reward (task, comm, milestone, Hebbian
+            # diffuse) into stdout so the SLURM .out / run.log shows the
+            # signal stream as it accumulates. Previously only milestone
+            # events ([MILESTONE] from Lua) and end-of-episode totals were
+            # visible, so per-step comm-base / comm-milestone / Hebbian
+            # contributions were silent — hard to audit "where did the
+            # 50-pt reward in step 12 come from?" without parsing the
+            # JSON step_log post-hoc. Compact format: show only the
+            # streams that fired this step plus the final diffused total
+            # the RL/metric layer actually saw.
+            _row_strs = []
+            for _aid in range(num_agents):
+                _d = _reward_decomp_this_step[_aid]
+                _total = float(diffused_rewards[_aid])
+                _streams_nonzero = {k: v for k, v in _d.items() if abs(v) > 1e-6}
+                if abs(_total) > 1e-6 or _streams_nonzero:
+                    _comps = " ".join(
+                        f"{k}={v:+.2f}" for k, v in _streams_nonzero.items()
+                    ) or "0"
+                    _row_strs.append(
+                        f"agent_{_aid}[{_comps}]→{_total:+.2f}"
+                    )
+            if _row_strs:
+                print(
+                    f"[REWARD ep={episode+1} step={step+1}/{max_steps}] "
+                    + "  ".join(_row_strs)
+                )
+
             # ── Phase 3: Record (diffused) rewards for metrics + RL ──
             for agent_id, agent in enumerate(agents):
                 agent_name = f"agent_{agent_id}"
@@ -2482,9 +2410,7 @@ async def run(args):
                     hebbian_graph=hebbian_graph,
                     frames_list=frames_list if args.checkpoint_frames else None,
                     save_frames=args.checkpoint_frames,
-                    current_phase=current_phase,
                     global_step=global_step,
-                    gradual_trigger_step=_gradual_trigger_step,
                 )
 
             # ── Graceful shutdown on signal ──
@@ -2501,9 +2427,7 @@ async def run(args):
                     hebbian_graph=hebbian_graph,
                     frames_list=frames_list if args.checkpoint_frames else None,
                     save_frames=args.checkpoint_frames,
-                    current_phase=current_phase,
                     global_step=global_step,
-                    gradual_trigger_step=_gradual_trigger_step,
                 )
                 print(f"[CKPT] Shutdown checkpoint saved → {_ep_ckpt_dir}")
                 _wb.finish()
@@ -2597,9 +2521,7 @@ async def run(args):
             metric=metric,
             agents=agents,
             hebbian_graph=hebbian_graph,
-            current_phase=current_phase,
             global_step=global_step,
-            gradual_trigger_step=_gradual_trigger_step,
         )
 
         # Save GIFs for this episode

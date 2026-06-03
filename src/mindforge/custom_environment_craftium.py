@@ -964,7 +964,14 @@ class CraftiumEnvironmentInterface:
         return f"{h12}:{m:02d} {period} ({phase})"
 
     def get_player_status_text(self, agentId: int) -> str:
-        """Return a single string with health, hunger, and time for the given agent."""
+        """Return a single string with health and time for the given agent.
+
+        Hunger is intentionally omitted: the env is permanently in exploration
+        mode (survival was retired), so mcl_hunger drain is neutralised and
+        hunger is force-pinned to 20/20 every step — a constant carries no
+        information for the policy and its "hunger drains health" implication
+        can never fire. See player_state.lua's hunger-neutralisation block.
+        """
         world_path = self._get_world_path()
         agent_name = f"agent{agentId}"
 
@@ -976,7 +983,6 @@ class CraftiumEnvironmentInterface:
                 return fallback
 
         health = _read(os.path.join(world_path, f"health_{agent_name}.txt"), "?/20")
-        hunger = _read(os.path.join(world_path, f"hunger_{agent_name}.txt"), "?/20")
 
         tod_raw = _read(os.path.join(world_path, "timeofday.txt"), None)
         if tod_raw is not None:
@@ -987,7 +993,7 @@ class CraftiumEnvironmentInterface:
         else:
             time_str = "Unknown"
 
-        return f"Health: {health} | Hunger: {hunger} | Time: {time_str}"
+        return f"Health: {health} | Time: {time_str}"
 
     def get_position_text(self, agentId: int) -> str:
         """Return a formatted position string for the given agent, or 'Unknown'."""
@@ -1128,32 +1134,6 @@ class CraftiumEnvironmentInterface:
                 chamber_from, e,
             )
             return False
-
-    def _write_phase_file(self, phase: str) -> None:
-        """Atomically write *phase* to {world_path}/phase.txt.
-
-        Uses write-to-tmp + os.replace so the Lua mod never reads a partial
-        file.  Safe to call before reset() — returns early if the world path
-        is not yet resolved.
-
-        Valid phase strings (must match Lua phase-polling block):
-          "exploration"        — mobs frozen, hunger frozen (default)
-          "survival_mobs_only" — mobs hostile, hunger still frozen
-          "survival"           — mobs hostile + hunger drains
-        """
-        try:
-            world_path = self._get_world_path()
-        except AttributeError:
-            return  # called before reset(); env not yet initialised
-        tmp = os.path.join(world_path, "phase.tmp")
-        dst = os.path.join(world_path, "phase.txt")
-        try:
-            with open(tmp, "w") as f:
-                f.write(phase)
-            os.replace(tmp, dst)  # POSIX-atomic rename
-        except OSError as e:
-            import logging as _log
-            _log.warning("[PHASE] _write_phase_file failed: %s", e)
 
     @staticmethod
     def _pretty_item_name(raw_name: str) -> str:
