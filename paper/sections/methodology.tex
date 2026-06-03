@@ -11,10 +11,105 @@ Open environments with shifting populations are the long-term motivation for thi
     \label{fig:five_chambers_curriculum}
 \end{figure*}
 
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+  font=\sffamily\footnotesize,
+  >={Stealth[length=2.4mm,width=2mm]},
+  soft/.style={blur shadow={shadow blur steps=6, shadow xshift=0pt, shadow yshift=-0.5mm, shadow opacity=22}},
+  io/.style={draw=cEnv!75, line width=0.7pt, fill=cEnv!9, rounded corners=3pt, align=center,
+             inner sep=4pt, minimum height=11mm, text width=19mm, soft},
+  pill/.style={draw=cAgent!50, line width=0.5pt, fill=cAgent!10, rounded corners=4pt, align=center,
+               font=\sffamily\scriptsize, inner sep=2pt, minimum height=6mm, text width=15mm},
+  core/.style={draw=cCore!85, line width=1pt, fill=cCore!18, rounded corners=4pt, align=center,
+               inner sep=4pt, minimum height=15mm, text width=24mm, soft},
+  out/.style={draw=cCore!70, line width=0.6pt, fill=cCore!9, rounded corners=4pt, align=center,
+              font=\sffamily\scriptsize, inner sep=3pt, minimum height=7mm, text width=24mm},
+  rl/.style={draw=cRL!75, line width=0.8pt, fill=cRL!10, rounded corners=4pt, align=center,
+             inner sep=4pt, minimum height=18mm, text width=41mm, soft},
+  heb/.style={draw=cHeb!75, line width=0.8pt, fill=cHeb!9, rounded corners=4pt, align=center,
+              inner sep=4pt, minimum height=18mm, text width=41mm, soft},
+  title/.style={font=\sffamily\bfseries\footnotesize},
+  arr/.style={-{Stealth[length=2.4mm,width=2mm]}, line width=0.8pt, rounded corners=2pt, draw=cEnv!85},
+  flow/.style={-{Stealth[length=2.2mm]}, line width=0.7pt, dash pattern=on 2.2pt off 1.6pt, draw=cEnv!55},
+  node distance=7mm and 9mm,
+]
+
+% ============ Tier 1: per-agent inference loop ============
+% --- MindForge cognitive stack: 8 module pills in a 2x4 grid ---
+\node[pill] (g1) {Perception};
+\node[pill, right=2.5mm of g1] (g2) {Partner};
+\node[pill, below=2.2mm of g1] (g3) {Interaction};
+\node[pill, right=2.5mm of g3] (g4) {Task beliefs};
+\node[pill, below=2.2mm of g3] (g5) {Episodic mem.};
+\node[pill, right=2.5mm of g5] (g6) {Skills};
+\node[pill, below=2.2mm of g5] (g7) {Auto-curric.};
+\node[pill, right=2.5mm of g7] (g8) {Critic};
+\begin{scope}[on background layer]
+  \node[draw=cAgent!60, line width=0.8pt, fill=cAgent!4, rounded corners=5pt,
+        fit=(g1)(g2)(g7)(g8), inner sep=3.2mm, inner ysep=5.5mm, soft] (stack) {};
+\end{scope}
+\node[title, text=cAgent!75, anchor=north] at ([yshift=-1.2mm]stack.north) {MindForge cognitive stack};
+
+% --- environment + observation to the left of the stack ---
+\node[io, left=9mm of stack] (obs) {Observation\\[1pt]$o_i^t$};
+\node[io, left=of obs, fill=cEnv!13] (env) {Environment\\[1pt]\textbf{WIRE} (Luanti)};
+
+% --- LLM core + outputs to the right of the stack ---
+\node[core, right=9mm of stack] (llm) {\textbf{Frozen LLM}\\[1pt]Qwen3.5-2B\\[1pt]$+$ LoRA adapter};
+\node[out, right=8mm of llm, yshift=4.5mm] (head) {action head $\phi \to a_i^t$};
+\node[out, right=8mm of llm, yshift=-4.5mm, fill=cCore!5] (msg)  {message gen $\to m_i^t,\tau_i^t$};
+
+% inference-path arrows
+\draw[arr] (env) -- (obs);
+\draw[arr] (obs) -- (stack);
+\draw[arr] (stack) -- node[above, font=\sffamily\scriptsize, text=cEnv!70]{prompt} (llm);
+\draw[arr] (llm.east) to[out=20,in=180] (head.west);
+\draw[arr] (llm.east) to[out=-20,in=180] (msg.west);
+
+% feedback arc: act in the environment
+\draw[arr, draw=cCore!80]
+  ([yshift=1mm]head.north) .. controls ($(head.north)+(0,13mm)$) and ($(env.north)+(0,15mm)$) ..
+  node[above, font=\sffamily\scriptsize, text=black, pos=0.5]{act in environment: $a_i^t,\ m_i^t,\ \tau_i^t$}
+  (env.north);
+
+% ============ Tier 2: centralised training subsystems ============
+\node[rl, below=22mm of stack, xshift=-6mm] (mappo)
+  {centralised critic $V_\psi(s^t)$\\[2pt] advantage $A_i^t$ (GAE)\\[2pt] PPO clipped update};
+\node[title, text=cRL!72, anchor=south] at ([yshift=1mm]mappo.north) {Reinforcement learning (MAPPO, CTDE)};
+
+\node[heb, right=34mm of mappo] (hebb)
+  {co-activity $c_{ij}(t)\;\cdot\;$ modulator $m_i(t)$\\[2pt] social graph $W(t)$\\[2pt] reward diffusion $r_i \!\to\! r_i'$};
+\node[title, text=cHeb!75, anchor=south] at ([yshift=1mm]hebb.north) {Hebbian social plasticity};
+
+% experience bus: environment -> both trainers (anchored in the gap, clear of the stack)
+\coordinate (busY)   at ($(mappo.north)+(0,9mm)$);
+\coordinate (busEnv) at (env.south |- busY);
+\draw[flow] (env.south) -- (busEnv);
+\draw[flow,-] (busEnv) -- (busEnv -| hebb.north);
+\draw[flow] (busEnv -| mappo.north) -- (mappo.north)
+      node[pos=0.45, right, font=\sffamily\scriptsize, text=cEnv!75]{$r_i^t,\,s^t$};
+\draw[flow] (busEnv -| hebb.north) -- (hebb.north)
+      node[pos=0.45, right, font=\sffamily\scriptsize, text=cEnv!75]{$r_i^t$, pos., comm.};
+
+% couplings between the two trainers (wide gap keeps labels clear of boxes)
+\draw[arr, draw=cRL!85] ([yshift=4mm]mappo.east) to[bend left=10]
+      node[above, font=\sffamily\scriptsize, text=black]{$A_i^t$ (modulator)} ([yshift=4mm]hebb.west);
+\draw[arr, draw=cHeb!85] ([yshift=-4mm]hebb.west) to[bend left=10]
+      node[below, font=\sffamily\scriptsize, text=black]{$r_i'$ (diffused reward)} ([yshift=-4mm]mappo.east);
+
+% policy update back up to the agent's LoRA adapter
+\draw[arr, draw=cRL!85] ([xshift=8mm]mappo.north) to[out=80,in=-95]
+      node[right, font=\sffamily\scriptsize, text=black, pos=0.62]{policy update (LoRA, $\phi$)} (llm.south);
+\end{tikzpicture}
+\caption{System overview. \textbf{Top --- per-agent inference loop.} Each agent's \emph{MindForge} cognitive stack turns the observation $o_i^t$ into an action-selection prompt; the frozen LLM with a LoRA adapter emits a discrete action $a_i^t$ (via the action head $\phi$) and, in a separate call, a targeted message $(m_i^t,\tau_i^t)$, both enacted in the WIRE environment. \textbf{Bottom --- centralised training.} MAPPO updates the LoRA adapter and action head from rollouts under centralised training with decentralised execution, while the Hebbian module maintains the reward-modulated social graph $W(t)$. The subsystems are coupled: the per-step advantage $A_i^t$ drives the Hebbian modulator, and reward diffusion redistributes rewards along $W(t)$ to produce the diffused reward $r_i'$ that enters the policy gradient.}
+\label{fig:system_overview}
+\end{figure*}
+
 \subsection{Agent architecture}
 \label{sec:agent_architecture}
 
-Each agent in WIRE is built on the \emph{MindForge} cognitive stack \cite{licua2025mindforge}: a frozen language model (Qwen3.5-2B throughout) serving as the per-agent reasoning core, augmented with cognitive modules that maintain the agent's situated understanding of the task, its teammates, and its own progress. When the reinforcement-learning layer is enabled, a low-rank adapter (LoRA) \cite{hu2022lora} is inserted into the attention layers and trained against environment reward; the rest of the model remains frozen. At each step, an agent receives a $320 \times 180$ first-person frame, a structured text context, and any messages addressed to it by teammates, and emits one discrete action together with an optional natural-language message addressed to one specific teammate.
+An overview of the full system---the per-agent cognitive stack, the MAPPO reinforcement-learning layer, and the Hebbian social module that couples them---is shown in \autoref{fig:system_overview}. Each agent in WIRE is built on the \emph{MindForge} cognitive stack \cite{licua2025mindforge}: a frozen language model (Qwen3.5-2B throughout) serving as the per-agent reasoning core, augmented with cognitive modules that maintain the agent's situated understanding of the task, its teammates, and its own progress. When the reinforcement-learning layer is enabled, a low-rank adapter (LoRA) \cite{hu2022lora} is inserted into the attention layers and trained against environment reward; the rest of the model remains frozen. At each step, an agent receives a $320 \times 180$ first-person frame, a structured text context, and any messages addressed to it by teammates, and emits one discrete action together with an optional natural-language message addressed to one specific teammate.
 
 \paragraph{Cognitive modules.}
 Six modules feed into the action-selection prompt: \emph{perception beliefs} describe what the agent sees in action-relative spatial terms and flag unenacted action--target combinations as intrinsic-motivation targets \cite{georgeon2012interactional}; \emph{partner beliefs} maintain one entry per teammate summarising their chamber, gear, commitments, and reported schemes; \emph{interaction beliefs} extract actionable shared information like role assignments, switch and door status, combat coordination, team-level warnings from recent conversation; \emph{task beliefs} provide a procedural context for the current task, framed as a scheme that pairs an intended action with the observation the agent expects to see; \emph{episodic memory}, a ChromaDB vector store keyed on task embeddings, retrieves past attempts with a 70/30 success-to-failure ratio so the agent sees mostly positive examples without losing failure signal; and \emph{skills} stores successful action-thought pairs in a separate vector store for retrieval on similar tasks.

@@ -36,8 +36,22 @@ class BeliefSystem:
         self._partner_prompt = override_partner_prompt or partner_prompt
         self._interaction_prompt = override_interaction_prompt or interaction_prompt
         self._context_prompt = override_context_prompt or context_prompt
+        self.number_of_agents = number_of_agents
         self.perception_beliefs = ""
         self.partner_beliefs = {i: "" for i in range(number_of_agents - 1)}
+        self.interaction_beliefs = ""
+        self.task_beliefs = ""
+
+    def reset(self):
+        """Clear all beliefs back to their empty initial state.
+
+        Beliefs are WORKING memory — momentary inferences about the current
+        frame / task / teammates — not learned knowledge, so they are dropped
+        between episodes (see CustomAgent.on_reset). Durable social learning
+        lives in the Hebbian bond weights, not here.
+        """
+        self.perception_beliefs = ""
+        self.partner_beliefs = {i: "" for i in range(self.number_of_agents - 1)}
         self.interaction_beliefs = ""
         self.task_beliefs = ""
 

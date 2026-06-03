@@ -1181,6 +1181,17 @@ async def run(args):
         environment.reset_milestone_offset()
         environment.reset_anvil_coop_offset()
 
+        # Reset each agent's per-episode WORKING memory (current task, last
+        # chamber, beliefs, cached critic + action/reward window) so the new
+        # episode starts clean in Ch1 instead of inheriting the previous
+        # episode's end-of-run Ch5 task/beliefs (which cost ~80 disoriented
+        # steps and a milestone deficit). Long-term memory (skills, episodes,
+        # Hebbian bonds) is preserved. Skipped on the resume-continuation
+        # episode so checkpoint-restored task/state is kept.
+        if episode > resume_episode:
+            for _ag in agents:
+                await _ag.on_reset(CancellationToken())
+
         # ── Warm-up: wait for media to load ──
         # VoxeLibre media download can take 5-15 minutes on HPC nodes
         # (first run only; subsequent runs use cached media).

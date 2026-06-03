@@ -229,6 +229,11 @@ class CustomAgent(BaseChatAgent):
         # Rolling (last_action, step_reward) buffer handed to the critic so it
         # sees the whole window since its last run, not just the final step.
         self._step_log = deque(maxlen=CRITIC_HISTORY_WINDOW)
+        # Set True after the one-time skill/episode/curriculum wipe on the very
+        # first on_messages call. Guards that wipe so the per-episode task reset
+        # (on_reset sets current_task=None) does NOT re-trigger it and nuke the
+        # learned skill/episode DBs every episode.
+        self._initialized = False
 
         self.action_selection = (
             action_selection if action_selection else ActionSelection()
@@ -296,7 +301,11 @@ class CustomAgent(BaseChatAgent):
 
         print("Error count: ", error_count)
         # if first round, clear skill manager data
-        if self.auto_curriculum.current_task is None:
+        if self.auto_curriculum.current_task is None and not self._initialized:
+            # One-time only (very first call of the whole run): start each DB
+            # from a clean slate. NOT re-run on per-episode resets, where
+            # current_task is also None but skills/episodes must persist.
+            self._initialized = True
             await self.skill_manager.clear_data()
             await self.episode_manager.clear_data()
             await self.auto_curriculum.clear_data()
@@ -717,4 +726,34 @@ class CustomAgent(BaseChatAgent):
         return content, error_count
 
     async def on_reset(self, cancellation_token: CancellationToken) -> None:
-        pass
+        """Reset per-episode WORKING memory between episodes; keep LONG-TERM memory.
+
+        Called from the training loop right after environment.reset(). Without
+        it, episode N+1 inherits episode N's end-of-run state — the curriculum
+        task, _last_chamber, and beliefs all still describe the previous
+        episode's final chamber (e.g. the Ch5 boss room). The agent then spends
+        the first ~80 steps acting on a stale boss-fight context while the env
+        has actually teleported it back to Ch1, so it re-earns far fewer
+        milestones (observed: 6 vs 16) and episode returns stay flat.
+
+        RESET (working memory): current task (-> a fresh Ch1 task is generated),
+        _last_chamber, all beliefs, the cached critic verdict, and the rolling
+        action/reward window.
+
+        PRESERVED (long-term learning): the skill vector DB, the episode-memory
+        DB, and the Hebbian bond weights — these legitimately carry across
+        episodes. The _initialized guard in on_messages ensures setting
+        current_task=None here does NOT re-trigger the one-time DB wipe.
+        """
+        self.auto_curriculum.current_task = None
+        self._last_chamber = None
+        self.belief_system.reset()
+        self._cached_beliefs = {
+            "perception_beliefs": "",
+            "partner_beliefs": "",
+            "interaction_beliefs": "",
+            "task_beliefs": "",
+        }
+        self._cached_success = None
+        self._cached_critique = None
+        self._step_log.clear()
