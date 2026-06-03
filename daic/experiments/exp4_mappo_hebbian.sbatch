@@ -20,7 +20,7 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-mappo,hebbian,centralized_critic}"
 # MAPPO + Hebbian — the headline thesis claim. Shared centralized critic plus
 # a Hebbian social-plasticity graph that diffuses rewards across co-bonded
 # teammates and seeds the in-prompt {social_bonds} block.
-run_exp "exp4_mappo_hebbian_rl" "$MODEL_2B" \
+run_exp "exp4_mappo_hebbian" "$MODEL_2B" \
     --rl \
     --rl-critic-mode centralized \
     --rl-model-path "$MODEL_2B" \

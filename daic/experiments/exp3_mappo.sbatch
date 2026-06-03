@@ -17,7 +17,7 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-mappo,centralized_critic}"
 
 # MAPPO — action-level PPO with a SHARED centralized critic V(joint_state).
 # No Hebbian. The classical multi-agent baseline.
-run_exp "exp3_mappo_rl" "$MODEL_2B" \
+run_exp "exp3_mappo" "$MODEL_2B" \
     --rl \
     --rl-critic-mode centralized \
     --rl-model-path "$MODEL_2B" \

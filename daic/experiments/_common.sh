@@ -22,7 +22,7 @@ SEEDS=(42 123 456)
 if [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
     SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
 elif [ -z "${SEED:-}" ]; then
-    SEED=42
+    SEED=123
 fi
 
 # ── Weights & Biases ──────────────────────────────────────────────────────
