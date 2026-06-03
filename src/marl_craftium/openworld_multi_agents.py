@@ -48,6 +48,10 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         seed: Optional[int] = None,
         frameskip: int = 3,
         pmul: int = 20,
+        voxel_obs: bool = False,
+        voxel_obs_rx: int = 10,
+        voxel_obs_ry: int = 5,
+        voxel_obs_rz: int = 10,
     ):
         super().__init__()
 
@@ -60,14 +64,30 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         self.render_mode = render_mode
         self.frameskip = frameskip
         self.pmul = pmul
+        # T2.1 voxel observation opt-in. Default OFF so existing runs are
+        # unaffected. Radii chosen for the five-chambers world: 10/5/10
+        # covers a 21×11×21 grid (~5k cells) — plenty of context for
+        # the LLM-grounding use case without blowing TCP throughput
+        # (default Craftium radii are 20/10/20, ~4× more data).
+        self.voxel_obs = voxel_obs
+        self.voxel_obs_rx = voxel_obs_rx
+        self.voxel_obs_ry = voxel_obs_ry
+        self.voxel_obs_rz = voxel_obs_rz
 
         self.possible_agents = [f"agent_{i}" for i in range(num_agents)]
         self.agents = self.possible_agents.copy()
 
-        self.env = _PatchedMarlCraftiumEnv(
-            **self._build_marl_kwargs(num_agents, obs_width, obs_height,
-                                      max_steps, seed, frameskip, pmul),
+        _marl_kwargs = self._build_marl_kwargs(
+            num_agents, obs_width, obs_height, max_steps, seed, frameskip, pmul,
         )
+        if voxel_obs:
+            _marl_kwargs.update(
+                voxel_obs=True,
+                voxel_obs_rx=voxel_obs_rx,
+                voxel_obs_ry=voxel_obs_ry,
+                voxel_obs_rz=voxel_obs_rz,
+            )
+        self.env = _PatchedMarlCraftiumEnv(**_marl_kwargs)
 
         self._observation_space = spaces.Box(
             low=0, high=255, shape=(obs_height, obs_width, 3), dtype=np.uint8,
@@ -140,6 +160,30 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
             seed=seed,
             frameskip=frameskip,
             pmul=pmul,
+            # T1.4 — Luanti server tuning for our small world.
+            # Defaults in craftium/craftium/minetest.py target an open
+            # Minecraft-scale world with a 100-block view distance and a
+            # 200 fps server tick. Five-chambers spans ~70 blocks in z
+            # total (Ch1 z=0..15 through Ch5 z=59..67), all pre-generated
+            # by world_gen.lua at server start, so almost all of the
+            # default server CPU goes to renderable-chunk bookkeeping the
+            # agents never see.
+            #
+            # fps_max: 200 → 30 — Lua tick rate is 20 Hz; server tick +
+            #   screenshot capture happen once per env step, so 30 fps
+            #   gives ~50% safety margin without burning idle CPU on a
+            #   software renderer. Passed at the top level so it applies
+            #   to BOTH server and client (the constructor threads it
+            #   into both, see craftium/craftium/multiagent_env.py:103,
+            #   126).
+            fps_max=30,
+            mt_server_conf={
+                # max_block_send_distance: 100 → 8 — 8 mapblocks ≈ 128
+                # blocks, more than enough for the agent's camera
+                # frustum at obs_width=320.
+                "max_block_send_distance": 8,
+                "max_block_generate_distance": 8,
+            },
             # Smallest engine-allowed HUD scale so hearts/food bar don't eat half
             # the 320×180 observation frame.
             mt_clients_conf={"hud_scaling": 0.5},

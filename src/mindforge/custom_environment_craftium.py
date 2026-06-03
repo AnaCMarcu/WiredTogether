@@ -51,14 +51,13 @@ ACTION_MAP = {
 
 VALID_ACTIONS = [k for k in ACTION_MAP if k != "Inventory"]
 
-# Macro actions REMOVED (2026-06): agents use ONLY primitive actions. Macros
-# were long fixed sequences (9-23 steps) the policy committed to with no
-# perception / decision / communication in between — ~30% of env-time on
-# autopilot, directly harming coordination. Kept as an EMPTY dict so the
-# (now-dead) macro dispatch in step()/_resolve_action_for_agent is a
-# guaranteed no-op without touching that critical stepping code. With no
-# keys, VALID_ACTIONS stays primitives-only (no append below).
-_MACRO_ACTIONS: dict = {}
+# Macro actions were REMOVED (2026-06): agents use only primitive actions.
+# Macros were long fixed sequences (9-23 steps) the policy committed to
+# with no perception / decision / communication in between — ~30% of
+# env-time on autopilot, directly harming coordination. The macro
+# dispatch + queue scaffolding (kept as a no-op for a while after the
+# removal) was deleted in the T1.6 cleanup; agents now always execute
+# the primitive action the LLM emits.
 
 
 class CraftiumEnvironmentInterface:
@@ -118,7 +117,9 @@ class CraftiumEnvironmentInterface:
         ("MoveForward", 8),
     ]
 
-    def __init__(self, num_agents=3, obs_width=480, obs_height=480, max_steps=10000, seed=None, frameskip=3, pmul=20):
+    def __init__(self, num_agents=3, obs_width=480, obs_height=480, max_steps=10000,
+                 seed=None, frameskip=3, pmul=20, voxel_obs=False,
+                 voxel_obs_rx=10, voxel_obs_ry=5, voxel_obs_rz=10):
         self.num_agents = num_agents
         self.seed = seed
         self.env = OpenWorldMultiAgentEnv(
@@ -129,7 +130,12 @@ class CraftiumEnvironmentInterface:
             seed=seed,
             frameskip=frameskip,
             pmul=pmul,
+            voxel_obs=voxel_obs,
+            voxel_obs_rx=voxel_obs_rx,
+            voxel_obs_ry=voxel_obs_ry,
+            voxel_obs_rz=voxel_obs_rz,
         )
+        self.voxel_obs_enabled = voxel_obs
         self.environment_prompt = environment_prompt
 
         # Per-agent state
@@ -146,7 +152,6 @@ class CraftiumEnvironmentInterface:
         self._last_xz = {}           # agent_name -> (x, z) at last movement action
         self._stuck_move_steps = {}  # agent_name -> int, consecutive non-idle steps without xz change
         self._escape_queue = {}      # agent_name -> list of (action, ticks) remaining
-        self._macro_queue = {}       # agent_name -> list of [action, remaining_count]
 
         # Camera pitch tracker (net LookDown steps minus LookUp steps).
         # Positive = looking down, negative = looking up.
@@ -180,6 +185,15 @@ class CraftiumEnvironmentInterface:
         # Cleared once read.
         self._invalid_action_warning = {}  # agent_name -> str
 
+        # Per-step memoization cache (T1.2). Invalidated at the top of
+        # every step() / step_all() call. Keys are arbitrary identifiers
+        # ("timeofday", ("chamber_state", agent_id), etc.) → cached value.
+        # Used to share agent-invariant file reads (e.g. timeofday.txt,
+        # which is the same string for all 3 agents) across the per-agent
+        # prompt-building loop. Without this, get_player_status_text()
+        # opens timeofday.txt 3 times per step in a 3-agent run.
+        self._step_cache: dict = {}
+
         # Per-anvil HP history (last 4 reads) so _read_ch2_anvil_state()
         # can surface a "Δhp last 3 steps" delta in the LLM prompt. Keyed
         # by the kind string from anvils.txt ("A" or "B"), value is a
@@ -205,7 +219,6 @@ class CraftiumEnvironmentInterface:
         self._last_xz = {}
         self._stuck_move_steps = {}
         self._escape_queue = {}
-        self._macro_queue = {}
         self._pitch = {}
         self._futile_actions = {}
         # Clear the per-anvil HP history so the "Δhp_last3" signal
@@ -221,13 +234,12 @@ class CraftiumEnvironmentInterface:
         step()).
 
         Runs the same guards step() has always run *before* it builds the
-        underlying action dict: macro dispatch, invalid-action clamping, the
-        idle-loop guard, position-stuck / escape-queue handling, respawn pitch
-        reset, and the camera pitch cap. It mutates the identical per-agent
-        state dicts step() mutates (_macro_queue, _escape_queue,
-        _consecutive_idle, _last_xz, _stuck_move_steps, _pitch,
-        _futile_actions, _invalid_action_warning) and returns the resolved
-        PRIMITIVE action name.
+        underlying action dict: invalid-action clamping, the idle-loop guard,
+        position-stuck / escape-queue handling, respawn pitch reset, and the
+        camera pitch cap. It mutates the identical per-agent state dicts
+        step() mutates (_escape_queue, _consecutive_idle, _last_xz,
+        _stuck_move_steps, _pitch, _futile_actions, _invalid_action_warning)
+        and returns the resolved PRIMITIVE action name.
 
         NOTE: this is intentionally a verbatim lift of step()'s preprocessing
         block. step() is left untouched until the --simultaneous path is
@@ -238,18 +250,6 @@ class CraftiumEnvironmentInterface:
         import logging as _logging
 
         agent_name = f"agent_{agentId}"
-
-        # ── Macro dispatch ────────────────────────────────────────────────────
-        if action_str in _MACRO_ACTIONS:
-            self._macro_queue[agent_name] = [[a, n] for a, n in _MACRO_ACTIONS[action_str]]
-            _logging.info("Agent %d macro '%s' queued: %s", agentId, action_str, _MACRO_ACTIONS[action_str])
-
-        if self._macro_queue.get(agent_name) and not self._escape_queue.get(agent_name):
-            seg = self._macro_queue[agent_name][0]
-            action_str = seg[0]
-            seg[1] -= 1
-            if seg[1] <= 0:
-                self._macro_queue[agent_name].pop(0)
 
         if action_str not in ACTION_MAP:
             _logging.warning(
@@ -373,6 +373,10 @@ class CraftiumEnvironmentInterface:
         and acts on it. This is a deliberate turn-based -> simultaneous-move
         change and is only reached when the caller opts in via --simultaneous.
         """
+        # Drop the per-step file-read cache (T1.2) — a new tick is starting,
+        # so timeofday + any other cached agent-invariant reads must be
+        # re-fetched. Same guard at the top of step().
+        self._step_cache.clear()
         live = list(self.env.agents)
 
         # 1. Resolve every agent's primitive via the shared preprocessing.
@@ -464,23 +468,12 @@ class CraftiumEnvironmentInterface:
         """
         import logging as _logging
 
+        # Drop the per-step file-read cache (T1.2). The turn-based path
+        # calls step() once per agent, but a fresh env tick fires inside
+        # this method, so timeofday + state-file reads must re-fetch.
+        self._step_cache.clear()
+
         agent_name = f"agent_{agentId}"
-
-        # ── Macro dispatch ────────────────────────────────────────────────────
-        # If the LLM picked a macro name, load its primitive sequence.
-        if action_str in _MACRO_ACTIONS:
-            self._macro_queue[agent_name] = [[a, n] for a, n in _MACRO_ACTIONS[action_str]]
-            _logging.info("Agent %d macro '%s' queued: %s", agentId, action_str, _MACRO_ACTIONS[action_str])
-
-        # Consume from the macro queue — but only when the escape queue is NOT
-        # active (escape takes priority; macro count only decrements when it fires).
-        if self._macro_queue.get(agent_name) and not self._escape_queue.get(agent_name):
-            seg = self._macro_queue[agent_name][0]   # [action_str, remaining]
-            action_str = seg[0]
-            seg[1] -= 1
-            if seg[1] <= 0:
-                self._macro_queue[agent_name].pop(0)
-        # ── End macro dispatch ────────────────────────────────────────────────
 
         if action_str not in ACTION_MAP:
             _logging.warning(
@@ -982,28 +975,172 @@ class CraftiumEnvironmentInterface:
             except (FileNotFoundError, OSError):
                 return fallback
 
+        # Health is per-agent → read every call.
         health = _read(os.path.join(world_path, f"health_{agent_name}.txt"), "?/20")
 
-        tod_raw = _read(os.path.join(world_path, "timeofday.txt"), None)
-        if tod_raw is not None:
-            try:
-                time_str = self._tod_to_clock(float(tod_raw))
-            except ValueError:
-                time_str = "Unknown"
+        # Time-of-day is global (same string for every agent), so cache it
+        # per env-step in `_step_cache`. In a 3-agent run this turns 3 file
+        # opens per step into 1.
+        if "timeofday" in self._step_cache:
+            time_str = self._step_cache["timeofday"]
         else:
-            time_str = "Unknown"
+            tod_raw = _read(os.path.join(world_path, "timeofday.txt"), None)
+            if tod_raw is not None:
+                try:
+                    time_str = self._tod_to_clock(float(tod_raw))
+                except ValueError:
+                    time_str = "Unknown"
+            else:
+                time_str = "Unknown"
+            self._step_cache["timeofday"] = time_str
 
         return f"Health: {health} | Time: {time_str}"
 
     def get_position_text(self, agentId: int) -> str:
-        """Return a formatted position string for the given agent, or 'Unknown'."""
+        """Return a formatted position + facing string for the agent.
+
+        Reads pos AND yaw natively from the mt_channel observations
+        (stashed on the patched env in T1.3). The yaw is the agent's
+        camera horizontal angle in degrees from Lua (NUE convention:
+        0 = north). The compass label gives the LLM a discrete direction
+        token without it having to count TurnLeft/TurnRight actions.
+
+        Returns "Unknown" when the env hasn't produced a position yet.
+        """
         try:
             pos = self.env.env._positions[agentId]
-            if pos is not None:
-                return f"x={pos[0]:.1f}, y={pos[1]:.1f}, z={pos[2]:.1f}"
+            if pos is None:
+                return "Unknown"
+            text = f"x={pos[0]:.1f}, y={pos[1]:.1f}, z={pos[2]:.1f}"
+            try:
+                yaw = self.env.env._yaws[agentId]
+                # Normalize to [0, 360). NUE: 0=north, 90=east, 180=south, 270=west.
+                yaw_norm = float(yaw) % 360.0
+                _DIRECTIONS = [
+                    ("north", 0), ("north-east", 45), ("east", 90), ("south-east", 135),
+                    ("south", 180), ("south-west", 225), ("west", 270), ("north-west", 315),
+                ]
+                facing = min(_DIRECTIONS, key=lambda d: min(
+                    abs(yaw_norm - d[1]), 360.0 - abs(yaw_norm - d[1])
+                ))[0]
+                text += f" facing {facing} (yaw={yaw_norm:.0f}°)"
+            except (AttributeError, IndexError, TypeError):
+                pass
+            return text
         except (AttributeError, IndexError, TypeError):
-            pass
-        return "Unknown"
+            return "Unknown"
+
+    def get_agent_velocity(self, agentId: int):
+        """Return the agent's (vx, vy, vz) velocity tuple or None.
+
+        Sourced from the mt_channel binary protocol (units: blocks/sec).
+        Useful for a faster / more reliable stuck detector than the
+        existing XZ-displacement heuristic — a velocity magnitude of
+        near zero across consecutive steps is a positive signal the
+        agent is wedged.
+        """
+        try:
+            return self.env.env._velocities[agentId]
+        except (AttributeError, IndexError, TypeError):
+            return None
+
+    def get_agent_pitch(self, agentId: int) -> float:
+        """Return the agent's camera pitch in degrees (native, not the
+        hand-rolled action-counter substitute). 0 = level; negative =
+        looking up; positive = looking down. Returns 0.0 if not yet
+        available."""
+        try:
+            return float(self.env.env._pitches[agentId])
+        except (AttributeError, IndexError, TypeError):
+            return 0.0
+
+    def get_agent_yaw(self, agentId: int) -> float:
+        """Return the agent's camera yaw in degrees (native). 0 = north.
+        Returns 0.0 if not yet available."""
+        try:
+            return float(self.env.env._yaws[agentId])
+        except (AttributeError, IndexError, TypeError):
+            return 0.0
+
+    def get_agent_dtime(self, agentId: int) -> float:
+        """Return Minetest's wall-clock dtime for this agent's last server
+        tick (seconds). Useful for profiling server-side stalls. Returns
+        0.0 if not yet available."""
+        try:
+            return float(self.env.env._dtimes[agentId])
+        except (AttributeError, IndexError, TypeError):
+            return 0.0
+
+    def get_voxel_obs(self, agentId: int):
+        """Return the agent's voxel observation tensor or None.
+
+        Shape: (2*voxel_obs_rx+1, 2*voxel_obs_ry+1, 2*voxel_obs_rz+1, 3).
+        Last dim = (node_id, light, param2). Coordinate convention NUE
+        (North=+x, Up=+y, East=+z). Available only when the env was
+        constructed with ``voxel_obs=True``; otherwise returns None.
+        """
+        if not self.voxel_obs_enabled:
+            return None
+        try:
+            return self.env.env._voxobs[agentId]
+        except (AttributeError, IndexError, TypeError):
+            return None
+
+    def get_voxel_summary(self, agentId: int, top_k: int = 6) -> str:
+        """Compact text summary of the voxel observation for the LLM prompt.
+
+        Returns a one-line description of the most common non-air nodes
+        around the agent, formatted as ``Nearby: stone×42, tree×8, dirt×6
+        (plus 9 air-equivalent)``. Designed to be embedded in the
+        per-step prompt as a hallucination-resistant grounding signal:
+        the LLM cannot perceive a zombie that isn't in the voxel readout.
+
+        Returns an empty string when voxel obs is disabled or the tensor
+        hasn't been populated yet. The mapping from numeric node_id to
+        human node-name (e.g. ``mcl_core:tree``) requires the env's node
+        registry, which Craftium does NOT expose to Python — for now the
+        summary reports raw node-id integers grouped by frequency. The
+        LLM is told (via its system prompt's voxel section, added with
+        this feature) that low IDs are usually engine air/walls and a
+        handful of high IDs are the interactive blocks for the current
+        chamber.
+        """
+        if not self.voxel_obs_enabled:
+            return ""
+        try:
+            vox = self.env.env._voxobs[agentId]
+        except (AttributeError, IndexError, TypeError):
+            return ""
+        if vox is None:
+            return ""
+        try:
+            import numpy as _np
+            node_ids = vox[..., 0].astype(_np.int64).ravel()
+            uniques, counts = _np.unique(node_ids, return_counts=True)
+            # Discard "air-equivalent" (id 0 is typically CONTENT_AIR or
+            # CONTENT_IGNORE in Luanti's node registry). Reported as a
+            # tail count instead of cluttering the top entries.
+            air_mask = (uniques == 0)
+            air_count = int(counts[air_mask].sum()) if air_mask.any() else 0
+            non_air = [
+                (int(u), int(c))
+                for u, c in zip(uniques, counts) if u != 0
+            ]
+            non_air.sort(key=lambda x: x[1], reverse=True)
+            head = non_air[:top_k]
+            parts = [f"node_id={u}×{c}" for u, c in head]
+            tail = sum(c for _, c in non_air[top_k:])
+            extras = []
+            if tail > 0:
+                extras.append(f"+{tail} other non-air")
+            if air_count > 0:
+                extras.append(f"{air_count} air")
+            joined = ", ".join(parts) if parts else "no non-air voxels in range"
+            if extras:
+                joined += " (" + "; ".join(extras) + ")"
+            return f"Nearby voxels: {joined}"
+        except Exception:
+            return ""
 
     def warmup_noop(self):
         """Send NoOps to keep channels alive without incrementing step counters.
@@ -1186,10 +1323,6 @@ class CraftiumEnvironmentInterface:
                 lines.append(f"  [{slot_num}] {name} x{count}{marker}")
 
         return "Hotbar:\n" + "\n".join(lines)
-
-    def is_macro_running(self, agentId: int) -> bool:
-        """True while a macro action is still consuming steps for this agent."""
-        return bool(self._macro_queue.get(f"agent_{agentId}"))
 
     # Tool tier ranking — higher = better. Covers pickaxes, swords, and axes.
     _TOOL_TIER = {

@@ -36,10 +36,9 @@ from rl_layer import RLConfig, RLLayer, HebbianConfig, HebbianSocialGraph
 
 ROLE_NAMES = ["agent", "hunter", "harvester", "scouter"]
 
-# Macro actions removed — agents use only primitives. Kept as an EMPTY set so
-# the (now-dead) macro reward-deferral / macro-skip paths are guaranteed
-# no-ops without restructuring the step loop.
-_MACRO_NAMES = frozenset()
+# Macro actions removed — agents use only primitives. The macro
+# reward-deferral / macro-skip scaffolding (kept around as a no-op for a
+# while after the macro removal) was deleted in the T1.6 cleanup.
 
 
 def parse_args():
@@ -266,6 +265,16 @@ def parse_args():
     parser.add_argument("--checkpoint-frames", action="store_true",
                         help="Include raw frames in the checkpoint for GIF continuity. "
                              "Off by default as frame arrays can be large.")
+    parser.add_argument("--voxel-obs", action="store_true",
+                        help="Enable Craftium's per-agent voxel observations "
+                             "(node-id + light + param2 grid around each agent). "
+                             "When set, the per-step prompt gains a "
+                             "'Nearby voxels: ...' line summarising the most "
+                             "common blocks within ~10 blocks. Intended as a "
+                             "hallucination-resistant grounding signal: the LLM "
+                             "cannot perceive a zombie that isn't in the voxel "
+                             "readout. Adds ~50 KB per agent per env step to the "
+                             "TCP payload; OFF by default.")
     return parser.parse_args()
 
 
@@ -985,6 +994,7 @@ async def run(args):
         obs_height=obs_height,
         max_steps=max_steps,
         seed=seed,
+        voxel_obs=args.voxel_obs,
     )
 
     # ── RL layer config ──
@@ -1181,7 +1191,17 @@ async def run(args):
         import time as _time
         # On resume the media cache is already populated — skip the warmup loop
         # unless explicitly requested.
-        skip_warmup = args.resume is not None and args.resume_skip_warmup
+        # T2.3: episode > 0 ALSO skips the minimum warmup. From ep2 onwards
+        # MarlCraftiumEnv.reset() takes the soft-reset branch (no MT process
+        # restart; the existing clients just respawn via the Lua handler),
+        # so the 300 s VoxeLibre media-load wait that's needed on ep1 is
+        # pure dead air on ep2+. The std-dev sanity check below still fires
+        # to confirm clients are responsive — it just exits in seconds when
+        # the world is already loaded instead of sleeping for warmup_time.
+        skip_warmup = (
+            (args.resume is not None and args.resume_skip_warmup)
+            or episode > 0
+        )
         warmup_secs = 0 if skip_warmup else args.warmup_time
         max_warmup = 900  # hard cap: 15 min
         print(f"  * Waiting for media to load (min {warmup_secs}s, max {max_warmup}s)...")
@@ -1271,13 +1291,6 @@ async def run(args):
         # in the prompt as a hard ground-truth list so the LLM can't claim
         # to be in a chamber it has never visited (frequent hallucination).
         _visited_chambers = [set() for _ in range(num_agents)]
-        # ── Macro credit assignment: accumulate rewards across macro ticks ──
-        # When the RL policy selects a macro, store_reward() is deferred until
-        # the macro completes so the buffer receives the full accumulated return.
-        _macro_acc_reward = {i: 0.0 for i in range(num_agents)}   # accumulated reward
-        _macro_acc_active = {i: False for i in range(num_agents)}  # deferred store_reward
-        _was_macro_running = {i: False for i in range(num_agents)} # previous-step macro state
-
         # Previous-step memory used to encode the PRE-step joint state for the
         # centralised critic. The joint state V_global is now evaluated at the
         # TOP of each step (i.e. at s_t, before any agent acts) so that the
@@ -1286,19 +1299,80 @@ async def run(args):
         # features — those refer to step t-1 from the perspective of s_t.
         _prev_step_actions = {i: "NoOp" for i in range(num_agents)}
         _prev_step_comms   = {i: "" for i in range(num_agents)}
-        frames_list = []
+
+        # ── T1.5 Hebbian bond-string cache ──
+        # Hebbian.update() runs at most a handful of times per episode (on
+        # specific events: comm milestones, dig coop, etc.), so the O(N²)
+        # bond-string + weight-dict build that fired every step before this
+        # cache was almost always recomputing identical output. Key on the
+        # graph's `_step_count` — it increments inside update() and stays
+        # frozen otherwise. Cache miss = rebuild + bump version; cache hit
+        # = reuse the dicts wholesale.
+        _bond_cache_version = -1
+        _bond_strings_cached: dict = {}
+        _bond_weights_cached: dict = {}
+        _bond_deltas_cached: dict = {}
+
+        # ── Frame capture: streaming MP4 + bounded rolling buffer ──
+        # Two outputs per agent per episode:
+        #   (a) <run_dir>/gifs/<run>_<agent>_ep<N>.mp4 — FULL-episode MP4,
+        #       written frame-by-frame to disk via an imageio streaming
+        #       writer. No in-RAM accumulation; bounded memory regardless
+        #       of episode length. Preserves color.
+        #   (b) intermediate per-gif_interval GIF + MP4 checkpoints in
+        #       intermediate_gif_dir, rendered from a ROLLING deque that
+        #       only holds the most recent gif_interval frames.
+        #
+        # Replaced the previous "frames_list = []" accumulator that grew
+        # unbounded across the episode (~2.5 GB by step 1500 × 3 agents),
+        # causing the SLURM cgroup OOM-kill that crashed exp3_mappo
+        # mid-ep3 (job 12616286).
+        import collections as _collections
+        _mp4_writers: list = [None] * num_agents
+        if save_gif:
+            try:
+                import imageio as _imageio_ep
+                for _i in range(num_agents):
+                    _ep_mp4_path = (
+                        f"{gif_dir}/{run_id}_{role_configs[_i]['agent_name']}"
+                        f"_ep{episode+1}.mp4"
+                    )
+                    os.makedirs(os.path.dirname(_ep_mp4_path), exist_ok=True)
+                    _mp4_writers[_i] = _imageio_ep.get_writer(
+                        _ep_mp4_path, fps=2, macro_block_size=1,
+                    )
+            except Exception as _exc:
+                logging.warning(
+                    "[GIF] streaming MP4 writer setup failed (%s); falling "
+                    "back to deque-only capture (final MP4 will be from "
+                    "the last gif_interval frames only).", _exc)
+                _mp4_writers = [None] * num_agents
+
+        # Rolling window — used for both intermediate GIF/MP4 checkpoints
+        # and (as a fallback) the end-of-episode GIF. maxlen bounds RSS to
+        # ~gif_interval × num_agents × frame-size (≈ 165 MB for 300×3 at
+        # 320×180×3). `frames_list` name kept for save_checkpoint compat.
+        _recent_window = max(gif_interval if gif_interval > 0 else 300, 1)
+        frames_list: "_collections.deque" = _collections.deque(maxlen=_recent_window)
 
         def _save_gif_checkpoint(step_num):
-            """Write a GIF for each agent from frames collected so far.
+            """Write a checkpoint GIF + MP4 per agent from the rolling window.
 
-            Intermediate (mid-episode) checkpoint gifs go to
+            Intermediate (mid-episode) checkpoint media go to
             intermediate_gif_dir — kept off the PRB share so the runs/
-            tree stays small (the final per-episode gif still lands in
-            <run_dir>/gifs/ via the end-of-episode block).
+            tree stays small (the final per-episode MP4 lives in
+            <run_dir>/gifs/ via the streaming writer above).
+
+            The rolling window only carries the LAST gif_interval frames,
+            so each checkpoint shows the most recent slice of the episode
+            — perfect for "what was happening when this checkpoint fired?"
+            and bounded in RAM.
             """
+            _window_snapshot = list(frames_list)
             for i in range(num_agents):
                 agent_frames = [
-                    PIL.Image.fromarray(f[i]) for f in frames_list if f[i] is not None
+                    PIL.Image.fromarray(f[i])
+                    for f in _window_snapshot if f[i] is not None
                 ]
                 if agent_frames:
                     gif_path = (
@@ -1423,14 +1497,30 @@ async def run(args):
                 print(f"  All agents done at step {step+1}")
                 break
 
-            # Collect current frames for GIF
+            # Collect current frames for GIF / MP4 capture.
+            #   1. Stream each agent's frame straight to its end-of-ep MP4
+            #      writer (no in-RAM accumulation; bounded RSS).
+            #   2. Push the same frames into the bounded rolling window
+            #      `frames_list` (a deque with maxlen=gif_interval). The
+            #      window drops the oldest frame automatically when full,
+            #      so RSS stays flat regardless of episode length.
             current_frames = []
             for i in range(num_agents):
                 frame = environment.get_agent_frame(i)
-                current_frames.append(
-                    frame if frame is not None
-                    else np.zeros((obs_height, obs_width, 3), dtype=np.uint8)
-                )
+                if frame is None:
+                    frame = np.zeros((obs_height, obs_width, 3), dtype=np.uint8)
+                current_frames.append(frame)
+                if save_gif and _mp4_writers[i] is not None:
+                    try:
+                        _mp4_writers[i].append_data(frame)
+                    except Exception as _exc:
+                        # Don't crash the run on a transient encode error;
+                        # next step will retry, and the deque-fallback
+                        # still produces an end-of-ep video from the last
+                        # gif_interval frames.
+                        logging.warning(
+                            "[GIF] streaming MP4 append failed for agent %d "
+                            "step %d: %s", i, step + 1, _exc)
             frames_list.append(current_frames)
 
             # Periodic GIF checkpoint so partial episodes are visible on HPC time limits
@@ -1459,7 +1549,9 @@ async def run(args):
             # leak last step's events into the next iteration.
             _milestone_events_this_step: list = []
 
-            # Build per-agent social bond summaries for the LLM prompt
+            # Build per-agent social bond summaries for the LLM prompt.
+            # Cached on hebbian_graph._step_count so unchanged bonds skip
+            # the O(N²) rebuild (T1.5).
             _bond_strings = {}
             # Parallel dicts of raw (weight, delta) per teammate, consumed by
             # the SocialModule when --social-module != none. Empty when
@@ -1468,28 +1560,40 @@ async def run(args):
             _bond_weights: dict[int, dict[str, float]] = {}
             _bond_deltas: dict[int, dict[str, float]] = {}
             if hebbian_config.enabled:
-                for i in range(num_agents):
-                    parts = []
-                    for j in range(num_agents):
-                        if j == i:
-                            continue
-                        raw_w = hebbian_graph.get_weight(i, j)
-                        role_j = ROLE_NAMES[j % len(ROLE_NAMES)]
-                        parts.append(f"agent_{j} ({role_j}): {raw_w:.2f}")
-                    _bond_strings[i] = "Social bonds: " + ", ".join(parts)
-                    # Also build the structured (weight, delta) dicts for the
-                    # SocialModule. Keys are "agent_N" strings so they survive
-                    # JSON round-trips and match the comm-target format the
-                    # LLM emits.
-                    delta_row = hebbian_graph.bond_delta_row(i)
-                    _bond_weights[i] = {
-                        f"agent_{j}": float(hebbian_graph.get_weight(i, j))
-                        for j in range(num_agents) if j != i
-                    }
-                    _bond_deltas[i] = {
-                        f"agent_{j}": float(delta_row.get(j, 0.0))
-                        for j in range(num_agents) if j != i
-                    }
+                _current_version = int(getattr(hebbian_graph, "_step_count", 0))
+                if _current_version != _bond_cache_version:
+                    # Bonds changed (or first step) → rebuild and refresh cache.
+                    for i in range(num_agents):
+                        parts = []
+                        for j in range(num_agents):
+                            if j == i:
+                                continue
+                            raw_w = hebbian_graph.get_weight(i, j)
+                            role_j = ROLE_NAMES[j % len(ROLE_NAMES)]
+                            parts.append(f"agent_{j} ({role_j}): {raw_w:.2f}")
+                        _bond_strings[i] = "Social bonds: " + ", ".join(parts)
+                        # Also build the structured (weight, delta) dicts for the
+                        # SocialModule. Keys are "agent_N" strings so they survive
+                        # JSON round-trips and match the comm-target format the
+                        # LLM emits.
+                        delta_row = hebbian_graph.bond_delta_row(i)
+                        _bond_weights[i] = {
+                            f"agent_{j}": float(hebbian_graph.get_weight(i, j))
+                            for j in range(num_agents) if j != i
+                        }
+                        _bond_deltas[i] = {
+                            f"agent_{j}": float(delta_row.get(j, 0.0))
+                            for j in range(num_agents) if j != i
+                        }
+                    _bond_cache_version = _current_version
+                    _bond_strings_cached = dict(_bond_strings)
+                    _bond_weights_cached = {k: dict(v) for k, v in _bond_weights.items()}
+                    _bond_deltas_cached  = {k: dict(v) for k, v in _bond_deltas.items()}
+                else:
+                    # Bonds unchanged → reuse the cached dicts.
+                    _bond_strings = dict(_bond_strings_cached)
+                    _bond_weights = {k: dict(v) for k, v in _bond_weights_cached.items()}
+                    _bond_deltas  = {k: dict(v) for k, v in _bond_deltas_cached.items()}
 
             # ── Phase B+ §1: per-teammate reward-propagation prompt lines ──
             # Disabled — the rlvr.reward_propagation module was removed.
@@ -1598,7 +1702,15 @@ async def run(args):
                             visited_chambers=sorted(_visited_chambers[_i]),
                             completed_milestones=_ag_done,
                             milestone_progress=_mp,
-                            chamber_state=environment.get_chamber_state(_i),
+                            chamber_state=(
+                                environment.get_chamber_state(_i)
+                                + (
+                                    "\n" + environment.get_voxel_summary(_i)
+                                    if args.voxel_obs
+                                    and environment.get_voxel_summary(_i)
+                                    else ""
+                                )
+                            ),
                             bond_weights=_bond_weights.get(_i),
                             bond_deltas=_bond_deltas.get(_i),
                         )
@@ -1609,18 +1721,6 @@ async def run(args):
                         )
                         return _i, {"action": "NoOp", "thoughts": "", "communication": ""}
 
-                # Agents mid-macro replay their queued primitive WITHOUT an
-                # LLM call (matching the turn-based macro-skip), so the
-                # env-side action stream AND comm volume stay identical
-                # across stepping modes — important for a clean turn-based
-                # vs --simultaneous A/B. The queued primitive is pulled
-                # inside step_all() via _resolve_action_for_agent; None
-                # content => the shared loop body skips comm routing for
-                # that agent (exactly as the turn-based macro-skip does).
-                _sim_macro = [
-                    _i for _i in _sim_alive if environment.is_macro_running(_i)
-                ]
-                _sim_deciding = [_i for _i in _sim_alive if _i not in _sim_macro]
                 # SEQUENTIAL, not asyncio.gather: the agents still all decide
                 # on the shared pre-step state s_t before step_all() runs, so
                 # simultaneous-move semantics hold — but interleaving their
@@ -1629,7 +1729,7 @@ async def run(args):
                 # in-process LLM serializes on one GPU regardless, so this
                 # costs no speed and matches the turn-based order that works.
                 _sim_results = []
-                for _i in _sim_deciding:
+                for _i in _sim_alive:
                     _sim_results.append(await _sim_select(_i))
                 _sim_actions = {}
                 for _i, _content in _sim_results:
@@ -1637,9 +1737,6 @@ async def run(args):
                     _sim_actions[_i] = (
                         _content.get("action", "NoOp") if _content else "NoOp"
                     )
-                for _i in _sim_macro:
-                    _sim_contents[_i] = None
-                    _sim_actions[_i] = "NoOp"
                 environment.step_all(_sim_actions)
                 # step_all produced ONE _step_rewards set — drain it once
                 # (turn-based drains once per agent inside its loop instead).
@@ -1653,41 +1750,6 @@ async def run(args):
 
                 if environment._terminations.get(agent_name, False):
                     continue
-
-                # ── Macro skip: advance macro queue without calling the LLM ──
-                # (turn-based only — under --simultaneous, step_all() already
-                # advanced every agent this step, so there is no per-agent
-                # macro tick to skip; macros are a Stage-3 item there.)
-                if not args.simultaneous and environment.is_macro_running(agent_id):
-                    environment.step("NoOp", agentId=agent_id)
-                    # Drain rewards for ALL agents — multi-contributor milestones
-                    # (m22 all_mobs_killed, m19 all_in_communal, etc.) credit
-                    # multiple agents in one env tick. The wrapper's
-                    # `_step_rewards` is overwritten on the NEXT step, so other
-                    # agents' shares would be silently lost if we read only
-                    # this agent's slot. See the bug-fix note at the second
-                    # drain site below.
-                    for _i in range(num_agents):
-                        _r_env = environment.get_step_reward(_i)
-                        step_rewards_raw[_i] += _r_env
-                        _step_envstep_reward[_i] += _r_env
-                    step_contents[agent_id] = None
-                    _was_macro_running[agent_id] = True
-                    continue
-                # ─────────────────────────────────────────────────────────────
-
-                # ── Macro just finished: flush accumulated reward to RL buffer ──
-                # The pending transition was created when the macro was selected.
-                # Rewards from all macro ticks are accumulated in _macro_acc_reward
-                # and flushed here so the policy sees the full macro return signal.
-                if _was_macro_running[agent_id]:
-                    if agent.rl_layer and agent.rl_layer.enabled and _macro_acc_active[agent_id]:
-                        agent_done = environment._terminations.get(agent_name, False)
-                        agent.rl_layer.store_reward(_macro_acc_reward[agent_id], done=agent_done)
-                    _macro_acc_reward[agent_id] = 0.0
-                    _macro_acc_active[agent_id] = False
-                    _was_macro_running[agent_id] = False
-                # ─────────────────────────────────────────────────────────────
 
                 error_count = agents_error_count[agent_id]
                 frame_image = environment.get_pil_image(agent_id)
@@ -1731,7 +1793,15 @@ async def run(args):
                         visited_chambers=sorted(_visited_chambers[agent_id]),
                         completed_milestones=_agent_done,
                         milestone_progress=_milestone_progress,
-                        chamber_state=environment.get_chamber_state(agent_id),
+                        chamber_state=(
+                            environment.get_chamber_state(agent_id)
+                            + (
+                                "\n" + environment.get_voxel_summary(agent_id)
+                                if args.voxel_obs
+                                and environment.get_voxel_summary(agent_id)
+                                else ""
+                            )
+                        ),
                         bond_weights=_bond_weights.get(agent_id),
                         bond_deltas=_bond_deltas.get(agent_id),
                     )
@@ -2175,34 +2245,19 @@ async def run(args):
                 metric.record_reward(agent_id, reward)
                 metric.record_reward_decomposed(agent_id, _reward_decomp_this_step[agent_id])
 
-                # Feed reward to RL layer
+                # Feed reward to RL layer. (The macro-defer / macro-flush
+                # branches that used to wrap this store_reward were
+                # removed in T1.6 — agents always execute primitive
+                # actions now, so the reward closes the pending
+                # transition immediately.)
                 if agent.rl_layer and agent.rl_layer.enabled:
                     content = step_contents[agent_id]
-                    action_chosen = content.get("action", "NoOp") if content else "NoOp"
                     agent_done = environment._terminations.get(agent_name, False)
-
-                    if action_chosen in _MACRO_NAMES:
-                        # Macro just selected this step — defer store_reward.
-                        # The pending transition stays open; rewards accumulate
-                        # across macro ticks and are flushed when macro finishes.
-                        _macro_acc_active[agent_id] = True
-                        _macro_acc_reward[agent_id] = reward
-                    elif _macro_acc_active[agent_id]:
-                        # Still accumulating across macro ticks.
-                        # Hebbian still sees per-tick rewards via step_rewards_raw.
-                        _macro_acc_reward[agent_id] += reward
-                        # Flush now if agent terminated mid-macro
-                        if agent_done:
-                            agent.rl_layer.store_reward(_macro_acc_reward[agent_id], done=True)
-                            _macro_acc_active[agent_id] = False
-                            _macro_acc_reward[agent_id] = 0.0
-                    else:
-                        # Normal step — close the pending transition immediately.
-                        agent.rl_layer.store_reward(
-                            reward, done=agent_done,
-                            reward_task=_task_rewards_this_step.get(agent_id, 0.0),
-                            reward_comm=_comm_rewards_this_step.get(agent_id, 0.0),
-                        )
+                    agent.rl_layer.store_reward(
+                        reward, done=agent_done,
+                        reward_task=_task_rewards_this_step.get(agent_id, 0.0),
+                        reward_comm=_comm_rewards_this_step.get(agent_id, 0.0),
+                    )
 
                     agent.rl_layer.record_context(
                         action=content.get("action", "NoOp") if content else "NoOp",
@@ -2430,6 +2485,17 @@ async def run(args):
                     global_step=global_step,
                 )
                 print(f"[CKPT] Shutdown checkpoint saved → {_ep_ckpt_dir}")
+                # Close any open MP4 writers so the partial-episode video
+                # is finalised (playable up to whatever frame was last
+                # appended). Without this, the SLURM kill path leaves a
+                # zero-byte / unfinalised MP4 file.
+                if save_gif:
+                    for _i in range(num_agents):
+                        if _mp4_writers[_i] is not None:
+                            try:
+                                _mp4_writers[_i].close()
+                            except Exception:
+                                pass
                 _wb.finish()
                 environment.close()
                 return
@@ -2524,11 +2590,37 @@ async def run(args):
             global_step=global_step,
         )
 
-        # Save GIFs for this episode
+        # ── End-of-episode media flush ──
+        # The FULL-episode MP4 was streamed to disk one frame at a time
+        # during the loop above. Close the writers now so the file is
+        # finalised and playable. (Pre-refactor, this whole block also
+        # re-encoded the MP4 from frames_list; that path is gone because
+        # the streaming writer already produced the same artifact.)
+        if save_gif:
+            for _i in range(num_agents):
+                if _mp4_writers[_i] is not None:
+                    try:
+                        _mp4_writers[_i].close()
+                        _ep_mp4_path = (
+                            f"{gif_dir}/{run_id}_{role_configs[_i]['agent_name']}"
+                            f"_ep{episode+1}.mp4"
+                        )
+                        print(f"[{run_id}] Saved MP4: {_ep_mp4_path}")
+                    except Exception as _exc:
+                        logging.warning(
+                            "[GIF] streaming MP4 close failed for agent %d: %s",
+                            _i, _exc)
+
+        # Also emit a final GIF for each agent — covers the LAST
+        # gif_interval frames of the episode (the deque's max content).
+        # The full-episode story lives in the MP4 above; this GIF is the
+        # compact "what happened at the end" companion for quick review.
         if save_gif and frames_list:
+            _final_window = list(frames_list)
             for i in range(num_agents):
                 agent_frames = [
-                    PIL.Image.fromarray(f[i]) for f in frames_list if f[i] is not None
+                    PIL.Image.fromarray(f[i])
+                    for f in _final_window if f[i] is not None
                 ]
                 if agent_frames:
                     gif_path = (
@@ -2544,9 +2636,6 @@ async def run(args):
                         loop=0,
                     )
                     print(f"[{run_id}] Saved GIF: {gif_path}")
-                    # Final per-episode mp4 lives next to the final gif in
-                    # run/gifs/ (checkpoint media still goes to artifacts).
-                    _frames_to_mp4(agent_frames, gif_path.replace(".gif", ".mp4"))
 
     print(f"[{run_id}] Experiment complete! Timesteps logged: {metric.timestep}")
     # Attach run config for reproducibility before saving
