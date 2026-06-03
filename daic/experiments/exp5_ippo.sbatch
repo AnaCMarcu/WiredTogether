@@ -15,7 +15,7 @@ source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/dai
 
 # IPPO — action-level PPO with PER-AGENT independent value heads. No shared
 # critic, no Hebbian. The "no centralized info" baseline.
-run_exp "exp5_ippo" "$MODEL_2B" \
+run_exp "exp5_ippo_rl" "$MODEL_2B" \
     --rl \
     --rl-critic-mode independent \
     --rl-model-path "$MODEL_2B" \

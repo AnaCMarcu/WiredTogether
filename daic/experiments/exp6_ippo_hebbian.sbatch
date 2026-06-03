@@ -15,7 +15,7 @@ source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/dai
 
 # IPPO + Hebbian — "Hebbian without a shared critic" cell of the 2x3
 # comparison matrix.
-run_exp "exp6_ippo_hebbian" "$MODEL_2B" \
+run_exp "exp6_ippo_hebbian_rl" "$MODEL_2B" \
     --rl \
     --rl-critic-mode independent \
     --rl-model-path "$MODEL_2B" \
