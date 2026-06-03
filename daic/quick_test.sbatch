@@ -28,7 +28,7 @@
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
-run_exp "fast_rl2" "$MODEL_2B" \
+run_exp "opt_test" "$MODEL_2B" \
     --episodes 2 \
     --max-steps 100 \
     --simultaneous \

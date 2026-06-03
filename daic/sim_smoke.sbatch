@@ -21,7 +21,7 @@
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # wandb off for a throwaway smoke (override with WANDB=1 sbatch ... if wanted).
-WANDB="${WANDB:-0}" run_exp "sim_smoke" "$MODEL_2B" \
+WANDB="${WANDB:-0}" run_exp "opt_test_rl" "$MODEL_2B" \
     --episodes 2 \
     --max-steps 100 \
     --simultaneous \
