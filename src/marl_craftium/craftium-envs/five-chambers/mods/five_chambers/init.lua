@@ -56,9 +56,29 @@ minetest.register_on_mods_loaded(function()
 end)
 
 -- ── HUD hiding (shared by join / respawn / global-step safety net) ──
--- Hide every client HUD element whose pixels would occlude the agent's visual
--- observation (hotbar, crosshair, healthbar, chat) plus the nametag. Idempotent
--- — safe to call repeatedly; hud_set_flags is a no-op when already cleared.
+-- Two DISTINCT HUD systems occlude the agent's observation and must both be
+-- hidden:
+--   1. Engine HUD flags (hotbar, crosshair, healthbar, chat) — hud_set_flags.
+--      These only reset on respawn.
+--   2. VoxeLibre "hudbars" (health/breath/armor/hunger/...) — separate HUD
+--      elements NOT controlled by hud_set_flags. hudbars' own global step
+--      AUTO-SHOWS the health bar whenever HP < max (i.e. the instant an agent
+--      takes its first hit in Ch4) and keeps re-showing it every tick, which is
+--      why the gray bar appears on Ch4 ENTRY (not death) and lingers into ep2.
+-- hb.hide_hudbar is idempotent (early-returns when already hidden) and
+-- pcall-guarded here, so re-hiding every tick is cheap and crash-safe even
+-- before a bar is initialised for the player.
+local _HUDBAR_IDS = {
+    "health", "breath", "armor", "hunger",
+    "saturation", "exhaustion", "absorption",
+}
+local function hide_player_hudbars(player)
+    if not (player and hb and hb.hide_hudbar) then return end
+    for _, id in ipairs(_HUDBAR_IDS) do
+        pcall(hb.hide_hudbar, player, id)
+    end
+end
+
 local function hide_player_hud(player)
     if not player then return end
     player:hud_set_flags({
@@ -68,6 +88,7 @@ local function hide_player_hud(player)
         chat      = false,
     })
     player:set_nametag_attributes({color = {a = 0, r = 0, g = 0, b = 0}})
+    hide_player_hudbars(player)
 end
 
 -- ── Player join ───────────────────────────────────────────────────
@@ -125,12 +146,25 @@ minetest.register_globalstep(function(dtime)
     minetest.set_timeofday(0.5)
     -- Increment Lua-tick counter (runs at 20Hz; Python step = 3 Lua ticks).
     five_chambers.step_counter = five_chambers.step_counter + 1
-    -- Safety net: re-hide the HUD on all players ~once per second. Guarantees the
-    -- gray HUD panel can never persist for the rest of an episode even if some
-    -- respawn/teleport path slips past the on_respawnplayer re-hide. hud_set_flags
-    -- is a no-op when the flags are already cleared, so this adds no visible churn.
+
+    local _players = minetest.get_connected_players()
+
+    -- EVERY tick: re-hide the VoxeLibre hudbars. hudbars' own global step
+    -- re-shows the health bar whenever HP < max — every combat hit in Ch4/Ch5 —
+    -- so this must run as often as theirs to keep it gone, and it must keep
+    -- running across episodes (a bar shown after ep1 combat otherwise lingers
+    -- into ep2). The hb.hide_hudbar calls are idempotent no-ops once hidden, so
+    -- this is cheap; real work happens only on the tick a bar was re-shown.
+    for _, p in ipairs(_players) do
+        hide_player_hudbars(p)
+    end
+
+    -- Once per second: re-apply the engine HUD flags (hotbar/crosshair/nametag).
+    -- These only reset on respawn, and hud_set_flags sends a packet on every
+    -- call, so it is throttled rather than run every tick. (hide_player_hud also
+    -- re-hides the hudbars, harmlessly.)
     if five_chambers.step_counter % 20 == 0 then
-        for _, p in ipairs(minetest.get_connected_players()) do
+        for _, p in ipairs(_players) do
             hide_player_hud(p)
         end
     end
