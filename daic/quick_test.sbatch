@@ -2,7 +2,7 @@
 #SBATCH --job-name=fast_rl
 #SBATCH --partition=general
 #SBATCH --qos=short
-#SBATCH --time=1:00:00
+#SBATCH --time=2:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
@@ -13,9 +13,9 @@
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
-run_exp "opt_test_3" "$MODEL_2B" \
+run_exp "opt_test_4" "$MODEL_2B" \
     --episodes 2 \
-    --max-steps 20 \
+    --max-steps 100 \
     --simultaneous \
     # --rl \
     # --rl-critic-mode centralized \
