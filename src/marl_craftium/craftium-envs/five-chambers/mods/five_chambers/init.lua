@@ -158,6 +158,13 @@ minetest.register_globalstep(function(dtime)
     -- this is cheap; real work happens only on the tick a bar was re-shown.
     for _, p in ipairs(_players) do
         hide_player_hudbars(p)
+        -- Force-close any formspec the headless bot got stuck behind (the gray
+        -- panel occluding the bottom of the view in combat). Agents never use
+        -- formspecs, so dismissing whatever is open — a node/menu formspec, or
+        -- the engine death screen — is always safe. minetest.close_formspec with
+        -- an empty formname closes the currently-shown formspec; it's a no-op
+        -- when none is open.
+        minetest.close_formspec(p:get_player_name(), "")
     end
 
     -- Once per second: re-apply the engine HUD flags (hotbar/crosshair/nametag).
