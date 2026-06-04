@@ -16,6 +16,17 @@
 five_chambers.player_dead = five_chambers.player_dead or {}
 local DEATH_PENALTY = -10
 
+-- Suppress the engine "You died / Respawn" formspec entirely. The builtin
+-- (builtin/game/death_screen.lua) opens it via core.show_death_screen on every
+-- death AND on join-with-0-HP, occluding the whole observation behind a gray
+-- menu that a headless RL bot never dismisses. Both triggers look up
+-- core.show_death_screen dynamically at call time, and mods load after builtin,
+-- so replacing it with a no-op here neutralises both. Respawn/penalty handling
+-- below is unaffected (it runs from register_on_dieplayer, not the formspec).
+if minetest.show_death_screen then
+    minetest.show_death_screen = function() end
+end
+
 -- Write the episode_over flag (polled by CraftiumEnvironmentInterface.episode_over)
 -- once all connected agents are permanently dead. Cleared on episode reset.
 local function _signal_episode_over()

@@ -42,14 +42,18 @@ ACTION_MAP = {
     "LookDown": 16,
     "LookUp": 17,
     # --- added actions ---
-    "Inventory": 0,    # mapped to NoOp — inventory info is now in the text prompt
+    # NOTE: there is deliberately NO "Inventory" action. Opening the survival
+    # inventory/crafting menu just pops a formspec the headless agent can't
+    # close (occluding its view); inventory contents are surfaced in the text
+    # prompt instead. The discrete env slot for it (_actions.py index 17) is
+    # kept as a NOP only to preserve action-index alignment.
     "Drop": 19,         # drop the currently held item
     "Slot6": 20,
     "Slot7": 21,
     "Slot8": 22,
 }
 
-VALID_ACTIONS = [k for k in ACTION_MAP if k != "Inventory"]
+VALID_ACTIONS = list(ACTION_MAP)
 
 # Macro actions were REMOVED (2026-06): agents use only primitive actions.
 # Macros were long fixed sequences (9-23 steps) the policy committed to
@@ -70,7 +74,7 @@ class CraftiumEnvironmentInterface:
     """
 
     # Actions considered "idle" — repeating these wastes steps
-    _IDLE_ACTIONS = frozenset({"NoOp", "Inventory"})
+    _IDLE_ACTIONS = frozenset({"NoOp"})
 
     # Camera pitch cap: agent may look at most this many LookDown steps below
     # horizontal, or this many LookUp steps above it.  Beyond these limits the
