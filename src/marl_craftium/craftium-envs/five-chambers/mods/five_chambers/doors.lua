@@ -568,6 +568,12 @@ minetest.register_globalstep(function(dtime)
             or  {x = 7, y = five_chambers.FLOOR_Y + 1,
                  z = (five_chambers.CH2 and five_chambers.CH2.z0 or 17) + 2}
         player:set_pos(dest)
+        -- Forfeit any unearned Ch1 milestones: the team is being RESCUED out of
+        -- Ch1, not clearing it, so it should not collect Ch1 rewards. Critically
+        -- this stops m1_move_5 from firing off this teleport's position jump —
+        -- the agent did not move, it was teleported. (Already-earned Ch1
+        -- milestones stay earned; this only marks the not-yet-fired ones.)
+        five_chambers.forfeit_track_milestones(name, "ch1_solo")
         if io and io.stderr then
             io.stderr:write(string.format(
                 "[CH1_TIMEOUT] %s idx=%d -> (%d,%d,%d)\n",

@@ -1508,6 +1508,13 @@ async def run(args):
                 print(f"  All agents done at step {step+1}")
                 break
 
+            # Team wipe in Ch5 (boss): deaths.lua signals episode_over once every
+            # agent is permanently dead. Ends the episode early (death is final
+            # only in the boss room; Ch4 deaths respawn).
+            if environment.episode_over():
+                print(f"  Team wipe (all agents dead in Ch5) at step {step+1} — ending episode")
+                break
+
             # Collect current frames for GIF / MP4 capture.
             #   1. Stream each agent's frame straight to its end-of-ep MP4
             #      writer (no in-RAM accumulation; bounded RSS).

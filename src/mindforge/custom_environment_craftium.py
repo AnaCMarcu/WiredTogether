@@ -719,6 +719,17 @@ class CraftiumEnvironmentInterface:
                 return False
         return True
 
+    def episode_over(self) -> bool:
+        """True once Lua signals a team wipe in Ch5 (deaths.lua writes
+        episode_over.txt when every agent is permanently dead in the boss room).
+
+        Explicit flag rather than relying on all_done(): in Ch4 agents are
+        force-respawned (so they're never all 'terminated' together), and a
+        permadeath in Ch5 may not map to a persistent PettingZoo termination.
+        The flag is cleared at episode reset (init.lua reset handler).
+        """
+        return self._door_state_file_exists("episode_over.txt")
+
     def get_step_reward(self, agentId: int) -> float:
         """Return the raw reward from the last env.step() for this agent."""
         agent_name = f"agent_{agentId}"

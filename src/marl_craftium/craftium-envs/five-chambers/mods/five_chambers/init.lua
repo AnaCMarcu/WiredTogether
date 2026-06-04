@@ -28,6 +28,7 @@ dofile(modpath .. "/doors.lua")
 dofile(modpath .. "/gear.lua")
 dofile(modpath .. "/mobs.lua")
 dofile(modpath .. "/player_state.lua")
+dofile(modpath .. "/deaths.lua")
 
 -- ── Server-start initialisation ───────────────────────────────────
 -- Runs after all mods (including mobs_mc) have loaded, so entity
@@ -182,6 +183,11 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
     -- Clear all per-episode state.
     five_chambers.step_counter = 0
     five_chambers.reset_milestone_state()
+    -- Clear death bookkeeping + the episode_over flag (see deaths.lua) so the
+    -- new episode starts with every agent alive and the loop doesn't see a
+    -- stale all-dead signal.
+    five_chambers.player_dead = {}
+    os.remove(minetest.get_worldpath() .. "/episode_over.txt")
     -- Rebuild the world geometry: re-places trees, stone blocks, ceiling
     -- glowstones, and the anvils (which got DESTROYED on break in the
     -- previous episode). VoxelManip writes directly so re-placing nodes

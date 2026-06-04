@@ -201,6 +201,24 @@ function five_chambers.record_spawn_pos(name, pos)
     five_chambers.spawn_pos[name] = {x=pos.x, z=pos.z}
 end
 
+-- Mark every not-yet-fired milestone on a track as FORFEIT: recorded as fired
+-- (so it can never trigger later) but WITHOUT emitting its reward. Used by the
+-- Ch1 rescue teleport — an agent dragged out of Ch1 because the whole team was
+-- too slow is NOT clearing the chamber, so it must not still collect Ch1
+-- rewards. In particular m1_move_5 (distance > 5 from spawn) would otherwise
+-- fire instantly off the teleport's large position jump, paying a "move"
+-- reward for being teleported. Idempotent.
+function five_chambers.forfeit_track_milestones(name, track)
+    if not five_chambers.milestone_fired[name] then
+        five_chambers.init_player_milestone_state(name)
+    end
+    for mid, def in pairs(five_chambers.MILESTONE_DEFS) do
+        if def.track == track and not five_chambers.milestone_fired[name][mid] then
+            five_chambers.milestone_fired[name][mid] = true
+        end
+    end
+end
+
 -- Called by mobs.lua when a Ch1 animal dies and the killer is known.
 function five_chambers.record_animal_kill(killer_name)
     if not five_chambers.kill_counts[killer_name] then

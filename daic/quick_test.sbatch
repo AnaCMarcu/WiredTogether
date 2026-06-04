@@ -11,21 +11,6 @@
 #SBATCH --error=slurm_logs/fast%j.err
 #SBATCH --exclude=cor1
 
-# 200-step MAPPO+Hebbian smoke test (action-level MAPPO with centralized
-# critic + Hebbian social plasticity, NO social-module prompt block).
-# Exercises the full RL update path on a tiny episode budget so we can
-# verify plumbing (gradient steps fire, critic loss not NaN, wandb gets
-# rl/* metrics) in ~30 min instead of waiting for a real 36h job.
-#
-# MODEL = 9B. RLLayer now uses a process-wide SHARED base model + per-agent
-# LoRA adapter (Option 1 in the OOM follow-up), so 3 agents × 9B costs
-# 1 × 18 GB + 3 × ~1 MB adapter weights + small per-agent value heads —
-# fits comfortably on V100 (32 GB). If you ever OOM again, drop to 2B.
-#
-# Uses the same apptainer + wandb + env setup as the real experiments
-# via _common.sh (pre-flight pkill, /tmp cwd, EGL software fallback,
-# model paths, wandb wiring, archive rsync).
-
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 run_exp "opt_test_2" "$MODEL_2B" \

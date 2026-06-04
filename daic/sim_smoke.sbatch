@@ -2,7 +2,7 @@
 #SBATCH --job-name=sim_smoke
 #SBATCH --partition=general
 #SBATCH --qos=short
-#SBATCH --time=2:00:00
+#SBATCH --time=1:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
@@ -21,9 +21,9 @@
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # wandb off for a throwaway smoke (override with WANDB=1 sbatch ... if wanted).
-WANDB="${WANDB:-0}" run_exp "opt_test_rl" "$MODEL_2B" \
+WANDB="${WANDB:-0}" run_exp "opt_test_rl_2" "$MODEL_2B" \
     --episodes 2 \
-    --max-steps 100 \
+    --max-steps 20 \
     --simultaneous \
     --rl \
     --rl-critic-mode centralized \
