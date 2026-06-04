@@ -1,19 +1,26 @@
 -- deaths.lua: player-death handling for Five Chambers.
 --
--- A headless RL bot never clicks the engine's "You died" respawn button, so
--- without this a dead agent gets stuck behind the gray death formspec for the
--- rest of the episode. On death we:
---   (1) apply a -10 RL penalty, delivered through craftium.reward (the same
---       channel milestones use), so it lands in the agent's reward signal;
---   (2) branch on the chamber the agent died in:
---        * Ch5 (boss): PERMADEATH. The agent is NOT respawned; it stays down.
---          Ch5 is the last chamber, so once EVERY agent is dead we write an
---          episode_over flag the Python loop polls to end the episode.
---        * anywhere else (Ch4 combat practice, or a stray Ch1-3 death):
---          force-respawn the bot so the death screen clears and it keeps
---          playing; a Ch4 death is placed back inside Ch4 (not the Ch1 spawn).
+-- A headless RL bot never clicks the engine's "You died" respawn button, and
+-- the Craftium client FREEZES a player (stops sending movement) for as long as
+-- it is dead — HP 0 — (see client.cpp isDead() gating). Relying on a post-death
+-- server-side respawn to un-freeze the client proved fragile, so in the four
+-- FORGIVING chambers we never let a player die at all:
+--   * Ch1-Ch4: the killing blow is intercepted in register_on_player_hpchange
+--     and clamped so HP stays >= 1 (a "virtual death"). The agent still takes
+--     the -10 RL penalty through craftium.reward, then is healed + (in Ch4)
+--     repositioned next tick. No engine death => no "You died" formspec, no
+--     frozen dead-client, no stuck agent — the team keeps progressing to Ch5.
+--   * Ch5 (boss): the lethal hit is LET THROUGH to a real PERMADEATH. The agent
+--     stays down; once EVERY agent is permanently dead we write an episode_over
+--     flag the Python loop polls to end the episode.
+-- register_on_dieplayer below still runs: in Ch5 it records the permadeath, and
+-- anywhere else it is a defensive fallback for a real death that somehow bypass-
+-- ed the hpchange clamp (force-respawn so the agent is never left stuck dead).
 
 five_chambers.player_dead = five_chambers.player_dead or {}
+-- Names currently mid-"virtual death" (downed this tick, heal pending). Guards
+-- against a multi-hit burst charging the -10 penalty more than once per downing.
+five_chambers._dying = five_chambers._dying or {}
 local DEATH_PENALTY = -10
 
 -- Suppress the engine "You died / Respawn" formspec entirely. The builtin
@@ -45,6 +52,68 @@ local function _signal_episode_over()
     end
 end
 
+-- Revive an agent one tick after a virtual death: heal to full and, in Ch4,
+-- move it clear of the mob that downed it (its fallback spawn on the south
+-- edge). Deferred so it runs after the damage event has fully resolved.
+local function _revive_after_virtual_death(name, chamber, idx)
+    local pl = minetest.get_player_by_name(name)
+    if not pl then
+        five_chambers._dying[name] = nil
+        return
+    end
+    if chamber == "ch4" and idx >= 0 then
+        local dest = five_chambers.ch4_fallback_spawn_pos(idx)
+        if dest then pl:set_pos(dest) end
+    end
+    pl:set_hp(20, {type = "set_hp", from = "mod"})
+    five_chambers._dying[name] = nil
+end
+
+-- Forgiving-chamber damage interception (the primary death-avoidance path).
+-- Registered as a MODIFIER so its return value replaces hp_change before the
+-- engine applies it. A would-be-lethal hit in Ch1-Ch4 is clamped to leave the
+-- agent at 1 HP (no death), charged the -10 penalty once, and revived next tick.
+-- Ch5 lethal hits are passed through untouched so the boss room keeps its real
+-- permadeath. Healing (hp_change >= 0), including our own set_hp revive, is
+-- ignored so it can never loop.
+minetest.register_on_player_hpchange(function(player, hp_change, reason)
+    if hp_change >= 0 then return hp_change end
+    if not (player and player.is_player and player:is_player()) then return hp_change end
+    local hp = player:get_hp()
+    if hp + hp_change > 0 then return hp_change end  -- survivable hit, pass through
+
+    local name    = player:get_player_name()
+    local pos     = player:get_pos()
+    local chamber = pos and five_chambers.get_chamber_for_pos(pos) or nil
+
+    -- Boss room: let the lethal hit through to a real permadeath.
+    if chamber == "ch5" then return hp_change end
+
+    -- Forgiving chamber: convert into a non-fatal virtual death.
+    if not five_chambers._dying[name] then
+        five_chambers._dying[name] = true
+        local idx = five_chambers.agent_index(name)
+        if craftium and craftium.reward then
+            craftium.reward(player, DEATH_PENALTY)
+        end
+        minetest.log("action", string.format(
+            "[VDEATH] %s downed in %s (penalty %d) — clamped + revived",
+            name, tostring(chamber), DEATH_PENALTY))
+        if io and io.stderr then
+            io.stderr:write(string.format(
+                "[VDEATH] %s downed in %s penalty=%d\n", name, tostring(chamber), DEATH_PENALTY))
+            io.stderr:flush()
+        end
+        minetest.after(0, function()
+            _revive_after_virtual_death(name, chamber, idx)
+        end)
+    end
+
+    -- Clamp this tick's damage so HP lands at 1 (alive). Armor/other modifiers
+    -- only ever reduce damage further, so HP stays >= 1 regardless of ordering.
+    return 1 - hp
+end, true)  -- true => modifier callback (may change hp_change)
+
 minetest.register_on_dieplayer(function(player, reason)
     if not (player and player.is_player and player:is_player()) then return end
     local name    = player:get_player_name()
@@ -52,9 +121,14 @@ minetest.register_on_dieplayer(function(player, reason)
     local pos     = player:get_pos()
     local chamber = pos and five_chambers.get_chamber_for_pos(pos) or nil
 
-    -- (1) -10 death penalty into the RL reward signal.
-    if craftium and craftium.reward then
-        craftium.reward(player, DEATH_PENALTY)
+    -- (1) -10 death penalty into the RL reward signal. Skip it when a virtual
+    -- death is already mid-flight for this name (the hpchange clamp charged it
+    -- this same tick) so a real death that slipped past the clamp can't
+    -- double-charge the penalty.
+    if not five_chambers._dying[name] then
+        if craftium and craftium.reward then
+            craftium.reward(player, DEATH_PENALTY)
+        end
     end
     minetest.log("action", string.format(
         "[DEATH] %s died in %s (penalty %d)", name, tostring(chamber), DEATH_PENALTY))
@@ -72,10 +146,13 @@ minetest.register_on_dieplayer(function(player, reason)
         return
     end
 
-    -- (2b) Forgiving chambers: force-respawn the bot (it never clicks respawn
-    -- itself), deferred one tick so the engine has finished the death. A Ch4
-    -- death is placed back inside Ch4 so combat practice continues there rather
-    -- than dumping the agent at the distant Ch1 world spawn.
+    -- (2b) Forgiving chambers — DEFENSIVE FALLBACK ONLY. The hpchange clamp
+    -- above should prevent any Ch1-Ch4 death, so this normally never runs; it
+    -- exists so a real death that bypassed the clamp still force-respawns the
+    -- bot (it never clicks respawn itself) rather than leaving it stuck dead.
+    -- Deferred one tick so the engine has finished the death; a Ch4 death is
+    -- placed back inside Ch4 rather than at the distant Ch1 world spawn.
+    five_chambers._dying[name] = nil
     local back_in_ch4 = (chamber == "ch4")
     minetest.after(0, function()
         local pl = minetest.get_player_by_name(name)

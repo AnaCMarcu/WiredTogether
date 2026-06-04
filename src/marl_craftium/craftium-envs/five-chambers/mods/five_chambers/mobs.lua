@@ -72,6 +72,7 @@ five_chambers.mob_state = {
     ch4_contributors = {},   -- {[agent_name]=cumulative_damage_HP} across Ch4 mobs
     ch5_boss         = nil,
     ch5_triggered    = false,
+    ch5_healed       = {},   -- {[agent_name]=true} once full-healed on Ch5 entry
     ch4_kills        = {},
     boss_damage      = {},
 }
@@ -185,6 +186,7 @@ function five_chambers.reset_mob_state()
         ch4_contributors = {},
         ch5_boss         = nil,
         ch5_triggered    = false,
+        ch5_healed       = {},
         ch4_kills        = {},
         boss_damage      = {},
     }
@@ -432,6 +434,18 @@ minetest.register_globalstep(function(dtime)
         if five_chambers.agent_index(name) >= 0 then
             local pos = player:get_pos()
             if pos and five_chambers.get_chamber_for_pos(pos) == "ch5" then
+                -- Full-heal each agent ONCE on first Ch5 entry, so the boss
+                -- fight starts fresh regardless of how battered they came out
+                -- of Ch4 combat (where the hpchange clamp leaves them at low HP
+                -- between virtual deaths). Guarded per-name so it heals only on
+                -- entry, not every tick they stand in the boss room. From here
+                -- on death is real (permadeath) — see deaths.lua.
+                if not five_chambers.mob_state.ch5_healed[name] then
+                    five_chambers.mob_state.ch5_healed[name] = true
+                    player:set_hp(20, {type = "set_hp", from = "mod"})
+                    minetest.log("action",
+                        "[five_chambers] " .. name .. " full-healed on Ch5 entry")
+                end
                 -- Suppress m24_enter_ch5 when the Ch4→Ch5 timeout
                 -- teleport already fired this episode: agents were
                 -- force-relocated, not earned. Boss still spawns.
