@@ -72,8 +72,19 @@ class HebbianSocialGraph:
 
         N = config.num_agents
 
-        # Social graph W(t) ∈ [0,1]^{N×N}, diagonal always 0
-        self.W = np.full((N, N), config.init_weight, dtype=np.float32)
+        # Social graph W(t) ∈ [0,1]^{N×N}, diagonal always 0.
+        # init_matrix (explicit) ≻ init_preset (named) ≻ uniform init_weight.
+        if config.init_matrix is not None:
+            self.W = self._load_matrix(config.init_matrix, N)
+        elif config.init_preset and config.init_preset != "none":
+            self.W = self.build_preset_matrix(
+                config.init_preset, N,
+                strong=config.preset_bond_strong,
+                weak=config.preset_bond_weak,
+                hub=config.preset_hub,
+            )
+        else:
+            self.W = np.full((N, N), config.init_weight, dtype=np.float32)
         np.fill_diagonal(self.W, 0.0)
 
         # Sustained LTD state
@@ -85,6 +96,29 @@ class HebbianSocialGraph:
         # Running max of |ri(t)| for engagement normalisation
         self._max_reward_seen: float = 0.0
 
+        # ── Gated-Hebbian variant state (mode != "legacy") ──────────────
+        # Warm-start w₀ must be > 0 for the new variants: W=0 is a fixed point
+        # (no co-activity ⇒ no growth; decay branch ∝ W ⇒ no decay at 0).
+        if config.mode != "legacy" and config.init_weight <= 0.0:
+            raise ValueError(
+                f"mode={config.mode!r} requires init_weight (w₀) > 0; "
+                f"got {config.init_weight}. W=0 is a fixed point of the gated "
+                "rule, so a zero warm-start can never grow."
+            )
+        # Rolling window of per-step co-activity matrices, for coop_ij(t) =
+        # peak co-activity over the last n steps (n = config.coop_window).
+        self._coact_window: deque = deque(maxlen=max(1, config.coop_window))
+        # Rolling window of per-agent Ch2–5-gated TOTAL rewards (death included),
+        # for neg_i(t) = 1[Σ_window r_i < −θ].
+        self._reward_window: deque = deque(maxlen=max(1, config.coop_window))
+        # Running max of the Ch2–5 BONDABLE reward magnitude — normalises the
+        # engagement gate g_i. Bondable ⇒ death excluded ⇒ death never inflates
+        # engagement (so it never drives growth in either variant).
+        self._max_bond_reward_seen: float = 0.0
+        # Realized per-branch deltas from the last gated step (analysis/tests).
+        self._last_growth: Optional[np.ndarray] = None
+        self._last_decay: Optional[np.ndarray] = None
+
         # Rolling snapshot of W for bond-delta queries. Length matches the
         # social module's "recent history" window. bond_delta_row(i) returns
         # (W_now[i,:] - W_history[0][i,:]) — Δw over the window. Keeps
@@ -92,6 +126,50 @@ class HebbianSocialGraph:
         self._bond_delta_window: int = 50
         self._W_history: deque = deque(maxlen=self._bond_delta_window)
         self._W_history.append(self.W.copy())
+
+    # ──────────────────────────────────────────────
+    # 2.1b  Hardcoded / frozen graph helpers
+    # ──────────────────────────────────────────────
+
+    @staticmethod
+    def _load_matrix(matrix, N: int) -> np.ndarray:
+        """Validate + load an explicit N×N init matrix (diagonal forced to 0)."""
+        W = np.array(matrix, dtype=np.float32)
+        if W.shape != (N, N):
+            raise ValueError(
+                f"init_matrix shape {W.shape} != ({N}, {N}) for num_agents={N}"
+            )
+        np.clip(W, 0.0, 1.0, out=W)
+        np.fill_diagonal(W, 0.0)
+        return W
+
+    @staticmethod
+    def build_preset_matrix(
+        preset: str, N: int, strong: float = 0.8, weak: float = 0.1, hub: int = 0
+    ) -> np.ndarray:
+        """Construct a named hardcoded social topology.
+
+        W[i, j] is agent i's (directed) bond toward j. See HebbianConfig for the
+        semantics of each preset. Diagonal is always 0.
+        """
+        W = np.full((N, N), weak, dtype=np.float32)
+        if preset == "uniform":
+            W[:] = strong
+        elif preset == "star":
+            if not (0 <= hub < N):
+                raise ValueError(f"preset_hub {hub} out of range for N={N}")
+            W[:, hub] = strong            # everyone → hub strongly
+        elif preset == "ring":
+            for i in range(N):
+                W[i, (i + 1) % N] = strong  # i → i+1 (directed cycle)
+        elif preset == "pair":
+            if N >= 2:
+                W[0, 1] = strong
+                W[1, 0] = strong          # 0 ↔ 1 dyad; everyone else weak
+        else:
+            raise ValueError(f"unknown init_preset {preset!r}")
+        np.fill_diagonal(W, 0.0)
+        return W
 
     # ──────────────────────────────────────────────
     # 2.2  Co-activity signal (refined Eq. 2)
@@ -310,29 +388,292 @@ class HebbianSocialGraph:
         Fij = self._failure_coactivation / float(cfg.failure_memory_window)
         return -cfg.ltd_sustained_lr * Fij * self.W
 
+    # ══════════════════════════════════════════════════════════════════
+    #  GATED-HEBBIAN VARIANTS  (mode ∈ {"coactivity", "reward_modulated"})
+    #
+    #  ΔW_ij = growth_ij − decay_ij ;  W_ij ← clip(W_ij + ΔW_ij, 0, 1)
+    #
+    #  Shared in BOTH variants: the co-activity gate c_ij, the windowed
+    #  statistics (coop_ij, neg_i) and the failure-gated decay branch. The
+    #  ONLY difference is the growth coefficient (_growth_coeff). There is no
+    #  passive −λW term — the failure-gated branch is the sole downward pull.
+    # ══════════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _chamber_gate(chambers: Optional[List[int]], N: int) -> np.ndarray:
+        """1[chamber_i >= 2] as a float (N,) vector.
+
+        Restricts every reward read to cooperative chambers (Ch2–Ch5). A
+        None list means "no chamber info" → assume all cooperative (gate=1),
+        which is what the unit tests and non-Craftium callers want.
+        """
+        if chambers is None:
+            return np.ones(N, dtype=np.float32)
+        gate = np.zeros(N, dtype=np.float32)
+        for i in range(min(N, len(chambers))):
+            ch = chambers[i]
+            if ch is not None and ch >= 2:
+                gate[i] = 1.0
+        return gate
+
+    def _engagement(
+        self,
+        bond_rewards_gated: np.ndarray,
+        comm_agents: set,
+    ) -> np.ndarray:
+        """Engagement score g_i(t) ∈ [0,1] (shared gate, both variants).
+
+        g_i = clip( α·|r_bond_i|/r_max·1[ch≥2] + (1−α)·1[i communicates], 0, 1)
+
+        ``bond_rewards_gated`` is already Ch2–5-gated and DEATH-excluded, so
+        engagement reflects cooperative salience only — a death spike can
+        never raise g_i. ``r_max`` is a running max over the same Ch2–5
+        bondable magnitudes (drift is harmless: g_i is a bounded gate).
+        """
+        cfg = self.config
+        N = cfg.num_agents
+        abs_r = np.abs(bond_rewards_gated)
+        cur_max = float(abs_r.max()) if abs_r.size else 0.0
+        if cur_max > self._max_bond_reward_seen:
+            self._max_bond_reward_seen = cur_max
+        norm = self._max_bond_reward_seen + _EPS
+        reward_component = cfg.engagement_reward_weight * (abs_r / norm)
+        comm_component = np.array(
+            [(1.0 - cfg.engagement_reward_weight) if i in comm_agents else 0.0
+             for i in range(N)],
+            dtype=np.float32,
+        )
+        return np.clip(reward_component + comm_component, 0.0, 1.0)
+
+    def _coactivity_gated(
+        self,
+        positions: List[Optional[Tuple[float, float, float]]],
+        engagement: np.ndarray,
+        comm_events: Optional[List[Tuple[int, int]]],
+    ) -> np.ndarray:
+        """Shared co-activity gate c_ij(t) ∈ [0,1].
+
+        c_spat = 1[‖p_i−p_j‖≤d]·g_i·g_j               (close AND both engaged)
+        c_comm = δ_comm·1[i↔j message]·(1−1[‖p_i−p_j‖≤d])  (talk across distance)
+        c_ij   = clip(c_spat + c_comm, 0, 1)
+
+        Vectorised over the N×N grid. Co-activity below ε is floored to 0 (ε is
+        the "no co-activity" threshold), which makes the growth and decay
+        branches strictly mutually exclusive.
+        """
+        cfg = self.config
+        N = cfg.num_agents
+
+        # Spatial gate 1[dist ≤ d], vectorised. Missing positions ⇒ no gate.
+        pos = np.full((N, 3), np.nan, dtype=np.float32)
+        for i in range(N):
+            if positions is not None and i < len(positions) and positions[i] is not None:
+                pos[i] = np.asarray(positions[i], dtype=np.float32)[:3]
+        diff = pos[:, None, :] - pos[None, :, :]          # (N,N,3)
+        dist = np.sqrt((diff ** 2).sum(axis=2))           # (N,N), nan if missing
+        close = (dist <= cfg.interaction_radius) & np.isfinite(dist)
+        spatial_gate = close.astype(np.float32)
+        np.fill_diagonal(spatial_gate, 0.0)
+
+        c_spat = spatial_gate * np.outer(engagement, engagement)
+
+        # Communication co-activity (only when NOT spatially co-located).
+        c_comm = np.zeros((N, N), dtype=np.float32)
+        if comm_events and cfg.communication_coactivity_bonus > 0.0:
+            for s, r in comm_events:
+                if 0 <= s < N and 0 <= r < N and s != r:
+                    for a, b in ((s, r), (r, s)):  # symmetric exchange
+                        c_comm[a, b] = cfg.communication_coactivity_bonus * (
+                            1.0 - spatial_gate[a, b]
+                        )
+
+        cij = np.clip(c_spat + c_comm, 0.0, 1.0)
+        np.fill_diagonal(cij, 0.0)
+        # Floor sub-ε co-activity to exactly 0 (ε = "no co-activity").
+        cij[cij < cfg.coop_eps] = 0.0
+        return cij
+
+    def _growth_coeff(self, bond_rewards_gated: np.ndarray) -> np.ndarray:
+        """Per-agent growth coefficient (the ONLY thing differing A vs B).
+
+        Implemented as a shared floor + a mode-specific salience term, so the
+        constant-growth ("co-presence builds bonds") logic is not duplicated:
+
+        - Variant A ("coactivity"):       coeff_i = η₊            (flat rate)
+        - Variant B ("reward_modulated"):  coeff_i = η₀ + η₊·|r_bond_i|/R
+
+        Note A is NOT B with η₊=0: Variant A's η₊ plays the role of Variant B's
+        association floor η₀ (both are the co-presence constant). The thing
+        ablated between B and A is the salience term η₊·|r_bond|/R.
+
+        ``bond_rewards_gated`` is Ch2–5-gated and DEATH-excluded, so a death
+        contributes exactly 0 to the salience term in Variant B.
+        """
+        cfg = self.config
+        N = cfg.num_agents
+        if cfg.mode == "coactivity":
+            return np.full(N, cfg.eta_plus, dtype=np.float32)
+        if cfg.mode == "reward_modulated":
+            salience = cfg.eta_plus * np.abs(bond_rewards_gated) / float(cfg.reward_norm_R)
+            return (cfg.eta_0 + salience).astype(np.float32)
+        raise ValueError(f"unknown gated mode {cfg.mode!r}")
+
+    def _windowed_stats(
+        self, cij: np.ndarray, total_rewards_gated: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Roll the windows and return (coop_ij, neg_i).
+
+        coop_ij(t) = max_{t-n<s≤t} c_ij(s)   — peak co-activity in window (N,N)
+        neg_i(t)   = 1[Σ_{t-n<s≤t} r_i(s) < −θ] — sustained loss for i (N,)
+
+        Both windows include the current step (appended before reduction), so
+        coop_ij ≥ c_ij(t): if coop_ij < ε then c_ij(t) < ε (= 0 after flooring),
+        which is why decay implies zero growth — the mutual-exclusivity claim.
+        """
+        cfg = self.config
+        N = cfg.num_agents
+        self._coact_window.append(cij.copy())
+        self._reward_window.append(total_rewards_gated.copy())
+
+        coop = np.maximum.reduce(list(self._coact_window))
+        reward_sum = np.sum(self._reward_window, axis=0)
+        neg = (reward_sum < -cfg.neg_theta)
+        return coop, neg
+
+    def _update_gated(
+        self,
+        positions: List[Optional[Tuple[float, float, float]]],
+        comm_events: Optional[List[Tuple[int, int]]],
+        chambers: Optional[List[int]],
+        total_rewards: Optional[List[float]],
+        bond_rewards: Optional[List[float]],
+    ) -> np.ndarray:
+        """One gated-Hebbian step (Variant A or B). Vectorised over N×N.
+
+        ΔW_ij  = growth_ij − decay_ij
+        growth_ij = coeff_i · c_ij · (1 − W_ij)
+        decay_ij  = η₋ · 1[coop_ij < ε  AND  neg_i] · W_ij
+
+        The two branches are mutually exclusive (decay needs coop<ε ⇒ c_ij=0 ⇒
+        no growth), so a per-pair np.where picks exactly one — this also makes
+        the exclusivity invariant exact regardless of fractional gates.
+
+        This whole method is a pure NumPy forward rule: NO autograd, no torch.
+        """
+        cfg = self.config
+        N = cfg.num_agents
+
+        chamber_gate = self._chamber_gate(chambers, N)
+
+        # Bondable reward (death-excluded), Ch2–5-gated → growth + engagement.
+        if bond_rewards is not None:
+            bond_g = np.array(
+                [_sanitize_reward(bond_rewards[i]) if i < len(bond_rewards) else 0.0
+                 for i in range(N)], dtype=np.float32,
+            ) * chamber_gate
+        else:
+            bond_g = np.zeros(N, dtype=np.float32)
+
+        # Total reward (death-included), Ch2–5-gated → neg_i decay gate only.
+        if total_rewards is not None:
+            total_g = np.array(
+                [_sanitize_reward(total_rewards[i]) if i < len(total_rewards) else 0.0
+                 for i in range(N)], dtype=np.float32,
+            ) * chamber_gate
+        else:
+            total_g = np.zeros(N, dtype=np.float32)
+
+        comm_agents = set()
+        if comm_events:
+            for s, r in comm_events:
+                comm_agents.add(s)
+                comm_agents.add(r)
+
+        engagement = self._engagement(bond_g, comm_agents)
+        cij = self._coactivity_gated(positions, engagement, comm_events)
+        self._last_coactivity = cij
+
+        coop, neg = self._windowed_stats(cij, total_g)
+
+        # Growth (per-agent coeff broadcast over outgoing bonds j).
+        coeff = self._growth_coeff(bond_g)                       # (N,)
+        growth = coeff[:, None] * cij * (1.0 - self.W)           # (N,N)
+
+        # Failure-gated decay. neg_i is agent i's OWN signal (row-broadcast),
+        # so W[i,j] and W[j,i] can decay at different times — bonds may become
+        # one-sided. Intended.
+        decay_mask = (coop < cfg.coop_eps) & neg[:, None]        # (N,N) bool
+        decay = cfg.eta_minus * self.W                           # (N,N)
+
+        # Strictly one branch per pair (see docstring). Capture the REALIZED
+        # (mutually exclusive) per-branch magnitudes for logging + the
+        # exclusivity unit test: realized growth lives only where decay didn't
+        # fire, realized decay only where it did.
+        delta = np.where(decay_mask, -decay, growth)
+        np.fill_diagonal(delta, 0.0)
+        self._last_growth = np.where(decay_mask, 0.0, growth)
+        np.fill_diagonal(self._last_growth, 0.0)
+        self._last_decay = np.where(decay_mask, decay, 0.0)
+        np.fill_diagonal(self._last_decay, 0.0)
+
+        self.W = self.W + delta
+        np.clip(self.W, 0.0, 1.0, out=self.W)
+        np.fill_diagonal(self.W, 0.0)
+
+        self._step_count += 1
+        self._W_history.append(self.W.copy())
+
+        if self._step_count % cfg.log_graph_every == 0:
+            grew = int((delta > 0).sum())
+            shrank = int((delta < 0).sum())
+            mean_w = float(self.W[self.W > 0].mean()) if (self.W > 0).any() else 0.0
+            logger.info(
+                "[Hebbian/%s step=%d] W mean=%.4f max=%.4f  grow=%d  decay=%d",
+                cfg.mode, self._step_count, mean_w, float(self.W.max()), grew, shrank,
+            )
+
+        return self.W
+
     # ──────────────────────────────────────────────
-    # 2.5  Full Hebbian update (Eq. 4, refined)
+    # 2.5  Full Hebbian update (Eq. 4, refined) — LEGACY mode
     # ──────────────────────────────────────────────
 
     def update(
         self,
         positions: List[Optional[Tuple[float, float, float]]],
-        step_rewards: List[float],
+        step_rewards: Optional[List[float]] = None,
         advantages: Optional[List[float]] = None,
         comm_events: Optional[List[Tuple[int, int]]] = None,
+        *,
+        chambers: Optional[List[int]] = None,
+        bond_rewards: Optional[List[float]] = None,
+        total_rewards: Optional[List[float]] = None,
     ) -> Optional[np.ndarray]:
-        """Execute one full Hebbian plasticity step.
+        """Execute one full social-graph plasticity step.
 
-        Implements Eq. 4 (refined) from the thesis proposal:
-        Δwij = m(t)·cij(t)·(1-wij(t)) - λ·wij(t) + Δwij_sustained
-        wij(t+1) = clip(wij(t) + Δwij, 0, 1)
+        Dispatches on ``config.mode``:
+
+        - ``"legacy"`` — the accreted advantage-modulator + failure-window +
+          grace rule (uses ``step_rewards`` / ``advantages``). Unchanged.
+        - ``"coactivity"`` / ``"reward_modulated"`` — the gated-Hebbian
+          variants (see :meth:`_update_gated`). These read ``chambers``,
+          ``total_rewards`` and (Variant B) ``bond_rewards``; the legacy
+          ``step_rewards`` / ``advantages`` args are accepted but ignored.
 
         Parameters
         ----------
         positions : list of (x,y,z) or None, one per agent
-        step_rewards : list of floats, one per agent
-        advantages : list of per-agent advantages, or None
+        step_rewards : list of floats (legacy mode), one per agent
+        advantages : list of per-agent advantages (legacy mode), or None
         comm_events : list of (sender, receiver) index pairs, or None
+        chambers : per-agent chamber index (1..5); 0/None ⇒ solo/unknown,
+            treated as Ch1 (non-cooperative, gated OUT of every reward read).
+            If the whole list is None, all agents are assumed cooperative.
+        bond_rewards : per-agent BONDABLE reward this step (milestone + comm +
+            futile; DEATH EXCLUDED). Drives Variant B's growth magnitude and
+            the engagement normaliser. Ignored by Variant A.
+        total_rewards : per-agent TOTAL reward this step (death INCLUDED). Used
+            only for the neg_i decay gate. Falls back to ``step_rewards``.
 
         Returns
         -------
@@ -340,6 +681,26 @@ class HebbianSocialGraph:
         """
         if not self.config.enabled:
             return None
+
+        # Frozen / hardcoded graph: W never changes (no plasticity). bond
+        # weights stay constant and bond deltas stay 0 ("STABLE"), which is
+        # exactly what the LLM-only social-bias ablation wants. Diffusion is
+        # left inactive (no co-activity computed) — use --hebbian-gamma 0.
+        if self.config.freeze_weights:
+            return self.W
+
+        if self.config.mode != "legacy":
+            return self._update_gated(
+                positions=positions,
+                comm_events=comm_events,
+                chambers=chambers,
+                total_rewards=(total_rewards if total_rewards is not None
+                               else step_rewards),
+                bond_rewards=bond_rewards,
+            )
+
+        if step_rewards is None:
+            raise ValueError("legacy mode requires step_rewards")
 
         cfg = self.config
 
@@ -748,6 +1109,7 @@ class HebbianSocialGraph:
             "W": self.W.tolist(),
             "_failure_coactivation": self._failure_coactivation.tolist(),
             "_max_reward_seen": self._max_reward_seen,
+            "_max_bond_reward_seen": self._max_bond_reward_seen,
             "_step_count": self._step_count,
             "num_agents": self.config.num_agents,
             "init_weight": self.config.init_weight,
@@ -782,8 +1144,12 @@ class HebbianSocialGraph:
         self._step_count = int(d.get("_step_count", 0))
         lc = d.get("_last_coactivity")
         self._last_coactivity = np.array(lc, dtype=np.float32) if lc is not None else None
-        # Clear the deque — we cannot restore per-step snapshots from JSON
+        # Clear the deques — we cannot restore per-step snapshots from JSON.
+        # The windows simply re-warm over the next `coop_window` steps.
         self._failure_window_buffer.clear()
+        self._coact_window.clear()
+        self._reward_window.clear()
+        self._max_bond_reward_seen = float(d.get("_max_bond_reward_seen", 0.0))
 
     def reset(self) -> None:
         """Reinitialise W to init_weight, clear all history.
@@ -801,3 +1167,7 @@ class HebbianSocialGraph:
         self._max_reward_seen = 0.0
         self._last_coactivity = None
         self._step_count = 0
+        # Gated-variant window state
+        self._coact_window.clear()
+        self._reward_window.clear()
+        self._max_bond_reward_seen = 0.0

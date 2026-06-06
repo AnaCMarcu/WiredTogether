@@ -1,0 +1,48 @@
+\section{Reinforcement-learning hyperparameters}
+\label{sec:rl_hyperparams}
+
+\autoref{tab:rl_hyperparams} lists the settings used for the MAPPO layer described in \autoref{sec:rl_formulation}. Reward normalisation is applied only in the IPPO ablation: under the centralised critic both the per-agent and team rewards are kept on the raw milestone scale, so that the GAE deltas $r'_{i,t}+\gamma V_\psi(s^{t+1})-V_\psi(s^t)$ are computed on a single consistent scale.
+
+\begin{table}[h]
+\centering
+\caption{Reinforcement-learning hyperparameters for the WIRE MAPPO layer.}
+\label{tab:rl_hyperparams}
+\small
+\begin{tabular}{ll}
+\toprule
+Hyperparameter & Value \\
+\midrule
+\multicolumn{2}{l}{\emph{Base model \& adapters}} \\
+Base language model            & Qwen3.5-2B (frozen) \\
+LoRA rank $r$ / $\alpha$ / dropout & $8$ / $16$ / $0.05$ \\
+LoRA target modules            & \texttt{q\_proj}, \texttt{v\_proj} \\
+Adapter scope                  & one per agent (role) \\
+Precision / grad.\ checkpointing & fp16 / on \\
+Prompt length cap              & $256$ tokens \\
+\midrule
+\multicolumn{2}{l}{\emph{PPO / MAPPO}} \\
+Discount $\gamma$              & $0.995$ \\
+GAE $\lambda$                  & $0.95$ \\
+Clip $\epsilon$               & $0.2$ \\
+Entropy coef.\ $\beta_t$       & $0.05 \rightarrow 0.001$ over $500$ updates \\
+Value-loss coef.              & $0.5$ \\
+Actor value clip (IPPO)       & $1.0$ \\
+Critic value clip $\xi$       & $10.0$ \\
+Max gradient norm             & $0.5$ \\
+PPO epochs $E$                & $2$ \\
+Mini-batch size               & $4$ \\
+Update interval $K$           & $128$ steps \\
+Rollout buffer size           & $2048$ \\
+\midrule
+\multicolumn{2}{l}{\emph{Optimisation}} \\
+Optimiser                     & Adam \\
+Actor learning rate           & $1\times10^{-4}$ \\
+Critic learning rate          & $3\times10^{-4}$ \\
+Critic hidden width           & $256$ \\
+\midrule
+\multicolumn{2}{l}{\emph{Reward}} \\
+Reward normalisation          & on (IPPO) / off (MAPPO) \\
+Death penalty                 & $-50$ \\
+\bottomrule
+\end{tabular}
+\end{table}

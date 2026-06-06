@@ -161,6 +161,33 @@ def parse_args():
     # ── Hebbian social plasticity ──
     parser.add_argument("--hebbian", action="store_true",
                         help="Enable Hebbian social plasticity graph")
+    parser.add_argument("--hebbian-mode", type=str, default="reward_modulated",
+                        choices=["legacy", "coactivity", "reward_modulated"],
+                        help="Graph-update rule. 'reward_modulated' (default, "
+                             "Variant B): growth (η0 + η+·|r_bond|/R)·c·(1−W). "
+                             "'coactivity' (Variant A): flat η+·c·(1−W). "
+                             "'legacy': old advantage-modulator + failure-window "
+                             "rule. A/B the two variants for the ablation.")
+    # ── Gated-variant knobs (mode = coactivity | reward_modulated) ──
+    parser.add_argument("--hebbian-eta-plus", type=float, default=0.05,
+                        help="η+ growth rate (Variant A flat rate / Variant B "
+                             "salience scale)")
+    parser.add_argument("--hebbian-eta-0", type=float, default=0.01,
+                        help="η0 association floor (Variant B only)")
+    parser.add_argument("--hebbian-eta-minus", type=float, default=0.025,
+                        help="η- failure-gated decay rate")
+    parser.add_argument("--hebbian-coop-eps", type=float, default=0.05,
+                        help="ε 'no co-activity' / activity-floor threshold")
+    parser.add_argument("--hebbian-coop-window", type=int, default=50,
+                        help="n rolling-window length (steps) for coop/neg")
+    parser.add_argument("--hebbian-neg-theta", type=float, default=5.0,
+                        help="θ negative-reward threshold (between |futile|=1 "
+                             "and |death|=10)")
+    parser.add_argument("--hebbian-reward-norm", type=float, default=300.0,
+                        help="R fixed bondable-reward normalizer (Variant B); "
+                             "default = largest milestone reward (m27=300)")
+    parser.add_argument("--hebbian-alpha", type=float, default=0.5,
+                        help="α engagement reward/comm mix in g_i")
     parser.add_argument("--hebbian-radius", type=float, default=5.0,
                         help="Interaction radius d (Minetest world units)")
     parser.add_argument("--hebbian-ltp", type=float, default=0.01,
@@ -179,6 +206,24 @@ def parse_args():
                         help="Initial bond weight W_0 (default 0.1 = warm start)")
     parser.add_argument("--hebbian-no-comm-bond", action="store_true",
                         help="Set δ_comm=0 (spatial-only, for RQ4 ablation)")
+    # ── Hardcoded / frozen graph (LLM-only social-bias ablation) ──
+    parser.add_argument("--hebbian-freeze", action="store_true",
+                        help="Freeze W for the whole run (no plasticity). Use "
+                             "with --hebbian-preset + --social-module bias to "
+                             "test an IMPOSED social topology. Pair with "
+                             "--hebbian-gamma 0.")
+    parser.add_argument("--hebbian-preset", type=str, default="none",
+                        choices=["none", "uniform", "star", "ring", "pair"],
+                        help="Hardcoded starting topology for W. 'uniform' = "
+                             "flat control; 'star' = all bond to the hub; "
+                             "'ring' = directed help chain; 'pair' = 0↔1 dyad "
+                             "+ loner.")
+    parser.add_argument("--hebbian-bond-strong", type=float, default=0.8,
+                        help="Value of a 'strong' hardcoded bond (preset)")
+    parser.add_argument("--hebbian-bond-weak", type=float, default=0.1,
+                        help="Value of a 'weak' hardcoded bond (preset)")
+    parser.add_argument("--hebbian-hub", type=int, default=0,
+                        help="Hub agent index for the 'star' preset")
     # ── Phase B+ thesis comparison: interpretability sidecar ──
     # (`--reward-propagation` was removed alongside the deleted rlvr module
     #  that provided per_teammate_contributions / attribute_source_events /
@@ -1066,6 +1111,7 @@ async def run(args):
     # ── Hebbian social plasticity ──
     hebbian_config = HebbianConfig(
         enabled=args.hebbian,
+        mode=args.hebbian_mode,
         num_agents=num_agents,
         interaction_radius=args.hebbian_radius,
         ltp_lr=args.hebbian_ltp,
@@ -1076,13 +1122,49 @@ async def run(args):
         reward_diffusion_gamma=args.hebbian_gamma,
         communication_coactivity_bonus=0.0 if args.hebbian_no_comm_bond else 0.5,
         init_weight=args.hebbian_init_weight,
+        # Gated-variant (coactivity / reward_modulated) knobs
+        engagement_reward_weight=args.hebbian_alpha,
+        eta_plus=args.hebbian_eta_plus,
+        eta_0=args.hebbian_eta_0,
+        eta_minus=args.hebbian_eta_minus,
+        coop_eps=args.hebbian_coop_eps,
+        coop_window=args.hebbian_coop_window,
+        neg_theta=args.hebbian_neg_theta,
+        reward_norm_R=args.hebbian_reward_norm,
+        # Hardcoded / frozen graph (LLM-only social-bias ablation)
+        freeze_weights=args.hebbian_freeze,
+        init_preset=args.hebbian_preset,
+        preset_bond_strong=args.hebbian_bond_strong,
+        preset_bond_weak=args.hebbian_bond_weak,
+        preset_hub=args.hebbian_hub,
     )
     agent_roles = [ROLE_NAMES.index(rc["name"]) for rc in role_configs]
     hebbian_graph = HebbianSocialGraph(hebbian_config, agent_roles=agent_roles)
+    if hebbian_config.enabled and hebbian_config.freeze_weights:
+        import numpy as _np
+        print(f"[FEATURES] Hebbian graph FROZEN (no plasticity): "
+              f"preset={hebbian_config.init_preset} "
+              f"strong={hebbian_config.preset_bond_strong} "
+              f"weak={hebbian_config.preset_bond_weak}"
+              + (f" hub={hebbian_config.preset_hub}"
+                 if hebbian_config.init_preset == "star" else ""))
+        print("[FEATURES] Hardcoded W (row i = agent i's bonds toward j):")
+        print(_np.array2string(hebbian_graph.get_all_weights(),
+                               precision=2, suppress_small=True))
     if hebbian_config.enabled:
-        print(f"Hebbian social plasticity ENABLED: ltp={hebbian_config.ltp_lr}, "
-              f"ltd={hebbian_config.ltd_lr}, radius={hebbian_config.interaction_radius}, "
-              f"γ={hebbian_config.reward_diffusion_gamma}")
+        if hebbian_config.mode == "legacy":
+            print(f"Hebbian social plasticity ENABLED [legacy]: "
+                  f"ltp={hebbian_config.ltp_lr}, ltd={hebbian_config.ltd_lr}, "
+                  f"radius={hebbian_config.interaction_radius}, "
+                  f"γ={hebbian_config.reward_diffusion_gamma}")
+        else:
+            print(f"Hebbian social plasticity ENABLED [{hebbian_config.mode}]: "
+                  f"η+={hebbian_config.eta_plus}, η0={hebbian_config.eta_0}, "
+                  f"η-={hebbian_config.eta_minus}, ε={hebbian_config.coop_eps}, "
+                  f"n={hebbian_config.coop_window}, θ={hebbian_config.neg_theta}, "
+                  f"R={hebbian_config.reward_norm_R}, "
+                  f"radius={hebbian_config.interaction_radius}, "
+                  f"γ={hebbian_config.reward_diffusion_gamma}")
 
     comm_mode = "off" if not communication else "targeted"
     print(f"\nConfig: {num_agents} agents, {num_episodes} episodes, "
@@ -2174,11 +2256,39 @@ async def run(args):
             # learning indirectly through Hebbian co-activity (cij), which
             # gates LTP without paying out raw reward.
 
+            # Gated-Hebbian variants (mode != "legacy") read structured,
+            # chamber-gated reward streams instead of a single scalar:
+            #   chambers      — per-agent chamber index 1..5 (0 ⇒ Ch1/solo,
+            #                    gated OUT of every reward read).
+            #   bond_rewards  — BONDABLE reward = milestone + comm + futile.
+            #                    The env-step stream (which carries the −10
+            #                    DEATH penalty via craftium.reward) is NOT
+            #                    summed here, so death is excluded from growth
+            #                    by construction — Variant B never bonds on
+            #                    shared deaths.
+            #   total_rewards — full reward incl. death (= step_rewards_raw);
+            #                    used only for the neg_i decay gate, so a death
+            #                    can still trip decay.
+            # The legacy mode ignores these and uses step_rewards/advantages.
+            _CHAMBER_TO_INT = {"ch1": 1, "ch2": 2, "ch3": 3, "ch4": 4, "ch5": 5}
+            _chambers = [
+                _CHAMBER_TO_INT.get(environment.get_chamber(_i) or "", 0)
+                for _i in range(num_agents)
+            ]
+            _bond_rewards = [
+                _step_milestone_drain[_i]
+                + (float(_comm_rewards_this_step.get(_i, 0.0)) if communication else 0.0)
+                + _step_pitch_penalty[_i]
+                for _i in range(num_agents)
+            ]
             hebbian_graph.update(
                 positions=positions,
                 step_rewards=step_rewards_raw,
                 advantages=step_advantages if _any_advantage else None,
                 comm_events=comm_events if communication else None,
+                chambers=_chambers,
+                bond_rewards=_bond_rewards,
+                total_rewards=step_rewards_raw,
             )
             diffused_rewards = hebbian_graph.diffuse_rewards(step_rewards_raw)
 
