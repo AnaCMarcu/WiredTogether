@@ -27,5 +27,5 @@ Current task: {task}
 
 Drop beliefs that are no longer relevant to the current chamber or task.
 
-Respond ONLY in JSON: {{"beliefs": "Belief 1. Belief 2. Belief 3."}}
-Write each belief as a sentence in the same string. Do not make a list.
+Respond ONLY in JSON: {{"beliefs": ["Belief 1.", "Belief 2.", "Belief 3."]}}
+Each belief is one short sentence. Give at most 5.

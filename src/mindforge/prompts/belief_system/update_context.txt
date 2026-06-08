@@ -29,4 +29,5 @@ Interaction beliefs: {interaction_beliefs}
 If interaction beliefs add useful info (a teammate pressed a switch, a teammate is low HP),
 include it. Keep the context to 2-3 sentences focused on the physical action sequence needed NOW.
 
-Respond ONLY in JSON: {{"beliefs": "..."}}
+Respond ONLY in JSON: {{"beliefs": ["...", "..."]}}
+Give 2-3 short beliefs, one sentence each, focused on the physical action sequence needed NOW.

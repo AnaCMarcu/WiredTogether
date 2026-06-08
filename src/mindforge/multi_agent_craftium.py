@@ -2261,11 +2261,12 @@ async def run(args):
             #   chambers      — per-agent chamber index 1..5 (0 ⇒ Ch1/solo,
             #                    gated OUT of every reward read).
             #   bond_rewards  — BONDABLE reward = milestone + comm + futile.
-            #                    The env-step stream (which carries the −10
-            #                    DEATH penalty via craftium.reward) is NOT
-            #                    summed here, so death is excluded from growth
-            #                    by construction — Variant B never bonds on
-            #                    shared deaths.
+            #                    The env-step stream (which carries the death
+            #                    penalties via craftium.reward — −10 for a
+            #                    would-have-died in Ch1–4, −50 for a real Ch5
+            #                    death) is NOT summed here, so death is excluded
+            #                    from growth by construction — Variant B never
+            #                    bonds on shared deaths.
             #   total_rewards — full reward incl. death (= step_rewards_raw);
             #                    used only for the neg_i decay gate, so a death
             #                    can still trip decay.
@@ -2772,6 +2773,12 @@ async def run(args):
     metric.num_episodes = num_episodes
     metric.experiment_id = args.experiment_id
     metric.cli_args = vars(args)
+    # Surface the env's action-health diagnostics in summary.txt /
+    # final_metrics: why agents were rescued from NoOp (invalid action vs
+    # explicit stall) and how many invented action names were recovered to a
+    # valid primitive (e.g. 'Attack' -> 'Dig') instead of clamped.
+    metric.idle_force_counts = environment.idle_force_summary()
+    metric.action_recovered_counts = environment.action_recovered_summary()
     metric.save_run_metrics()
 
     # Save RL checkpoints

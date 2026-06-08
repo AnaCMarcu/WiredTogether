@@ -616,9 +616,12 @@ class HebbianSocialGraph:
         self._last_decay = np.where(decay_mask, decay, 0.0)
         np.fill_diagonal(self._last_decay, 0.0)
 
-        self.W = self.W + delta
-        np.clip(self.W, 0.0, 1.0, out=self.W)
-        np.fill_diagonal(self.W, 0.0)
+        # Frozen graph: keep W constant (the realized delta is 0), but the
+        # observational bookkeeping below still runs — see update() head.
+        if not self.config.freeze_weights:
+            self.W = self.W + delta
+            np.clip(self.W, 0.0, 1.0, out=self.W)
+            np.fill_diagonal(self.W, 0.0)
 
         self._step_count += 1
         self._W_history.append(self.W.copy())
@@ -682,13 +685,14 @@ class HebbianSocialGraph:
         if not self.config.enabled:
             return None
 
-        # Frozen / hardcoded graph: W never changes (no plasticity). bond
-        # weights stay constant and bond deltas stay 0 ("STABLE"), which is
-        # exactly what the LLM-only social-bias ablation wants. Diffusion is
-        # left inactive (no co-activity computed) — use --hebbian-gamma 0.
-        if self.config.freeze_weights:
-            return self.W
-
+        # Frozen / hardcoded graph (freeze_weights): W never changes — bond
+        # weights stay constant and bond deltas stay 0 ("STABLE"), the LLM-only
+        # social-bias ablation. We still run the rest of the update so the
+        # OBSERVATIONAL accumulators (_step_count, _last_coactivity, the
+        # max-reward normalisers) stay honest; only the W *mutation* is skipped,
+        # guarded at the apply site in each path. Previously this returned early,
+        # leaving those fields at init values (0 / None) and silently corrupting
+        # cross-run Hebbian diagnostics for the frozen runs (exp16 / exp17).
         if self.config.mode != "legacy":
             return self._update_gated(
                 positions=positions,
@@ -756,12 +760,14 @@ class HebbianSocialGraph:
         # Sustained LTD
         delta_ltd = self._compute_sustained_ltd()
 
-        # Full update
-        self.W = self.W + delta_main + delta_ltd
-
-        # Hard constraints
-        np.clip(self.W, 0.0, 1.0, out=self.W)
-        np.fill_diagonal(self.W, 0.0)
+        # Full update. Skipped when the graph is frozen (freeze_weights) — W
+        # stays constant, but _step_count / _last_coactivity / the failure
+        # window above are still recorded so the diagnostics stay honest.
+        if not cfg.freeze_weights:
+            self.W = self.W + delta_main + delta_ltd
+            # Hard constraints
+            np.clip(self.W, 0.0, 1.0, out=self.W)
+            np.fill_diagonal(self.W, 0.0)
 
         self._step_count += 1
 
@@ -1106,6 +1112,11 @@ class HebbianSocialGraph:
 
         return {
             "enabled": True,
+            # Explicit so a consumer never mistakes a frozen graph's constant W
+            # (and intentionally-static diagnostics) for a plastic run that
+            # happened to converge.
+            "frozen": bool(self.config.freeze_weights),
+            "mode": self.config.mode,
             "W": self.W.tolist(),
             "_failure_coactivation": self._failure_coactivation.tolist(),
             "_max_reward_seen": self._max_reward_seen,

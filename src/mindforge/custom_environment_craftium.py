@@ -1,6 +1,7 @@
 """Environment adapter bridging Craftium OpenWorld multi-agent env to CausalForge's interface."""
 
 import os
+import re
 import json
 import numpy as np
 import PIL.Image
@@ -54,6 +55,78 @@ ACTION_MAP = {
 }
 
 VALID_ACTIONS = list(ACTION_MAP)
+
+# Synonyms / invented names the policy (especially smaller models) emits
+# despite the explicit action list. Mapping them to the intended primitive
+# RECOVERS the policy's intent instead of clamping to NoOp — which then gets
+# force-moved (the model's choice destroyed twice; see _idle_guard). Keys are
+# normalized (lowercased, separators stripped) — see _normalize_action_key.
+# Combat/break all map to Dig: the env has no separate attack/kill action
+# ("Attack a mob: face it and Dig repeatedly" — environment_prompt.txt).
+_ACTION_ALIASES = {
+    # combat / breaking -> Dig
+    "attack": "Dig", "mine": "Dig", "hit": "Dig", "punch": "Dig",
+    "break": "Dig", "chop": "Dig", "kill": "Dig", "strike": "Dig",
+    "swing": "Dig", "fight": "Dig", "smash": "Dig",
+    # forward / backward / strafe
+    "forward": "MoveForward", "moveup": "MoveForward", "advance": "MoveForward",
+    "walkforward": "MoveForward", "goforward": "MoveForward", "step": "MoveForward",
+    "backward": "MoveBackward", "moveback": "MoveBackward", "back": "MoveBackward",
+    "retreat": "MoveBackward",
+    "strafeleft": "MoveLeft", "strafright": "MoveRight", "straferight": "MoveRight",
+    # turning / camera. Bare "turn" defaults to TurnRight (direction unspecified).
+    "turn": "TurnRight", "rotate": "TurnRight", "rotateright": "TurnRight",
+    "turnclockwise": "TurnRight", "rotateleft": "TurnLeft",
+    "turncounterclockwise": "TurnLeft",
+    "turnup": "LookUp", "lookup": "LookUp", "lookupward": "LookUp", "tiltup": "LookUp",
+    "raisecamera": "LookUp",
+    "turndown": "LookDown", "lookdown": "LookDown", "lookdownward": "LookDown",
+    "tiltdown": "LookDown", "lowercamera": "LookDown",
+    # place / drop / jump / sneak
+    "placeblock": "Place", "put": "Place", "build": "Place",
+    "throw": "Drop", "discard": "Drop",
+    "hop": "Jump", "leap": "Jump",
+    "crouch": "Sneak",
+    # explicit idling
+    "wait": "NoOp", "stay": "NoOp", "idle": "NoOp", "stop": "NoOp",
+    "donothing": "NoOp", "nothing": "NoOp", "none": "NoOp", "hold": "NoOp",
+    "stand": "NoOp",
+}
+
+
+def _normalize_action_key(name) -> str:
+    """Lowercase and strip spaces / underscores / hyphens for fuzzy matching."""
+    return re.sub(r"[\s_\-]+", "", str(name)).lower()
+
+
+# normalized valid-name -> canonical valid name (e.g. "moveforward" -> "MoveForward")
+_VALID_ACTION_NORMALIZED = {_normalize_action_key(a): a for a in ACTION_MAP}
+
+
+def canonicalize_action(action_str):
+    """Resolve a possibly-malformed action name to a valid ACTION_MAP key, or None.
+
+    Tries in order: exact match, format-normalized match (case / spaces /
+    underscores, e.g. 'move_forward' or 'MOVEFORWARD'), the synonym alias map
+    (e.g. 'Attack' -> 'Dig', 'TurnUp' -> 'LookUp'), and finally the leading
+    word of a multi-word string ('MoveForward to the door' -> 'MoveForward').
+    Returns the canonical action name, or None if unrecoverable.
+    """
+    if action_str in ACTION_MAP:
+        return action_str
+    norm = _normalize_action_key(action_str)
+    if norm in _VALID_ACTION_NORMALIZED:
+        return _VALID_ACTION_NORMALIZED[norm]
+    if norm in _ACTION_ALIASES:
+        return _ACTION_ALIASES[norm]
+    tokens = str(action_str).strip().split()
+    if tokens:
+        first = _normalize_action_key(tokens[0])
+        if first in _VALID_ACTION_NORMALIZED:
+            return _VALID_ACTION_NORMALIZED[first]
+        if first in _ACTION_ALIASES:
+            return _ACTION_ALIASES[first]
+    return None
 
 # Macro actions were REMOVED (2026-06): agents use only primitive actions.
 # Macros were long fixed sequences (9-23 steps) the policy committed to
@@ -189,6 +262,23 @@ class CraftiumEnvironmentInterface:
         # Cleared once read.
         self._invalid_action_warning = {}  # agent_name -> str
 
+        # Diagnostics: WHY the idle-guard force-moved an agent. The guard
+        # converts a single NoOp to MoveForward, but two very different
+        # failures feed that NoOp — an UNMAPPED action name clamped to NoOp
+        # ("invalid_action") vs. the policy deliberately choosing NoOp
+        # ("explicit_noop"). Both used to log identically as "idle for N
+        # steps", hiding which one dominates (it's far worse on 2B / RL
+        # policies). We keep a run-cumulative per-agent tally so idle-forcing
+        # is measurable instead of a silent band-aid. See _idle_guard() and
+        # idle_force_summary(). NOT cleared on reset() — totals span the run.
+        self._idle_force_counts = {}  # agent_name -> {cause -> int}
+
+        # Run-cumulative count of actions RECOVERED by canonicalize_action()
+        # (a synonym / format variant resolved to a valid primitive instead of
+        # being clamped to NoOp). High on smaller models that invent names like
+        # 'Attack'/'TurnUp'. Surfaced via action_recovered_summary().
+        self._action_recovered_counts = {}  # agent_name -> int
+
         # Per-step memoization cache (T1.2). Invalidated at the top of
         # every step() / step_all() call. Keys are arbitrary identifiers
         # ("timeofday", ("chamber_state", agent_id), etc.) → cached value.
@@ -233,6 +323,73 @@ class CraftiumEnvironmentInterface:
         self.reset_log_offset()
         return self._observations
 
+    def _idle_guard(self, agent_name, agentId, action_str, invalid_original=None):
+        """Break single-step idle loops, recording WHY the agent idled.
+
+        A NoOp wastes a step, so the first one is converted to MoveForward
+        (``_MAX_CONSECUTIVE_IDLE == 1``). Two distinct upstream failures feed
+        NoOp into this guard:
+          • ``invalid_action`` — the policy emitted an action name not in
+            ACTION_MAP; it was clamped to NoOp and ``invalid_original`` holds
+            the original (e.g. 'Attack', 'Turn', 'Mine').
+          • ``explicit_noop``  — the policy deliberately chose NoOp.
+        Both were previously logged identically as "idle for N steps", which
+        hid the cause. We now name it and keep a per-agent run tally
+        (:meth:`idle_force_summary`) so the band-aid is measurable.
+
+        Shared verbatim by ``step()`` and ``_resolve_action_for_agent()`` so
+        the two stepping paths cannot drift apart. Returns the (possibly
+        rewritten) action name.
+        """
+        import logging as _logging
+
+        if action_str not in self._IDLE_ACTIONS:
+            self._consecutive_idle[agent_name] = 0
+            return action_str
+
+        self._consecutive_idle[agent_name] = (
+            self._consecutive_idle.get(agent_name, 0) + 1
+        )
+        if self._consecutive_idle[agent_name] < self._MAX_CONSECUTIVE_IDLE:
+            return action_str
+
+        cause = "invalid_action" if invalid_original is not None else "explicit_noop"
+        tally = self._idle_force_counts.setdefault(
+            agent_name, {"invalid_action": 0, "explicit_noop": 0}
+        )
+        tally[cause] += 1
+        detail = (
+            f"invalid action '{invalid_original}' clamped to NoOp"
+            if invalid_original is not None
+            else "policy emitted NoOp"
+        )
+        _logging.warning(
+            "Agent %d idle (%s: %s), forcing MoveForward "
+            "[run tally agent_%d: invalid=%d explicit=%d]",
+            agentId, cause, detail, agentId,
+            tally["invalid_action"], tally["explicit_noop"],
+        )
+        self._consecutive_idle[agent_name] = 0
+        return "MoveForward"
+
+    def idle_force_summary(self):
+        """Run-cumulative idle-force counts by agent and cause.
+
+        Returns ``{agent_name: {"invalid_action": int, "explicit_noop": int}}``.
+        Lets the trainer surface idle-forcing (and its dominant cause) in
+        summary.txt instead of leaving it buried in the slurm .err firehose.
+        """
+        return {a: dict(c) for a, c in self._idle_force_counts.items()}
+
+    def action_recovered_summary(self):
+        """Run-cumulative count of synonym/format actions recovered per agent.
+
+        Returns ``{agent_name: int}`` — how often canonicalize_action() rescued
+        an invented action name (e.g. 'Attack' -> 'Dig') that would otherwise
+        have been clamped to NoOp and force-moved.
+        """
+        return dict(self._action_recovered_counts)
+
     def _resolve_action_for_agent(self, agentId: int, action_str: str) -> str:
         """Per-agent action preprocessing shared by step_all() (and, eventually,
         step()).
@@ -255,33 +412,39 @@ class CraftiumEnvironmentInterface:
 
         agent_name = f"agent_{agentId}"
 
+        invalid_original = None
         if action_str not in ACTION_MAP:
-            _logging.warning(
-                f"Invalid action: '{action_str}', clamping to NoOp. "
-                f"Valid actions: {VALID_ACTIONS}"
-            )
-            self._invalid_action_warning[agent_name] = (
-                f"WARNING: Your previous action '{action_str}' is NOT a "
-                f"valid action — it was silently clamped to NoOp. Valid "
-                f"actions are: {VALID_ACTIONS}. Do not emit invalid action "
-                f"names; use 'Dig' (not 'Mine' or 'Attack'), 'TurnRight' "
-                f"(not 'Turn'), etc."
-            )
-            action_str = "NoOp"
-
-        if action_str in self._IDLE_ACTIONS:
-            self._consecutive_idle[agent_name] = (
-                self._consecutive_idle.get(agent_name, 0) + 1
-            )
-            if self._consecutive_idle[agent_name] >= self._MAX_CONSECUTIVE_IDLE:
-                _logging.warning(
-                    f"Agent {agentId} idle for {self._consecutive_idle[agent_name]} "
-                    f"steps, forcing MoveForward"
+            canon = canonicalize_action(action_str)
+            if canon is not None:
+                # Synonym / format variant — recover intent instead of clamping.
+                _logging.info(
+                    "Recovered action '%s' -> '%s' for %s",
+                    action_str, canon, agent_name,
                 )
-                action_str = "MoveForward"
-                self._consecutive_idle[agent_name] = 0
-        else:
-            self._consecutive_idle[agent_name] = 0
+                self._action_recovered_counts[agent_name] = (
+                    self._action_recovered_counts.get(agent_name, 0) + 1
+                )
+                action_str = canon
+            else:
+                invalid_original = action_str
+                _logging.warning(
+                    f"Invalid action: '{action_str}', clamping to NoOp. "
+                    f"Valid actions: {VALID_ACTIONS}"
+                )
+                self._invalid_action_warning[agent_name] = (
+                    f"WARNING: Your previous action '{action_str}' is NOT a "
+                    f"valid action — it was silently clamped to NoOp. Valid "
+                    f"actions are: {VALID_ACTIONS}. Do not emit invalid action "
+                    f"names; use 'Dig' (not 'Mine' or 'Attack'), 'TurnRight' "
+                    f"(not 'Turn'), etc."
+                )
+                action_str = "NoOp"
+
+        # Break idle loops, recording whether the NoOp came from an invalid
+        # action or an explicit policy NoOp (see _idle_guard).
+        action_str = self._idle_guard(
+            agent_name, agentId, action_str, invalid_original
+        )
 
         if self._escape_queue.get(agent_name):
             esc_action, esc_ticks = self._escape_queue[agent_name][0]
@@ -479,37 +642,44 @@ class CraftiumEnvironmentInterface:
 
         agent_name = f"agent_{agentId}"
 
+        invalid_original = None
         if action_str not in ACTION_MAP:
-            _logging.warning(
-                f"Invalid action: '{action_str}', clamping to NoOp. "
-                f"Valid actions: {VALID_ACTIONS}"
-            )
-            # Stash for the LLM to see on the next prompt — without this
-            # surfacing, the policy keeps emitting 'Mine' / 'Attack' / etc.
-            # indefinitely because the clamping is silent.
-            self._invalid_action_warning[agent_name] = (
-                f"WARNING: Your previous action '{action_str}' is NOT a "
-                f"valid action — it was silently clamped to NoOp. Valid "
-                f"actions are: {VALID_ACTIONS}. Do not emit invalid action "
-                f"names; use 'Dig' (not 'Mine' or 'Attack'), 'TurnRight' "
-                f"(not 'Turn'), etc."
-            )
-            action_str = "NoOp"
-
-        # Guard: break idle loops (NoOp/Inventory spam)
-        if action_str in self._IDLE_ACTIONS:
-            self._consecutive_idle[agent_name] = (
-                self._consecutive_idle.get(agent_name, 0) + 1
-            )
-            if self._consecutive_idle[agent_name] >= self._MAX_CONSECUTIVE_IDLE:
-                _logging.warning(
-                    f"Agent {agentId} idle for {self._consecutive_idle[agent_name]} "
-                    f"steps, forcing MoveForward"
+            canon = canonicalize_action(action_str)
+            if canon is not None:
+                # Synonym / format variant (e.g. 'Attack' -> 'Dig',
+                # 'TurnUp' -> 'LookUp') — recover the policy's intent rather
+                # than clamping to NoOp and then force-moving it.
+                _logging.info(
+                    "Recovered action '%s' -> '%s' for %s",
+                    action_str, canon, agent_name,
                 )
-                action_str = "MoveForward"
-                self._consecutive_idle[agent_name] = 0
-        else:
-            self._consecutive_idle[agent_name] = 0
+                self._action_recovered_counts[agent_name] = (
+                    self._action_recovered_counts.get(agent_name, 0) + 1
+                )
+                action_str = canon
+            else:
+                invalid_original = action_str
+                _logging.warning(
+                    f"Invalid action: '{action_str}', clamping to NoOp. "
+                    f"Valid actions: {VALID_ACTIONS}"
+                )
+                # Stash for the LLM to see on the next prompt — without this
+                # surfacing, the policy keeps emitting truly unknown names
+                # indefinitely because the clamping is silent.
+                self._invalid_action_warning[agent_name] = (
+                    f"WARNING: Your previous action '{action_str}' is NOT a "
+                    f"valid action — it was silently clamped to NoOp. Valid "
+                    f"actions are: {VALID_ACTIONS}. Do not emit invalid action "
+                    f"names; use 'Dig' (not 'Mine' or 'Attack'), 'TurnRight' "
+                    f"(not 'Turn'), etc."
+                )
+                action_str = "NoOp"
+
+        # Guard: break idle loops (NoOp spam). Records whether the NoOp came
+        # from an invalid action or an explicit policy NoOp (see _idle_guard).
+        action_str = self._idle_guard(
+            agent_name, agentId, action_str, invalid_original
+        )
 
         # Guard: position-stuck detection.
         # If an escape sequence is queued, consume from it first.

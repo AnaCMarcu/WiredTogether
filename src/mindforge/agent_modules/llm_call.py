@@ -84,6 +84,7 @@ async def llm_call(
     system_prompt=None,
     frame=None,
     parse_check=None,
+    parser=None,
     retry_count=0,
     log_prefix="LLM call",
     **kwargs,
@@ -153,7 +154,7 @@ async def llm_call(
 
     # parse response
     try:
-        content = load_json(response.content)
+        content = (parser or load_json)(response.content)
         if not content:
             raise ValueError("Empty JSON response")
         if parse_check is not None:
@@ -170,6 +171,8 @@ async def llm_call(
             user_prompt=user_prompt,
             cancellation_token=cancellation_token,
             frame=frame,
+            parse_check=parse_check,
+            parser=parser,
             retry_count=retry_count + 1,
             log_prefix=log_prefix,
             **kwargs,

@@ -358,21 +358,26 @@ minetest.register_globalstep(function(dtime)
         if #contrib_list > 0 then
             five_chambers.fire_milestone("m22_all_mobs_killed", contrib_list)
 
-            -- M23: bonus if all qualifying agents are alive AND contributed.
-            -- Aliveness alone no longer suffices — the agent must have
-            -- damaged a Ch4 mob beyond MIN_DAMAGE_FOR_CREDIT.
-            local alive_list = {}
+            -- M23: "all survived" bonus. Now a REAL condition — fires only if
+            -- NO agent recorded a would-have-died (-10 near-death) event during
+            -- Ch4. Aliveness was previously trivial (the forgiving chamber
+            -- makes agents invincible, so get_hp() > 0 is always true); instead
+            -- we read the per-agent Ch4 near-death counter (deaths.lua). A team
+            -- that took a near-fatal beating loses this bonus even though every
+            -- agent is technically still standing.
+            local all_survived = true
+            local survivor_list = {}
             for _, player in ipairs(minetest.get_connected_players()) do
                 local name = player:get_player_name()
-                local agent_dmg = five_chambers.mob_state.ch4_contributors[name] or 0
-                if five_chambers.agent_index(name) >= 0
-                   and player:get_hp() > 0
-                   and agent_dmg >= min_dmg then
-                    table.insert(alive_list, name)
+                if five_chambers.agent_index(name) >= 0 then
+                    table.insert(survivor_list, name)
+                    if (five_chambers.would_die_count_ch4[name] or 0) > 0 then
+                        all_survived = false
+                    end
                 end
             end
-            if #alive_list >= five_chambers.NUM_AGENTS then
-                five_chambers.fire_milestone("m23_all_alive_ch4", alive_list)
+            if all_survived and #survivor_list >= five_chambers.NUM_AGENTS then
+                five_chambers.fire_milestone("m23_all_alive_ch4", survivor_list)
             end
 
             five_chambers.open_door4()

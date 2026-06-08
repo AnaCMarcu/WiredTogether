@@ -247,6 +247,50 @@ def load_json(response: str) -> dict:
     return {}
 
 
+def coerce_belief_text(value, previous: str = "") -> str:
+    """Normalise a parsed ``beliefs`` field into a single string.
+
+    Accepts a string ("A. B."), a list (["A.", "B."]), or anything empty.
+    Falls back to ``previous`` when there is nothing usable, so a blank
+    update never clobbers an existing belief.
+    """
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, list):
+        joined = " ".join(str(x).strip() for x in value if str(x).strip())
+        if joined:
+            return joined
+    return previous
+
+
+def load_belief(response: str) -> dict:
+    """Parse a belief-module response into ``{"beliefs": <str>}``.
+
+    Belief modules only ever read a single free-text ``beliefs`` field, so
+    this is far more forgiving than :func:`load_json` and **never triggers a
+    retry**. It accepts the canonical ``{"beliefs": "..."}`` and
+    ``{"beliefs": [...]}`` shapes, and salvages the common malformation where
+    the model emits a bag of bare strings — ``{"beliefs": "A", "B", "C"}`` —
+    by harvesting every string literal and joining them. Returns
+    ``{"beliefs": ""}`` when nothing is salvageable (the caller keeps its
+    previous belief), which is always truthy and so will not provoke the
+    "Empty JSON response" retry path in ``llm_call``.
+    """
+    parsed = load_json(response)
+    if isinstance(parsed, dict):
+        text = coerce_belief_text(parsed.get("beliefs"))
+        if text:
+            return {"beliefs": text}
+
+    # Salvage: harvest all quoted strings, dropping a leading "beliefs" key
+    # token if the object was malformed (keyless bare strings).
+    strings = re.findall(r'"((?:[^"\\]|\\.)*)"', _strip_markdown_fences(response))
+    if strings and strings[0].strip() == "beliefs":
+        strings = strings[1:]
+    joined = " ".join(s.strip() for s in strings if s.strip())
+    return {"beliefs": joined}
+
+
 # ─── Image utilities ───────────────────────────────────────────────────
 
 def visualize_frames(

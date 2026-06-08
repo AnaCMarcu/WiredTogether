@@ -196,6 +196,7 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
     five_chambers.player_dead = {}
     five_chambers._virtual_hp = {}
     five_chambers.would_die_count = {}
+    five_chambers.would_die_count_ch4 = {}
     os.remove(minetest.get_worldpath() .. "/episode_over.txt")
     -- Rebuild the world geometry: re-places trees, stone blocks, ceiling
     -- glowstones, and the anvils (which got DESTROYED on break in the

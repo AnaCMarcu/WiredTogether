@@ -339,6 +339,17 @@ def test_freeze_is_a_noop(mode):
     # Bonds read STABLE: deltas are exactly zero for the social module.
     assert all(v == 0.0 for v in g.bond_delta_row(0).values())
 
+    # Regression (B6): a frozen graph must still record the OBSERVATIONAL
+    # accumulators — previously the freeze path returned early and serialised
+    # _step_count=0 / _last_coactivity=null, silently corrupting cross-run
+    # Hebbian diagnostics for the frozen runs.
+    assert g._step_count == 20
+    assert g._last_coactivity is not None
+    d = g.to_dict()
+    assert d["frozen"] is True
+    assert d["_step_count"] == 20
+    assert d["_last_coactivity"] is not None
+
 
 def test_explicit_init_matrix_loaded_and_shape_checked():
     m = [[0.0, 0.9, 0.2], [0.3, 0.0, 0.7], [0.1, 0.1, 0.0]]

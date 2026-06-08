@@ -143,9 +143,11 @@ class HebbianConfig:
     coop_window: int = 50
 
     # Negative-reward threshold θ: neg_i fires when Σ_window r_i < −θ.
-    # MUST sit between |futile penalty| (1.0) and |death penalty| (10.0) so one
-    # misfired camera-tilt cannot trip decay but a death (−10) does. Default 5.0.
-    # TODO(tune): confirm against the live futile/death magnitudes.
+    # MUST sit between |futile penalty| (1.0) and |would-have-died penalty|
+    # (10.0) so one misfired camera-tilt cannot trip decay but a near-death
+    # (−10) does. (A real Ch5 death is −50, but the boss chamber is excluded
+    # from bonding, so the relevant magnitude here is the −10 would-have-died.)
+    # Default 5.0. TODO(tune): confirm against the live futile/death magnitudes.
     neg_theta: float = 5.0
 
     # Fixed reward normalizer R for Variant B's salience term (|r_bond|/R).

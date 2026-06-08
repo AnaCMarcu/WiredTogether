@@ -32,6 +32,14 @@ _ACHIEVABLE_KEYWORDS = frozenset({
     "find", "move", "walk", "go", "run", "approach", # navigation
     "place", "build", "craft",                       # construction
     "collect", "gather", "get", "pick",              # generic gathering
+    # orientation / camera — directly executable via TurnLeft/TurnRight/
+    # LookUp/LookDown (or compositions). These were previously rejected as
+    # "non-actionable" and swapped for the vaguer "Explore" default, even
+    # though "TurnRight until the door is centered" is MORE primitive-aligned
+    # than the fallback. The system prompt itself tells agents to "centre it
+    # with TurnRight/TurnLeft then MoveForward", so aiming tasks are valid.
+    "turn", "rotate", "look", "face", "center", "centre", "aim",
+    "survey", "scan", "orient", "explore", "search",
 })
 
 # Tasks containing these get replaced even if they match a keyword — they

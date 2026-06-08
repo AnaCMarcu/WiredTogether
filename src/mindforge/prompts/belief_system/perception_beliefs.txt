@@ -30,6 +30,6 @@ milestone status; surface them so action selection can weigh novelty vs. extrins
 Communications from teammates: {communications}
 Execution errors: {error}
 
-Respond ONLY in JSON: {{"beliefs": "..."}}
-Write beliefs as a single string of 2-4 sentences. Be specific about image position
+Respond ONLY in JSON: {{"beliefs": ["...", "..."]}}
+Give 2-4 short beliefs, one sentence each. Be specific about image position
 (left/center/right, near/far), chamber-relevant entities, and unenacted schemes.

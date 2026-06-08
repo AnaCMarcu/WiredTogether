@@ -25,7 +25,18 @@ five_chambers.player_dead = five_chambers.player_dead or {}
 five_chambers._virtual_hp = five_chambers._virtual_hp or {}
 -- Per-agent count of would-have-died events this episode (for metrics/logging).
 five_chambers.would_die_count = five_chambers.would_die_count or {}
-local DEATH_PENALTY = -10
+-- Per-agent count of would-have-died events that occurred specifically in Ch4,
+-- so the M23 "all survived" bonus can require that NO agent had a near-death in
+-- the combat chamber (see mobs.lua). Reset each episode in init.lua.
+five_chambers.would_die_count_ch4 = five_chambers.would_die_count_ch4 or {}
+-- Real (terminal) death in the lethal boss chamber (Ch5) — the only place a
+-- death actually ends the agent's episode.
+local DEATH_PENALTY = -50
+-- Would-have-died near-miss in the FORGIVING chambers (Ch1-Ch4): the agent is
+-- invincible and keeps playing, so this is a smaller graded penalty, not a
+-- termination. Real death and a near-death are deliberately different
+-- magnitudes (-50 vs -10).
+local WOULD_DIE_PENALTY = -10
 local MAX_HP = 20
 
 -- Suppress the engine "You died / Respawn" formspec entirely. Even though the
@@ -107,17 +118,22 @@ minetest.register_on_player_hpchange(function(player, hp_change, reason)
 
     if vhp <= 0 then
         if craftium and craftium.reward then
-            craftium.reward(player, DEATH_PENALTY)  -- record in the RL signal
+            craftium.reward(player, WOULD_DIE_PENALTY)  -- record in the RL signal
         end
         local n = (five_chambers.would_die_count[name] or 0) + 1
         five_chambers.would_die_count[name] = n
+        -- Track Ch4 near-deaths separately so M23 can reward a clean run.
+        if chamber == "ch4" then
+            five_chambers.would_die_count_ch4[name] =
+                (five_chambers.would_die_count_ch4[name] or 0) + 1
+        end
         minetest.log("action", string.format(
             "[WOULDDIE] %s would have died in %s (#%d, penalty %d) — no respawn",
-            name, tostring(chamber), n, DEATH_PENALTY))
+            name, tostring(chamber), n, WOULD_DIE_PENALTY))
         if io and io.stderr then
             io.stderr:write(string.format(
                 "[WOULDDIE] %s would have died in %s #%d penalty=%d\n",
-                name, tostring(chamber), n, DEATH_PENALTY))
+                name, tostring(chamber), n, WOULD_DIE_PENALTY))
             io.stderr:flush()
         end
         vhp = MAX_HP  -- refill so the next accumulated lethal damage records again
@@ -134,7 +150,7 @@ minetest.register_on_dieplayer(function(player, reason)
     local pos     = player:get_pos()
     local chamber = pos and five_chambers.get_chamber_for_pos(pos) or nil
 
-    -- -10 death penalty into the RL reward signal.
+    -- -50 (terminal) death penalty into the RL reward signal.
     if craftium and craftium.reward then
         craftium.reward(player, DEATH_PENALTY)
     end

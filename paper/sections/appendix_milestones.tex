@@ -13,7 +13,7 @@ Several milestones (M19, M22, M23, M27, M28) are inherently team-level events: t
 The communication track is delivered through a separate mechanism. Each valid message earns a small base payment, capped at a per-agent per-episode total to prevent reward farming through chat spam; in addition, when an agent emits more than a threshold number of valid messages in a single chamber, that chamber's communication milestone fires once. Validity rules (minimum length, no duplicates, rate-limited) and target-validity rules (no self-targeting, no broadcast, no missing target) gate both rewards: messages that fail validity earn nothing, and messages with malformed targets are rerouted but their sender does not receive the base reward.
 
 \paragraph{Auxiliary penalties.}
-Two negative reward components are applied outside the milestone schedule. A death penalty (--50 points) is subtracted when an agent terminates, so the value baseline learns that dying mid-episode is worse than running out of steps with the team intact.
+Two negative reward components are applied outside the milestone schedule. The first is a death penalty, applied at two magnitudes. A real death in the lethal boss chamber (Chamber~5), where a lethal hit ends the agent's episode, incurs $-50$ points. In the forgiving chambers (Chambers~1--4) the agent is invincible and takes no real damage, but accumulated would-be damage is tracked in a virtual-health pool, and each time that pool reaches a lethal threshold a smaller $-10$ \emph{would-have-died} penalty is recorded (and the pool refills) without any actual death or respawn --- a graded signal that a near-fatal beating is costly but, unlike a real death, not terminal. The second component is a small futile-action penalty of $-1$ point, applied when an action is structurally wasted --- for example a camera tilt past the pitch cap that the engine cannot apply --- giving the policy a per-action validity signal that the team-level milestone reward lacks.
 
 \paragraph{Full schedule.}
 Table~\ref{tab:milestone_schedule} lists every milestone, its firing condition, and its reward value. Reward magnitudes were chosen iteratively during environment development with the design constraint that (i) the cumulative reward attainable from a chamber should grow as the cooperation demand of that chamber grows, so a team that successfully completes Chamber 5 receives substantially more reward than one that only completes Chamber 1; (ii) within a chamber, milestones should be ordered such that early milestones serve as stepping stones for later ones, with reward magnitudes signalling the relative progress they represent; and (iii) the communication track should be large enough to be a non-trivial part of the policy gradient but small enough not to dominate it.
@@ -56,7 +56,7 @@ M19 & ch3\_switches & All agents in communal room              & 100  & T \\
 M20 & ch4\_combat   & Enter Chamber 4                          & 30   & P \\
 M21 & ch4\_combat   & First mob kill                           & 60   & P \\
 M22 & ch4\_combat   & All mobs killed                          & 150  & T \\
-M23 & ch4\_combat   & All agents alive after Ch4 cleared       & 100  & T \\
+M23 & ch4\_combat   & All agents survive Ch4 with no would-have-died event & 100  & T \\
 \midrule
 \multicolumn{5}{l}{\emph{Chamber 5 --- cooperative boss fight}} \\
 M24 & ch5\_boss     & Enter Chamber 5                          & 50   & P \\

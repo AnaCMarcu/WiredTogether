@@ -61,7 +61,13 @@ class RLConfig:
 
     # ── Reward shaping ──
     normalize_rewards: bool = True   # running mean/std normalisation before buffer storage
-    death_penalty: float = -50.0     # added to reward when agent terminates (done=True)
+    # The environment (deaths.lua) already applies the -50 terminal death
+    # penalty into the env reward stream on a real Ch5 death — the SAME
+    # transition that has done=True here. Adding it again would double-count
+    # (-100) on RL runs, so this is 0: the env owns the death penalty, giving a
+    # single -50 consistent across LLM and RL runs. Set non-zero only if you
+    # want an *additional* RL-side termination penalty on top of the env's.
+    death_penalty: float = 0.0       # added to reward when agent terminates (done=True)
 
     # ── Entropy annealing ──
     # Linearly decay entropy coefficient from entropy_start to entropy_end over

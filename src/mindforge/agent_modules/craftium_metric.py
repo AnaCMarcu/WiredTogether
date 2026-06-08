@@ -328,6 +328,15 @@ class CraftiumMetric:
         self.communication_log = []
         self.comm_counts_per_step = []
 
+        # Action health — idle-force diagnostics copied from the env
+        # (CraftiumEnvironmentInterface.idle_force_summary()) just before the
+        # summary is written. Shape: {agent_name: {"invalid_action": int,
+        # "explicit_noop": int}}. Empty if the trainer never populated it.
+        self.idle_force_counts = {}
+        # Per-agent count of actions recovered by the env's synonym/format
+        # canonicalizer (e.g. 'Attack' -> 'Dig'). {agent_name: int}.
+        self.action_recovered_counts = {}
+
         # RL
         self.rl_updates = []
         self.rl_token_opts = []
@@ -740,6 +749,8 @@ class CraftiumMetric:
                 (statistics.pstdev(c) if len(c) >= 2 else 0.0)
                 for c in self.comm_count_per_episode
             ],
+            "idle_force_counts":    self.idle_force_counts,
+            "action_recovered_counts": self.action_recovered_counts,
             "steps_to_milestone":   self.steps_to_milestone_table(),
             "milestones_per_agent": self.milestones_per_agent(),
             "milestone_events":     self.milestone_events,
@@ -1739,6 +1750,7 @@ class CraftiumMetric:
         lines.extend(self._summary_steps_to_milestone())
         lines.extend(self._summary_specialization())
         lines.extend(self._summary_communication())
+        lines.extend(self._summary_action_health())
         lines.extend(self._summary_rl())
         lines.extend(self._summary_hebbian())
         lines.append("=" * 55)
@@ -1861,6 +1873,35 @@ class CraftiumMetric:
             f"  Avg per step:   {total / max(self.timestep, 1):.2f}",
             "",
         ]
+
+    def _summary_action_health(self):
+        """Idle-force breakdown: how often the env had to rescue an agent that
+        emitted NoOp, split by cause. A high ``invalid`` count means the policy
+        is inventing action names (clamped to NoOp then force-moved); a high
+        ``explicit`` count means it is deliberately stalling. Both are masked
+        coordination failures — surfaced here so they are not silent.
+        """
+        total_inv = sum(c.get("invalid_action", 0) for c in self.idle_force_counts.values())
+        total_exp = sum(c.get("explicit_noop", 0) for c in self.idle_force_counts.values())
+        total_rec = sum(self.action_recovered_counts.values())
+        if total_inv == total_exp == total_rec == 0:
+            return []
+        lines = ["--- Action Health ---"]
+        lines.append(
+            f"  Forced MoveForward (idle): {total_inv + total_exp}  "
+            f"(invalid_action={total_inv}, explicit_noop={total_exp})"
+        )
+        lines.append(
+            f"  Recovered (synonym/format -> valid): {total_rec}"
+        )
+        agents = sorted(set(self.idle_force_counts) | set(self.action_recovered_counts))
+        for name in agents:
+            c = self.idle_force_counts.get(name, {})
+            inv, exp = c.get("invalid_action", 0), c.get("explicit_noop", 0)
+            rec = self.action_recovered_counts.get(name, 0)
+            lines.append(f"  {name}: invalid={inv}, explicit={exp}, recovered={rec}")
+        lines.append("")
+        return lines
 
     def _summary_rl(self):
         if not (self.rl_updates or self.rl_token_opts):
