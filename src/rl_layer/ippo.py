@@ -17,6 +17,7 @@ Token-level:   optimises the full token-level log-likelihood of the generated
 response (only triggered by the agent's learning-belief mechanism).
 """
 
+import logging
 from typing import List, Optional, Tuple
 
 import torch
@@ -24,6 +25,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from rl_layer.trajectory_buffer import Transition
+
+logger = logging.getLogger(__name__)
 
 
 # ── Helpers ──
@@ -115,11 +118,19 @@ def action_level_ppo_step(
     clip_count      = 0
     ratio_values: List[float] = []
     value_loss_sum  = 0.0
+    n_nonfinite     = 0
 
     for tr, cand_idx in kept:
         cand_logp, pooled = rl_layer._score_actions(
             tr.prompt_text, candidate_set, with_grad=True,
         )
+        # Defensive: a non-finite forward (fp16 overflow, or weights already
+        # corrupted by an earlier bad step) would crash Categorical(). Skip the
+        # transition and warn rather than killing the whole run; the grad guard
+        # in run_ppo_update prevents the corruption that usually causes this.
+        if not torch.isfinite(cand_logp).all():
+            n_nonfinite += 1
+            continue
         dist = torch.distributions.Categorical(logits=cand_logp)
         idx_t = torch.tensor(cand_idx, device=device)
         new_log_prob = dist.log_prob(idx_t).to(torch.float32)
@@ -172,6 +183,25 @@ def action_level_ppo_step(
         if abs(r_val - 1.0) > clip_eps:
             clip_count += 1
 
+    if n_nonfinite:
+        logger.warning(
+            "action_level_ppo_step: %d/%d transitions had non-finite logits "
+            "and were skipped (model may be diverging — check grad norms).",
+            n_nonfinite, N_kept,
+        )
+
+    # Every transition produced non-finite logits → nothing to report and no
+    # gradient was accumulated. Return a degenerate info dict (mirrors the
+    # all-filtered case) instead of crashing on max([]) / div-by-zero below.
+    if not ratio_values:
+        return {
+            "policy_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0,
+            "clip_frac": 0.0, "ratio_max": 1.0, "ratio_mean": 1.0,
+            "adv_mean": 0.0, "adv_std": 0.0, "adv_min": 0.0, "adv_max": 0.0,
+            "frac_pos_advantage": 0.5, "value_loss": 0.0,
+            "n_kept": 0, "n_dropped": len(batch), "n_nonfinite": n_nonfinite,
+        }
+
     # ── Build info dict (means over the kept mini-batch) ──
     info = {
         "policy_loss": policy_loss_sum / N_kept,
@@ -187,6 +217,7 @@ def action_level_ppo_step(
         "frac_pos_advantage": float((advantages_stats > 0).float().mean().item()),
         "n_kept":      N_kept,
         "n_dropped":   len(batch) - N_kept,
+        "n_nonfinite": n_nonfinite,
         "value_loss":  value_loss_sum / N_kept if value_loss_enabled else 0.0,
     }
     return info

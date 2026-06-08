@@ -107,10 +107,26 @@ def run_ppo_update(
             # inside action_level_ppo_step. Just unscale, clip, and step.
             if info.get("n_kept", 0) > 0:
                 scaler.unscale_(rl.optimizer)
-                nn.utils.clip_grad_norm_(
+                total_norm = nn.utils.clip_grad_norm_(
                     rl.model.parameters(), rl.config.max_grad_norm,
                 )
-                scaler.step(rl.optimizer)
+                # The GradScaler is disabled (fp16/bf16 weights are stepped
+                # directly), so there is NO automatic inf/NaN-skip. A single
+                # batch with non-finite gradients — fp16 overflow, a ratio
+                # explosion — would otherwise be applied by optimizer.step()
+                # and corrupt EVERY weight to NaN; from then on all forwards
+                # return NaN logits and training dies at Categorical(logits=…).
+                # Guard it: skip the step and discard the grads when the grad
+                # norm isn't finite, so one bad batch can't poison the run.
+                if torch.isfinite(total_norm):
+                    scaler.step(rl.optimizer)
+                else:
+                    logger.warning(
+                        "RLLayer agent %d update #%d: non-finite grad norm "
+                        "(%s) — skipping optimizer step to avoid corrupting "
+                        "weights", rl.agent_id, rl._update_count + 1, total_norm,
+                    )
+                    rl.optimizer.zero_grad(set_to_none=True)
                 scaler.update()
             all_info = info  # keep last batch info
 
