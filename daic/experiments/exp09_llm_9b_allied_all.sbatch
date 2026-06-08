@@ -1,17 +1,24 @@
 #!/bin/bash
-#SBATCH --job-name=exp16-llm-9b-allied-all
+#SBATCH --job-name=exp09-llm-9b-allied-all
 #SBATCH --partition=general
-#SBATCH --qos=medium
-#SBATCH --time=36:00:00
+#SBATCH --qos=long
+#SBATCH --time=168:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
 #SBATCH --gres=gpu:1
-#SBATCH --output=slurm_logs/exp16_llm_9b_allied_all_%j.out
-#SBATCH --error=slurm_logs/exp16_llm_9b_allied_all_%j.err
+#SBATCH --output=slurm_logs/exp09_llm_9b_allied_all_%j.out
+#SBATCH --error=slurm_logs/exp09_llm_9b_allied_all_%j.err
 #SBATCH --exclude=cor1
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
+
+# Final experiment suite: 5 episodes × 2500 steps, results in runs/final/.
+RUN_GROUP=final
+EPISODES=5
+MAX_STEPS=2500
+
+export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,9b,hebbian,frozen,allied_all,social_bias,final}"
 
 # ───────────────────────────────────────────────────────────────────────────
 # 9B LLM-only + HARDCODED (frozen) Hebbian graph + SocialModule (bias).
@@ -22,7 +29,7 @@ source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/dai
 #
 # HYPOTHESIS (H1): the team completes MORE cooperative milestones (Ch2–Ch5)
 # when all three are allied (this run) than when only two are allied
-# (exp17_llm_9b_allied_pair) — and more than with no social module (exp7).
+# (exp10_llm_9b_allied_pair) — and more than with no social module (exp02).
 # Cooperative milestones m19/m22/m23/m28 require ALL THREE agents, so a fully
 # allied team should reach more of them.
 #
@@ -31,7 +38,7 @@ source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/dai
 # Primary metric: # distinct Ch2–Ch5 milestones the team completes (per seed).
 # ───────────────────────────────────────────────────────────────────────────
 
-run_exp "exp16_llm_9b_allied_all" "$MODEL_9B" \
+run_exp "exp09_llm_9b_allied_all" "$MODEL_9B" \
     --hebbian \
     --hebbian-freeze \
     --hebbian-preset uniform \

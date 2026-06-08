@@ -17,17 +17,17 @@
 #   N_SEEDS=3 bash daic/experiments/submit_all.sh
 #       — full 3-seed sweep: tasks 0,1,2 → seeds 42, 123, 456.
 #
-#   ONLY="exp1_,exp4_" bash daic/experiments/submit_all.sh
+#   ONLY="exp01_,exp05_" bash daic/experiments/submit_all.sh
 #       — submit only the named experiments. Comma-separated substring
 #         match against the sbatch filename. Use a trailing "_" to avoid
-#         "exp1" also matching "exp10".
+#         "exp01" also matching another file.
 #
-#   SKIP="exp9_,exp10_,exp11_,exp12_" bash daic/experiments/submit_all.sh
+#   SKIP="exp09_,exp10_" bash daic/experiments/submit_all.sh
 #       — submit everything except these.
 #
 #   DRY_RUN=1 bash daic/experiments/submit_all.sh
 #       — print the sbatch command for each experiment without submitting.
-#         Sanity check before burning 14 × N × 48h of GPU.
+#         Sanity check before burning 10 × N × 168h of GPU.
 #
 #   WANDB=0 bash daic/experiments/submit_all.sh
 #       — disable W&B logging for this batch (otherwise inherited from env).
@@ -37,26 +37,29 @@
 # through to sbatch via --export=ALL,VAR=value.
 #
 # Results land in:
-#     $WORKSPACE/WiredTogether/runs/legacy/<exp_name>/seed_<seed>/
+#     $WORKSPACE/WiredTogether/runs/final/<exp_name>/seed_<seed>/
+#     (each sbatch sets RUN_GROUP=final, EPISODES=5, MAX_STEPS=2500)
 # Slurm .out/.err land in CWD as <exp_name>_<jobid>.out/.err
 # (or <exp_name>_<jobid>_<arrayidx>.out for array jobs).
 #
 # Re-submit one experiment with a chosen seed:
-#     SEED=123 sbatch daic/experiments/exp4_mappo_hebbian.sbatch
+#     SEED=123 sbatch daic/experiments/exp05_mappo_hebbian.sbatch
 
 set -euo pipefail
 
 EXP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 EXPERIMENTS=(
-    "exp1_llm.sbatch"
-    # "exp3_mappo.sbatch"
-    # "exp4_mappo_hebbian.sbatch"
-    # "exp5_ippo.sbatch"
-    # "exp6_ippo_hebbian.sbatch"
-    "exp7_llm_9b.sbatch"
-    "exp9_llm_2b_social_prompt.sbatch"
-    "exp11_llm_9b_social_prompt.sbatch"
+    "exp01_llm_2b.sbatch"
+    "exp02_llm_9b.sbatch"
+    "exp03_mappo.sbatch"
+    "exp04_ippo.sbatch"
+    "exp05_mappo_hebbian.sbatch"
+    "exp06_ippo_hebbian.sbatch"
+    "exp07_llm_2b_social_prompt.sbatch"
+    "exp08_llm_9b_social_prompt.sbatch"
+    "exp09_llm_9b_allied_all.sbatch"
+    "exp10_llm_9b_allied_pair.sbatch"
 )
 
 # Resolved seed values for human-readable reporting only. Must match the

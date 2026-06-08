@@ -1,23 +1,28 @@
 #!/bin/bash
-#SBATCH --job-name=exp3-mappo
+#SBATCH --job-name=exp03-mappo
 #SBATCH --partition=general
-#SBATCH --qos=medium
-#SBATCH --time=36:00:00
+#SBATCH --qos=long
+#SBATCH --time=168:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
 #SBATCH --gres=gpu:1
-#SBATCH --output=slurm_logs/exp3_mappo_%j.out
-#SBATCH --error=slurm_logs/exp3_mappo_%j.err
+#SBATCH --output=slurm_logs/exp03_mappo_%j.out
+#SBATCH --error=slurm_logs/exp03_mappo_%j.err
 #SBATCH --exclude=cor1
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
-export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-mappo,centralized_critic}"
+# Final experiment suite: 5 episodes × 2500 steps, results in runs/final/.
+RUN_GROUP=final
+EPISODES=5
+MAX_STEPS=2500
+
+export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-mappo,centralized_critic,final}"
 
 # MAPPO — action-level PPO with a SHARED centralized critic V(joint_state).
 # No Hebbian. The classical multi-agent baseline.
-run_exp "exp3_mappo" "$MODEL_2B" \
+run_exp "exp03_mappo" "$MODEL_2B" \
     --rl \
     --rl-critic-mode centralized \
     --rl-model-path "$MODEL_2B" \

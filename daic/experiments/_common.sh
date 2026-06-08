@@ -53,12 +53,16 @@ run_exp() {
     local LLM_MODEL="$2"
     shift 2
 
-    local RUN_DIR="$REPO/runs/legacy/${EXP_NAME}/seed_${SEED}"
+    # RUN_GROUP selects the runs/<group>/ subtree. Defaults to "legacy" for
+    # backward-compat; the final experiment suite sets RUN_GROUP=final in each
+    # sbatch file so results land in runs/final/<exp>/seed_<N>/.
+    local RUN_GROUP="${RUN_GROUP:-legacy}"
+    local RUN_DIR="$REPO/runs/${RUN_GROUP}/${EXP_NAME}/seed_${SEED}"
     # Heavy artifacts (craftium debug.txt, wandb offline-runs, intermediate
     # per-100-step gifs) live in a PARALLEL tree so the runs/ dir stays
     # small and fast to scp. Mirror the same exp/seed structure for easy
     # cross-referencing.
-    local ARTIFACTS_DIR="$REPO/run_artifacts/legacy/${EXP_NAME}/seed_${SEED}"
+    local ARTIFACTS_DIR="$REPO/run_artifacts/${RUN_GROUP}/${EXP_NAME}/seed_${SEED}"
     local WORK_DIR="/tmp/$USER/${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
     mkdir -p "$RUN_DIR" "$ARTIFACTS_DIR" "$WORK_DIR"
     # Empty dir bind-mounted OVER /dev/dri (below) to hide all GPU render nodes
@@ -213,8 +217,8 @@ run_exp() {
         ' sh \
         python -u "$REPO/src/mindforge/multi_agent_craftium.py" \
             --num-agents 3 \
-            --episodes 3 \
-            --max-steps 1000 \
+            --episodes "${EPISODES:-3}" \
+            --max-steps "${MAX_STEPS:-1000}" \
             --warmup-time 300 \
             --seed "$SEED" \
             --experiment-id "$EXP_NAME" \

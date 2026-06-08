@@ -1,26 +1,31 @@
 #!/bin/bash
-#SBATCH --job-name=exp4-mappo-hebbian
+#SBATCH --job-name=exp05-mappo-hebbian
 #SBATCH --partition=general
-#SBATCH --qos=medium
-#SBATCH --time=36:00:00
+#SBATCH --qos=long
+#SBATCH --time=168:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
 #SBATCH --gres=gpu:1
-#SBATCH --output=slurm_logs/exp4_mappo_hebbian_%j.out
-#SBATCH --error=slurm_logs/exp4_mappo_hebbian_%j.err
+#SBATCH --output=slurm_logs/exp05_mappo_hebbian_%j.out
+#SBATCH --error=slurm_logs/exp05_mappo_hebbian_%j.err
 #SBATCH --exclude=cor1
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
+# Final experiment suite: 5 episodes × 2500 steps, results in runs/final/.
+RUN_GROUP=final
+EPISODES=5
+MAX_STEPS=2500
+
 # Per-experiment wandb tags layered on top of the auto tags (exp_*, seed_*).
 # Useful for filtering "all hebbian runs" or "all mappo runs" in the UI.
-export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-mappo,hebbian,centralized_critic}"
+export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-mappo,hebbian,centralized_critic,final}"
 
 # MAPPO + Hebbian — the headline thesis claim. Shared centralized critic plus
 # a Hebbian social-plasticity graph that diffuses rewards across co-bonded
 # teammates and seeds the in-prompt {social_bonds} block.
-run_exp "exp4_mappo_hebbian" "$MODEL_2B" \
+run_exp "exp05_mappo_hebbian" "$MODEL_2B" \
     --rl \
     --rl-critic-mode centralized \
     --rl-model-path "$MODEL_2B" \

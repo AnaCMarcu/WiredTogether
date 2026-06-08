@@ -1,21 +1,28 @@
 #!/bin/bash
-#SBATCH --job-name=exp6-ippo-hebbian
+#SBATCH --job-name=exp06-ippo-hebbian
 #SBATCH --partition=general
-#SBATCH --qos=medium
-#SBATCH --time=36:00:00
+#SBATCH --qos=long
+#SBATCH --time=168:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
 #SBATCH --gres=gpu:1
-#SBATCH --output=slurm_logs/exp6_ippo_hebbian_%j.out
-#SBATCH --error=slurm_logs/exp6_ippo_hebbian_%j.err
+#SBATCH --output=slurm_logs/exp06_ippo_hebbian_%j.out
+#SBATCH --error=slurm_logs/exp06_ippo_hebbian_%j.err
 #SBATCH --exclude=cor1
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
+# Final experiment suite: 5 episodes × 2500 steps, results in runs/final/.
+RUN_GROUP=final
+EPISODES=5
+MAX_STEPS=2500
+
+export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-ippo,hebbian,independent_critic,final}"
+
 # IPPO + Hebbian — "Hebbian without a shared critic" cell of the 2x3
 # comparison matrix.
-run_exp "exp6_ippo_hebbian" "$MODEL_2B" \
+run_exp "exp06_ippo_hebbian" "$MODEL_2B" \
     --rl \
     --rl-critic-mode independent \
     --rl-model-path "$MODEL_2B" \
