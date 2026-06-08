@@ -178,7 +178,45 @@ end)
 
 -- ── Public reset ─────────────────────────────────────────────────
 
+-- Safely remove an entity ObjectRef (no-op if already gone/invalid).
+local function _safe_remove(obj)
+    if obj then pcall(function() obj:remove() end) end
+end
+
+-- Despawn EVERY VoxeLibre mob anywhere in the chambers. Used on reset: the Ch1
+-- animals, Ch4 zombies and Ch5 boss are all pinned
+-- (despawn_immediately/static_save/persistent) so the engine never culls them,
+-- and reset only rebuilt the world + cleared bookkeeping — so any survivor
+-- persisted and the next episode spawned a fresh set ON TOP of it (a 2nd-episode
+-- Ch4 with 4+ zombies, a 2nd Ch5 boss, etc.). A radius scan catches them all,
+-- including any TRACKED-table entry we might have lost or an untracked natural
+-- spawn. Players are never luaentities (get_luaentity()==nil) so they're safe.
+local function _despawn_chamber_mobs()
+    local z_max  = (five_chambers.CH5 and five_chambers.CH5.z1) or 70
+    local center = {x = 6, y = (five_chambers.FLOOR_Y or 10) + 3, z = z_max / 2}
+    local radius = z_max + 10  -- comfortably spans Ch1..Ch5
+    local n_zombie, n_other = 0, 0
+    for _, obj in ipairs(minetest.get_objects_inside_radius(center, radius)) do
+        local le = obj and obj:get_luaentity()
+        local nm = le and le.name
+        if nm and nm:sub(1, 8) == "mobs_mc:" then
+            _safe_remove(obj)
+            if nm == "mobs_mc:zombie" then n_zombie = n_zombie + 1 else n_other = n_other + 1 end
+        end
+    end
+    if n_zombie + n_other > 0 then
+        minetest.log("action", string.format(
+            "[MOBRESET] despawned leftover mobs: zombies=%d other=%d", n_zombie, n_other))
+    end
+end
+
 function five_chambers.reset_mob_state()
+    -- Clear out every leftover mob BEFORE wiping the bookkeeping table, so a
+    -- survivor from the previous episode can't pile onto the freshly-spawned
+    -- set (applies equally to Ch4 zombies and the Ch5 boss). Idempotent: at
+    -- server start there are no mobs yet, so this is a no-op.
+    _despawn_chamber_mobs()
+
     five_chambers.mob_state = {
         active_ch1_mobs  = {},
         ch4_mobs         = {},
@@ -393,6 +431,26 @@ local function fire_boss_death()
     minetest.log("action", "[five_chambers] Boss defeated — episode complete.")
 end
 
+-- Called when the boss ObjectRef/luaentity has vanished. A real kill is already
+-- caught by the hp<=0 branch (while the entity is still valid), so a vanish is
+-- a DEFEAT only if the boss had actually been brought to 0 HP. A vanish with
+-- HP still > 0 means the entity was removed for another reason — episode reset
+-- (_despawn_chamber_mobs) or an area unload — and must NOT fire fire_boss_death,
+-- which would otherwise write episode_done.txt, award m27/m28 and terminate the
+-- episode as if the agents had won. Defaults to "not killed" when HP is unknown.
+local function boss_vanished_handler()
+    local boss = five_chambers.mob_state.ch5_boss
+    if not boss then return end
+    if (boss.last_hp or five_chambers.BOSS_HP or 1) <= 0 then
+        fire_boss_death()  -- killed, then removed before the hp<=0 tick caught it
+    else
+        minetest.log("action", string.format(
+            "[five_chambers] Ch5 boss vanished with HP=%s (>0) — removal, NOT a "
+            .. "defeat (no episode-complete fired)", tostring(boss.last_hp)))
+    end
+    five_chambers.mob_state.ch5_boss = nil
+end
+
 function five_chambers.spawn_boss()
     local c   = five_chambers.CH5
     local pos = {x = 6, y = five_chambers.FLOOR_Y + 1, z = math.floor((c.z0 + c.z1) / 2)}
@@ -416,6 +474,7 @@ function five_chambers.spawn_boss()
         contributors  = {},   -- {[agent_name]=cumulative_damage_HP}
         dmg_fired     = false,
         half_hp_fired = false,
+        last_hp       = five_chambers.BOSS_HP,  -- gates kill-vs-removal on vanish
     }
 
     minetest.log("action", "[five_chambers] Boss spawned at "
@@ -474,15 +533,13 @@ minetest.register_globalstep(function(dtime)
 
     local obj = boss.obj
     if not obj:is_valid() then
-        fire_boss_death()
-        five_chambers.mob_state.ch5_boss = nil
+        boss_vanished_handler()  -- defeat only if it had reached 0 HP
         return
     end
 
     local ent = obj:get_luaentity()
     if not ent then
-        fire_boss_death()
-        five_chambers.mob_state.ch5_boss = nil
+        boss_vanished_handler()  -- defeat only if it had reached 0 HP
         return
     end
 
@@ -495,6 +552,7 @@ minetest.register_globalstep(function(dtime)
     end
 
     local hp = ent.health or ent.hp or obj:get_hp()
+    boss.last_hp = hp  -- so boss_vanished_handler can tell a kill from a removal
     local min_dmg = five_chambers.MIN_DAMAGE_FOR_CREDIT or 0
 
     -- M25: first qualifying damage landed (≥ MIN_DAMAGE_FOR_CREDIT).

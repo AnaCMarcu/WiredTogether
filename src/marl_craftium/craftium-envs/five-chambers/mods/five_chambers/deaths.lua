@@ -55,6 +55,21 @@ local function _signal_episode_over()
     end
 end
 
+-- Human-readable description of what dealt a hit, from the hpchange reason
+-- (mob entity name for a punch, else the damage type: fall / drown / ...).
+local function _damage_source(reason)
+    if not reason then return "unknown" end
+    if reason.object then
+        local le = reason.object:get_luaentity()
+        if le and le.name then return le.name end
+        if reason.object:is_player and reason.object:is_player() then
+            return "player:" .. reason.object:get_player_name()
+        end
+        return "object"
+    end
+    return reason.type or "unknown"
+end
+
 -- Forgiving-chamber invincibility + would-have-died recording.
 -- Registered as a MODIFIER so its return replaces hp_change before the engine
 -- applies it. Ch1-Ch4: drain the virtual-HP pool by the would-be damage and
@@ -76,7 +91,20 @@ minetest.register_on_player_hpchange(function(player, hp_change, reason)
 
     -- Forgiving chambers: invincible. Drain the virtual pool by what this hit
     -- would have dealt; record a would-have-died when it would have been lethal.
-    local vhp = (five_chambers._virtual_hp[name] or MAX_HP) + hp_change  -- hp_change < 0
+    local prev = five_chambers._virtual_hp[name] or MAX_HP
+    local vhp  = prev + hp_change  -- hp_change < 0
+
+    -- Debug: log every absorbed hit (damage, source, reason type, virtual HP).
+    local hit_msg = string.format(
+        "[HIT] %s in %s took %d (absorbed) from %s [%s] vHP %d->%d",
+        name, tostring(chamber), -hp_change, _damage_source(reason),
+        (reason and reason.type) or "?", prev, math.max(0, vhp))
+    minetest.log("action", hit_msg)
+    if io and io.stderr then
+        io.stderr:write(hit_msg .. "\n")
+        io.stderr:flush()
+    end
+
     if vhp <= 0 then
         if craftium and craftium.reward then
             craftium.reward(player, DEATH_PENALTY)  -- record in the RL signal
