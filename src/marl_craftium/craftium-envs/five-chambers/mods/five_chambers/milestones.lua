@@ -24,13 +24,21 @@ five_chambers.MILESTONE_DEFS = {
     m5_kill_1_animal     = { track="ch1_solo",  reward=50,  once=true },
     m6_kill_2_animals    = { track="ch1_solo",  reward=80,  once=true },
     m7_dig_3_stone       = { track="ch1_solo",  reward=60,  once=true },
-    -- Ch2 anvil cooperation
+    -- Door 1 unlock bonus. Fires for the agent whose Ch1 milestone first
+    -- caused open_door1() to fire (i.e. the agent who unlocked Ch1→Ch2
+    -- for the whole team). Teammates ride for free through the open door
+    -- but don't get this bonus; Hebbian's job is to amplify the
+    -- "follow the leader" pattern that creates.
+    m_door1_open         = { track="ch1_solo",  reward=50,  once=true },
+    -- Ch2 anvil cooperation. Ch2 has exactly 2 anvils: m8 (Row A, drops
+    -- sword) + m11 (Row B, drops chestplate). m9/m10/m12/m13 were a
+    -- LEGACY 6-anvil design and can never fire (anvil_positions() in
+    -- anvil.lua only registers state for m8 and m11). Removed so plots
+    -- and prompts don't show 4 permanently-OPEN ghost milestones.
     m8_anvil_A1          = { track="ch2_anvils", reward=40, once=true },
-    m9_anvil_A2          = { track="ch2_anvils", reward=40, once=true },
-    m10_anvil_A3         = { track="ch2_anvils", reward=40, once=true },
-    m11_anvil_B1         = { track="ch2_anvils", reward=40, once=true },
-    m12_anvil_B2         = { track="ch2_anvils", reward=40, once=true },
-    m13_anvil_B3         = { track="ch2_anvils", reward=40, once=true },
+    -- Renamed from m11 to close the m8/m11 gap left by removing the
+    -- legacy 6-anvil m9/m10/m12/m13 entries.
+    m9_anvil_B1          = { track="ch2_anvils", reward=40, once=true },
     m14_sword_equipped   = { track="ch2_gear",  reward=50,  once=true },
     m15_chestplate_equipped = { track="ch2_gear", reward=30, once=true },
     -- Ch3 switch puzzle
@@ -113,6 +121,17 @@ function five_chambers.reset_milestone_state()
     end
 end
 
+-- Ch1 milestones that unlock Door 1 the first time any one of them fires.
+-- Lookup table (not a list) so the check in fire_milestone is O(1).
+local _CH1_UNLOCK_MILESTONES = {
+    m2_dig_3_any      = true,
+    m3_pickup_3       = true,
+    m4_dig_5_wood     = true,
+    m5_kill_1_animal  = true,
+    m6_kill_2_animals = true,
+    m7_dig_3_stone    = true,
+}
+
 -- Fire a milestone for a list of contributor player names.
 -- Skips contributors who already fired this milestone (when once=true).
 function five_chambers.fire_milestone(milestone_id, contributors)
@@ -140,6 +159,31 @@ function five_chambers.fire_milestone(milestone_id, contributors)
     if #actual == 0 then return end
 
     five_chambers.emit_milestone(milestone_id, actual, def.reward)
+
+    -- Door 1 unlock hook. The first agent to fire any of m2..m7 unlocks
+    -- Ch1→Ch2 for the whole team and earns the m_door1_open bonus.
+    -- door1_open guard makes the unlock fire at most once per episode
+    -- (m_door1_open's once=true would also dedup per-agent, but the
+    -- guard avoids a second redundant open_door1() call when a later
+    -- agent fires their own first m2..m7).
+    --
+    -- Also suppress when the Ch1→Ch2 timeout teleport already fired:
+    -- the team got past Door 1 by force-relocate, not by unlocking it,
+    -- so this bonus has not been earned even if an m2..m7 milestone
+    -- fires later from digging inside Ch2.
+    if _CH1_UNLOCK_MILESTONES[milestone_id]
+       and five_chambers.door_state
+       and not five_chambers.door_state.door1_open then
+        if five_chambers.door_state.door1_force_teleported then
+            minetest.log("action",
+                "[five_chambers] m_door1_open suppressed for "
+                .. actual[1] .. " (Ch1 timeout teleport fired this episode; "
+                .. milestone_id .. " in Ch2 is not an honest Door 1 unlock)")
+        else
+            five_chambers.open_door1()
+            five_chambers.fire_milestone("m_door1_open", {actual[1]})
+        end
+    end
 end
 
 -- ──────────────────────────────────────────────────────────────────
@@ -155,6 +199,24 @@ end
 -- Called by joinplayer and reset handler to capture initial position.
 function five_chambers.record_spawn_pos(name, pos)
     five_chambers.spawn_pos[name] = {x=pos.x, z=pos.z}
+end
+
+-- Mark every not-yet-fired milestone on a track as FORFEIT: recorded as fired
+-- (so it can never trigger later) but WITHOUT emitting its reward. Used by the
+-- Ch1 rescue teleport — an agent dragged out of Ch1 because the whole team was
+-- too slow is NOT clearing the chamber, so it must not still collect Ch1
+-- rewards. In particular m1_move_5 (distance > 5 from spawn) would otherwise
+-- fire instantly off the teleport's large position jump, paying a "move"
+-- reward for being teleported. Idempotent.
+function five_chambers.forfeit_track_milestones(name, track)
+    if not five_chambers.milestone_fired[name] then
+        five_chambers.init_player_milestone_state(name)
+    end
+    for mid, def in pairs(five_chambers.MILESTONE_DEFS) do
+        if def.track == track and not five_chambers.milestone_fired[name][mid] then
+            five_chambers.milestone_fired[name][mid] = true
+        end
+    end
 end
 
 -- Called by mobs.lua when a Ch1 animal dies and the killer is known.
@@ -191,11 +253,27 @@ minetest.register_on_dignode(function(pos, oldnode, digger)
     local counts    = five_chambers.dig_counts[name]
 
     counts.any = counts.any + 1
-    if minetest.get_item_group(node_name, "tree") > 0 then
-        counts.wood = counts.wood + 1
-    end
-    if minetest.get_item_group(node_name, "stone") > 0 then
-        counts.stone = counts.stone + 1
+    local is_tree  = minetest.get_item_group(node_name, "tree")  > 0
+    local is_stone = minetest.get_item_group(node_name, "stone") > 0
+    if is_tree  then counts.wood  = counts.wood  + 1 end
+    if is_stone then counts.stone = counts.stone + 1 end
+
+    -- Per-dig diagnostic log. Lands in debug.txt and on stderr so we can
+    -- audit which agent dug what and why a milestone failed to fire.
+    -- Previously dig events were invisible until the per-agent threshold
+    -- of 3 was reached — if each agent broke only 1-2 blocks (likely
+    -- given the heavily interspersed Dig/Move/Turn action mix), the
+    -- breaks were genuinely happening but no log line ever appeared.
+    minetest.log("action", string.format(
+        "[five_chambers] dig: agent=%s node=%s tree=%s stone=%s "
+        .. "counts={any=%d wood=%d stone=%d}",
+        name, node_name, tostring(is_tree), tostring(is_stone),
+        counts.any, counts.wood, counts.stone))
+    if io and io.stderr then
+        io.stderr:write(string.format(
+            "[DIG] agent=%s node=%s counts={any=%d wood=%d stone=%d}\n",
+            name, node_name, counts.any, counts.wood, counts.stone))
+        io.stderr:flush()
     end
 
     if counts.any   >= 3 then five_chambers.fire_milestone("m2_dig_3_any",   {name}) end

@@ -31,6 +31,34 @@ model = os.environ.get("LLM_MODEL", "google/gemini-2.5-flash")
 ST_MODEL_NAME = os.environ.get("ST_MODEL_NAME", "all-MiniLM-L6-v2")
 
 
+# ─── Agent-ID normalization ────────────────────────────────────────────
+
+_AGENT_ID_RE = re.compile(r"^\s*agent_?(\d+)\s*$", re.IGNORECASE)
+
+
+def normalize_agent_target(s):
+    """Canonicalize an LLM-emitted agent name to the form ``agent_<N>``.
+
+    The LLM sometimes drops the underscore (``agent0``), capitalizes
+    (``Agent_1``), or pads with spaces. Without normalization the same
+    teammate ends up indexed under two distinct keys downstream — observed
+    in ``exp1_llm/seed_42`` where milestone_log contributors contained
+    BOTH ``agent_0`` and ``agent0`` for the same agent, double-counting
+    per-agent contribution metrics.
+
+    Returns the canonical ``agent_<N>`` string when ``s`` parses cleanly,
+    otherwise returns the input unchanged (so the existing routing-layer
+    fallback in multi_agent_craftium.py can still rescue unparseable
+    targets like ``all`` / ``none`` / ``self``).
+    """
+    if not isinstance(s, str):
+        return s
+    m = _AGENT_ID_RE.match(s)
+    if m is None:
+        return s
+    return f"agent_{int(m.group(1))}"
+
+
 # ─── Pydantic response schemas ─────────────────────────────────────────
 
 class AgentResponse(BaseModel):
@@ -47,7 +75,16 @@ class AgentResponse(BaseModel):
 
 class TargetedCommunicationResponse(BaseModel):
     """All comm is targeted: communication_target is a required string (not Optional)
-    so the schema enforcer guarantees the model always picks a recipient."""
+    so the schema enforcer guarantees the model always picks a recipient.
+
+    ``thoughts`` is required too: in RL mode the action is chosen by the
+    constrained-generation scorer (no freeform LLM output), so this is the
+    only LLM-produced reasoning text we get per step. Without it the run
+    log just shows a hard-coded placeholder ('RL policy (step N): selected
+    X') and we have no insight into why the LLM picked any particular
+    teammate or message phrasing.
+    """
+    thoughts: str
     communication: str
     communication_target: str
 
@@ -83,6 +120,33 @@ class EpisodeResponse(BaseModel):
 
 class BeliefResponse(BaseModel):
     beliefs: str
+
+
+class SocialThought(BaseModel):
+    """Output of the SocialModule's deliberation step.
+
+    Lives between the Hebbian graph and the action LLM: takes (bond weights,
+    bond deltas, incoming messages, recent self-state) and produces an
+    explicit social directive that the action prompt consumes. The
+    ``referenced_bonds`` + ``bond_change_explanation`` fields are the
+    interpretability artifact for the Hebbian-as-social-intelligence claim —
+    they show whether the LLM actually conditioned on the graph.
+    """
+    # Why each non-zero bond delta is moving the way it is (one line per
+    # teammate). Surfaces the LLM's causal model of its own graph; greppable
+    # post-hoc for "ignored my request" / "helped me" patterns.
+    bond_change_explanation: dict[str, str]
+    # Free-text rationale tying bonds + incoming messages to the decision.
+    reasoning: str
+    # Bonds the LLM claims to have used. Compared offline against the bonds
+    # actually passed in to detect cargo-cult reasoning.
+    referenced_bonds: dict[str, float]
+    # Asker side: who to send a help request to, and the suggested text.
+    ask_target: Optional[str] = None
+    ask_message: Optional[str] = None
+    # Responder side: subset of incoming senders to help this step.
+    respond_to: List[str] = []
+    confidence: float = 0.5
 
 
 # ─── Prompt formatting ─────────────────────────────────────────────────
@@ -181,6 +245,50 @@ def load_json(response: str) -> dict:
 
     logging.error("Failed to decode JSON response: %s", response[:300])
     return {}
+
+
+def coerce_belief_text(value, previous: str = "") -> str:
+    """Normalise a parsed ``beliefs`` field into a single string.
+
+    Accepts a string ("A. B."), a list (["A.", "B."]), or anything empty.
+    Falls back to ``previous`` when there is nothing usable, so a blank
+    update never clobbers an existing belief.
+    """
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, list):
+        joined = " ".join(str(x).strip() for x in value if str(x).strip())
+        if joined:
+            return joined
+    return previous
+
+
+def load_belief(response: str) -> dict:
+    """Parse a belief-module response into ``{"beliefs": <str>}``.
+
+    Belief modules only ever read a single free-text ``beliefs`` field, so
+    this is far more forgiving than :func:`load_json` and **never triggers a
+    retry**. It accepts the canonical ``{"beliefs": "..."}`` and
+    ``{"beliefs": [...]}`` shapes, and salvages the common malformation where
+    the model emits a bag of bare strings — ``{"beliefs": "A", "B", "C"}`` —
+    by harvesting every string literal and joining them. Returns
+    ``{"beliefs": ""}`` when nothing is salvageable (the caller keeps its
+    previous belief), which is always truthy and so will not provoke the
+    "Empty JSON response" retry path in ``llm_call``.
+    """
+    parsed = load_json(response)
+    if isinstance(parsed, dict):
+        text = coerce_belief_text(parsed.get("beliefs"))
+        if text:
+            return {"beliefs": text}
+
+    # Salvage: harvest all quoted strings, dropping a leading "beliefs" key
+    # token if the object was malformed (keyless bare strings).
+    strings = re.findall(r'"((?:[^"\\]|\\.)*)"', _strip_markdown_fences(response))
+    if strings and strings[0].strip() == "beliefs":
+        strings = strings[1:]
+    joined = " ".join(s.strip() for s in strings if s.strip())
+    return {"beliefs": joined}
 
 
 # ─── Image utilities ───────────────────────────────────────────────────

@@ -56,16 +56,26 @@ def run_ppo_update(
     all_info: Dict = {}
     # GradScaler off: model weights are FP16/BF16 directly so unscaling would fail.
     scaler = torch.amp.GradScaler("cuda", enabled=False)
-    for _ in range(rl.config.ppo_epochs):
+    # Sanity invariant: on the FIRST PPO epoch's FIRST batch, mean(ratio)
+    # must be ~1.0 because old_log_probs were produced by the SAME
+    # _score_actions path that's about to recompute new_log_probs (no
+    # gradient step has happened yet). If they diverge, the candidate-set
+    # tokenization or scoring is inconsistent between select_action and
+    # action_level_ppo_step — surface that loudly so we don't silently
+    # train on a broken ratio.
+    _first_batch_checked = False
+    for epoch_i in range(rl.config.ppo_epochs):
         for batch in rl.buffer.sample_batches(
             rl.config.mini_batch_size, extra_transitions=social_transitions,
         ):
+            # action_level_ppo_step now owns the backward path (per-transition
+            # gradient accumulation, to bound peak memory to ONE forward
+            # graph regardless of mini_batch_size). We zero grads up front,
+            # the function accumulates, then we clip + step here.
+            rl.optimizer.zero_grad()
             with torch.amp.autocast(rl._device.type, dtype=rl._dtype):
-                loss, info = action_level_ppo_step(
-                    model=rl.model,
-                    action_head=rl.action_head,
-                    value_head=rl.value_head,
-                    tokenizer=rl.tokenizer,
+                info = action_level_ppo_step(
+                    rl_layer=rl,
                     batch=batch,
                     clip_eps=rl.config.clip_eps,
                     value_clip_eps=rl.config.value_clip_eps,
@@ -74,14 +84,50 @@ def run_ppo_update(
                     device=rl._device,
                     max_length=rl.config.rl_prompt_max_tokens,
                     value_loss_enabled=not rl._use_centralized,
-                    action_mask=getattr(rl, "_action_mask", None),
+                    scaler=scaler,
                 )
-            rl.optimizer.zero_grad()
-            scaler.scale(loss).backward()
-            scaler.unscale_(rl.optimizer)
-            nn.utils.clip_grad_norm_(rl.model.parameters(), rl.config.max_grad_norm)
-            scaler.step(rl.optimizer)
-            scaler.update()
+            if epoch_i == 0 and not _first_batch_checked and info.get("n_kept", 0) > 0:
+                _first_batch_checked = True
+                r_mean = float(info.get("ratio_mean", 1.0))
+                if abs(r_mean - 1.0) > 0.05:
+                    logger.warning(
+                        "RLLayer agent %d first-epoch mean(ratio)=%.4f deviates "
+                        "from 1.0 — tokenization/scoring may be inconsistent "
+                        "between select_action and action_level_ppo_step. "
+                        "Verify _candidate_token_ids match the candidate "
+                        "ordering used at sample time.",
+                        rl.agent_id, r_mean,
+                    )
+                else:
+                    logger.info(
+                        "RLLayer agent %d first-epoch mean(ratio)=%.4f (OK)",
+                        rl.agent_id, r_mean,
+                    )
+            # Gradients are already accumulated by per-transition backward
+            # inside action_level_ppo_step. Just unscale, clip, and step.
+            if info.get("n_kept", 0) > 0:
+                scaler.unscale_(rl.optimizer)
+                total_norm = nn.utils.clip_grad_norm_(
+                    rl.model.parameters(), rl.config.max_grad_norm,
+                )
+                # The GradScaler is disabled (fp16/bf16 weights are stepped
+                # directly), so there is NO automatic inf/NaN-skip. A single
+                # batch with non-finite gradients — fp16 overflow, a ratio
+                # explosion — would otherwise be applied by optimizer.step()
+                # and corrupt EVERY weight to NaN; from then on all forwards
+                # return NaN logits and training dies at Categorical(logits=…).
+                # Guard it: skip the step and discard the grads when the grad
+                # norm isn't finite, so one bad batch can't poison the run.
+                if torch.isfinite(total_norm):
+                    scaler.step(rl.optimizer)
+                else:
+                    logger.warning(
+                        "RLLayer agent %d update #%d: non-finite grad norm "
+                        "(%s) — skipping optimizer step to avoid corrupting "
+                        "weights", rl.agent_id, rl._update_count + 1, total_norm,
+                    )
+                    rl.optimizer.zero_grad(set_to_none=True)
+                scaler.update()
             all_info = info  # keep last batch info
 
     rl._update_count += 1

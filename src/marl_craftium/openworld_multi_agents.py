@@ -48,6 +48,10 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         seed: Optional[int] = None,
         frameskip: int = 3,
         pmul: int = 20,
+        voxel_obs: bool = False,
+        voxel_obs_rx: int = 10,
+        voxel_obs_ry: int = 5,
+        voxel_obs_rz: int = 10,
     ):
         super().__init__()
 
@@ -60,21 +64,36 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         self.render_mode = render_mode
         self.frameskip = frameskip
         self.pmul = pmul
+        # T2.1 voxel observation opt-in. Default OFF so existing runs are
+        # unaffected. Radii chosen for the five-chambers world: 10/5/10
+        # covers a 21×11×21 grid (~5k cells) — plenty of context for
+        # the LLM-grounding use case without blowing TCP throughput
+        # (default Craftium radii are 20/10/20, ~4× more data).
+        self.voxel_obs = voxel_obs
+        self.voxel_obs_rx = voxel_obs_rx
+        self.voxel_obs_ry = voxel_obs_ry
+        self.voxel_obs_rz = voxel_obs_rz
 
         self.possible_agents = [f"agent_{i}" for i in range(num_agents)]
         self.agents = self.possible_agents.copy()
 
-        self.env = _PatchedMarlCraftiumEnv(
-            **self._build_marl_kwargs(num_agents, obs_width, obs_height,
-                                      max_steps, seed, frameskip, pmul),
+        _marl_kwargs = self._build_marl_kwargs(
+            num_agents, obs_width, obs_height, max_steps, seed, frameskip, pmul,
         )
+        if voxel_obs:
+            _marl_kwargs.update(
+                voxel_obs=True,
+                voxel_obs_rx=voxel_obs_rx,
+                voxel_obs_ry=voxel_obs_ry,
+                voxel_obs_rz=voxel_obs_rz,
+            )
+        self.env = _PatchedMarlCraftiumEnv(**_marl_kwargs)
 
         self._observation_space = spaces.Box(
             low=0, high=255, shape=(obs_height, obs_width, 3), dtype=np.uint8,
         )
         # Craftium discrete actions: 0=NOP + 22 named actions.
         self._action_space = spaces.Discrete(23)
-        self._step_count = 0
 
     # ─── Construction helpers ─────────────────────────────────────────
 
@@ -101,21 +120,70 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
             or (_pkg_env if os.path.isdir(_pkg_env) else _local_env)
         )
 
+        # Unique MT server port per job, INDEPENDENT of the reproducibility
+        # seed. craftium falls back to random.randint(49152, 65535) when
+        # mt_server_port is None, but multi_agent_craftium.py calls
+        # random.seed(seed) for reproducibility — so two jobs with the SAME
+        # seed draw the SAME "random" port (e.g. 52800 for seed 42) and collide
+        # ("Server socket listen timeout") when they land on the same node.
+        # Derive the port from SLURM_JOB_ID (unique per job), falling back to an
+        # UNSEEDED SystemRandom draw for local/non-SLURM runs.
+        _jobid = os.environ.get("SLURM_JOB_ID", "")
+        if _jobid.isdigit():
+            _mt_port = 49152 + int(_jobid) % 16000
+        else:
+            import random as _random
+            _mt_port = _random.SystemRandom().randint(49152, 65535)
+
         return dict(
+            mt_server_port=_mt_port,
             env_dir=env_dir,
             game_id="VoxeLibre",
             num_agents=num_agents,
             obs_width=obs_width,
             obs_height=obs_height,
-            # CraftiumEnvironmentInterface calls env.step() once per agent per
-            # round; each env.step() runs one step_agent round which (after our
-            # fix) increments timesteps once. So timesteps = num_agents * rounds.
-            max_timesteps=max_steps * num_agents,
+            # Disable env-side step-count truncation. The old setting was
+            # `max_steps * num_agents`, written before the _patched_env fix
+            # that made `self.timesteps` advance once per ROUND instead of
+            # once per agent. Combined with sustained actions (Dig calls
+            # env.step() 5× per Python step in custom_environment_craftium.py),
+            # the env truncates AT episodes well before `max_steps` is reached
+            # (~750 Python steps for max_steps=1500 in dig-heavy rollouts,
+            # ~26 for max_steps=50). Python's `for step in range(max_steps)`
+            # in multi_agent_craftium.py is the authoritative episode-length
+            # cap; with max_timesteps=None the env's truncated flag stays
+            # False for the whole episode and only termination (an agent
+            # dying) ends the episode early.
+            max_timesteps=None,
             minetest_dir=minetest_dir,
             mt_listen_timeout=300_000,  # 5 min per client; VoxeLibre loads slowly on HPC
             seed=seed,
             frameskip=frameskip,
             pmul=pmul,
+            # T1.4 — Luanti server tuning for our small world.
+            # Defaults in craftium/craftium/minetest.py target an open
+            # Minecraft-scale world with a 100-block view distance and a
+            # 200 fps server tick. Five-chambers spans ~70 blocks in z
+            # total (Ch1 z=0..15 through Ch5 z=59..67), all pre-generated
+            # by world_gen.lua at server start, so almost all of the
+            # default server CPU goes to renderable-chunk bookkeeping the
+            # agents never see.
+            #
+            # fps_max: 200 → 30 — Lua tick rate is 20 Hz; server tick +
+            #   screenshot capture happen once per env step, so 30 fps
+            #   gives ~50% safety margin without burning idle CPU on a
+            #   software renderer. Passed at the top level so it applies
+            #   to BOTH server and client (the constructor threads it
+            #   into both, see craftium/craftium/multiagent_env.py:103,
+            #   126).
+            fps_max=30,
+            mt_server_conf={
+                # max_block_send_distance: 100 → 8 — 8 mapblocks ≈ 128
+                # blocks, more than enough for the agent's camera
+                # frustum at obs_width=320.
+                "max_block_send_distance": 8,
+                "max_block_generate_distance": 8,
+            },
             # Smallest engine-allowed HUD scale so hearts/food bar don't eat half
             # the 320×180 observation frame.
             mt_clients_conf={"hud_scaling": 0.5},
@@ -149,7 +217,6 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
 
         obs_array, _ = self.env.reset()
         self.agents = self.possible_agents.copy()
-        self._step_count = 0
 
         observations = {f"agent_{i}": obs for i, obs in enumerate(obs_array)}
         infos = {f"agent_{i}": {} for i in range(self._num_agents)}
@@ -164,10 +231,6 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
         Dict[str, bool],
         Dict[str, Dict[str, Any]],
     ]:
-        self._step_count += 1
-
-        # Always send actions for ALL agents — MarlCraftiumEnv expects exactly
-        # num_agents actions every step. NoOp for terminated agents.
         action_list = [
             _discrete_to_dict(actions.get(agent, 0))
             for agent in self.possible_agents

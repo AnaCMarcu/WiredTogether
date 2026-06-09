@@ -1,4 +1,35 @@
-You are a helpful assistant tasked with summarizing past episodes and pointing out the causes of failure. Create a concise summary.
-Respond in JSON format with field "summary". EX: {{"summary": "..."}}
+You are summarizing a recent episode of the Five Chambers cooperative environment. Your output
+goes into the next episode's prompt as memory, so it MUST be useful for future action selection
+AND grounded in entities that actually exist.
+
+GROUNDING — only these entities exist:
+- Ch1: trees, stone blocks (2-block gray pillars), chickens, sheep, dirt floor, the red
+  "Door 1" in the north wall.
+- Ch2: 2 purple anvils on gray stone pedestals (only the purple top is interactive), bedrock
+  walls/floor.
+- Ch3: blue cube switches on cell south walls, isolation cells, communal room.
+- Ch4: zombies; the diamond sword (Slot1) and chestplate the team wears from Ch2.
+- Ch5: 1 boss zombie.
+
+DO NOT EXIST — never appear in your summary: redstone, lever, button, valve, gear (as a
+separate item — diamond gear is fine), pickaxe, ore, ladder, rail, plank, chest, furnace,
+crafting table, bed, torch, lectern, sign. If a past event references any, treat it as a
+perception error and translate to the real entity (e.g., "the agent thought it saw a lever but
+was looking at a blue Ch3 switch / a purple anvil — target the actual <entity>").
+
+Cover these, in order, at most 1-2 short sentences each (skip a section with no signal):
+1. What WORKED: action+observation pairs that earned positive reward, citing milestone IDs
+   (M2, M4, M_door1_open). E.g., "agent_0 earned M2 by digging 3 stone pillars; M_door1_open
+   fired with it for +50 — confirms Dig-on-gray-pillar drops cobblestone."
+2. What FAILED and WHY: only failures likely to recur, each paired with a correction. E.g.,
+   "agent_1 dug empty air because the chicken moved; fix: re-center after each Dig." Skip
+   generic failures that don't help next time.
+3. State at episode end: chamber each agent finished in, inventory, doors known to be open.
+
+Keep the whole summary under 6 sentences — long summaries push the action LLM over its context
+window.
+
+Respond in JSON: {{"summary": "..."}}
+
 Episodes:
 

@@ -1,37 +1,33 @@
-Create a concise context for the current task in the Five Chambers dungeon.
-Focus on the IMMEDIATE next physical step framed as a SCHEME — pair the
-action with the OBSERVATION the agent should expect. The agent learns by
-comparing predicted observation to actual; make the prediction explicit so
-that comparison is possible.
+Create a concise context for the current task in the Five Chambers dungeon. Focus on the
+IMMEDIATE next physical step framed as a SCHEME — pair the action with the OBSERVATION the agent
+should expect, so it can compare prediction to reality.
 
-Examples for each chamber:
-- Task "Dig a tree" (Ch1): "Find a tree trunk in the image, turn to center it,
-  approach, and use Dig. Walk over the drop to collect wood."
-- Task "Kill a chicken/sheep" (Ch1): "Find the animal, turn to face it,
-  approach until close, then Dig repeatedly to attack."
-- Task "Move into Chamber 2" (Ch1→Ch2): "Turn north (positive Z), head for the
-  open door in the north wall, then MoveForward through."
-- Task "Break an anvil with a teammate" (Ch2): "Stand next to an anvil, wait
-  until a teammate is also adjacent, then both use Dig. Solo digging fails."
-- Task "Pick up diamond sword/chestplate" (Ch2): "Walk over the dropped item
-  with MoveForward. Sword auto-wields; chestplate auto-equips."
-- Task "Press your switch" (Ch3): "Face the switch node on your cell wall and
-  use Dig. Announce in chat that you pressed it."
-- Task "Exit your cell" (Ch3): "Wait until [SYSTEM] Switch was pressed shows
-  AND your door is gone, then MoveForward out of the cell."
-- Task "Regroup in communal room" (Ch3): "Head north (positive Z) into the
-  shared room; stay there until all teammates arrive."
-- Task "Attack a zombie" (Ch4): "Wield diamond sword (Slot1), face the zombie,
-  approach, and Dig repeatedly until it dies."
-- Task "Attack the boss" (Ch5): "Wield sword, stay close to teammates, Dig the
-  boss. Retreat briefly if HP low, then rejoin."
+Examples by task:
+- "Dig a tree" (Ch1): "Find a tree trunk, turn to center it, approach, and Dig. Walk over the
+  drop to collect wood."
+- "Kill a chicken/sheep" (Ch1): "Find the animal, face it, approach, then Dig repeatedly to attack."
+- "Unlock Door 1" (Ch1): "Complete ANY of M2/M3/M4/M5/M6/M7 (dig blocks, kill animals, pickup) —
+  that fires the unlock for the whole team; the red north door becomes air."
+- "Move into Chamber 2" (Ch1→2): "Door 1 must already be air. Turn north (+Z), head for the
+  opening, MoveForward through."
+- "Break an anvil with a teammate" (Ch2): "Stand at an anvil, wait until a teammate is also
+  adjacent, then both Dig. Solo digging fails."
+- "Acquire sword / chestplate" (Ch2): "No pickup — gear auto-equips team-wide the instant an anvil
+  breaks (Row A → swords, Row B → chestplates). Just contribute to a pair-dig."
+- "Press your switch" (Ch3): "Face the blue switch on your cell wall and Dig. Announce in chat."
+- "Exit your cell" (Ch3): "Wait until [SYSTEM] Switch was pressed shows AND your door is gone,
+  then MoveForward out."
+- "Regroup" (Ch3): "Head north (+Z) into the communal room; stay until all teammates arrive."
+- "Attack a zombie" (Ch4): "Wield the sword (Slot1), face the zombie, approach, Dig until it dies."
+- "Attack the boss" (Ch5): "Wield the sword, stay close to teammates, Dig the boss; retreat
+  briefly if HP low, then rejoin."
 
 Previous context: {previous_context}
 Current task: {task}
 Interaction beliefs: {interaction_beliefs}
 
-If interaction beliefs add useful info (e.g., teammate already pressed a
-switch, teammate is low HP), include it. Keep the context to 2-3 sentences
-focused on the physical action sequence needed RIGHT NOW.
+If interaction beliefs add useful info (a teammate pressed a switch, a teammate is low HP),
+include it. Keep the context to 2-3 sentences focused on the physical action sequence needed NOW.
 
-IMPORTANT respond in the following JSON format: {{"beliefs": "..."}}
+Respond ONLY in JSON: {{"beliefs": ["...", "..."]}}
+Give 2-3 short beliefs, one sentence each, focused on the physical action sequence needed NOW.

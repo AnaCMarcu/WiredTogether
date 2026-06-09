@@ -209,3 +209,23 @@ __marimo__/
 
 # Runs
 runs/
+runs_from_hpc/
+runs_from_daic/
+
+# SLURM job logs (DAIC sbatch --output=slurm_logs/...)
+slurm_logs/
+
+# DAIC job outputs (keep submit.sh + script.py tracked; ignore generated logs)
+daic/slurm_*.out
+daic/slurm_*.err
+
+# Vendored hebbian-marl sub-project — per-run artifacts only.
+# The source (epymarl/, scripts/, tests/, configs/, pyproject.toml) IS tracked;
+# only training outputs and local environments are excluded.
+hebbian-marl/.venv/
+hebbian-marl/results/
+hebbian-marl/runs/
+hebbian-marl/hebbian_marl.egg-info/
+hebbian-marl/epymarl/results/
+hebbian-marl/**/__pycache__/
+hebbian-marl/**/.pytest_cache/

@@ -72,6 +72,7 @@ five_chambers.mob_state = {
     ch4_contributors = {},   -- {[agent_name]=cumulative_damage_HP} across Ch4 mobs
     ch5_boss         = nil,
     ch5_triggered    = false,
+    ch5_healed       = {},   -- {[agent_name]=true} once full-healed on Ch5 entry
     ch4_kills        = {},
     boss_damage      = {},
 }
@@ -177,7 +178,45 @@ end)
 
 -- ── Public reset ─────────────────────────────────────────────────
 
+-- Safely remove an entity ObjectRef (no-op if already gone/invalid).
+local function _safe_remove(obj)
+    if obj then pcall(function() obj:remove() end) end
+end
+
+-- Despawn EVERY VoxeLibre mob anywhere in the chambers. Used on reset: the Ch1
+-- animals, Ch4 zombies and Ch5 boss are all pinned
+-- (despawn_immediately/static_save/persistent) so the engine never culls them,
+-- and reset only rebuilt the world + cleared bookkeeping — so any survivor
+-- persisted and the next episode spawned a fresh set ON TOP of it (a 2nd-episode
+-- Ch4 with 4+ zombies, a 2nd Ch5 boss, etc.). A radius scan catches them all,
+-- including any TRACKED-table entry we might have lost or an untracked natural
+-- spawn. Players are never luaentities (get_luaentity()==nil) so they're safe.
+local function _despawn_chamber_mobs()
+    local z_max  = (five_chambers.CH5 and five_chambers.CH5.z1) or 70
+    local center = {x = 6, y = (five_chambers.FLOOR_Y or 10) + 3, z = z_max / 2}
+    local radius = z_max + 10  -- comfortably spans Ch1..Ch5
+    local n_zombie, n_other = 0, 0
+    for _, obj in ipairs(minetest.get_objects_inside_radius(center, radius)) do
+        local le = obj and obj:get_luaentity()
+        local nm = le and le.name
+        if nm and nm:sub(1, 8) == "mobs_mc:" then
+            _safe_remove(obj)
+            if nm == "mobs_mc:zombie" then n_zombie = n_zombie + 1 else n_other = n_other + 1 end
+        end
+    end
+    if n_zombie + n_other > 0 then
+        minetest.log("action", string.format(
+            "[MOBRESET] despawned leftover mobs: zombies=%d other=%d", n_zombie, n_other))
+    end
+end
+
 function five_chambers.reset_mob_state()
+    -- Clear out every leftover mob BEFORE wiping the bookkeeping table, so a
+    -- survivor from the previous episode can't pile onto the freshly-spawned
+    -- set (applies equally to Ch4 zombies and the Ch5 boss). Idempotent: at
+    -- server start there are no mobs yet, so this is a no-op.
+    _despawn_chamber_mobs()
+
     five_chambers.mob_state = {
         active_ch1_mobs  = {},
         ch4_mobs         = {},
@@ -185,6 +224,7 @@ function five_chambers.reset_mob_state()
         ch4_contributors = {},
         ch5_boss         = nil,
         ch5_triggered    = false,
+        ch5_healed       = {},
         ch4_kills        = {},
         boss_damage      = {},
     }
@@ -227,7 +267,18 @@ minetest.register_globalstep(function(dtime)
         if five_chambers.agent_index(name) >= 0 then
             local pos = player:get_pos()
             if pos and five_chambers.get_chamber_for_pos(pos) == "ch4" then
-                five_chambers.fire_milestone("m20_enter_ch4", {name})
+                -- Suppress m20_enter_ch4 when the Ch3→Ch4 timeout
+                -- teleport already fired this episode: agents were
+                -- force-relocated, not earned. Mob spawning still
+                -- proceeds (the chamber is in use either way).
+                if five_chambers.door_state
+                   and five_chambers.door_state.door3_force_teleported then
+                    minetest.log("action",
+                        "[five_chambers] m20_enter_ch4 suppressed for "
+                        .. name .. " (Ch3 timeout teleport fired this episode)")
+                else
+                    five_chambers.fire_milestone("m20_enter_ch4", {name})
+                end
                 if not five_chambers.mob_state.ch4_triggered then
                     five_chambers.mob_state.ch4_triggered = true
                     five_chambers.spawn_ch4_mobs()
@@ -307,21 +358,26 @@ minetest.register_globalstep(function(dtime)
         if #contrib_list > 0 then
             five_chambers.fire_milestone("m22_all_mobs_killed", contrib_list)
 
-            -- M23: bonus if all qualifying agents are alive AND contributed.
-            -- Aliveness alone no longer suffices — the agent must have
-            -- damaged a Ch4 mob beyond MIN_DAMAGE_FOR_CREDIT.
-            local alive_list = {}
+            -- M23: "all survived" bonus. Now a REAL condition — fires only if
+            -- NO agent recorded a would-have-died (-10 near-death) event during
+            -- Ch4. Aliveness was previously trivial (the forgiving chamber
+            -- makes agents invincible, so get_hp() > 0 is always true); instead
+            -- we read the per-agent Ch4 near-death counter (deaths.lua). A team
+            -- that took a near-fatal beating loses this bonus even though every
+            -- agent is technically still standing.
+            local all_survived = true
+            local survivor_list = {}
             for _, player in ipairs(minetest.get_connected_players()) do
                 local name = player:get_player_name()
-                local agent_dmg = five_chambers.mob_state.ch4_contributors[name] or 0
-                if five_chambers.agent_index(name) >= 0
-                   and player:get_hp() > 0
-                   and agent_dmg >= min_dmg then
-                    table.insert(alive_list, name)
+                if five_chambers.agent_index(name) >= 0 then
+                    table.insert(survivor_list, name)
+                    if (five_chambers.would_die_count_ch4[name] or 0) > 0 then
+                        all_survived = false
+                    end
                 end
             end
-            if #alive_list >= five_chambers.NUM_AGENTS then
-                five_chambers.fire_milestone("m23_all_alive_ch4", alive_list)
+            if all_survived and #survivor_list >= five_chambers.NUM_AGENTS then
+                five_chambers.fire_milestone("m23_all_alive_ch4", survivor_list)
             end
 
             five_chambers.open_door4()
@@ -380,6 +436,26 @@ local function fire_boss_death()
     minetest.log("action", "[five_chambers] Boss defeated — episode complete.")
 end
 
+-- Called when the boss ObjectRef/luaentity has vanished. A real kill is already
+-- caught by the hp<=0 branch (while the entity is still valid), so a vanish is
+-- a DEFEAT only if the boss had actually been brought to 0 HP. A vanish with
+-- HP still > 0 means the entity was removed for another reason — episode reset
+-- (_despawn_chamber_mobs) or an area unload — and must NOT fire fire_boss_death,
+-- which would otherwise write episode_done.txt, award m27/m28 and terminate the
+-- episode as if the agents had won. Defaults to "not killed" when HP is unknown.
+local function boss_vanished_handler()
+    local boss = five_chambers.mob_state.ch5_boss
+    if not boss then return end
+    if (boss.last_hp or five_chambers.BOSS_HP or 1) <= 0 then
+        fire_boss_death()  -- killed, then removed before the hp<=0 tick caught it
+    else
+        minetest.log("action", string.format(
+            "[five_chambers] Ch5 boss vanished with HP=%s (>0) — removal, NOT a "
+            .. "defeat (no episode-complete fired)", tostring(boss.last_hp)))
+    end
+    five_chambers.mob_state.ch5_boss = nil
+end
+
 function five_chambers.spawn_boss()
     local c   = five_chambers.CH5
     local pos = {x = 6, y = five_chambers.FLOOR_Y + 1, z = math.floor((c.z0 + c.z1) / 2)}
@@ -403,6 +479,7 @@ function five_chambers.spawn_boss()
         contributors  = {},   -- {[agent_name]=cumulative_damage_HP}
         dmg_fired     = false,
         half_hp_fired = false,
+        last_hp       = five_chambers.BOSS_HP,  -- gates kill-vs-removal on vanish
     }
 
     minetest.log("action", "[five_chambers] Boss spawned at "
@@ -421,7 +498,29 @@ minetest.register_globalstep(function(dtime)
         if five_chambers.agent_index(name) >= 0 then
             local pos = player:get_pos()
             if pos and five_chambers.get_chamber_for_pos(pos) == "ch5" then
-                five_chambers.fire_milestone("m24_enter_ch5", {name})
+                -- Full-heal each agent ONCE on first Ch5 entry, so the boss
+                -- fight starts fresh regardless of how battered they came out
+                -- of Ch4 combat (where the hpchange clamp leaves them at low HP
+                -- between virtual deaths). Guarded per-name so it heals only on
+                -- entry, not every tick they stand in the boss room. From here
+                -- on death is real (permadeath) — see deaths.lua.
+                if not five_chambers.mob_state.ch5_healed[name] then
+                    five_chambers.mob_state.ch5_healed[name] = true
+                    player:set_hp(20, {type = "set_hp", from = "mod"})
+                    minetest.log("action",
+                        "[five_chambers] " .. name .. " full-healed on Ch5 entry")
+                end
+                -- Suppress m24_enter_ch5 when the Ch4→Ch5 timeout
+                -- teleport already fired this episode: agents were
+                -- force-relocated, not earned. Boss still spawns.
+                if five_chambers.door_state
+                   and five_chambers.door_state.door4_force_teleported then
+                    minetest.log("action",
+                        "[five_chambers] m24_enter_ch5 suppressed for "
+                        .. name .. " (Ch4 timeout teleport fired this episode)")
+                else
+                    five_chambers.fire_milestone("m24_enter_ch5", {name})
+                end
                 if not five_chambers.mob_state.ch5_triggered then
                     five_chambers.mob_state.ch5_triggered = true
                     five_chambers.spawn_boss()
@@ -439,15 +538,13 @@ minetest.register_globalstep(function(dtime)
 
     local obj = boss.obj
     if not obj:is_valid() then
-        fire_boss_death()
-        five_chambers.mob_state.ch5_boss = nil
+        boss_vanished_handler()  -- defeat only if it had reached 0 HP
         return
     end
 
     local ent = obj:get_luaentity()
     if not ent then
-        fire_boss_death()
-        five_chambers.mob_state.ch5_boss = nil
+        boss_vanished_handler()  -- defeat only if it had reached 0 HP
         return
     end
 
@@ -460,6 +557,7 @@ minetest.register_globalstep(function(dtime)
     end
 
     local hp = ent.health or ent.hp or obj:get_hp()
+    boss.last_hp = hp  -- so boss_vanished_handler can tell a kill from a removal
     local min_dmg = five_chambers.MIN_DAMAGE_FOR_CREDIT or 0
 
     -- M25: first qualifying damage landed (≥ MIN_DAMAGE_FOR_CREDIT).
