@@ -13,7 +13,7 @@
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/hpc/daic/experiments/_common.sh
 
-run_exp "opt_test_6" "$MODEL_2B" \
+run_exp "opt_test_7" "$MODEL_2B" \
     --episodes 2 \
     --max-steps 50 \
     --simultaneous \
