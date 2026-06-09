@@ -2,7 +2,7 @@
 #SBATCH --job-name=sim_smoke
 #SBATCH --partition=general
 #SBATCH --qos=short
-#SBATCH --time=2:00:00
+#SBATCH --time=1:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
@@ -21,19 +21,19 @@
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
 # wandb off for a throwaway smoke (override with WANDB=1 sbatch ... if wanted).
-WANDB="${WANDB:-0}" run_exp "opt_test_rl_3" "$MODEL_2B" \
+WANDB="${WANDB:-0}" run_exp "opt_test_rl_4" "$MODEL_2B" \
     --episodes 2 \
     --max-steps 20 \
-    --simultaneous \
-    --rl \
-    --rl-critic-mode centralized \
-    --rl-model-path "$MODEL_2B" \
-    --rl-update-interval 16 \
-    --rl-lr 3e-4 \
-    --hebbian \
-    --hebbian-ltp 0.01 \
-    --hebbian-ltd 0.005 \
-    --hebbian-decay 0.005 \
-    --hebbian-beta 1.0 \
-    --hebbian-rho 0.3 \
-    --hebbian-gamma 0.2
+    # --simultaneous \
+    # --rl \
+    # --rl-critic-mode centralized \
+    # --rl-model-path "$MODEL_2B" \
+    # --rl-update-interval 16 \
+    # --rl-lr 3e-4 \
+    # --hebbian \
+    # --hebbian-ltp 0.01 \
+    # --hebbian-ltd 0.005 \
+    # --hebbian-decay 0.005 \
+    # --hebbian-beta 1.0 \
+    # --hebbian-rho 0.3 \
+    # --hebbian-gamma 0.2

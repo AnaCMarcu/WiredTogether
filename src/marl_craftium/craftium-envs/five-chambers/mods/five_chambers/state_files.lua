@@ -60,6 +60,34 @@ function five_chambers.emit_milestone(milestone_id, contributors, reward)
     end
 end
 
+-- Appends one death / would-have-died event to death_events.jsonl.
+-- Called by deaths.lua on a real Ch5 (perma)death and on a Ch1-4 would-die.
+-- Python polls this via CraftiumEnvironmentInterface.poll_death_events() and
+-- drains the (negative) reward into the RL signal. This JSONL is the
+-- AUTHORITATIVE death-reward channel: server-side craftium.reward() does NOT
+-- reach env.step()'s reward channel in the multi-agent five-chambers context
+-- (same limitation that forces the milestone JSONL drain above), so without
+-- this file the −10 / −50 penalties never reach Python and vanish from the
+-- RL signal and episode_return. `kind` is "death" (real Ch5) or "woulddie"
+-- (forgiving Ch1-4). Unlike one-shot milestones, the same agent may emit many
+-- of these per episode — Python reads by byte-offset, so repeats are fine.
+function five_chambers.emit_death_event(kind, name, chamber, reward)
+    local world_path = minetest.get_worldpath()
+    local path = world_path .. "/death_events.jsonl"
+    local json_line = string.format(
+        '{"step":%d,"kind":"%s","agent":"%s","chamber":"%s","reward":%d}\n',
+        five_chambers.step_counter or 0,
+        kind, name, tostring(chamber), reward
+    )
+    local f = io.open(path, "a")
+    if f then
+        f:write(json_line)
+        f:close()
+    else
+        minetest.log("error", "[five_chambers] emit_death_event: cannot open " .. path)
+    end
+end
+
 -- Appends one switch event line to switch_events.jsonl (D5 stub).
 function five_chambers.emit_switch_event(switch_id, door_opened, presser_name)
     local world_path = minetest.get_worldpath()
@@ -78,6 +106,7 @@ end
 function five_chambers.clear_state_files()
     local world_path = minetest.get_worldpath()
     os.remove(world_path .. "/milestone_events.jsonl")
+    os.remove(world_path .. "/death_events.jsonl")
     os.remove(world_path .. "/switch_events.jsonl")
     os.remove(world_path .. "/episode_done.txt")
     -- Door 1 unlock state — written by doors.lua's open_door1() when the

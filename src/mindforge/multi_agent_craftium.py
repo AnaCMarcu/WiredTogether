@@ -182,7 +182,7 @@ def parse_args():
                         help="n rolling-window length (steps) for coop/neg")
     parser.add_argument("--hebbian-neg-theta", type=float, default=5.0,
                         help="θ negative-reward threshold (between |futile|=1 "
-                             "and |death|=10)")
+                             "and the death-class penalties |would-die|=10 / |death|=50)")
     parser.add_argument("--hebbian-reward-norm", type=float, default=300.0,
                         help="R fixed bondable-reward normalizer (Variant B); "
                              "default = largest milestone reward (m27=300)")
@@ -1262,6 +1262,7 @@ async def run(args):
         environment.reset()
         environment.reset_milestone_offset()
         environment.reset_anvil_coop_offset()
+        environment.reset_death_offset()
 
         # Reset each agent's per-episode WORKING memory (current task, last
         # chamber, beliefs, cached critic + action/reward window) so the new
@@ -1638,6 +1639,7 @@ async def run(args):
             _step_envstep_reward = [0.0] * num_agents   # environment.get_step_reward
             _step_pitch_penalty  = [0.0] * num_agents   # negative; pitch-cap futile
             _step_milestone_drain = [0.0] * num_agents  # poll_milestone_events drain
+            _step_death_drain    = [0.0] * num_agents   # negative; poll_death_events drain
             step_contents = [None] * num_agents
             comm_events = []
             # Per-message metadata staged here in Phase 1a; rewards stamped
@@ -2233,6 +2235,29 @@ async def run(args):
                         step_rewards_raw[_aid] += _rw
                         _step_milestone_drain[_aid] += _rw
 
+            # ── Phase 1d: Drain death / would-die penalties ──
+            # deaths.lua emits these to death_events.jsonl; like milestones, the
+            # server-side craftium.reward() it also fires does NOT reach
+            # env.step()'s reward channel in multi-agent five-chambers, so this
+            # JSONL is the authoritative source. Each event carries a NEGATIVE
+            # reward for exactly one agent (−10 would-die in Ch1–4, −50 real Ch5
+            # death). Drain into step_rewards_raw HERE (before Hebbian diffusion
+            # + record_reward) so the penalty propagates through the graph and
+            # into episode_return. Folded into the `task` decomposition stream.
+            _death_events_this_step = environment.poll_death_events()
+            for _ev in _death_events_this_step:
+                _rw = float(_ev.get("reward", 0))
+                if _rw == 0.0:
+                    continue
+                _s = str(_ev.get("agent", "")).removeprefix("agent_").removeprefix("agent")
+                try:
+                    _aid = int(_s)
+                except ValueError:
+                    continue
+                if 0 <= _aid < num_agents:
+                    step_rewards_raw[_aid] += _rw
+                    _step_death_drain[_aid] += _rw
+
             # ── Phase 2: Hebbian update + reward diffusion ──
 
             # Per-agent one-step advantage δ_t = r_t - V(s_t).
@@ -2261,13 +2286,15 @@ async def run(args):
             #   chambers      — per-agent chamber index 1..5 (0 ⇒ Ch1/solo,
             #                    gated OUT of every reward read).
             #   bond_rewards  — BONDABLE reward = milestone + comm + futile.
-            #                    The env-step stream (which carries the death
-            #                    penalties via craftium.reward — −10 for a
-            #                    would-have-died in Ch1–4, −50 for a real Ch5
-            #                    death) is NOT summed here, so death is excluded
-            #                    from growth by construction — Variant B never
-            #                    bonds on shared deaths.
-            #   total_rewards — full reward incl. death (= step_rewards_raw);
+            #                    The drained death/would-die penalties
+            #                    (_step_death_drain — −10 for a would-have-died
+            #                    in Ch1–4, −50 for a real Ch5 death, via the
+            #                    death_events.jsonl drain in Phase 1d) are NOT
+            #                    summed here, so death is excluded from growth by
+            #                    construction — Variant B never bonds on shared
+            #                    deaths.
+            #   total_rewards — full reward incl. death (= step_rewards_raw,
+            #                    which now carries the drained death penalty);
             #                    used only for the neg_i decay gate, so a death
             #                    can still trip decay.
             # The legacy mode ignores these and uses step_rewards/advantages.
@@ -2302,7 +2329,8 @@ async def run(args):
             # ── Reward decomposition: split each agent's diffused reward into
             #    its source streams. Each stream is read directly from the
             #    per-source accumulator populated at the matching add-site:
-            #      task            = env-step reward + pitch penalty + drained milestones
+            #      task            = env-step reward + pitch penalty + drained
+            #                        milestones + drained death/would-die penalties
             #      comm_base       = BASE_MSG_REWARD per valid message
             #      comm_milestone  = Tier-2 per-chamber communication milestones
             #      proximity       = 0 (the +0.3/pair proximity bonus was removed;
@@ -2321,7 +2349,8 @@ async def run(args):
             for _aid in range(num_agents):
                 _task = (_step_envstep_reward[_aid]
                          + _step_pitch_penalty[_aid]
-                         + _step_milestone_drain[_aid])
+                         + _step_milestone_drain[_aid]
+                         + _step_death_drain[_aid])
                 _comm_total = float(_comm_rewards_this_step.get(_aid, 0.0)) if communication else 0.0
                 _comm_ms = float(_comm_milestone_per_agent.get(_aid, 0.0))
                 _comm_base = _comm_total - _comm_ms

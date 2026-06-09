@@ -408,7 +408,8 @@ class CraftiumMetric:
 
         components keys (all floats, default 0):
           task              env-step reward + pitch-cap penalty + drained
-                            five-chambers milestone rewards (m1..m28)
+                            five-chambers milestone rewards (m1..m28) +
+                            drained death / would-die penalties (−50 / −10)
           comm_base         BASE_MSG_REWARD per valid message
           comm_milestone    Tier-2 per-chamber communication milestones
           proximity         vestigial — the +0.3/pair proximity bonus was

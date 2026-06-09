@@ -117,8 +117,12 @@ minetest.register_on_player_hpchange(function(player, hp_change, reason)
     end
 
     if vhp <= 0 then
+        -- Authoritative RL channel: JSONL drained by Python (server-side
+        -- craftium.reward below does NOT reach env.step()'s reward channel
+        -- in multi-agent five-chambers — see emit_death_event / state_files.lua).
+        five_chambers.emit_death_event("woulddie", name, chamber, WOULD_DIE_PENALTY)
         if craftium and craftium.reward then
-            craftium.reward(player, WOULD_DIE_PENALTY)  -- record in the RL signal
+            craftium.reward(player, WOULD_DIE_PENALTY)  -- backup (LLM-visibility only)
         end
         local n = (five_chambers.would_die_count[name] or 0) + 1
         five_chambers.would_die_count[name] = n
@@ -150,9 +154,12 @@ minetest.register_on_dieplayer(function(player, reason)
     local pos     = player:get_pos()
     local chamber = pos and five_chambers.get_chamber_for_pos(pos) or nil
 
-    -- -50 (terminal) death penalty into the RL reward signal.
+    -- -50 (terminal) death penalty into the RL reward signal. The JSONL is the
+    -- authoritative channel Python drains (server-side craftium.reward below
+    -- does NOT reach env.step()'s reward channel in multi-agent five-chambers).
+    five_chambers.emit_death_event("death", name, chamber, DEATH_PENALTY)
     if craftium and craftium.reward then
-        craftium.reward(player, DEATH_PENALTY)
+        craftium.reward(player, DEATH_PENALTY)  -- backup (LLM-visibility only)
     end
     minetest.log("action", string.format(
         "[DEATH] %s died in %s (penalty %d)", name, tostring(chamber), DEATH_PENALTY))

@@ -13,10 +13,12 @@
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/daic/experiments/_common.sh
 
-# Final experiment suite: 5 episodes × 2500 steps, results in runs/final/.
+# Final experiment suite: 5 episodes × 2500 steps, results in runs/final/,
+# logged to the "final_wired_together" wandb project.
 RUN_GROUP=final
 EPISODES=5
 MAX_STEPS=2500
+WANDB_PROJECT=final_wired_together
 
 # Per-experiment wandb tags layered on top of the auto tags (exp_*, seed_*).
 # Useful for filtering "all hebbian runs" or "all mappo runs" in the UI.

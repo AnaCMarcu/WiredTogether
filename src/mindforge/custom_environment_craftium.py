@@ -254,6 +254,12 @@ class CraftiumEnvironmentInterface:
         # writes to anvil_coop_events.jsonl when ≥2 agents punch the same anvil
         # within ACTIVE_WINDOW ticks). No reward; pure analysis signal.
         self._anvil_coop_file_offset = 0
+        # Death / would-die event file polling (deaths.lua writes death_events.jsonl
+        # on a real Ch5 permadeath and on a Ch1-4 would-have-died). Each event
+        # carries a NEGATIVE reward drained into the RL signal — the server-side
+        # craftium.reward() penalties never reach env.step()'s reward channel in
+        # the multi-agent five-chambers context, so this JSONL is authoritative.
+        self._death_file_offset = 0
 
         # Per-agent invalid-action warning, surfaced to the LLM via
         # get_chamber_state() on the NEXT prompt so the policy can see that
@@ -1756,6 +1762,86 @@ class CraftiumEnvironmentInterface:
             self._anvil_coop_file_offset = os.path.getsize(path)
         except OSError:
             self._anvil_coop_file_offset = 0
+
+    def poll_death_events(self) -> list:
+        """Read any new death / would-die events since the last call.
+
+        Returns a list of dicts each with keys: step, kind ("death" |
+        "woulddie"), agent, chamber, reward (a NEGATIVE int: −10 for a
+        forgiving-chamber would-have-died, −50 for a real Ch5 permadeath).
+        deaths.lua writes these to death_events.jsonl because the server-side
+        craftium.reward() it also calls does NOT reach env.step()'s reward
+        channel in the multi-agent five-chambers context — so this JSONL is the
+        authoritative reward source. The caller (multi_agent_craftium.py) drains
+        each event's reward into step_rewards_raw before Hebbian diffusion /
+        record_reward, so the penalty propagates into the graph and into
+        cumulative_returns / episode_return.
+
+        Mirrors poll_milestone_events()/poll_anvil_coop_events() file-offset
+        bookkeeping so repeated calls never re-read the same lines, and a
+        smaller file size (episode reset / file cleared) auto-rewinds to 0.
+        Unlike milestones, the same agent may legitimately emit many of these
+        per episode.
+        """
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            return []
+        path = os.path.join(world_path, "death_events.jsonl")
+        if not os.path.exists(path):
+            self._death_file_offset = 0
+            return []
+        try:
+            if os.path.getsize(path) < self._death_file_offset:
+                self._death_file_offset = 0
+        except OSError:
+            return []
+        new_events = []
+        try:
+            with open(path, "r") as f:
+                f.seek(self._death_file_offset)
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                        new_events.append(ev)
+                        # Mirror the penalty into the cumulative `_rewards`
+                        # bucket so it shows in get_reward_summary() (the LLM
+                        # prompt's reward line). LLM-visibility only — RL credit
+                        # is delivered at the call site by draining into
+                        # step_rewards_raw. Normalise the Lua 'agentN' name to
+                        # the canonical 'agent_N' key (same as milestones).
+                        _s = str(ev.get("agent", "")).removeprefix("agent_").removeprefix("agent")
+                        try:
+                            _aid = int(_s)
+                        except ValueError:
+                            _aid = None
+                        if _aid is not None:
+                            agent_name = f"agent_{_aid}"
+                            self._rewards[agent_name] = (
+                                self._rewards.get(agent_name, 0.0) + ev.get("reward", 0)
+                            )
+                    except json.JSONDecodeError:
+                        pass
+                self._death_file_offset = f.tell()
+        except OSError:
+            pass
+        return new_events
+
+    def reset_death_offset(self):
+        """Anchor the death-event reader to current EOF (post env.reset())."""
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            self._death_file_offset = 0
+            return
+        path = os.path.join(world_path, "death_events.jsonl")
+        try:
+            self._death_file_offset = os.path.getsize(path)
+        except OSError:
+            self._death_file_offset = 0
 
     def _get_server_log_path(self):
         """Resolve and cache the path to the server's stderr.txt."""
