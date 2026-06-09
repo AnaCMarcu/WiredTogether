@@ -2244,6 +2244,10 @@ async def run(args):
             # death). Drain into step_rewards_raw HERE (before Hebbian diffusion
             # + record_reward) so the penalty propagates through the graph and
             # into episode_return. Folded into the `task` decomposition stream.
+            # NOTE: poll_death_events() already RATE-LIMITS would-die to one per
+            # agent per EPISODE (the Lua callback fires per damage event, so an
+            # attacked agent would otherwise stack dozens of −10s) — so this loop
+            # sees at most one would-die per agent per episode. Deaths uncapped.
             _death_events_this_step = environment.poll_death_events()
             for _ev in _death_events_this_step:
                 _rw = float(_ev.get("reward", 0))

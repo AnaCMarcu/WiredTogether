@@ -260,6 +260,12 @@ class CraftiumEnvironmentInterface:
         # craftium.reward() penalties never reach env.step()'s reward channel in
         # the multi-agent five-chambers context, so this JSONL is authoritative.
         self._death_file_offset = 0
+        # Agent indices already charged a would-die penalty THIS EPISODE. The
+        # −10 would-die is applied at most ONCE per agent per episode (see
+        # poll_death_events); the Lua callback fires per damage event so an
+        # attacked agent would otherwise rack up dozens of −10s. Cleared at
+        # episode reset via reset_death_offset().
+        self._woulddie_charged: set = set()
 
         # Per-agent invalid-action warning, surfaced to the LLM via
         # get_chamber_state() on the NEXT prompt so the policy can see that
@@ -1777,11 +1783,21 @@ class CraftiumEnvironmentInterface:
         record_reward, so the penalty propagates into the graph and into
         cumulative_returns / episode_return.
 
+        WOULD-DIE RATE LIMIT (once per agent per EPISODE): the Lua hpchange
+        callback fires once per *damage event*, so a continuously attacked agent
+        emits dozens of would-die lines — stacking −10s until the penalty swamps
+        every positive reward. We cap it hard: each agent is charged the −10
+        would-die AT MOST ONCE PER EPISODE. Subsequent would-die lines for an
+        already-charged agent are dropped (not returned, not mirrored into
+        _rewards). The charged-agent set (self._woulddie_charged) is cleared at
+        episode reset via reset_death_offset(). Real Ch5 deaths ("death") are
+        one-shot/terminal and are never capped. The file offset still advances
+        past every line, so dropped duplicates are not re-read; Lua keeps its
+        own full [WOULDDIE] log + would_die_count for diagnostics.
+
         Mirrors poll_milestone_events()/poll_anvil_coop_events() file-offset
         bookkeeping so repeated calls never re-read the same lines, and a
         smaller file size (episode reset / file cleared) auto-rewinds to 0.
-        Unlike milestones, the same agent may legitimately emit many of these
-        per episode.
         """
         try:
             world_path = self._get_world_path()
@@ -1806,32 +1822,42 @@ class CraftiumEnvironmentInterface:
                         continue
                     try:
                         ev = json.loads(line)
-                        new_events.append(ev)
-                        # Mirror the penalty into the cumulative `_rewards`
-                        # bucket so it shows in get_reward_summary() (the LLM
-                        # prompt's reward line). LLM-visibility only — RL credit
-                        # is delivered at the call site by draining into
-                        # step_rewards_raw. Normalise the Lua 'agentN' name to
-                        # the canonical 'agent_N' key (same as milestones).
-                        _s = str(ev.get("agent", "")).removeprefix("agent_").removeprefix("agent")
-                        try:
-                            _aid = int(_s)
-                        except ValueError:
-                            _aid = None
-                        if _aid is not None:
-                            agent_name = f"agent_{_aid}"
-                            self._rewards[agent_name] = (
-                                self._rewards.get(agent_name, 0.0) + ev.get("reward", 0)
-                            )
                     except json.JSONDecodeError:
-                        pass
+                        continue
+                    # Normalise the Lua 'agentN' name to the canonical
+                    # 'agent_N' index (same parser as milestones).
+                    _s = str(ev.get("agent", "")).removeprefix("agent_").removeprefix("agent")
+                    try:
+                        _aid = int(_s)
+                    except ValueError:
+                        _aid = None
+                    # Rate-limit: charge each agent the would-die at most ONCE
+                    # per episode. self._woulddie_charged persists across calls
+                    # and is cleared at episode reset. Deaths are never capped.
+                    if ev.get("kind") == "woulddie" and _aid is not None:
+                        if _aid in self._woulddie_charged:
+                            continue
+                        self._woulddie_charged.add(_aid)
+                    new_events.append(ev)
+                    # Mirror the (capped) penalty into the cumulative `_rewards`
+                    # bucket so it shows in get_reward_summary() (the LLM
+                    # prompt's reward line). LLM-visibility only — RL credit is
+                    # delivered at the call site by draining into step_rewards_raw.
+                    if _aid is not None:
+                        agent_name = f"agent_{_aid}"
+                        self._rewards[agent_name] = (
+                            self._rewards.get(agent_name, 0.0) + ev.get("reward", 0)
+                        )
                 self._death_file_offset = f.tell()
         except OSError:
             pass
         return new_events
 
     def reset_death_offset(self):
-        """Anchor the death-event reader to current EOF (post env.reset())."""
+        """Anchor the death-event reader to current EOF (post env.reset()) and
+        clear the per-episode would-die charge set so each agent can be charged
+        the −10 once again in the new episode."""
+        self._woulddie_charged = set()
         try:
             world_path = self._get_world_path()
         except AttributeError:
