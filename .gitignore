@@ -184,8 +184,8 @@ runs_from_daic/
 
 slurm_logs/
 
-daic/slurm_*.out
-daic/slurm_*.err
+hpc/daic/slurm_*.out
+hpc/daic/slurm_*.err
 
 # Vendored hebbian-marl sub-project — per-run artifacts only.
 # The source (epymarl/, scripts/, tests/, configs/, pyproject.toml) IS tracked;
@@ -205,4 +205,4 @@ craftium/
 
 *.stackdump
 
-scripts/analysis/out/
+hpc/delft_blue/analysis/out/

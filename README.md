@@ -103,7 +103,7 @@ All scripts:
 - `export PYTHONPATH="$PROJECT_DIR/src:$PYTHONPATH"` so `rl_layer`, `hebbian`, and `mindforge.env` resolve as top-level packages
 - `cd src/mindforge` then `python multi_agent_craftium.py …`
 
-Submit with e.g. `sbatch scripts/small.sh`.
+Submit with e.g. `sbatch hpc/delft_blue/small.sh`.
 
 ---
 
@@ -201,7 +201,7 @@ checkpoints/<run_id>/
 picks it up via `run_continue.sh`. Trigger manually with
 `scancel --signal=SIGTERM <job_id>`.
 
-**Chained jobs.** `bash scripts/chain_jobs.sh 3` submits 1 fresh job + 3
+**Chained jobs.** `bash hpc/delft_blue/chain_jobs.sh 3` submits 1 fresh job + 3
 continuations (`--dependency=afterany`), giving up to ~32 hours of compute.
 
 ---
@@ -242,10 +242,10 @@ strongly-bonded teammates' transitions are mixed into each mini-batch.
 
 ## Reproducing the experiments
 
-The paper's experiment campaigns are SLURM scripts under `scripts/experiments/`. Each sources
+The paper's experiment campaigns are SLURM scripts under `hpc/delft_blue/experiments/`. Each sources
 `_common.sh` (conda activation, model paths, seed array) and launches `multi_agent_craftium.py`
 with a fixed configuration. Submit one campaign across all seeds with `submit_all.sh`, or an
-individual experiment with `sbatch scripts/experiments/<name>.sh`.
+individual experiment with `sbatch hpc/delft_blue/experiments/<name>.sh`.
 
 | Group | Scripts | Configuration |
 |---|---|---|
@@ -256,7 +256,7 @@ individual experiment with `sbatch scripts/experiments/<name>.sh`.
 | Social prompting | `exp9_…_social_prompt.sh`, `exp10/12_…_social_bias.sh`, `exp11_…` | Prompt-/bias-level social signals (2B / 9B) |
 | Heterogeneous roles | `exp14_llm_hebbian_roles.sh`, `exp15_llm_roles.sh` | Role-specialised teams (harvester / hunter / scouter) |
 
-`quick_test.sh` is a fast end-to-end check. Post-hoc analysis lives in `scripts/analysis/`
+`quick_test.sh` is a fast end-to-end check. Post-hoc analysis lives in `hpc/delft_blue/analysis/`
 (`analyze_runs.py`, `aggregate_seeds.py`, and the `tier*_analysis.py` plotters); their figures
 are regenerated locally and are not committed.
 
