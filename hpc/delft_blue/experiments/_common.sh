@@ -86,7 +86,7 @@ fi
 # is present by then; if not, run `wandb sync <dir>` from the login node
 # any time later).
 WANDB="${WANDB:-1}"
-WANDB_PROJECT="${WANDB_PROJECT:-wired-together}"
+WANDB_PROJECT="${WANDB_PROJECT:-final_wired_together}"
 WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-}"  # comma-separated, appended to auto tags
 WANDB_MODE="${WANDB_MODE:-online}"        # default online; offline if env-forced
 

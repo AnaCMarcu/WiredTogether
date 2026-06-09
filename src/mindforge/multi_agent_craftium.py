@@ -108,8 +108,8 @@ def parse_args():
                         help="Enable Weights & Biases logging. Requires WANDB_API_KEY "
                              "in the environment. Failures during init/log are "
                              "tolerated and do not kill training.")
-    parser.add_argument("--wandb-project", type=str, default="wired-together",
-                        help="W&B project name (default 'wired-together').")
+    parser.add_argument("--wandb-project", type=str, default="final_wired_together",
+                        help="W&B project name (default 'final_wired_together').")
     parser.add_argument("--wandb-entity", type=str, default=None,
                         help="W&B entity (team or user). Defaults to your "
                              "wandb-configured default entity.")

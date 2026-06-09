@@ -43,7 +43,7 @@ fi
 # end-of-job salvage hook below will still capture any offline-mode
 # dirs and auto-sync them so the data survives.
 WANDB="${WANDB:-1}"
-WANDB_PROJECT="${WANDB_PROJECT:-wired-together}"
+WANDB_PROJECT="${WANDB_PROJECT:-final_wired_together}"
 WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-}"  # comma-separated, appended to auto tags
 WANDB_MODE="${WANDB_MODE:-online}"        # default online; offline if env-forced
 
