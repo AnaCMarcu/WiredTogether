@@ -72,8 +72,6 @@ class HebbianSocialGraph:
 
         N = config.num_agents
 
-        # Social graph W(t) ∈ [0,1]^{N×N}, diagonal always 0.
-        # init_matrix (explicit) ≻ init_preset (named) ≻ uniform init_weight.
         if config.init_matrix is not None:
             self.W = self._load_matrix(config.init_matrix, N)
         elif config.init_preset and config.init_preset != "none":
@@ -97,39 +95,23 @@ class HebbianSocialGraph:
         self._max_reward_seen: float = 0.0
 
         # ── Gated-Hebbian variant state (mode != "legacy") ──────────────
-        # Warm-start w₀ must be > 0 for the new variants: W=0 is a fixed point
-        # (no co-activity ⇒ no growth; decay branch ∝ W ⇒ no decay at 0).
         if config.mode != "legacy" and config.init_weight <= 0.0:
             raise ValueError(
                 f"mode={config.mode!r} requires init_weight (w₀) > 0; "
                 f"got {config.init_weight}. W=0 is a fixed point of the gated "
                 "rule, so a zero warm-start can never grow."
             )
-        # Rolling window of per-step co-activity matrices, for coop_ij(t) =
-        # peak co-activity over the last n steps (n = config.coop_window).
         self._coact_window: deque = deque(maxlen=max(1, config.coop_window))
-        # Rolling window of per-agent Ch2–5-gated TOTAL rewards (death included),
-        # for neg_i(t) = 1[Σ_window r_i < −θ].
         self._reward_window: deque = deque(maxlen=max(1, config.coop_window))
-        # Running max of the Ch2–5 BONDABLE reward magnitude — normalises the
-        # engagement gate g_i. Bondable ⇒ death excluded ⇒ death never inflates
-        # engagement (so it never drives growth in either variant).
         self._max_bond_reward_seen: float = 0.0
         # Realized per-branch deltas from the last gated step (analysis/tests).
         self._last_growth: Optional[np.ndarray] = None
         self._last_decay: Optional[np.ndarray] = None
 
-        # Rolling snapshot of W for bond-delta queries. Length matches the
-        # social module's "recent history" window. bond_delta_row(i) returns
-        # (W_now[i,:] - W_history[0][i,:]) — Δw over the window. Keeps
-        # numpy-only; no torch dep.
         self._bond_delta_window: int = 50
         self._W_history: deque = deque(maxlen=self._bond_delta_window)
         self._W_history.append(self.W.copy())
 
-    # ──────────────────────────────────────────────
-    # 2.1b  Hardcoded / frozen graph helpers
-    # ──────────────────────────────────────────────
 
     @staticmethod
     def _load_matrix(matrix, N: int) -> np.ndarray:
@@ -171,9 +153,6 @@ class HebbianSocialGraph:
         np.fill_diagonal(W, 0.0)
         return W
 
-    # ──────────────────────────────────────────────
-    # 2.2  Co-activity signal (refined Eq. 2)
-    # ──────────────────────────────────────────────
 
     def _compute_coactivity(
         self,
@@ -207,7 +186,6 @@ class HebbianSocialGraph:
                 self._max_reward_seen = abs_r
 
         # ── Soft engagement score gi(t) ──
-        # gi(t) = clip(α · |ri(t)| / (max_reward_seen + ε) + (1-α) · comm_i(t), 0, 1)
         comm_agents = set()
         if comm_events:
             for sender, receiver in comm_events:
@@ -241,11 +219,9 @@ class HebbianSocialGraph:
                     spatial_gate[j, i] = 1.0
 
         # ── Spatial co-activity ──
-        # cij_spatial(t) = I[dist ≤ d] · gi(t) · gj(t)
         cij_spatial = spatial_gate * np.outer(engagement, engagement)
 
         # ── Communication co-activity bonus ──
-        # cij_comm(t) = δ_comm · comm_pair_ij(t) · (1 - I[dist ≤ d])
         cij_comm = np.zeros((N, N), dtype=np.float32)
         if comm_events and cfg.communication_coactivity_bonus > 0.0:
             comm_pair_set = set()
@@ -264,9 +240,6 @@ class HebbianSocialGraph:
         np.fill_diagonal(cij, 0.0)
         return cij
 
-    # ──────────────────────────────────────────────
-    # 2.3  Modulatory signal — asymmetric LTP/LTD (refined Eq. 4+5)
-    # ──────────────────────────────────────────────
 
     def _compute_modulator(
         self,
@@ -305,11 +278,6 @@ class HebbianSocialGraph:
         N = self.config.num_agents
         cfg = self.config
 
-        # Build per-agent signal: prefer advantage, fall back to reward/max.
-        # Clip to [-1, 1] so a stuck policy with strongly-negative
-        # advantage (A ≈ -V(s) when reward=0 and V(s) > 0) doesn't drive
-        # m_ltd into saturation every step. Without clipping, agent's
-        # outgoing bonds collapse to 0 within ~30 co-active steps.
         agent_signals = np.zeros(N, dtype=np.float32)
         for i in range(N):
             if advantages is not None and i < len(advantages) and advantages[i] is not None:
@@ -320,10 +288,6 @@ class HebbianSocialGraph:
                 )
         np.clip(agent_signals, -1.0, 1.0, out=agent_signals)
 
-        # Per-direction LTP/LTD scalars from each agent's own signal.
-        # LTD only fires when the agent's signal is clearly negative
-        # (beyond ltd_threshold) — exploration noise (A ≈ −V(s)) stays
-        # below the threshold and does NOT depress bonds.
         ltp_per_agent = np.zeros(N, dtype=np.float32)
         ltd_per_agent = np.zeros(N, dtype=np.float32)
         for i in range(N):
@@ -335,15 +299,10 @@ class HebbianSocialGraph:
             )
 
         m_per_agent = ltp_per_agent - ltd_per_agent  # (N,)
-        # Broadcast to all outgoing bonds of each agent: m[i, :] = m_per_agent[i].
-        # Diagonal stays 0 (it's not used; W diagonal is always zero).
         m = np.tile(m_per_agent.reshape(N, 1), (1, N))
         np.fill_diagonal(m, 0.0)
         return m
 
-    # ──────────────────────────────────────────────
-    # 2.4  Sustained LTD from repeated co-failure
-    # ──────────────────────────────────────────────
 
     def _update_failure_window(
         self, cij: np.ndarray, At: float
@@ -388,16 +347,6 @@ class HebbianSocialGraph:
         Fij = self._failure_coactivation / float(cfg.failure_memory_window)
         return -cfg.ltd_sustained_lr * Fij * self.W
 
-    # ══════════════════════════════════════════════════════════════════
-    #  GATED-HEBBIAN VARIANTS  (mode ∈ {"coactivity", "reward_modulated"})
-    #
-    #  ΔW_ij = growth_ij − decay_ij ;  W_ij ← clip(W_ij + ΔW_ij, 0, 1)
-    #
-    #  Shared in BOTH variants: the co-activity gate c_ij, the windowed
-    #  statistics (coop_ij, neg_i) and the failure-gated decay branch. The
-    #  ONLY difference is the growth coefficient (_growth_coeff). There is no
-    #  passive −λW term — the failure-gated branch is the sole downward pull.
-    # ══════════════════════════════════════════════════════════════════
 
     @staticmethod
     def _chamber_gate(chambers: Optional[List[int]], N: int) -> np.ndarray:
@@ -599,16 +548,9 @@ class HebbianSocialGraph:
         coeff = self._growth_coeff(bond_g)                       # (N,)
         growth = coeff[:, None] * cij * (1.0 - self.W)           # (N,N)
 
-        # Failure-gated decay. neg_i is agent i's OWN signal (row-broadcast),
-        # so W[i,j] and W[j,i] can decay at different times — bonds may become
-        # one-sided. Intended.
         decay_mask = (coop < cfg.coop_eps) & neg[:, None]        # (N,N) bool
         decay = cfg.eta_minus * self.W                           # (N,N)
 
-        # Strictly one branch per pair (see docstring). Capture the REALIZED
-        # (mutually exclusive) per-branch magnitudes for logging + the
-        # exclusivity unit test: realized growth lives only where decay didn't
-        # fire, realized decay only where it did.
         delta = np.where(decay_mask, -decay, growth)
         np.fill_diagonal(delta, 0.0)
         self._last_growth = np.where(decay_mask, 0.0, growth)
@@ -616,8 +558,6 @@ class HebbianSocialGraph:
         self._last_decay = np.where(decay_mask, decay, 0.0)
         np.fill_diagonal(self._last_decay, 0.0)
 
-        # Frozen graph: keep W constant (the realized delta is 0), but the
-        # observational bookkeeping below still runs — see update() head.
         if not self.config.freeze_weights:
             self.W = self.W + delta
             np.clip(self.W, 0.0, 1.0, out=self.W)
@@ -637,9 +577,6 @@ class HebbianSocialGraph:
 
         return self.W
 
-    # ──────────────────────────────────────────────
-    # 2.5  Full Hebbian update (Eq. 4, refined) — LEGACY mode
-    # ──────────────────────────────────────────────
 
     def update(
         self,
@@ -685,14 +622,6 @@ class HebbianSocialGraph:
         if not self.config.enabled:
             return None
 
-        # Frozen / hardcoded graph (freeze_weights): W never changes — bond
-        # weights stay constant and bond deltas stay 0 ("STABLE"), the LLM-only
-        # social-bias ablation. We still run the rest of the update so the
-        # OBSERVATIONAL accumulators (_step_count, _last_coactivity, the
-        # max-reward normalisers) stay honest; only the W *mutation* is skipped,
-        # guarded at the apply site in each path. Previously this returned early,
-        # leaving those fields at init values (0 / None) and silently corrupting
-        # cross-run Hebbian diagnostics for the frozen runs (exp16 / exp17).
         if self.config.mode != "legacy":
             return self._update_gated(
                 positions=positions,
@@ -715,9 +644,6 @@ class HebbianSocialGraph:
         # Per-pair modulator matrix (N×N) — uses per-agent advantages when available
         m = self._compute_modulator(advantages, step_rewards)
 
-        # Team-level advantage for the failure window (scalar mean — intentional:
-        # sustained LTD tracks episodes where the *whole team* repeatedly co-fails,
-        # which is a team-level signal, not per-pair).
         if advantages is not None:
             valid = [a for a in advantages if a is not None]
             At_team = float(np.mean([_sanitize_reward(a) for a in valid])) if valid else 0.0
@@ -728,14 +654,6 @@ class HebbianSocialGraph:
         # Update failure window BEFORE computing sustained LTD
         self._update_failure_window(cij, At_team)
 
-        # Failure-grace LTP bonus (opt-in, on by default). When team is
-        # failing and the pair's F_ij is still below threshold, add LTP
-        # proportional to co-activity — the "we tried something together"
-        # reinforcement. The bonus fades to zero once F_ij ≥
-        # failure_grace_threshold, after which only the existing sustained
-        # LTD applies, so the bond's per-step delta flips from positive
-        # to negative across the threshold. Set failure_grace_enabled=False
-        # in the config to reproduce the legacy pre-grace math.
         grace_bonus = None
         if cfg.failure_grace_enabled and At_team < -cfg.ltd_threshold:
             F_ij = self._failure_coactivation / float(cfg.failure_memory_window)
@@ -746,10 +664,6 @@ class HebbianSocialGraph:
             )
             grace_bonus = cfg.failure_ltp_lr * grace_factor * cij * (1.0 - self.W)
 
-        # Main Hebbian delta — m is now (N×N), element-wise with cij and W.
-        # Sub-components are named so the per-interval log can report which
-        # term dominates the bond trajectory (advantage gate vs base LTP vs
-        # passive decay vs grace); collapses to one expression at apply time.
         m_term        = m * cij * (1.0 - self.W)         # advantage-gated LTP/LTD
         base_ltp_term = cfg.base_ltp * cij * (1.0 - self.W)  # unconditional co-activity LTP
         decay_term    = -cfg.decay * self.W              # passive decay (≤ 0)
@@ -760,9 +674,6 @@ class HebbianSocialGraph:
         # Sustained LTD
         delta_ltd = self._compute_sustained_ltd()
 
-        # Full update. Skipped when the graph is frozen (freeze_weights) — W
-        # stays constant, but _step_count / _last_coactivity / the failure
-        # window above are still recorded so the diagnostics stay honest.
         if not cfg.freeze_weights:
             self.W = self.W + delta_main + delta_ltd
             # Hard constraints
@@ -771,10 +682,6 @@ class HebbianSocialGraph:
 
         self._step_count += 1
 
-        # Snapshot current W for the bond-delta window. Done AFTER the W
-        # update so the oldest entry in _W_history is the W from
-        # (_bond_delta_window) steps ago — Δw queries reflect actual change
-        # over that window.
         self._W_history.append(self.W.copy())
 
         # Per-interval logging: show LTP vs LTD pair counts so weight trends are visible
@@ -791,11 +698,6 @@ class HebbianSocialGraph:
                 "[Hebbian step=%d] W mean=%.4f max=%.4f  LTP pairs=%d  LTD pairs=%d%s",
                 self._step_count, mean_w, max_w, ltp_pairs, ltd_pairs, grace_str,
             )
-            # Component breakdown — sum over all (i,j) pairs. If bonds are
-            # collapsing, the dominant negative term here identifies which
-            # knob to turn: decay→lower cfg.decay; ltd_sustained→raise
-            # cfg.ltd_threshold or lower cfg.ltd_sustained_lr; m_neg→the
-            # advantage signal is mostly negative (upstream reward issue).
             m_pos_sum    = float(m_term[m_term > 0].sum())
             m_neg_sum    = float(m_term[m_term < 0].sum())
             base_ltp_sum = float(base_ltp_term.sum())
@@ -812,9 +714,6 @@ class HebbianSocialGraph:
 
         return self.W
 
-    # ──────────────────────────────────────────────
-    # 2.6  Normalised weights (Eq. 6)
-    # ──────────────────────────────────────────────
 
     def get_normalized_weights(self, i: int) -> np.ndarray:
         """Return normalised outgoing bond weights for agent i.
@@ -869,9 +768,6 @@ class HebbianSocialGraph:
             )
         return self.W.copy()
 
-    # ──────────────────────────────────────────────
-    # 2.7  Social replay (Eq. 7)
-    # ──────────────────────────────────────────────
 
     def get_social_replay_indices(
         self,
@@ -935,9 +831,6 @@ class HebbianSocialGraph:
 
         return indices
 
-    # ──────────────────────────────────────────────
-    # 2.8  Reward diffusion (Eq. 8)
-    # ──────────────────────────────────────────────
 
     def diffuse_rewards(
         self,
@@ -988,9 +881,6 @@ class HebbianSocialGraph:
 
         return diffused
 
-    # ──────────────────────────────────────────────
-    # 2.9  Graph metrics (for RQ2 analysis)
-    # ──────────────────────────────────────────────
 
     def get_graph_metrics(self) -> Dict:
         """Compute graph-level metrics for logging and analysis.
@@ -1076,8 +966,6 @@ class HebbianSocialGraph:
             "per_agent_out_strength": per_agent_out_strength,
             "modularity_proxy": modularity_proxy,
             "ltd_heatmap": ltd_heatmap.tolist(),
-            # Full N×N weight matrix — required by post-hoc plots that
-            # need any specific pair (not just current top-3).
             "W": W.tolist(),
         }
 
@@ -1097,9 +985,6 @@ class HebbianSocialGraph:
             self._failure_coactivation / float(self.config.failure_memory_window)
         )
 
-    # ──────────────────────────────────────────────
-    # 2.10  Serialisation and reset
-    # ──────────────────────────────────────────────
 
     def to_dict(self) -> Dict:
         """Serialise graph state to a JSON-compatible dict.
@@ -1112,9 +997,6 @@ class HebbianSocialGraph:
 
         return {
             "enabled": True,
-            # Explicit so a consumer never mistakes a frozen graph's constant W
-            # (and intentionally-static diagnostics) for a plastic run that
-            # happened to converge.
             "frozen": bool(self.config.freeze_weights),
             "mode": self.config.mode,
             "W": self.W.tolist(),
@@ -1155,8 +1037,6 @@ class HebbianSocialGraph:
         self._step_count = int(d.get("_step_count", 0))
         lc = d.get("_last_coactivity")
         self._last_coactivity = np.array(lc, dtype=np.float32) if lc is not None else None
-        # Clear the deques — we cannot restore per-step snapshots from JSON.
-        # The windows simply re-warm over the next `coop_window` steps.
         self._failure_window_buffer.clear()
         self._coact_window.clear()
         self._reward_window.clear()

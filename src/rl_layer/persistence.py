@@ -50,8 +50,6 @@ def save_rl_layer(rl: "RLLayer", path: Optional[str] = None) -> None:
             selected_adapters=[rl._adapter_name],
         )
     except TypeError:
-        # Older PEFT versions don't support selected_adapters; fall back
-        # to saving all adapters (wasteful but correct).
         rl.model.save_pretrained(str(save_dir))
     # No action_head.pt — the actor is now LLM constrained-generation.
     torch.save(rl.value_head.state_dict(), save_dir / "value_head.pt")
@@ -85,10 +83,6 @@ def load_rl_layer(rl: "RLLayer", path: Optional[str] = None) -> None:
     state_path = load_dir / "rl_state.pt"
 
     if ah_path.exists():
-        # Legacy checkpoint from the pre-refactor action_head path. The
-        # actor is now LLM constrained-generation — there's no classifier
-        # head to restore. Log and ignore (do NOT delete the file; the
-        # user may want to roll back).
         logger.warning(
             "RLLayer agent %d: legacy action_head.pt found at %s — "
             "ignoring (the actor is now LLM constrained-generation, "

@@ -56,22 +56,11 @@ def run_ppo_update(
     all_info: Dict = {}
     # GradScaler off: model weights are FP16/BF16 directly so unscaling would fail.
     scaler = torch.amp.GradScaler("cuda", enabled=False)
-    # Sanity invariant: on the FIRST PPO epoch's FIRST batch, mean(ratio)
-    # must be ~1.0 because old_log_probs were produced by the SAME
-    # _score_actions path that's about to recompute new_log_probs (no
-    # gradient step has happened yet). If they diverge, the candidate-set
-    # tokenization or scoring is inconsistent between select_action and
-    # action_level_ppo_step — surface that loudly so we don't silently
-    # train on a broken ratio.
     _first_batch_checked = False
     for epoch_i in range(rl.config.ppo_epochs):
         for batch in rl.buffer.sample_batches(
             rl.config.mini_batch_size, extra_transitions=social_transitions,
         ):
-            # action_level_ppo_step now owns the backward path (per-transition
-            # gradient accumulation, to bound peak memory to ONE forward
-            # graph regardless of mini_batch_size). We zero grads up front,
-            # the function accumulates, then we clip + step here.
             rl.optimizer.zero_grad()
             with torch.amp.autocast(rl._device.type, dtype=rl._dtype):
                 info = action_level_ppo_step(
@@ -103,21 +92,11 @@ def run_ppo_update(
                         "RLLayer agent %d first-epoch mean(ratio)=%.4f (OK)",
                         rl.agent_id, r_mean,
                     )
-            # Gradients are already accumulated by per-transition backward
-            # inside action_level_ppo_step. Just unscale, clip, and step.
             if info.get("n_kept", 0) > 0:
                 scaler.unscale_(rl.optimizer)
                 total_norm = nn.utils.clip_grad_norm_(
                     rl.model.parameters(), rl.config.max_grad_norm,
                 )
-                # The GradScaler is disabled (fp16/bf16 weights are stepped
-                # directly), so there is NO automatic inf/NaN-skip. A single
-                # batch with non-finite gradients — fp16 overflow, a ratio
-                # explosion — would otherwise be applied by optimizer.step()
-                # and corrupt EVERY weight to NaN; from then on all forwards
-                # return NaN logits and training dies at Categorical(logits=…).
-                # Guard it: skip the step and discard the grads when the grad
-                # norm isn't finite, so one bad batch can't poison the run.
                 if torch.isfinite(total_norm):
                     scaler.step(rl.optimizer)
                 else:

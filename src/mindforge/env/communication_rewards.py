@@ -16,24 +16,12 @@ CHAMBER_BOUNDS = {
 
 BASE_MSG_REWARD = 0.5
 BASE_MSG_CAP = 50  # Max rewarded messages per agent per episode (so 25 reward total).
-                   # Was 10 (cap of 5 reward), which was easily dwarfed by the
-                   # action-repetition penalty (-2/step now, see PHASE 1b in
-                   # multi_agent_craftium.py). Raising the cap so legitimate
-                   # comm gives a meaningful positive baseline before any
-                   # milestone fires.
 MIN_MSG_LEN = 5
 RATE_LIMIT_STEPS = 2  # Min steps between valid messages per agent
 
-# Tier-2 chamber milestones: (min_messages_in_chamber, reward, milestone_id).
-# Per-agent per-episode cap = 60 reward total (vs. ≤80 from a strong Ch1
-# task pass). Comm rewards are now a meaningful but non-dominant signal.
-# Threshold raised from 2 → 4 messages so a single sentence can't farm
-# the milestone — agents must use chat sustainably.
 CHAMBER_COMM_THRESHOLDS = {
     "ch1": (4, 10.0, "m_comm_ch1"),
     "ch2": (4, 10.0, "m_comm_ch2"),
-    # Ch3 IS the cooperative-comm puzzle — keep its milestone the highest
-    # so the policy still gets a stronger signal where comm matters most.
     "ch3": (4, 20.0, "m_comm_ch3"),
     "ch4": (4, 10.0, "m_comm_ch4"),
     "ch5": (4, 10.0, "m_comm_ch5"),

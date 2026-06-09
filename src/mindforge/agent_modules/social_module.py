@@ -49,9 +49,6 @@ def _format_bond_table(
     if not bond_weights:
         return "  (no teammates — you are alone)"
     lines = []
-    # Sort by current weight descending so the strongest bond is visually first;
-    # the prompt's "prefer high-bond teammates" rule then maps cleanly to
-    # "the agent at the top of this list".
     for teammate in sorted(bond_weights.keys(), key=lambda k: -bond_weights[k]):
         w = bond_weights[teammate]
         d = bond_deltas.get(teammate, 0.0)
@@ -92,8 +89,6 @@ class SocialModule:
         self.num_agents = num_agents
         self.social_interval = social_interval
         self._call_count = 0
-        # Reuse the same client factory as the rest of mindforge so structured
-        # JSON output is enforced via response_format.
         self._client = (
             social_model_client
             if social_model_client
@@ -121,8 +116,6 @@ class SocialModule:
         a duplicate LLM call.
         """
         self._call_count += 1
-        # Step-interval caching: skip the LLM call on non-deliberation steps
-        # and reuse the last thought. Matches the belief_interval pattern.
         if (
             self.social_interval > 1
             and self._call_count % self.social_interval != 0
@@ -150,9 +143,6 @@ class SocialModule:
         )
 
         if not response:
-            # Parser gave up after retries; emit a no-op thought so the rest
-            # of the pipeline degrades gracefully. The `none` coupling case
-            # ends up here too (caller can short-circuit before calling).
             response = {
                 "bond_change_explanation": {},
                 "reasoning": "(no thought — LLM call failed)",
@@ -163,11 +153,6 @@ class SocialModule:
                 "confidence": 0.0,
             }
 
-        # Defensive normalisation: the LLM sometimes ignores the schema and
-        # returns a string where a dict was asked for (e.g.
-        # bond_change_explanation = "agent_0 is helping me" instead of
-        # {"agent_0": "is helping me"}). Coerce to the expected types so
-        # downstream code doesn't crash on `.items()` / `.join(...)` calls.
         if not isinstance(response.get("bond_change_explanation"), dict):
             response["bond_change_explanation"] = {}
         if not isinstance(response.get("referenced_bonds"), dict):

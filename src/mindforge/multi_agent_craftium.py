@@ -807,10 +807,6 @@ def load_checkpoint(
             cur.failed_tasks = list(cur_state.get("failed_tasks", []))
             print(f"[CKPT] Restored curriculum for agent_{i}: task={cur.current_task!r}")
 
-    # Restore cumulative step count — stashed on metric so run() can pick it up.
-    # (Phase-state restoration was removed when the survival mode was retired;
-    # legacy checkpoints with `current_phase` / `gradual_trigger_step` are
-    # silently ignored.)
     metric._global_step_ckpt = run_state.get("global_step", 0)
 
     print(f"[CKPT] Loaded checkpoint: ep={episode} step={step} run_id={run_id}")
@@ -833,12 +829,6 @@ def _frames_to_mp4(pil_frames: list, mp4_path: str, fps: int = 2) -> None:
 # Main episode loop
 # ===========================
 async def run(args):
-    # --simultaneous + --rl: the RL reward/critic bookkeeping (select_action,
-    # V_global attach, store_reward, MAPPO + centralised-critic updates) all
-    # lives in the SHARED post-selection phases, so it runs in the simultaneous
-    # path unchanged. (Macro actions — which would have needed special
-    # reward-deferral handling here — were removed entirely; the action space
-    # is primitives only.)
     num_agents = args.num_agents
     num_episodes = args.episodes
     max_steps = args.max_steps
@@ -847,15 +837,9 @@ async def run(args):
     communication = not args.no_communication
     sleep_time = args.sleep_time
     save_gif = not args.no_gif
-    # Gif-dir resolution is deferred until after run_paths is built so the
-    # ``auto`` sentinel can land under <run_dir>/gifs/. Concrete value
-    # assigned below.
     gif_dir: str | None = None
     gif_interval = args.gif_interval
 
-    # ── Reproducibility: seed all RNG sources ──
-    # LLM sampling (temperature > 0) is inherently stochastic and not seeded —
-    # run multiple trials with the same seed to get statistical reproducibility.
     seed = args.seed
     if seed is not None:
         import torch
@@ -868,13 +852,6 @@ async def run(args):
         torch.backends.cudnn.benchmark = False
         print(f"Seeded RNG: seed={seed}")
 
-    # ── Run ID + RunPaths construction ──
-    # Two modes:
-    #   * ``--tag <id>`` (Phase B++): runs/legacy/<tag>/seed_<seed>/, matching
-    #     the GRPO ``runs/grpo/<tag>/seed_<N>/`` pattern so build_results.py
-    #     and the legacy schema bridge discover both stacks uniformly.
-    #   * untagged (legacy default): runs/<timestamp>_<experiment_id>_<uuid>/
-    #     — backwards-compatible with every existing run script.
     if args.tag is not None:
         seed_for_path = args.seed if args.seed is not None else 0
         run_paths = RunPaths.create_tagged(
@@ -891,10 +868,6 @@ async def run(args):
         run_paths = RunPaths.create(run_id=run_id, root="runs")
 
     # ── Weights & Biases init ─────────────────────────────────────────────
-    # Init early so config logging happens before training starts. For
-    # chunked SLURM jobs the wandb id is derived from run_id (which is
-    # stable across chunks for tagged runs), so resume="allow" merges
-    # the chunks into the same W&B run.
     import wandb_logger as _wb
     _wb_tags = [t.strip() for t in (args.wandb_tags or "").split(",") if t.strip()]
     _wb.init(
@@ -907,10 +880,6 @@ async def run(args):
         explicit_id=args.wandb_id,
     )
 
-    # ── Phase B++ §3: resolve gif directory ──
-    # ``auto`` → <run_dir>/gifs/ (run-scoped, matches GRPO layout).
-    # Explicit path → use as-is (preserves the /scratch override pattern
-    # for HPC quota management).
     if args.gif_dir == "auto":
         gif_dir = str(run_paths.root / "gifs")
     else:
@@ -918,30 +887,16 @@ async def run(args):
     if save_gif:
         os.makedirs(gif_dir, exist_ok=True)
 
-    # Intermediate (per-gif_interval) checkpoint gifs land here — kept
-    # OFF the slow PRB share by default. The wrapper (_common.sh)
-    # exports WIREDTOGETHER_INTERMEDIATE_GIF_DIR pointing at the local
-    # /tmp work dir; absent that env var we fall back to a sibling of
-    # gif_dir. Either way, only the FINAL per-episode gif lives under
-    # <run_dir>/gifs/; everything in intermediate_gif_dir is salvaged
-    # to a parallel run_artifacts/ tree after the job ends.
     intermediate_gif_dir = (
         os.environ.get("WIREDTOGETHER_INTERMEDIATE_GIF_DIR")
         or os.path.join(os.getcwd(), "intermediate_gifs")
     )
-    # Guard: checkpoint media must NEVER land inside the run's gif_dir —
-    # otherwise per-gif_interval gifs+mp4s bloat runs/ and slow the pull.
-    # If a launch misconfigures the env var to point at (or into) gif_dir,
-    # redirect to a cwd-local sibling and warn. Keeps the "only the FINAL
-    # per-episode gif under <run_dir>/gifs/" invariant true regardless of
-    # how the job was launched.
     _abs_gif_dir = os.path.abspath(gif_dir)
     _abs_intermediate = os.path.abspath(intermediate_gif_dir)
     if (_abs_intermediate == _abs_gif_dir
             or _abs_intermediate.startswith(_abs_gif_dir + os.sep)):
         _redirected = os.path.join(os.getcwd(), "intermediate_gifs")
         if os.path.abspath(_redirected).startswith(_abs_gif_dir + os.sep):
-            # cwd itself is inside the run — last-resort sibling of the run.
             _redirected = str(run_paths.root.parent / "intermediate_gifs")
         print(f"[GIF] WARNING: intermediate_gif_dir resolved inside the run "
               f"({intermediate_gif_dir}); redirecting checkpoint media to "
@@ -960,25 +915,18 @@ async def run(args):
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    # Per-module LLM logs: one file per module under runs/<run_id>/llm_logs/.
-    # Each call to llm_call() routes to the file matching its log_prefix
-    # (e.g. "Belief System ..." → belief_system.log). The prompt body is no
-    # longer dumped; only call metadata and the model response are logged.
     from agent_modules.llm_call import setup_llm_logging as _setup_llm_logging
     _setup_llm_logging(run_paths.root / "llm_logs")
 
     log_interval = args.log_interval
 
-    # Load prompts
     prompts = load_prompts()
     environment_prompt = prompts["environment"]
 
-    # Build system prompt with environment details baked in
     from agent_modules.util import safe_format
     system_prompt_template = prompts["system_template"]
     system_prompt = safe_format(system_prompt_template, environment_prompt=environment_prompt)
 
-    # Roles & agents
     role_configs = build_role_configs(
         num_agents,
         prompts["roles"],
@@ -993,31 +941,12 @@ async def run(args):
         run_id=run_id,
         run_paths=run_paths,
     )
-    # Attach team composition metadata for summary/checkpoint
     metric.team_mode = args.team_mode
     metric.homogeneous_role = args.homogeneous_role
     metric.roles = [rc["name"] for rc in role_configs]
 
-    # Pass the Ch1 timeout to the Lua mod via an env var. The Lua side
-    # config.lua reads CH1_TIMEOUT_TICKS at mod load and falls back to
-    # its hard-coded default if the var is unset.
-    #
-    # AUTHORITY: Python's per-episode step check (see "[CH1_TIMEOUT]" in
-    # the main loop) is the canonical trigger. The Lua-side step_counter
-    # ticks in WALL-CLOCK seconds regardless of whether Python is calling
-    # environment.step() — so with slow LLM inference the env effectively
-    # pauses while Python thinks, but Lua keeps ticking and crosses the
-    # threshold in real time long before Python has made the requested
-    # number of env steps. The old _LUA_TICKS_PER_ENV_STEP = num_agents*3
-    # conversion baked in the wrong assumption that the env always runs
-    # at native rate; it doesn't.
-    #
-    # Fix: inflate the Lua-side budget with a generous safety factor so
-    # the Lua fallback only fires when Python is genuinely hung (hours
-    # without progress). Python's force-flag remains the only practical
-    # trigger.
     _LUA_TICKS_PER_ENV_STEP = num_agents * 3
-    _LUA_SAFETY_FACTOR = 50   # 50× more wall-clock budget than naive conversion
+    _LUA_SAFETY_FACTOR = 50   
     _ch1_lua_ticks = (args.ch1_timeout_steps
                       * _LUA_TICKS_PER_ENV_STEP * _LUA_SAFETY_FACTOR)
     os.environ["CH1_TIMEOUT_TICKS"] = str(_ch1_lua_ticks)
@@ -1043,12 +972,6 @@ async def run(args):
     )
 
     # ── RL layer config ──
-    # Give each run its own lora_save_dir so concurrent or sequential jobs
-    # never share or accidentally load each other's adapters.
-    # Layout: runs/<run_id>/rl_live/<role>/agent_*/
-    # On resume: peek at the checkpoint run_state.json NOW (before build_agents)
-    # so the RLLayer loads the correct existing adapter instead of init-ing a
-    # fresh one that would immediately be overwritten by load_checkpoint().
     _rl_run_id = run_id
     _rl_run_paths = run_paths
     if args.resume:
@@ -1057,7 +980,6 @@ async def run(args):
             with open(_ckpt_state_path) as _f:
                 _rl_run_id = _json.load(_f).get("run_id", run_id)
             print(f"[RL] Resume: using adapter dir from original run_id={_rl_run_id!r}")
-            # Resume-time: use the original run's rl_live dir, not this run's.
             _rl_run_paths = RunPaths(
                 root=run_paths.root.parent / _rl_run_id,
                 run_id=_rl_run_id,
@@ -1081,15 +1003,11 @@ async def run(args):
               f"critic_mode={rl_config.critic_mode}")
 
     # ── Centralised MAPPO critic (one shared V across all agents) ─────────
-    # Built before agents so each RLLayer can hold a reference to it. In
-    # 'independent' mode (or when RL is off) we skip construction.
     centralized_critic = None
     if rl_config.enabled and rl_config.mode == "action" \
             and rl_config.critic_mode == "centralized":
         from rl_layer.centralized_critic import CentralizedCritic
         from agent_modules.craftium_metric import MILESTONE_TRACK
-        # Use the canonical milestone ID list as the bitmap order so the
-        # critic input layout is stable across runs.
         milestone_ids = list(MILESTONE_TRACK.keys())
         centralized_critic = CentralizedCritic(
             num_agents=num_agents,
@@ -1240,16 +1158,11 @@ async def run(args):
         resume_step = restored["step"]
         run_id = restored["run_id"]
         metric = restored["metric"]
-        # Patch rl_config so adapters are loaded from the original run's
-        # rl_live directory under runs/<orig_run_id>/. For Phase B++
-        # tagged runs the original run_id has the form ``<tag>/seed_<N>``
-        # and lives under ``runs/legacy/``; the helper auto-detects.
         rl_config.lora_save_dir = str(
             _resume_run_paths(run_id).root / "rl_live"
         )
         print(f"[CKPT] Resuming from episode {resume_episode} step {resume_step}")
 
-    # Cumulative env-step counter (across episodes). Persists through resume.
     global_step = 0
     if args.resume:
         global_step = getattr(metric, "_global_step_ckpt", 0)
@@ -1264,34 +1177,11 @@ async def run(args):
         environment.reset_anvil_coop_offset()
         environment.reset_death_offset()
 
-        # Reset each agent's per-episode WORKING memory (current task, last
-        # chamber, beliefs, cached critic + action/reward window) so the new
-        # episode starts clean in Ch1 instead of inheriting the previous
-        # episode's end-of-run Ch5 task/beliefs (which cost ~80 disoriented
-        # steps and a milestone deficit). Long-term memory (skills, episodes,
-        # Hebbian bonds) is preserved. Skipped on the resume-continuation
-        # episode so checkpoint-restored task/state is kept.
         if episode > resume_episode:
             for _ag in agents:
                 await _ag.on_reset(CancellationToken())
 
-        # ── Warm-up: wait for media to load ──
-        # VoxeLibre media download can take 5-15 minutes on HPC nodes
-        # (first run only; subsequent runs use cached media).
-        # Use warmup_noop() to keep TCP channels alive WITHOUT incrementing
-        # the environment's step/timestep counters.
-        # Detect completion by checking if ALL clients' screenshots have
-        # moved past the loading bar (high color std-dev = game world).
         import time as _time
-        # On resume the media cache is already populated — skip the warmup loop
-        # unless explicitly requested.
-        # T2.3: episode > 0 ALSO skips the minimum warmup. From ep2 onwards
-        # MarlCraftiumEnv.reset() takes the soft-reset branch (no MT process
-        # restart; the existing clients just respawn via the Lua handler),
-        # so the 300 s VoxeLibre media-load wait that's needed on ep1 is
-        # pure dead air on ep2+. The std-dev sanity check below still fires
-        # to confirm clients are responsive — it just exits in seconds when
-        # the world is already loaded instead of sleeping for warmup_time.
         skip_warmup = (
             (args.resume is not None and args.resume_skip_warmup)
             or episode > 0
@@ -1322,9 +1212,6 @@ async def run(args):
                 print(f"    [{elapsed:.0f}s] std-dev: {std_str}  (>25 = loaded)")
                 last_log_time = elapsed
 
-            # After minimum warm-up time, check if loading screens are gone.
-            # Use threshold 25 (not 30) and require 3 consecutive checks to
-            # avoid false-positives from VoxeLibre's second loading phase.
             if elapsed >= warmup_secs and stds:
                 if all(s > 25.0 for s in stds):
                     consecutive_loaded += 1
@@ -1342,18 +1229,9 @@ async def run(args):
             std_str = ", ".join(f"agent_{i}={s:.1f}" for i, s in enumerate(stds)) if stds else "N/A"
             print(f"  * Warm-up timeout ({elapsed:.0f}s). std-dev: {std_str}. Starting anyway.")
 
-        # Signal Lua that warmup is done. The Ch1-timeout fallback in
-        # doors.lua otherwise counts ticks from server start, which during a
-        # 300 s warmup blows past CH1_TIMEOUT_TICKS=400 (~20 s) and teleports
-        # agents to the Ch2 fallback spawn BEFORE Python step 0. See
-        # CraftiumEnvironmentInterface.signal_warmup_complete docstring for
-        # the full failure-mode write-up.
         try:
             environment.signal_warmup_complete()
         except AttributeError:
-            # Older env class without the signal method — Lua falls back to
-            # the legacy all_connected_tick path. Logged so we notice on HPC
-            # if the patched class isn't actually loaded.
             print("  * WARNING: env has no signal_warmup_complete; "
                   "Ch1 timeout may fire prematurely.")
 
@@ -1363,17 +1241,10 @@ async def run(args):
         comm_tracker = CommunicationTracker(agent_ids=list(range(num_agents)))
         coop_metric = CooperationMetric(agent_ids=list(range(num_agents)))
         ep_logger = EpisodeLogger(run_dir=metric.target_folder, episode=episode + 1)
-        # Phase B+ reward-propagation cache: per-teammate contributions from
-        # the previous step. Surfaced in this step's prompt so the LLM sees
-        # ``+2.5 from agent_1 (m17_switch_pressed)`` on the step right after
-        # the milestone fires. First step has empty cache → empty prompt line.
         _last_propagation_contribs: dict[int, dict[int, float]] = {
             i: {} for i in range(num_agents)
         }
         _last_milestone_sources: dict[int, str] = {}
-        # Phase B+ §2: interpretability sidecar. Default ON whenever
-        # Hebbian is active (cheap, ~250 B per agent per step); also
-        # honour the explicit --interpretability flag for non-Hebbian runs.
         _interpretability_enabled = bool(
             args.interpretability or args.hebbian
         )
@@ -1381,46 +1252,15 @@ async def run(args):
             Path(metric.target_folder) / "interpretability.jsonl"
             if _interpretability_enabled else None
         )
-        # Track chambers each agent has been in during this episode. Surfaced
-        # in the prompt as a hard ground-truth list so the LLM can't claim
-        # to be in a chamber it has never visited (frequent hallucination).
         _visited_chambers = [set() for _ in range(num_agents)]
-        # Previous-step memory used to encode the PRE-step joint state for the
-        # centralised critic. The joint state V_global is now evaluated at the
-        # TOP of each step (i.e. at s_t, before any agent acts) so that the
-        # value attached to each agent's pending transition is V(s_t), not
-        # V(s_{t+1}). The encoder takes "last action" / "last comm" semantic
-        # features — those refer to step t-1 from the perspective of s_t.
         _prev_step_actions = {i: "NoOp" for i in range(num_agents)}
         _prev_step_comms   = {i: "" for i in range(num_agents)}
 
-        # ── T1.5 Hebbian bond-string cache ──
-        # Hebbian.update() runs at most a handful of times per episode (on
-        # specific events: comm milestones, dig coop, etc.), so the O(N²)
-        # bond-string + weight-dict build that fired every step before this
-        # cache was almost always recomputing identical output. Key on the
-        # graph's `_step_count` — it increments inside update() and stays
-        # frozen otherwise. Cache miss = rebuild + bump version; cache hit
-        # = reuse the dicts wholesale.
         _bond_cache_version = -1
         _bond_strings_cached: dict = {}
         _bond_weights_cached: dict = {}
         _bond_deltas_cached: dict = {}
 
-        # ── Frame capture: streaming MP4 + bounded rolling buffer ──
-        # Two outputs per agent per episode:
-        #   (a) <run_dir>/gifs/<run>_<agent>_ep<N>.mp4 — FULL-episode MP4,
-        #       written frame-by-frame to disk via an imageio streaming
-        #       writer. No in-RAM accumulation; bounded memory regardless
-        #       of episode length. Preserves color.
-        #   (b) intermediate per-gif_interval GIF + MP4 checkpoints in
-        #       intermediate_gif_dir, rendered from a ROLLING deque that
-        #       only holds the most recent gif_interval frames.
-        #
-        # Replaced the previous "frames_list = []" accumulator that grew
-        # unbounded across the episode (~2.5 GB by step 1500 × 3 agents),
-        # causing the SLURM cgroup OOM-kill that crashed exp3_mappo
-        # mid-ep3 (job 12616286).
         import collections as _collections
         _mp4_writers: list = [None] * num_agents
         if save_gif:
@@ -1914,19 +1754,12 @@ async def run(args):
                         _step_envstep_reward[_i] += _r_env
                     step_contents[agent_id] = content
 
-                # ── Phase B+ §2: interpretability sidecar emission ──
-                # Disabled — rlvr.reward_propagation was removed (it provided
-                # build_interpretability_record). If we want to bring back
-                # the per-step interpretability JSONL, that record builder
-                # would need to be reimplemented locally.
-
                 # Attach the PRE-step V_global(s_t) to the transition that
-                # select_action just opened. This is the fix for the
-                # off-by-one credit-assignment bug — old_value_global is now
-                # V(s_t), not V(s_{t+1}). Safe no-op if no transition is
-                # pending (e.g. agent terminated before its action). For
-                # macro-continuation ticks this branch does not run because
-                # the macro-skip path early-continues before agent_do_action.
+                # select_action just opened, so old_value_global is V(s_t) and
+                # not V(s_{t+1}) (correct credit assignment). Safe no-op if no
+                # transition is pending (e.g. agent terminated before its
+                # action). For macro-continuation ticks this branch does not run
+                # because the macro-skip path early-continues before agent_do_action.
                 if (
                     centralized_critic is not None
                     and joint_state_t is not None
@@ -2901,12 +2734,6 @@ if __name__ == "__main__":
     print = functools.partial(print, flush=True)
     args = parse_args()
     if args.social_module != "none" and not args.hebbian:
-        # The social module reads from bond_weights / bond_deltas, which
-        # are only populated when the Hebbian graph is enabled. Without
-        # --hebbian, deliberation never runs and the directive falls back
-        # to "Social bonds: N/A" every step — a silent no-op. Fail loudly
-        # rather than letting an experiment run for 24h producing useless
-        # output.
         raise SystemExit(
             "--social-module requires --hebbian to be set (the social "
             "module needs bond weights to reason over)"

@@ -11,11 +11,6 @@ _DISCRETE_ACTIONS = [
     "mouse x+", "mouse x-", "mouse y-", "mouse y+",  # y- = look down, y+ = look up (Minetest Y-axis is inverted)
     # Added actions (indices 17-21):
     "inventory",                          # RESERVED NOP — never selected (no LLM
-                                          # ACTION_MAP entry and not in RLConfig.actions);
-                                          # kept only to preserve index alignment so
-                                          # drop/slot_6-8 stay at indices 18-21. Mapped
-                                          # to NOP in _discrete_to_dict (would otherwise
-                                          # open an uncloseable inventory formspec).
     "drop",                               # drop held item
     "slot_6", "slot_7", "slot_8",         # extra hotbar slots
 ]
@@ -51,12 +46,5 @@ def _discrete_to_dict(action: int) -> dict:
         mouse[1] = -_MOUSE_MOV
         return {"mouse": mouse}
     if name == "inventory":
-        # Pressing the inventory key opens the survival inventory/crafting
-        # formspec — a gray panel that occludes the headless agent's view and
-        # that it can never close, so it persists across chambers and episodes.
-        # Inventory contents are already surfaced in the text prompt, so this
-        # action is useless; treat it as a NOP (mirrors the LLM side, where
-        # ACTION_MAP maps "Inventory" -> NoOp). Kept at its index so the
-        # Discrete(23) space and existing RL checkpoints don't shift.
         return {}
     return {name: 1, "mouse": mouse}

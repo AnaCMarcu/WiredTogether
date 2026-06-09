@@ -67,10 +67,6 @@ class RLLayer:
     """
 
     # ── Process-wide shared base model + tokenizer (class state) ──
-    # First constructor populates these; subsequent constructors reuse them.
-    # Keyed loosely by model_path so a config switch within the same
-    # process triggers a clean reload (defensive — we don't actually do
-    # this in production but it prevents stale state in tests).
     _shared_model = None
     _shared_tokenizer = None
     _shared_model_path: Optional[str] = None
@@ -108,15 +104,8 @@ class RLLayer:
         adapter_name = role if config.lora_per_role else "shared"
         self._adapter_name = adapter_name
         self._ensure_adapter(adapter_name, config)
-        # Activate this adapter on the shared model so any immediate forward
-        # uses the right LoRA. Every public forward in this class re-sets
-        # before computing (cheap; idempotent if already active), so cross-
-        # agent calls in the main loop don't corrupt each other.
         self.model.set_adapter(adapter_name)
 
-        # Gradient checkpointing: recompute activations during backward instead of
-        # storing them all live.  Reduces peak VRAM by ~40-50% at ~33% compute cost.
-        # Apply only once per shared model — idempotent enable is safe.
         if config.gradient_checkpointing and not getattr(
             RLLayer._shared_model, "_grad_ckpt_enabled", False
         ):
@@ -125,23 +114,10 @@ class RLLayer:
             logger.info("RLLayer: gradient checkpointing enabled on shared base")
 
         # ── Value head — float32 ──
-        # pooled hidden states are upcast to float32 (in _encode_prompt and
-        # ippo.action_level_ppo_step) to prevent NaN from fp16 overflow, so
-        # the head must also be float32. (ActionHead was removed: the policy
-        # is now pi(a|s) = softmax over LLM sequence-log-probs of valid
-        # action strings, computed in _score_actions — see GLAM-style
-        # constrained generation. No classifier head needed.)
         hidden_size = self.model.config.hidden_size
         self.value_head = ValueHead(hidden_size, config.value_hidden).to(device=self._device, dtype=torch.float32)
 
         # ── Optimizer: ONLY this agent's LoRA adapter + value head ──
-        # The shared model holds adapters for every agent; we must select
-        # only this agent's params so agent_i.optimizer.step() doesn't
-        # walk onto agent_j's gradients (zero anyway, but Adam moments
-        # would still get a "saw this param" entry).
-        # PEFT names LoRA params like
-        #   base_model.model.[...].lora_A.<adapter_name>.weight
-        # so a substring match on ".<adapter_name>." is exact.
         adapter_tag = "." + adapter_name + "."
         adapter_params = [
             p for n, p in self.model.named_parameters()
@@ -162,15 +138,7 @@ class RLLayer:
         self._idx_to_action = {i: a for i, a in enumerate(config.actions)}
 
         # ── Candidate set: actions minus Slot* (the only masking) ──
-        # Membership in this set IS the masking — no separate _action_mask
-        # tensor anymore. Stored as an ordered tuple so the candidate-index
-        # used by Categorical is stable across select_action and the PPO
-        # update path.
         self._candidate_actions: tuple = self._build_candidate_actions()
-        # Reverse map: index into config.actions → index within candidate set
-        # (or -1 if masked out). Used by ippo to look up the action_idx that
-        # was stored in the buffer (a config.actions index) inside the new
-        # softmax distribution that's defined over the candidate set.
         self._full_idx_to_cand_idx = {
             self._action_to_idx[a]: c
             for c, a in enumerate(self._candidate_actions)
@@ -182,26 +150,6 @@ class RLLayer:
         )
 
         # ── Pre-tokenize candidate action strings (one tensor of ids per
-        #    candidate). Done once at init so the SAME token sequence is
-        #    used for scoring at sampling time AND at update time — this
-        #    is the consistency that makes ratio = exp(new_lp − old_lp)
-        #    equal 1.0 on the first PPO epoch (sanity check in ppo_update).
-        #
-        # We tokenize each candidate as " <name>" (leading space) for two
-        # reasons:
-        #  1. BPE tokenizers (Qwen, LLaMA, GPT2) emit DIFFERENT tokens for
-        #     "Dig" at sentence start vs " Dig" mid-sentence. The natural
-        #     continuation of a prompt is the mid-sentence variant, so
-        #     using the leading-space form makes log-probs comparable
-        #     across single-token and multi-token candidates.
-        #  2. Without the leading space, short common words like "Sneak"
-        #     / "Jump" / "Drop" / "TurnRight" get artificially high
-        #     log-probs (they match the LLM's natural sentence-start
-        #     prior), while multi-token / less common words ("MoveForward",
-        #     "MoveBackward") get penalised — observed in the first
-        #     test run as the agent only picking short words.
-        # add_special_tokens=False keeps us from adding BOS/EOS tokens
-        # that would also drift the encoding.
         self._candidate_token_ids: tuple = tuple(
             torch.tensor(
                 self.tokenizer(" " + a, add_special_tokens=False)["input_ids"],
@@ -220,9 +168,6 @@ class RLLayer:
         self._current_task: str = "Explore"
         self._last_token_opt_step: int = 0  # cooldown tracking
 
-    # ──────────────────────────────────────────────
-    # Public API (called by CustomAgent)
-    # ──────────────────────────────────────────────
 
     @property
     def enabled(self) -> bool:
@@ -261,12 +206,6 @@ class RLLayer:
             return None  # token-opt only — let LLM choose actions
 
         if thoughts_prefix:
-            # Append the LLM's pre-action reasoning to the prompt so the
-            # constrained scorer conditions on it. The "Action:" suffix is
-            # a soft prefix that biases the model toward emitting an
-            # action token next — this is the same shape as p2 prompts
-            # use, just without the JSON wrapper (the actual action
-            # selection is the argmax over the candidate set).
             scoring_prompt = (
                 f"{prompt_text}\n\nThoughts: {thoughts_prefix}\nAction:"
             )
@@ -278,34 +217,20 @@ class RLLayer:
             cand_logp, pooled = self._score_actions(
                 scoring_prompt, self._candidate_actions, with_grad=False,
             )
-            # Skip the per-agent value head when the centralised critic is in
-            # charge — the main loop will populate old_value_global + joint_state
-            # via set_pending_value_global() after all agents have acted.
             if self._use_centralized:
                 value_scalar = 0.0
             else:
                 value = self.value_head(pooled).squeeze(-1)  # (1,)
                 value_scalar = value.item()
 
-            # Categorical over the candidate set. The softmax in
-            # Categorical renormalises the summed-log-prob scores into a
-            # proper distribution.
             dist = torch.distributions.Categorical(logits=cand_logp)
             cand_idx = dist.sample()              # scalar tensor in [0, C)
             log_prob = dist.log_prob(cand_idx)    # scalar tensor
 
         cand_idx_int = int(cand_idx.item())
         action_name = self._candidate_actions[cand_idx_int]
-        # The buffer stores the index into config.actions (the canonical
-        # space), NOT the candidate-set index. ippo's action_level_ppo_step
-        # uses _full_idx_to_cand_idx to round-trip back to the candidate
-        # softmax. This keeps existing Transition fields untouched.
         full_action_idx = self._action_to_idx[action_name]
 
-        # Store the AUGMENTED prompt (with thoughts) so the PPO update
-        # re-scores against the same context. If we stored the bare
-        # prompt_text here, the update's _score_actions would see no
-        # thoughts and the ratio would drift away from 1.0 on epoch 1.
         self.buffer.store_action(
             prompt_text=scoring_prompt,
             action_idx=full_action_idx,
@@ -316,12 +241,6 @@ class RLLayer:
 
         logger.info("RLLayer step=%d action=%s prompt:\n%s", self.step_count, action_name, scoring_prompt)
 
-        # Communication + thoughts are produced by an EARLIER LLM call
-        # (action_selection.generate_thoughts_and_comm) before this method
-        # runs; the caller threads `thoughts_prefix` into our scoring
-        # prompt so the policy is conditioned on them. The empty strings
-        # here are structural placeholders the caller overwrites with the
-        # real values before the main loop reads them.
         return {
             "action": action_name,
             "thoughts": thoughts_prefix or "",
@@ -489,11 +408,6 @@ class RLLayer:
             trust_remote_code=True,
         ).to(device)
 
-        # Wrap in a PeftModel with a SENTINEL adapter named "__bootstrap__".
-        # Real per-agent adapters are added later via _ensure_adapter; the
-        # bootstrap adapter exists so get_peft_model has something to
-        # initialise around (PeftModel requires at least one adapter at
-        # construction time). It's never activated for inference/update.
         boot_lora = LoraConfig(
             r=config.lora_rank,
             lora_alpha=config.lora_alpha,
@@ -603,17 +517,11 @@ class RLLayer:
             True at update time (gradient flows through LoRA → log-prob
             extraction → ratio). False at sampling time.
         """
-        # Resolve pre-tokenized candidate IDs from the cache. Re-tokenizing
-        # at every call would risk drift between sampling and update.
         cand_ids_list = []
         for s in candidate_strings:
             cand_idx_in_full = self._candidate_actions.index(s)
             cand_ids_list.append(self._candidate_token_ids[cand_idx_in_full])
 
-        # Activate THIS agent's LoRA adapter. The shared base model carries
-        # an adapter per agent; without this set_adapter call a forward
-        # could end up using whichever adapter the LAST agent in the main
-        # loop activated, producing inconsistent logits across calls.
         self.model.set_adapter(self._adapter_name)
 
         # Tokenize the prompt ONCE.
@@ -625,10 +533,6 @@ class RLLayer:
         ).to(self._device)
         prompt_ids = enc.input_ids[0]                          # (L_pad,) — may include left-pad
         prompt_attn = enc.attention_mask[0]                    # (L_pad,)
-        # Strip any left-padding so concatenation with candidates lands at
-        # contiguous real positions [0, L). With padding_side="left", real
-        # tokens are right-aligned in the encoded tensor; we keep only
-        # those.
         real_mask = prompt_attn.bool()
         prompt_ids_real = prompt_ids[real_mask]                # (L,)
         prompt_len = int(prompt_ids_real.numel())
@@ -664,24 +568,11 @@ class RLLayer:
             )
 
             # ── Slice + gather + logsumexp (avoid materializing softmax) ──
-            # We only need log-probs at the positions that predict
-            # candidate tokens. Slicing the window cuts the V-dimensional
-            # tensor down to (C, K_max, V); using gather+logsumexp instead
-            # of log_softmax+index means we never RETAIN a full-vocab
-            # softmax output in the autograd graph for backward. Memory
-            # footprint for the log-prob computation goes from
-            # (C, max_len, V) ≈ 6.87 GB to (C, K_max) ≈ <1 KB live across
-            # backward; the V-sized intermediates inside logsumexp are
-            # temporary and freed before backward.
-            #
-            # log p(tok | context) = logit[tok] − logsumexp(logits, dim=-1)
             K_max = max((int(ids.numel()) for ids in cand_ids_list), default=1)
             window_start = prompt_len - 1
             window_end = window_start + K_max
             window_logits = out.logits[:, window_start:window_end, :]  # (C, K_max, V) — model dtype
 
-            # Build the (C, K_max) target tensor and a mask for padded
-            # candidate positions (when K_i < K_max).
             target_ids = torch.zeros((C, K_max), dtype=torch.long, device=self._device)
             mask = torch.zeros((C, K_max), dtype=torch.bool, device=self._device)
             for ci, ids in enumerate(cand_ids_list):
@@ -696,21 +587,12 @@ class RLLayer:
             ).squeeze(-1)
             # logsumexp over the vocab dim (fp32 for stability) → (C, K_max)
             lse = torch.logsumexp(window_logits.float(), dim=-1)
-            # Per-token log-prob; masked-fill pad positions to 0 so they
-            # contribute nothing to the sum below.
             log_p = (gathered.float() - lse).masked_fill(~mask, 0.0)
             cand_log_probs = log_p.sum(dim=1).to(torch.float32)  # (C,)
 
-            # Pool last-prompt-position hidden state for the value head.
-            # All rows share the same prompt at positions [0, L), so row 0
-            # is canonical.
             last_hidden = out.hidden_states[-1]                # (C, max_len, H)
             pooled = last_hidden[0:1, prompt_len - 1, :].float()  # (1, H)
 
-            # OPTIONAL length-normalisation hook (default OFF — sequence
-            # length is constant within candidate set for short action
-            # strings, so this rarely matters; flip via config when the
-            # action vocab gets longer/shorter mixes).
             if getattr(self.config, "length_normalize_action_logp", False):
                 lengths = torch.tensor(
                     [max(1, int(ids.numel())) for ids in cand_ids_list],

@@ -9,13 +9,6 @@ from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
 
 
 # ── Per-module LLM logging ───────────────────────────────────────────────
-# Each call site passes a ``log_prefix`` like "Belief System update_task: " or
-# "Agent agent_0 on_messages: ". We route those into module-specific log files
-# (``<run_dir>/llm_logs/<module>.log``) so the operator can inspect e.g. just
-# what the critic said without grepping the firehose. The prompt body is no
-# longer logged — only call-site metadata (lengths, kwargs) and the model
-# response. If ``setup_llm_logging`` is never called the loggers fall back to
-# the root handler (current behaviour minus the prompt dump).
 
 _LLM_LOG_DIR: str | None = None
 _MODULE_LOGGERS: dict[str, logging.Logger] = {}

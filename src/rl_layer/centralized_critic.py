@@ -28,13 +28,9 @@ from rl_layer.config import RLConfig
 logger = logging.getLogger(__name__)
 
 
-# Five-chambers chamber → one-hot index. Matches CHAMBER_BOUNDS in
-# cooperation_metric.py / communication_rewards.py.
 _CHAMBERS = ("ch1", "ch2", "ch3", "ch4", "ch5")
 _CHAMBER_INDEX = {c: i for i, c in enumerate(_CHAMBERS)}
 
-# Inventory items we one-hot encode (substring match against the env's
-# pickedup_object string). Captures the few items that drive milestones.
 _INVENTORY_ITEMS = (
     "diamond_sword",
     "diamond_chestplate",
@@ -188,8 +184,6 @@ class CentralizedCritic:
             "cuda" if torch.cuda.is_available() else "cpu"
         )
 
-        # Sentence-transformer for last-action+comm embeddings.
-        # Same ST_MODEL_NAME used by ChromaDB elsewhere — load shares cache.
         from sentence_transformers import SentenceTransformer
         from agent_modules.util import ST_MODEL_NAME
         self._sentence_model = SentenceTransformer(
@@ -299,13 +293,6 @@ class CentralizedCritic:
         )
 
         # ── Diagnostic snapshots taken BEFORE the update ─────────────
-        # Explained variance of the OLD value predictions vs the GAE return
-        # targets. The single most informative critic-health metric:
-        #   ev > 0.4  : critic has real signal
-        #   0.1 - 0.4 : weak value learning
-        #   < 0.1     : critic effectively predicts the mean — advantages
-        #               will be near-noise and policy gradient near-zero.
-        # See "MAPPO critic predicting mean" audit, section 1.
         with torch.no_grad():
             ret_var = torch.var(ret).item()
             if ret_var > 1e-8:
@@ -316,10 +303,6 @@ class CentralizedCritic:
         self.net.train()
         info = {}
         n = joint.size(0)
-        # Accumulate loss across mini-batches and epochs so the reported
-        # value is the average of the round, not whatever the last MB
-        # happened to be. Without this, info["critic_loss"] swung between
-        # 0 and 6000+ purely based on which MB landed last.
         loss_sum = 0.0
         n_minibatches = 0
         for _ in range(self.config.ppo_epochs):
@@ -329,9 +312,6 @@ class CentralizedCritic:
                 if idx.numel() == 0:
                     continue
                 v_pred = self.net(joint[idx])
-                # Use the critic-specific clip (calibrated for raw returns),
-                # not the per-agent value_clip_eps (calibrated for normalised
-                # returns). See RLConfig.critic_value_clip_eps for rationale.
                 v_clipped = old_v[idx] + torch.clamp(
                     v_pred - old_v[idx],
                     -self.config.critic_value_clip_eps,
@@ -339,10 +319,6 @@ class CentralizedCritic:
                 )
                 l1 = F.mse_loss(v_pred, ret[idx], reduction="none")
                 l2 = F.mse_loss(v_clipped, ret[idx], reduction="none")
-                # PPO2 value clipping uses MAX (penalises v_pred for moving
-                # past clip ε from old_v). Previously this was `min`, which
-                # made the clip a no-op — the optimizer always took the
-                # smaller of (unclipped, clipped) loss.
                 loss = torch.max(l1, l2).mean()
                 self.optimizer.zero_grad()
                 loss.backward()

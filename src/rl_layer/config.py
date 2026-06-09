@@ -25,25 +25,12 @@ class RLConfig:
     value_hidden: int = 256
 
     # ── Centralized critic (MAPPO) ──
-    # 'centralized' = single shared V(joint_state) across all agents (default).
-    # 'independent' = legacy IPPO with per-agent value heads.
     critic_mode: str = "centralized"
     critic_hidden: int = 256
     critic_lr: float = 3e-4
-    # Centralised-critic value clip. The per-agent value_clip_eps below is
-    # calibrated for normalised returns (~[-3,+3]). The centralised critic
-    # trains on RAW team returns whose scale is set by the milestone reward
-    # ladder (cumulative return reaches ~100 in successful episodes, ~10 in
-    # failed ones), so a tighter clip here would freeze V_global early and
-    # slow critic convergence to the point of being useless. 10.0 lets V
-    # shift up to ~10 reward units per minibatch update, enough to track
-    # milestone-fire spikes without going unstable.
     critic_value_clip_eps: float = 10.0
 
     # ── Memory management ──
-    # RL prompts can be very long (beliefs + skills + episodes).  Truncating at
-    # 512 tokens is sufficient for policy learning on discrete actions and keeps
-    # PPO activation memory to a manageable size during the backward pass.
     rl_prompt_max_tokens: int = 256  # was 512 — halving sequence length reduces attention memory ~4×; 256 tokens is enough for task+status+beliefs
     gradient_checkpointing: bool = True  # re-enabled: serving model + RL model share the 80GB A100, leaving ~1.5GB free; checkpointing trades 35% compute for ~60% activation memory reduction
 
@@ -61,29 +48,15 @@ class RLConfig:
 
     # ── Reward shaping ──
     normalize_rewards: bool = True   # running mean/std normalisation before buffer storage
-    # The environment (deaths.lua) already applies the -50 terminal death
-    # penalty into the env reward stream on a real Ch5 death — the SAME
-    # transition that has done=True here. Adding it again would double-count
-    # (-100) on RL runs, so this is 0: the env owns the death penalty, giving a
-    # single -50 consistent across LLM and RL runs. Set non-zero only if you
-    # want an *additional* RL-side termination penalty on top of the env's.
     death_penalty: float = 0.0       # added to reward when agent terminates (done=True)
 
     # ── Entropy annealing ──
-    # Linearly decay entropy coefficient from entropy_start to entropy_end over
-    # entropy_anneal_steps PPO updates.  Set entropy_anneal_steps=0 to disable.
     entropy_start: float = 0.05
     entropy_end: float = 0.001
     entropy_anneal_steps: int = 500   # PPO update steps (not env steps)
 
     # ── Rollout / update schedule ──
     buffer_size: int = 2048
-    # Update cadence. Lower = more responsive to recent experience (good for
-    # sparse-reward early training where any milestone fire should propagate
-    # gradient fast); higher = more diverse experience per update (better
-    # variance reduction in steady-state). 128 is a compromise: 2x more
-    # updates than the previous 256 setting, but still 2x the original 64
-    # that was causing 50× transition reuse.
     update_interval: int = 128
 
     # ── Token-level self-improvement ──
@@ -94,9 +67,6 @@ class RLConfig:
     token_opt_epochs: int = 2
 
     # ── Action space (must match VALID_ACTIONS in custom_environment_craftium.py) ──
-    # Primitives ONLY (indices 0-21). The 4 macro actions were removed: agents
-    # commit to single-tick primitives and re-decide every step (macros spent
-    # ~30% of env-time on autopilot with no perception/comm, harming coordination).
     actions: tuple = (
         "NoOp", "MoveForward", "MoveBackward", "MoveLeft", "MoveRight",
         "Jump", "Sneak", "Dig", "Place",
@@ -105,10 +75,4 @@ class RLConfig:
         "Drop", "Slot6", "Slot7", "Slot8",
     )
 
-    # Mask Slot*-prefixed actions out of the policy distribution.
-    # Inventory-select actions are mostly redundant: env.step has auto-equip
-    # logic that picks the best tool before Dig. Letting the policy waste
-    # exploration on Slot1-Slot8 (8 / 26 = 30% of the action space) was the
-    # primary cause of policy collapse onto Slot5 spam. With masking, the
-    # categorical distribution renormalises over the remaining 18 actions.
     mask_slot_actions: bool = True

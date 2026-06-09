@@ -1,4 +1,4 @@
-"""Environment adapter bridging Craftium OpenWorld multi-agent env to CausalForge's interface."""
+"""Environment adapter bridging the Craftium OpenWorld multi-agent env to the agent interface."""
 
 import os
 import re
@@ -6,10 +6,6 @@ import json
 import numpy as np
 import PIL.Image
 
-# `marl_craftium` is a top-level package under src/ (PYTHONPATH=src is set
-# by every SLURM script). Importing the package runs its _bootstrap side
-# effect, which puts the in-tree craftium submodule on sys.path so the
-# real `craftium` package resolves correctly even when pip-install isn't done.
 from marl_craftium import OpenWorldMultiAgentEnv
 
 _this_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,11 +14,6 @@ _this_dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(_this_dir, "prompts", "environment_prompt.txt"), "r") as f:
     environment_prompt = f.read()
 
-# Map from human-readable action names (used by the LLM) to Discrete(23) integers.
-# The integer mapping matches _DISCRETE_ACTIONS in openworld_multi_agents.py:
-#   0 = NOP
-#   1-16 = forward, backward, left, right, jump, sneak, dig, place,
-#           slot_1..slot_5, TurnRight(mouse x+), TurnLeft(mouse x-), LookDown(mouse y-), LookUp(mouse y+)
 ACTION_MAP = {
     "NoOp": 0,
     "MoveForward": 1,
@@ -42,12 +33,6 @@ ACTION_MAP = {
     "TurnLeft": 15,
     "LookDown": 16,
     "LookUp": 17,
-    # --- added actions ---
-    # NOTE: there is deliberately NO "Inventory" action. Opening the survival
-    # inventory/crafting menu just pops a formspec the headless agent can't
-    # close (occluding its view); inventory contents are surfaced in the text
-    # prompt instead. The discrete env slot for it (_actions.py index 17) is
-    # kept as a NOP only to preserve action-index alignment.
     "Drop": 19,         # drop the currently held item
     "Slot6": 20,
     "Slot7": 21,
@@ -56,13 +41,6 @@ ACTION_MAP = {
 
 VALID_ACTIONS = list(ACTION_MAP)
 
-# Synonyms / invented names the policy (especially smaller models) emits
-# despite the explicit action list. Mapping them to the intended primitive
-# RECOVERS the policy's intent instead of clamping to NoOp — which then gets
-# force-moved (the model's choice destroyed twice; see _idle_guard). Keys are
-# normalized (lowercased, separators stripped) — see _normalize_action_key.
-# Combat/break all map to Dig: the env has no separate attack/kill action
-# ("Attack a mob: face it and Dig repeatedly" — environment_prompt.txt).
 _ACTION_ALIASES = {
     # combat / breaking -> Dig
     "attack": "Dig", "mine": "Dig", "hit": "Dig", "punch": "Dig",
@@ -128,19 +106,10 @@ def canonicalize_action(action_str):
             return _ACTION_ALIASES[first]
     return None
 
-# Macro actions were REMOVED (2026-06): agents use only primitive actions.
-# Macros were long fixed sequences (9-23 steps) the policy committed to
-# with no perception / decision / communication in between — ~30% of
-# env-time on autopilot, directly harming coordination. The macro
-# dispatch + queue scaffolding (kept as a no-op for a while after the
-# removal) was deleted in the T1.6 cleanup; agents now always execute
-# the primitive action the LLM emits.
-
-
 class CraftiumEnvironmentInterface:
-    """Wraps OpenWorldMultiAgentEnv to match CausalForge's Environment_Interface contract.
+    """Wraps OpenWorldMultiAgentEnv to match the agent stack's Environment interface contract.
 
-    CausalForge expects:
+    The agent stack expects:
       - step(action_str, agentId) -> (event, action_str)
       - environment_prompt (str)
       - pickedup_object(agentId) -> str | None
@@ -149,40 +118,15 @@ class CraftiumEnvironmentInterface:
     # Actions considered "idle" — repeating these wastes steps
     _IDLE_ACTIONS = frozenset({"NoOp"})
 
-    # Camera pitch cap: agent may look at most this many LookDown steps below
-    # horizontal, or this many LookUp steps above it.  Beyond these limits the
-    # action is redirected to keep the crosshair in a useful range.
-    # Each LookDown/LookUp step now moves ~20-30° (marl_craftium/_actions.py
-    # doubled _MOUSE_MOV from 0.5 to 1.0). At the original cap of 4 down, that
-    # was ~80-120° (essentially staring at feet), which let LookDown spam
-    # produce useless camera state. Halved to 2 down so the cap holds at
-    # roughly the originally-intended 40-60° downward range.
     _PITCH_MAX_DOWN = 2   # positive pitch limit (looking down)
     _PITCH_MAX_UP   = 1   # negative pitch limit (looking up); ~20-30° matches original ~30°
     _MAX_CONSECUTIVE_IDLE = 1
 
     # Actions that need to be held for multiple env ticks to take effect.
-    # Minetest requires sustained key-press to break blocks / kill mobs.
-    # With frameskip=3, each env.step() = 3 physics ticks, so multiply accordingly.
-    # VoxeLibre bare-hand: wood ~15 physics ticks, stone ~30.
-    # At frameskip=3: 3 env steps = 9 ticks (enough for wood), 6 steps = 18 ticks.
-    #
-    # Raised from 5 -> 10 (30 physics ticks per Dig) to guarantee stone
-    # breaks in a single Dig action. With the old 5-tick budget, agents
-    # rarely strung two consecutive Digs on the same target (the action
-    # mix is heavily interspersed with TurnRight/MoveForward), so stone
-    # dig-progress kept resetting and m2_dig_3_any / m7_dig_3_stone almost
-    # never fired (0 dig events in 50 steps × 3 agents in the quick_test
-    # smoke run). Trade-off: each Dig is slower wall-clock, so the agent
-    # gets fewer total decisions per episode. Worth it — the previous
-    # rate produced zero milestone progress.
     _SUSTAINED_TICKS = {
         "Dig": 10,  # 10 env steps × frameskip=3 = 30 physics ticks — breaks stone in 1 action
     }
 
-    # Position-stuck detection: if x/z haven't moved more than this threshold
-    # after this many consecutive movement actions, the agent is physically stuck
-    # (e.g. trapped in a self-dug pit or pressed against terrain).
     _STUCK_THRESHOLD_XZ = 1.0   # blocks — less than this = stuck (higher with frameskip=3)
     _STUCK_MAX_STEPS = 8        # consecutive movement steps before escape
     # Escape sequence to execute when stuck: (action, repeat_ticks)
@@ -230,18 +174,8 @@ class CraftiumEnvironmentInterface:
         self._stuck_move_steps = {}  # agent_name -> int, consecutive non-idle steps without xz change
         self._escape_queue = {}      # agent_name -> list of (action, ticks) remaining
 
-        # Camera pitch tracker (net LookDown steps minus LookUp steps).
-        # Positive = looking down, negative = looking up.
-        # Capped at [-_PITCH_CAP, +_PITCH_CAP] to prevent staring at sky/ground.
         self._pitch = {}  # agent_name -> int
 
-        # Per-agent count of "futile" actions since the last consume_futile()
-        # call. Currently incremented when LookUp/LookDown is redirected to
-        # NoOp because pitch is at the cap (the policy is asking the camera
-        # to tilt past where it can go — pure waste). The trainer reads and
-        # zeros this each outer step to apply a small reward penalty, which
-        # gives PPO a per-action validity signal that the team-level reward
-        # path lacks (see Phase 1b in multi_agent_craftium.py).
         self._futile_actions = {}  # agent_name -> int
 
         # Server log tailer — surfaces [TOOLS]/[INVENTORY]/[TRACK STATUS] lines from Lua
@@ -250,68 +184,20 @@ class CraftiumEnvironmentInterface:
 
         # Milestone event file polling (see §4.6, poll_milestone_events())
         self._milestone_file_offset = 0  # byte offset into milestone_events.jsonl
-        # Anvil-coop diagnostic event file polling (Lua's anvil.lua globalstep
-        # writes to anvil_coop_events.jsonl when ≥2 agents punch the same anvil
-        # within ACTIVE_WINDOW ticks). No reward; pure analysis signal.
         self._anvil_coop_file_offset = 0
-        # Death / would-die event file polling (deaths.lua writes death_events.jsonl
-        # on a real Ch5 permadeath and on a Ch1-4 would-have-died). Each event
-        # carries a NEGATIVE reward drained into the RL signal — the server-side
-        # craftium.reward() penalties never reach env.step()'s reward channel in
-        # the multi-agent five-chambers context, so this JSONL is authoritative.
         self._death_file_offset = 0
-        # Agent indices already charged a would-die penalty THIS EPISODE. The
-        # −10 would-die is applied at most ONCE per agent per episode (see
-        # poll_death_events); the Lua callback fires per damage event so an
-        # attacked agent would otherwise rack up dozens of −10s. Cleared at
-        # episode reset via reset_death_offset().
         self._woulddie_charged: set = set()
 
-        # Per-agent invalid-action warning, surfaced to the LLM via
-        # get_chamber_state() on the NEXT prompt so the policy can see that
-        # its previous action got clamped (otherwise the warning only lands
-        # in slurm .err and the LLM keeps emitting 'Mine' / 'Attack' / etc.).
-        # Cleared once read.
         self._invalid_action_warning = {}  # agent_name -> str
 
-        # Diagnostics: WHY the idle-guard force-moved an agent. The guard
-        # converts a single NoOp to MoveForward, but two very different
-        # failures feed that NoOp — an UNMAPPED action name clamped to NoOp
-        # ("invalid_action") vs. the policy deliberately choosing NoOp
-        # ("explicit_noop"). Both used to log identically as "idle for N
-        # steps", hiding which one dominates (it's far worse on 2B / RL
-        # policies). We keep a run-cumulative per-agent tally so idle-forcing
-        # is measurable instead of a silent band-aid. See _idle_guard() and
-        # idle_force_summary(). NOT cleared on reset() — totals span the run.
         self._idle_force_counts = {}  # agent_name -> {cause -> int}
 
-        # Run-cumulative count of actions RECOVERED by canonicalize_action()
-        # (a synonym / format variant resolved to a valid primitive instead of
-        # being clamped to NoOp). High on smaller models that invent names like
-        # 'Attack'/'TurnUp'. Surfaced via action_recovered_summary().
         self._action_recovered_counts = {}  # agent_name -> int
 
-        # Per-step memoization cache (T1.2). Invalidated at the top of
-        # every step() / step_all() call. Keys are arbitrary identifiers
-        # ("timeofday", ("chamber_state", agent_id), etc.) → cached value.
-        # Used to share agent-invariant file reads (e.g. timeofday.txt,
-        # which is the same string for all 3 agents) across the per-agent
-        # prompt-building loop. Without this, get_player_status_text()
-        # opens timeofday.txt 3 times per step in a 3-agent run.
         self._step_cache: dict = {}
 
-        # Per-anvil HP history (last 4 reads) so _read_ch2_anvil_state()
-        # can surface a "Δhp last 3 steps" delta in the LLM prompt. Keyed
-        # by the kind string from anvils.txt ("A" or "B"), value is a
-        # collections.deque of recent HP samples. The "Δhp" signal lets
-        # the LLM see whether its punches are landing — without it, solo
-        # punching (HP unchanged) and paired punching (HP rising) look
-        # identical in chamber_state.
         self._anvil_hp_history = {}
 
-    # ------------------------------------------------------------------
-    # Core interface
-    # ------------------------------------------------------------------
     def reset(self):
         """Reset the environment and return initial observations."""
         observations, infos = self.env.reset()
@@ -327,10 +213,6 @@ class CraftiumEnvironmentInterface:
         self._escape_queue = {}
         self._pitch = {}
         self._futile_actions = {}
-        # Clear the per-anvil HP history so the "Δhp_last3" signal
-        # doesn't bridge the episode boundary (which would surface a
-        # huge negative delta when ep N+1 starts with fresh anvils at
-        # HP=0 vs ep N's last reading).
         self._anvil_hp_history = {}
         self.reset_log_offset()
         return self._observations
@@ -452,8 +334,6 @@ class CraftiumEnvironmentInterface:
                 )
                 action_str = "NoOp"
 
-        # Break idle loops, recording whether the NoOp came from an invalid
-        # action or an explicit policy NoOp (see _idle_guard).
         action_str = self._idle_guard(
             agent_name, agentId, action_str, invalid_original
         )
@@ -552,9 +432,6 @@ class CraftiumEnvironmentInterface:
         and acts on it. This is a deliberate turn-based -> simultaneous-move
         change and is only reached when the caller opts in via --simultaneous.
         """
-        # Drop the per-step file-read cache (T1.2) — a new tick is starting,
-        # so timeofday + any other cached agent-invariant reads must be
-        # re-fetched. Same guard at the top of step().
         self._step_cache.clear()
         live = list(self.env.agents)
 
@@ -566,8 +443,6 @@ class CraftiumEnvironmentInterface:
                 continue  # terminated — no action this step
             resolved[agentId] = self._resolve_action_for_agent(agentId, raw)
 
-        # 2. Auto-equip pre-tick: switch every Dig-er to its best tool in ONE
-        #    combined tick (step() does this per-agent; here it is batched).
         equip = {}
         for agentId, act in resolved.items():
             if act == "Dig":
@@ -582,11 +457,6 @@ class CraftiumEnvironmentInterface:
             }
             self.env.step(equip_actions)
 
-        # 3. Build a per-agent sub-tick schedule. Jump expands to
-        #    [Jump, MoveForward] (vault pairing); Dig repeats for its sustained
-        #    tick budget; everything else is a single tick. Agents with shorter
-        #    schedules NoOp-fill the remaining ticks so longer actions (Dig)
-        #    still complete.
         schedules: dict[str, list] = {}
         for agentId, act in resolved.items():
             ag = f"agent_{agentId}"
@@ -640,16 +510,13 @@ class CraftiumEnvironmentInterface:
             agentId: Integer index of the acting agent
 
         Returns:
-            (observations_dict, action_str) — matching CausalForge's contract
+            (observations_dict, action_str) — matching the agent interface contract
 
         Raises:
             ValueError: If action_str is not in ACTION_MAP
         """
         import logging as _logging
 
-        # Drop the per-step file-read cache (T1.2). The turn-based path
-        # calls step() once per agent, but a fresh env tick fires inside
-        # this method, so timeofday + state-file reads must re-fetch.
         self._step_cache.clear()
 
         agent_name = f"agent_{agentId}"
@@ -658,9 +525,6 @@ class CraftiumEnvironmentInterface:
         if action_str not in ACTION_MAP:
             canon = canonicalize_action(action_str)
             if canon is not None:
-                # Synonym / format variant (e.g. 'Attack' -> 'Dig',
-                # 'TurnUp' -> 'LookUp') — recover the policy's intent rather
-                # than clamping to NoOp and then force-moving it.
                 _logging.info(
                     "Recovered action '%s' -> '%s' for %s",
                     action_str, canon, agent_name,
@@ -675,9 +539,6 @@ class CraftiumEnvironmentInterface:
                     f"Invalid action: '{action_str}', clamping to NoOp. "
                     f"Valid actions: {VALID_ACTIONS}"
                 )
-                # Stash for the LLM to see on the next prompt — without this
-                # surfacing, the policy keeps emitting truly unknown names
-                # indefinitely because the clamping is silent.
                 self._invalid_action_warning[agent_name] = (
                     f"WARNING: Your previous action '{action_str}' is NOT a "
                     f"valid action — it was silently clamped to NoOp. Valid "
@@ -687,14 +548,10 @@ class CraftiumEnvironmentInterface:
                 )
                 action_str = "NoOp"
 
-        # Guard: break idle loops (NoOp spam). Records whether the NoOp came
-        # from an invalid action or an explicit policy NoOp (see _idle_guard).
         action_str = self._idle_guard(
             agent_name, agentId, action_str, invalid_original
         )
 
-        # Guard: position-stuck detection.
-        # If an escape sequence is queued, consume from it first.
         if self._escape_queue.get(agent_name):
             esc_action, esc_ticks = self._escape_queue[agent_name][0]
             esc_ticks -= 1
@@ -732,8 +589,6 @@ class CraftiumEnvironmentInterface:
                         self._stuck_move_steps[agent_name] = 0
 
                     if self._stuck_move_steps.get(agent_name, 0) >= self._STUCK_MAX_STEPS:
-                        # Stuck detected — inform via log but do NOT auto-escape.
-                        # The LLM can pick the "Escape" macro action to unstick.
                         _logging.warning(
                             f"Agent {agentId} stuck at xz={cur_xz} for "
                             f"{self._stuck_move_steps[agent_name]} steps — use Escape macro"
@@ -744,16 +599,9 @@ class CraftiumEnvironmentInterface:
                 # Non-movement action — reset stuck counter (position change not expected)
                 self._stuck_move_steps[agent_name] = 0
 
-        # Reset pitch on respawn: if the agent died last step, the server respawns
-        # them looking horizontally, so the stored pitch offset is stale.
         if self._terminations.get(agent_name, False):
             self._pitch[agent_name] = 0
 
-        # Camera pitch cap: prevent runaway LookUp (staring at sky) / LookDown (ground only).
-        # Each cap-hit redirect counts as a "futile action" — the trainer reads
-        # consume_futile() to apply a small per-step penalty, since the team-
-        # level reward path doesn't otherwise signal that the policy asked the
-        # camera to tilt past its physical limit.
         pitch = self._pitch.get(agent_name, 0)
         if action_str == "LookDown":
             if pitch >= self._PITCH_MAX_DOWN:
@@ -786,16 +634,10 @@ class CraftiumEnvironmentInterface:
             else:
                 actions[ag] = ACTION_MAP["NoOp"]
 
-        # Auto-equip: before Dig, switch to the best available tool.
-        # Reads the inventory file and sends one slot-switch tick if needed.
         if action_str == "Dig":
             best_slot = self._find_best_tool(agentId)
             if best_slot is not None:
                 slot_action_id = ACTION_MAP.get(f"Slot{best_slot}")
-                # Belt-and-braces guard: _find_best_tool now caps at the
-                # hotbar (Slot1..Slot8), but if a future change ever lets
-                # best_slot escape that range, skip the equip step instead
-                # of crashing in _discrete_to_dict(None).
                 if slot_action_id is not None:
                     equip_actions = {}
                     for ag_name in actions:
@@ -808,17 +650,12 @@ class CraftiumEnvironmentInterface:
                         "skipping equip and proceeding to Dig", best_slot,
                     )
 
-        # Jump+forward pairing: a bare Jump rarely clears obstacles since the
-        # agent doesn't move horizontally while airborne.  Send MoveForward on
-        # the tick immediately after Jump so the agent actually vaults over terrain.
         if action_str == "Jump":
             fwd_actions = {ag: (ACTION_MAP["MoveForward"] if ag == f"agent_{agentId}" else ACTION_MAP["NoOp"])
                            for ag in actions}
             self.env.step(actions)      # jump tick
             actions = fwd_actions       # forward tick (becomes the "main" step below)
 
-        # Sustained actions (Dig): repeat for multiple env ticks so blocks
-        # actually break and mobs actually take damage.
         repeat = self._SUSTAINED_TICKS.get(action_str, 1)
         total_rewards = {ag: 0.0 for ag in actions}
 
@@ -850,9 +687,6 @@ class CraftiumEnvironmentInterface:
 
         return self._observations, action_str
 
-    # ------------------------------------------------------------------
-    # Observation helpers (match CausalForge's usage patterns)
-    # ------------------------------------------------------------------
     def get_agent_frame(self, agentId: int) -> np.ndarray:
         """Return the raw observation array (H, W, 3) for a specific agent."""
         agent_name = f"agent_{agentId}"
@@ -934,9 +768,6 @@ class CraftiumEnvironmentInterface:
         chamber = self.get_chamber(agentId)
         agent_name = f"agent_{agentId}"
 
-        # Pop any pending invalid-action warning from the previous step.
-        # Prepending it to chamber_state means the LLM sees it on the next
-        # prompt without requiring a new placeholder in instruction_prompt_p2.
         prefix = ""
         warning = self._invalid_action_warning.pop(agent_name, "")
         if warning:
@@ -1006,10 +837,6 @@ class CraftiumEnvironmentInterface:
             except (TypeError, ValueError):
                 hp = None
 
-            # Track HP history (last 4 samples) per anvil kind. Δhp is
-            # computed against the oldest sample in the window (i.e., HP
-            # change over the last ~3 calls / ~3 env steps). Using
-            # deque(maxlen=4) keeps memory bounded.
             delta_str = ""
             if hp is not None:
                 hist = self._anvil_hp_history.setdefault(
@@ -1025,10 +852,6 @@ class CraftiumEnvironmentInterface:
                 else:
                     delta_str = " Δhp_last3=0 (no progress — need ≥2 punchers on this anvil at the same time)"
 
-            # Render the active-puncher set explicitly so the LLM sees
-            # WHICH teammates are punching, not just a count. Empty
-            # `names` from Lua means no agents are within the active
-            # window — render "(idle)" so the agent knows to start.
             puncher_names = [n.strip() for n in names.split(",") if n.strip()]
             if puncher_names:
                 who = " punchers: " + ", ".join(puncher_names)
@@ -1175,9 +998,6 @@ class CraftiumEnvironmentInterface:
         # Health is per-agent → read every call.
         health = _read(os.path.join(world_path, f"health_{agent_name}.txt"), "?/20")
 
-        # Time-of-day is global (same string for every agent), so cache it
-        # per env-step in `_step_cache`. In a 3-agent run this turns 3 file
-        # opens per step into 1.
         if "timeofday" in self._step_cache:
             time_str = self._step_cache["timeofday"]
         else:
@@ -1314,9 +1134,6 @@ class CraftiumEnvironmentInterface:
             import numpy as _np
             node_ids = vox[..., 0].astype(_np.int64).ravel()
             uniques, counts = _np.unique(node_ids, return_counts=True)
-            # Discard "air-equivalent" (id 0 is typically CONTENT_AIR or
-            # CONTENT_IGNORE in Luanti's node registry). Reported as a
-            # tail count instead of cluttering the top entries.
             air_mask = (uniques == 0)
             air_count = int(counts[air_mask].sum()) if air_mask.any() else 0
             non_air = [
@@ -1347,9 +1164,6 @@ class CraftiumEnvironmentInterface:
         """
         return self.env.warmup_noop()
 
-    # ------------------------------------------------------------------
-    # Inventory file reading
-    # ------------------------------------------------------------------
     def _get_world_path(self):
         """Return the absolute path to the Minetest world directory."""
         if not hasattr(self, "_world_path"):
@@ -1549,10 +1363,6 @@ class CraftiumEnvironmentInterface:
         except ValueError:
             return None
 
-        # Only the first 8 inventory slots are the hotbar, and only Slot1..Slot8
-        # are wieldable via discrete actions (ACTION_MAP). Iterating past slot 8
-        # produces a best_slot that has no corresponding action — and crashes
-        # downstream in _discrete_to_dict(None). Cap defensively at the source.
         _HOTBAR_LIMIT = 8
         slots = parts[1:1 + _HOTBAR_LIMIT]
         best_slot = None
@@ -1576,9 +1386,6 @@ class CraftiumEnvironmentInterface:
             return best_slot
         return None
 
-    # ------------------------------------------------------------------
-    # Server log tailer
-    # ------------------------------------------------------------------
 
     # Lines from the Lua server log that are worth surfacing in Python output.
     _LOG_TAGS = (
@@ -1587,17 +1394,10 @@ class CraftiumEnvironmentInterface:
         "[PHASE]",       # phase transitions
         "[MILESTONE]",   # five_chambers milestone events
         "[ANVIL]", "[SWITCH]", "[DOOR]", "[MOB]", "[BOSS]",
-        # Per-chamber timeout teleport diagnostics (doors.lua). The tailer
-        # surfaces these as "  [SRV] [CH{N}_TIMEOUT] ..." so it's visible
-        # whether the lua side fired the teleport after Python wrote the
-        # force-flag file for each chamber's 20% time budget.
         "[CH1_TIMEOUT]", "[CH1_TIMEOUT_DIAG]",
         "[CH2_TIMEOUT]", "[CH3_TIMEOUT]", "[CH4_TIMEOUT]",
     )
 
-    # Python mirror of Lua get_chamber_for_pos (keep in sync with config.lua).
-    # Ch2 shrunk from 14-deep (z=17..30) to 9-deep (z=17..25) and Ch3/Ch4/Ch5
-    # shifted south by 5 to keep the layout contiguous.
     _CHAMBER_BOUNDS = {
         "ch1": lambda p: 0  <= p[2] <= 15,
         "ch2": lambda p: 17 <= p[2] <= 25,
@@ -1659,28 +1459,6 @@ class CraftiumEnvironmentInterface:
                     try:
                         ev = json.loads(line)
                         new_events.append(ev)
-                        # Mirror milestone reward into the cumulative `_rewards`
-                        # bucket so it surfaces in get_reward_summary() (the LLM
-                        # prompt's reward line). This is LLM-visibility only —
-                        # it does NOT feed RL credit (get_step_reward() reads
-                        # the separate `_step_rewards` field, and `_rewards`
-                        # gets reset to 0 on each prompt read). RL credit is
-                        # delivered at the call site in multi_agent_craftium.py
-                        # by draining the returned events into step_rewards_raw
-                        # before Hebbian diffusion / record_reward.
-                        #
-                        # CRITICAL: normalise the contributor name to the
-                        # canonical 'agent_N' (with underscore) form before
-                        # using it as a key. The Lua side emits 'agent1' (no
-                        # underscore — Craftium's player-name convention) but
-                        # get_reward_summary reads `_rewards[f"agent_{i}"]`. If
-                        # we stored under the raw Lua name the LLM's prompt
-                        # would show Reward: 0.00 even when 80 points just
-                        # landed — observed in the exp1_llm/seed_42 analysis as
-                        # auto-curriculum stagnation: the critic saw no reward
-                        # progress, returned success=False, and the task never
-                        # updated. Fixes the LLM-visibility leg of the four-
-                        # site contributor-name parser bug.
                         for raw_name in ev.get("contributors", []):
                             _s = str(raw_name).removeprefix("agent_").removeprefix("agent")
                             try:
@@ -1824,25 +1602,16 @@ class CraftiumEnvironmentInterface:
                         ev = json.loads(line)
                     except json.JSONDecodeError:
                         continue
-                    # Normalise the Lua 'agentN' name to the canonical
-                    # 'agent_N' index (same parser as milestones).
                     _s = str(ev.get("agent", "")).removeprefix("agent_").removeprefix("agent")
                     try:
                         _aid = int(_s)
                     except ValueError:
                         _aid = None
-                    # Rate-limit: charge each agent the would-die at most ONCE
-                    # per episode. self._woulddie_charged persists across calls
-                    # and is cleared at episode reset. Deaths are never capped.
                     if ev.get("kind") == "woulddie" and _aid is not None:
                         if _aid in self._woulddie_charged:
                             continue
                         self._woulddie_charged.add(_aid)
                     new_events.append(ev)
-                    # Mirror the (capped) penalty into the cumulative `_rewards`
-                    # bucket so it shows in get_reward_summary() (the LLM
-                    # prompt's reward line). LLM-visibility only — RL credit is
-                    # delivered at the call site by draining into step_rewards_raw.
                     if _aid is not None:
                         agent_name = f"agent_{_aid}"
                         self._rewards[agent_name] = (

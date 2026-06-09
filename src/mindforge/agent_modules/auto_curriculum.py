@@ -32,18 +32,10 @@ _ACHIEVABLE_KEYWORDS = frozenset({
     "find", "move", "walk", "go", "run", "approach", # navigation
     "place", "build", "craft",                       # construction
     "collect", "gather", "get", "pick",              # generic gathering
-    # orientation / camera — directly executable via TurnLeft/TurnRight/
-    # LookUp/LookDown (or compositions). These were previously rejected as
-    # "non-actionable" and swapped for the vaguer "Explore" default, even
-    # though "TurnRight until the door is centered" is MORE primitive-aligned
-    # than the fallback. The system prompt itself tells agents to "centre it
-    # with TurnRight/TurnLeft then MoveForward", so aiming tasks are valid.
     "turn", "rotate", "look", "face", "center", "centre", "aim",
     "survey", "scan", "orient", "explore", "search",
 })
 
-# Tasks containing these get replaced even if they match a keyword — they
-# describe map fixtures / UI artefacts that agents fixate on unproductively.
 _TASK_BLOCKLIST = frozenset({
     "golden", "spawn", "platform",
     "hud", "interface", "inventory screen",
@@ -55,13 +47,6 @@ _ROLE_DEFAULT_TASKS = {
     "agent": "Explore by moving forward and turning to survey the room",
 }
 
-# Keywords that name fixtures only present in a specific chamber. If the
-# curriculum LLM proposes a task containing one of these while the agent
-# is in a DIFFERENT chamber, the task is unreachable and PPO will train on
-# guaranteed failure. We've observed agent_2 stuck in ch1 with task
-# "Move forward towards the nearest visible anvil" — anvils only exist in
-# ch2, so the policy collected ~7000 steps of negative reward chasing a
-# block that doesn't exist in its chamber.
 _CHAMBER_FIXTURES = {
     "anvil":  "ch2",
     "switch": "ch3",
@@ -226,12 +211,6 @@ class AutoCurriculum:
                 or "Health: ?/20 | Time: Unknown",
             current_chamber=current_chamber or "Unknown",
             completed_milestones=self._format_milestones(completed_milestones),
-            # Per-chamber milestone-progress block (you-done / team-done /
-            # OPEN per chamber). Computed in multi_agent_craftium.py via
-            # format_milestone_progress(). Lets the curriculum LLM pick a
-            # task that targets a specific OPEN milestone in the agent's
-            # current chamber without inferring what's still left from
-            # the completed list alone.
             milestone_progress=milestone_progress
                 or "(no milestone data yet)",
             inventory=picked_object or "empty",

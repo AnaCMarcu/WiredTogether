@@ -18,16 +18,11 @@ from pydantic import BaseModel
 
 
 # ─── Environment config ────────────────────────────────────────────────
-# Two ways to wire up an LLM:
-#   A) Local model:    LLM_MODEL_PATH=/path/to/model
-#   B) HTTP endpoint:  LLM_BASE_URL + LLM_MODEL + LLM_API_KEY (default: OpenRouter)
 
 local_model_path = os.environ.get("LLM_MODEL_PATH", "")
 base_url = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
 model = os.environ.get("LLM_MODEL", "google/gemini-2.5-flash")
 
-# Sentence-transformer for ChromaDB embeddings. On HPC point at a local path:
-#   export ST_MODEL_NAME=/scratch/acmarcu/models/all-MiniLM-L6-v2
 ST_MODEL_NAME = os.environ.get("ST_MODEL_NAME", "all-MiniLM-L6-v2")
 
 
@@ -65,11 +60,6 @@ class AgentResponse(BaseModel):
     thoughts: str
     action: str
     communication: str
-    # REQUIRED (not Optional): the JSON schema enforcer must always inject a
-    # value, otherwise the LLM treats the field as skippable and we lose
-    # targeted-comm enforcement. Routing in multi_agent_craftium.py rescues
-    # malformed targets ("all", self-target, missing agent_N) by re-routing
-    # via Hebbian-strongest or random teammate, but only if the field exists.
     communication_target: str
 
 
@@ -132,14 +122,9 @@ class SocialThought(BaseModel):
     interpretability artifact for the Hebbian-as-social-intelligence claim —
     they show whether the LLM actually conditioned on the graph.
     """
-    # Why each non-zero bond delta is moving the way it is (one line per
-    # teammate). Surfaces the LLM's causal model of its own graph; greppable
-    # post-hoc for "ignored my request" / "helped me" patterns.
     bond_change_explanation: dict[str, str]
     # Free-text rationale tying bonds + incoming messages to the decision.
     reasoning: str
-    # Bonds the LLM claims to have used. Compared offline against the bonds
-    # actually passed in to detect cargo-cult reasoning.
     referenced_bonds: dict[str, float]
     # Asker side: who to send a help request to, and the suggested text.
     ask_target: Optional[str] = None
@@ -227,8 +212,6 @@ def load_json(response: str) -> dict:
     if parsed is not None:
         return parsed
 
-    # 2. Walk all {...} substrings; prefer the LAST (thinking text often precedes
-    #    the real JSON, so the final brace span is more likely to be the answer).
     matches = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response)
     for match in reversed(matches):
         parsed = _try_parse(match)
@@ -282,8 +265,6 @@ def load_belief(response: str) -> dict:
         if text:
             return {"beliefs": text}
 
-    # Salvage: harvest all quoted strings, dropping a leading "beliefs" key
-    # token if the object was malformed (keyless bare strings).
     strings = re.findall(r'"((?:[^"\\]|\\.)*)"', _strip_markdown_fences(response))
     if strings and strings[0].strip() == "beliefs":
         strings = strings[1:]

@@ -57,8 +57,6 @@ def _add_matrices(a: list, b: list) -> list:
     return [[a[i][j] + b[i][j] for j in range(len(a))] for i in range(len(a))]
 
 
-# Milestone credit rules. Each entry returns a dict {agent_name: credit_share}
-# given (contributors_list, damage_per_agent_for_target). Sum = 1.0.
 def _credit_equal(contribs: list, *_a) -> dict:
     if not contribs:
         return {}

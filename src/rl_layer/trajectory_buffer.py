@@ -31,9 +31,6 @@ class Transition:
     reward_task: float = 0.0
     reward_comm: float = 0.0
     # ── Centralised-critic (MAPPO) fields, populated by main loop ──
-    # When set, GAE uses old_value_global instead of old_value, and
-    # action_level_ppo_step skips its value-loss term (the centralised
-    # critic owns its own update pipeline).
     old_value_global: Optional[float] = None
     joint_state: Optional[np.ndarray] = None
 

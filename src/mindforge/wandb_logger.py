@@ -165,8 +165,6 @@ def log_rl_update(agent_id: int, info: Dict[str, Any], step: Optional[int] = Non
         _log.warning("[wandb] log_rl_update failed: %s", e)
 
 
-# Per-decision running counters so the W&B chart shows cumulative trains/
-# skips/etc. rather than a noisy series of 1s. Keyed by (agent_id, decision).
 _TOKEN_OPT_COUNTS: Dict[tuple, int] = {}
 
 

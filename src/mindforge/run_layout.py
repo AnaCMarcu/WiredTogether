@@ -43,9 +43,6 @@ def _resolve_root(root: str | os.PathLike) -> Path:
     env_root = os.environ.get("WIREDTOGETHER_RUNS_ROOT")
     if env_root:
         env = Path(env_root)
-        # If caller asked for "runs" specifically, swap to the env root
-        # directly (the env var IS the runs dir). Otherwise treat the env
-        # root as a parent.
         if p == Path("runs"):
             return env
         return env / p
@@ -75,9 +72,6 @@ class RunPaths:
     @property
     def final_summary_txt(self) -> Path:  return self.root / "final_summary.txt"
 
-    # Back-compat: many call sites still expect a flat "metrics folder"
-    # equivalent to the old `./run_metrics/<run_id>/`. The new run root IS
-    # that folder — alias it so legacy code keeps working.
     @property
     def metrics_dir(self) -> Path:        return self.root
 

@@ -77,8 +77,6 @@ class EpisodeLogger:
 
         for agent_id in sorted(positions.keys()):
             pos = positions.get(agent_id)
-            # `pos` may be a numpy array of length 3 — use explicit None-check
-            # because `if pos:` raises on multi-element numpy arrays.
             has_pos = pos is not None and len(pos) >= 3
             self._step_writer.writerow({
                 "step": step,
@@ -94,10 +92,6 @@ class EpisodeLogger:
                 "hp": hp.get(agent_id, ""),
                 "message": messages.get(agent_id, ""),
             })
-        # Flush so the file on disk reflects what's been logged. SLURM
-        # preemption / SIGTERM / OOM can kill the process between steps;
-        # without this, the partially-buffered rows for the current step
-        # are lost. The cost is one fsync per env step — negligible.
         self._step_csv.flush()
         self._fire("on_step", step, positions, actions, messages,
                    task_rewards, comm_rewards, infos)
@@ -132,12 +126,8 @@ class EpisodeLogger:
             return
         with open(self.dir / "summary.json", "w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2, default=str)
-        # Also write the legacy filename for back-compat with any tooling
-        # that still reads episode_summary.json.
         with open(self.dir / "episode_summary.json", "w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2, default=str)
-        # Fire on_finalize BEFORE closing file handles so callbacks that
-        # need to read alongside the logger's outputs still can.
         self._fire("on_finalize", summary)
         self._step_csv.close()
         self._event_file.close()

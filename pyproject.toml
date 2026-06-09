@@ -8,25 +8,19 @@ packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
+# Environment + RL
 gymnasium = "^0.29.1"
 pettingzoo = "^1.24.3"
 torch = "^2.1.0"
-numpy = "^1.24.0"
-pandas = "^2.1.0"
+numpy = "^1.26.4"
 scipy = "^1.11.0"
-networkx = "^3.2"
-hydra-core = "^1.3.2"
-rich = "^13.7.0"
-loguru = "^0.7.2"
-wandb = "^0.16.0"
-tensorboard = "^2.15.0"
-tqdm = "^4.66.0"
-tyro = ">=0.7.0"
-python-dotenv = "^1.0.0"
-pydantic = "^2.5.0"
-imageio = {extras = ["ffmpeg"], version = "^2.33.0"}
-opencv-python = "^4.9.0"
+# Logging / metrics / media
+# wandb >=0.18 is required for protobuf>=5 compatibility with autogen-core
+wandb = ">=0.18.0"
 matplotlib = "^3.8.0"
+imageio = {extras = ["ffmpeg"], version = "^2.33.0"}
+pillow = ">=10.0.0"
+pydantic = "^2.5.0"
 sentence-transformers = ">=2.2.0"
 # MindForge agent dependencies
 autogen-agentchat = ">=0.6.0"
@@ -34,12 +28,11 @@ autogen-core = ">=0.6.0"
 autogen-ext = {extras = ["openai", "chromadb"], version = ">=0.6.0"}
 openai = ">=1.0.0"
 chromadb = ">=1.0.0"
-pillow = ">=10.0.0"
-flask = ">=3.0.0"
+# Local model + RL layer
 transformers = ">=4.37.0"
 peft = ">=0.10.0"
 safetensors = ">=0.4.0"
-# LLM server dependencies
+# LLM server (optional)
 fastapi = ">=0.100.0"
 uvicorn = ">=0.20.0"
 

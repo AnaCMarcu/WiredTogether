@@ -175,7 +175,6 @@ def compute_comm_metrics(run_root, num_agents: int) -> dict:
             valid_msgs += 1
 
     # ── Speaker Consistency: H(M_i), I(M_i; chamber_i) ──
-    # Cluster messages globally so cluster ids are comparable across agents.
     texts = [m.get("text", "") for m in all_messages]
     clusters = _cluster_messages(texts) if texts else []
     speaker_consistency = {}

@@ -43,9 +43,6 @@ class Critic:
         player_status_text=None,
         recent_history=None,
     ):
-        # if do_conversation:
-        #     return self.check_task_success_conversation(frame, cancellation_token, task, error, retry_count)
-
         def parse_check(content):
             assert content["success"] in [True, False]
             if "critique" not in content:

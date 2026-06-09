@@ -17,11 +17,6 @@ with open(os.path.join(_PROMPT_DIR, "environment_prompt.txt"), "r") as f:
     environment_prompt = f.read()
 with open(os.path.join(_PROMPT_DIR, "instruction_prompt_p2.txt"), "r") as f:
     instruction_prompt_p2 = f.read()
-# Mirror of instruction_prompt_p2.txt with the `action` field stripped from
-# the JSON response, used for the pre-action thoughts call in RL mode. Same
-# context (chamber, chamber_state, milestones, beliefs, etc.) as the policy
-# scoring prompt — without the chain-of-thought call having full context, it
-# would reason in a vacuum and produce uninformed intent.
 with open(os.path.join(_PROMPT_DIR, "instruction_prompt_p2_thoughts.txt"), "r") as f:
     instruction_prompt_p2_thoughts = f.read()
 
@@ -75,11 +70,6 @@ class ActionSelection:
             picked_object=picked_object,
             **beliefs,
         )
-        # Canonicalize "agent0"/"Agent_1"/"agent 2"/etc -> "agent_<N>" at
-        # the LLM-response boundary so every downstream consumer (metric,
-        # routing parser, social module, RL buffer) sees one identity
-        # per agent. Without this, exp1_llm's milestone_log contributors
-        # double-counted the same agent under "agent_0" and "agent0".
         if isinstance(content, dict) and "communication_target" in content:
             content["communication_target"] = normalize_agent_target(
                 content["communication_target"]
@@ -132,12 +122,6 @@ class ActionSelection:
             teammate_names = ", ".join(
                 f"agent_{j}" for j in range(num_agents) if j != self_idx
             )
-        # Mirror the non-RL select_action path: append messages[0].content[0]
-        # so the LLM sees the fresh per-step env observation block (what the
-        # agent perceives this round + incoming communications). Without
-        # this the model has only the static beliefs/task fields and free-
-        # associates off the raw image — observed in the first run as
-        # confident hallucinations of bosses/conveyors/diamonds in Ch1.
         per_step_observation = ""
         if messages and getattr(messages[0], "content", None):
             try:

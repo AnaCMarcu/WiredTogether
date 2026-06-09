@@ -18,23 +18,8 @@ from agent_modules.skill_manager import SkillManager
 from agent_modules.social_module import SocialModule
 
 
-# Phase 2: reward-based milestone success.
-# get_reward_summary() returns the reward accumulated since the last read
-# (effectively this step, since it's read once per agent per step) as the
-# string "Reward: X.XX / Status: Alive|Dead|Episode ended". Across all 28
-# Five-Chambers milestones the SMALLEST reward is 10 (m1_move_5) and comm
-# rewards are <=2, so a step reward >= this threshold means a real milestone
-# fired THIS step. This lets us detect task success every step in code —
-# no LLM critic call, no waiting for the critic interval. See milestones.lua.
 MILESTONE_REWARD_THRESHOLD = 10.0
 
-# How many recent (action -> reward) pairs to keep and hand to the critic.
-# The critic only runs every critic_interval (~20) steps and otherwise sees
-# just the single final step, so a window that did real work but ended on a
-# quiet step is indistinguishable from one that did nothing. The rolling log
-# gives it the whole gap: the action trajectory (to spot stuck/circling
-# patterns for a better critique) and any milestone reward that fired
-# mid-window even when the final step's Reward is 0.
 CRITIC_HISTORY_WINDOW = 20
 
 
@@ -48,8 +33,6 @@ def _parse_step_reward(reward_text):
     if not reward_text or not isinstance(reward_text, str):
         return None, False
     is_dead = "Dead" in reward_text
-    # Format is "Reward: <float> / Status: <status>"; grab the float after
-    # the first "Reward:".
     try:
         after = reward_text.split("Reward:", 1)[1]
         token = after.strip().split()[0].rstrip("/")
@@ -76,13 +59,6 @@ def _render_step_log(step_log):
     return " ".join(parts)
 
 
-# Per-chamber object whitelist. Substituted into the `Chamber:` field of
-# instruction_prompt_p2.txt so the action LLM sees an explicit list of what
-# can and CAN NOT appear in its current view. Action-time hallucinations of
-# the form "I see a purple anvil" (in Ch1) or "a zombie spawned" (in Ch2)
-# are a well-observed failure mode of the small action models — see the
-# exp1_llm/seed_42 analysis. The whitelist gives the LLM a concrete
-# negative grounding signal it can override its image interpretation with.
 _CHAMBER_OBJECT_WHITELIST = {
     "ch1": (
         "trees (brown trunks), stone blocks (grey textured), chickens, sheep, "
@@ -119,14 +95,6 @@ _CHAMBER_OBJECT_WHITELIST = {
 }
 
 
-# Per-chamber ROOM FACTS — objective + mechanics for the CURRENT room only.
-# These used to live as static per-chamber sections in environment_prompt.txt,
-# where all five rooms were in the system prompt every step even though the
-# agent is only ever in one. Moved here so _describe_chamber injects just the
-# room the agent is standing in (the {current_chamber} field, refreshed each
-# step). Milestone IDs are intentionally NOT listed — the dynamic
-# {milestone_progress} block already enumerates them. Coordination is stated as
-# mechanics/facts, not imperatives (the agent decides whether to coordinate).
 _CHAMBER_FACTS = {
     "ch1": (
         "Solo learning — each reward is individual (not shared). Dig trees/stone, "
@@ -220,19 +188,10 @@ class CustomAgent(BaseChatAgent):
     ) -> None:
         super().__init__(name, description)
         self.rl_layer = rl_layer
-        # How often to run the expensive belief/critic LLM calls.
-        # belief_interval=5 means beliefs are refreshed every 5 steps (cached in between).
-        # critic_interval=20 means task-success is checked every 20 steps.
         self.belief_interval = belief_interval
         self.critic_interval = critic_interval
         self._call_count = 0  # incremented each on_messages call
-        # Rolling (last_action, step_reward) buffer handed to the critic so it
-        # sees the whole window since its last run, not just the final step.
         self._step_log = deque(maxlen=CRITIC_HISTORY_WINDOW)
-        # Set True after the one-time skill/episode/curriculum wipe on the very
-        # first on_messages call. Guards that wipe so the per-episode task reset
-        # (on_reset sets current_task=None) does NOT re-trigger it and nuke the
-        # learned skill/episode DBs every episode.
         self._initialized = False
 
         self.action_selection = (
@@ -262,9 +221,6 @@ class CustomAgent(BaseChatAgent):
         self._last_reward_text = "N/A"
         self._episode_summary_cache = "There are no past episodes."
         self._episode_summary_dirty = False
-        # Optional — only instantiated when --social-module is not "none".
-        # When None, on_messages falls back to the legacy raw social_bonds
-        # string in the action prompt.
         self.social_module = social_module
 
 
@@ -302,9 +258,6 @@ class CustomAgent(BaseChatAgent):
         print("Error count: ", error_count)
         # if first round, clear skill manager data
         if self.auto_curriculum.current_task is None and not self._initialized:
-            # One-time only (very first call of the whole run): start each DB
-            # from a clean slate. NOT re-run on per-episode resets, where
-            # current_task is also None but skills/episodes must persist.
             self._initialized = True
             await self.skill_manager.clear_data()
             await self.episode_manager.clear_data()
@@ -316,12 +269,6 @@ class CustomAgent(BaseChatAgent):
 
         task = self.auto_curriculum.current_task
 
-        # Phase 2: reward-based milestone success, computed every step from the
-        # reward already passed in (no env re-read, no LLM critic call). A step
-        # reward >= MILESTONE_REWARD_THRESHOLD means a real milestone fired NOW,
-        # so success is caught the moment it happens instead of waiting for the
-        # next critic tick. milestone_event surfaces it to the action/thoughts
-        # prompt so the policy knows the objective is done and moves on.
         _step_reward, _is_dead = _parse_step_reward(reward_text)
         reward_success = (
             _step_reward is not None
@@ -335,18 +282,12 @@ class CustomAgent(BaseChatAgent):
             if reward_success else ""
         )
 
-        # Append this step's (action -> reward) to the rolling buffer BEFORE the
-        # critic runs, so the newest entry is included in the window it judges.
-        # (last_action is the action taken last step; _step_reward is the reward
-        # it produced — a coherent pair.)
         self._step_log.append((last_action, _step_reward))
 
         self.metric.log(
             f"Agent {self.name}: Error count: {error_count}, error: {error}, held object: {picked_object}"
         )
 
-        # Run critic if not first round and this is a scheduled critic step.
-        # Between critic steps, reuse the cached result to avoid a wasted LLM call.
         success = None
         critique = None
         if self.auto_curriculum.current_task is not None:
@@ -376,9 +317,6 @@ class CustomAgent(BaseChatAgent):
                 success = getattr(self, "_cached_success", None)
                 critique = getattr(self, "_cached_critique", None)
 
-            # Phase 2 reward fast-path: a milestone firing THIS step is
-            # ground-truth success regardless of the critic interval or its
-            # (possibly stale) cached verdict. Caught every step.
             if reward_success:
                 success = True
 
@@ -394,20 +332,12 @@ class CustomAgent(BaseChatAgent):
                         main=True if self.name == "agent_0" else False,
                     )
             elif success is not None and run_critic:
-                # Only count a failure when the critic actually ran this step.
-                # Cached success=False from a previous step should not keep
-                # incrementing error_count — that caused tasks to be abandoned
-                # after ~half a critic cycle regardless of actual progress.
                 error_count += 1
 
             # RL layer: track success for token-opt self-trigger
             if self.rl_layer and self.rl_layer.enabled:
                 self.rl_layer.record_success(success)
 
-            # Only add an episode when the critic ran — it provides the meaningful
-            # critique/success signal.  Adding on every step fills the DB with
-            # identical entries (same cached critique) and keeps the dirty flag
-            # perpetually True, defeating the episode summary cache entirely.
             if run_critic:
                 self.episode_manager.add_episode(
                     task=task,
@@ -418,15 +348,6 @@ class CustomAgent(BaseChatAgent):
                     success=success,
                 )
                 self._episode_summary_dirty = True
-        # Generate new task if there is no current task, the task succeeded,
-        # the agent failed too many times, OR the agent just changed chamber.
-        # Without the chamber-change trigger a stale task for the PREVIOUS
-        # chamber persists across forced teleports / organic transitions — e.g.
-        # a "dig the purple anvil" (Ch2) task lingering into the Ch5 boss room,
-        # which makes the agent waste steps reconciling the contradiction it can
-        # see (boss in view vs. "dig the anvil" instruction). The chamber-timer
-        # rotates rooms every 20% of the episode, far faster than the
-        # success/failure cycle that would otherwise refresh the task.
         _chamber_changed = (
             current_chamber is not None
             and getattr(self, "_last_chamber", None) is not None
@@ -471,10 +392,10 @@ class CustomAgent(BaseChatAgent):
 
         # ── Parallel belief + memory fetches ──
         async def _fetch_query_and_summary():
-            # Fix 1: use task directly as query — no LLM call needed for discrete actions
+            # Use the task string directly as the skill query — no LLM call needed for discrete actions.
             _skill_memory = await self.skill_manager.get_skills(task)
             if not self.voyager:
-                # Fix 2: only regenerate episode summary when new episodes were added
+                # Only regenerate the episode summary when new episodes were added; reuse the cache otherwise.
                 if self._episode_summary_dirty:
                     _episodes = self.episode_manager.retrieve_episodes(task)
                     _episode_summary = await self.episode_manager.generate_episode_summary(
@@ -504,8 +425,6 @@ class CustomAgent(BaseChatAgent):
                     "interaction_beliefs": self.belief_system.interaction_beliefs,
                     "task_beliefs": self.belief_system.task_beliefs,
                 })
-            # Fix 4: task_beliefs come from curriculum (set at task assignment) — no need to
-            # re-ask the LLM every belief_interval steps since the task doesn't change mid-task.
             perception, partner, interaction = await asyncio.gather(
                 self.belief_system.create_perception_beliefs(
                     last_frame, communication, error, cancellation_token
@@ -528,11 +447,6 @@ class CustomAgent(BaseChatAgent):
         )
 
         # ── Social module deliberation ──
-        # If a SocialModule was attached and we have bond weights from the
-        # Hebbian graph, run the deliberation before action selection. The
-        # produced directive replaces the raw `Social bonds: ...` text in
-        # the action prompt (legacy text is still rendered when the module
-        # is not attached, preserving backward compat).
         social_directive = f"Social bonds: {social_bonds or 'N/A'}"
         if self.social_module is not None and bond_weights:
             # Resolve "who am I" to format teammate names for the prompt.
@@ -543,8 +457,6 @@ class CustomAgent(BaseChatAgent):
             _teammate_names = ", ".join(
                 f"agent_{j}" for j in range(self.num_agents) if j != _self_idx
             )
-            # Filter incoming comms to plain text (the action-LLM call later
-            # uses MultiModalMessage; the social call is text-only).
             _incoming = list(communication) if communication else []
             await self.social_module.deliberate(
                 bond_weights=bond_weights,
@@ -566,51 +478,17 @@ class CustomAgent(BaseChatAgent):
             **belief_parts,
             "reward_text": reward_text or "N/A",
             "social_bonds": social_bonds or "N/A",
-            # New placeholder: the deliberated social directive. When the
-            # social module is disabled this is just the legacy "Social
-            # bonds: ..." line so instruction_prompt_p2.txt formats the
-            # same way as before.
             "social_directive": social_directive,
-            # Phase B+ §1 reward propagation. Default to empty string so the
-            # ``{propagation_summary}`` placeholder in instruction_prompt_p2.txt
-            # collapses to a blank line for runs without --reward-propagation
-            # (every existing run pre-Phase-B+).
             "propagation_summary": propagation_summary or "",
             "position_text": position_text or "Unknown",
             "player_status_text": player_status_text or "Health: ?/20 | Time: Unknown",
-            # Substitute the chamber name PLUS an explicit object whitelist
-            # ("VISIBLE HERE: ... NO X, NO Y here") so the action LLM has a
-            # concrete negative-grounding signal to override its image
-            # interpretation with. Without this, agents in Ch1 routinely
-            # hallucinated "purple anvil" / "diamond sword" / "red conveyor"
-            # objects (which only exist in Ch2 / post-Ch2). See _describe_chamber.
             "current_chamber": _describe_chamber(current_chamber),
-            # Live chamber-state string (e.g. anvil HP + active punchers in
-            # Ch2, switch / cell-door state in Ch3, etc.). Sourced from
-            # CraftiumEnvironmentInterface.get_chamber_state(). Empty string
-            # in chambers that don't expose live puzzle state. Lets the
-            # policy reason about hidden state without inferring it from
-            # the visual frame.
             "chamber_state": chamber_state or "(none)",
-            # Hard ground-truth list of chambers the agent has actually been
-            # in this episode. The prompt instructs the LLM not to claim it
-            # is in any chamber outside this list — pure-grounding to fight
-            # the "I am in Chamber 3" hallucination when actually in Ch1.
             "visited_chambers": (
                 ", ".join(visited_chambers) if visited_chambers else "(none yet)"
             ),
-            # Per-chamber milestone-progress block: what THIS agent fired,
-            # what teammates fired (so we don't redundantly re-chase
-            # team-shared milestones like M_door1_open), and what's still
-            # OPEN per chamber. Computed in multi_agent_craftium.py via
-            # format_milestone_progress(). Empty placeholder when unknown
-            # (e.g. before metric is populated).
             "milestone_progress": milestone_progress
                 or "(no milestone data yet)",
-            # Phase 2: one-shot banner shown ONLY on the step a milestone
-            # reward fires. Empty string otherwise so the {milestone_event}
-            # placeholder collapses to a blank line. Tells the action/thoughts
-            # policy the current objective just completed — stop repeating it.
             "milestone_event": milestone_event,
         }
         self.belief_system.task_beliefs = belief_parts["task_beliefs"]
@@ -625,8 +503,6 @@ class CustomAgent(BaseChatAgent):
                 comm_text = "\n".join(
                     f"  {c}" for c in communication if c
                 )
-            # One-shot milestone banner (Phase 2): empty unless a milestone
-            # reward fired this step, in which case it precedes Position.
             _ms_prefix = f"{milestone_event}\n" if milestone_event else ""
             rl_prompt = (
                 f"Task: {task}\n"
@@ -649,11 +525,6 @@ class CustomAgent(BaseChatAgent):
             _log.debug("Agent %s RL prompt:\n%s", self.name, rl_prompt)
             self.metric.log(f"Agent {self.name} RL prompt: {rl_prompt[:500]}")
             # ── Thoughts FIRST, then action conditioned on them ──
-            # The LLM produces a one-sentence rationale + the message; the
-            # rationale is then threaded into the scoring prompt so the
-            # constrained-generation policy is p(action | prompt, thoughts).
-            # Reverse order (action first, then post-hoc thoughts) was the
-            # bug: thoughts that don't drive the action are decorative.
             try:
                 _self_idx_for_thoughts = int(str(self.name).split("_")[-1])
             except (ValueError, IndexError):
@@ -683,9 +554,6 @@ class CustomAgent(BaseChatAgent):
                 rl_prompt, thoughts_prefix=_pre_thoughts,
             )
 
-        # Resolve "who am I, who are my teammates" so the prompt can tell the
-        # LLM both — without this, communication_target degenerates to self-
-        # targets and ID typos (agent0 vs agent_0).
         try:
             _self_idx = int(str(self.name).split("_")[-1])
         except (ValueError, IndexError):
@@ -695,9 +563,6 @@ class CustomAgent(BaseChatAgent):
         )
 
         if rl_content is not None:
-            # rl_content["thoughts"] was already set by select_action to the
-            # pre-action thoughts we generated above; we attach the matching
-            # comm + target here (same LLM call, same context).
             rl_content["thoughts"] = _pre_thoughts
             rl_content["communication"] = _pre_comm
             rl_content["communication_target"] = _pre_comm_target

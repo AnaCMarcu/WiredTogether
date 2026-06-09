@@ -83,8 +83,6 @@ def action_level_ppo_step(
     full_to_cand = rl_layer._full_idx_to_cand_idx
 
     # ── Pre-filter dropped transitions BEFORE any forward ──
-    # The drop predicate is buffer-only, so we can count N_kept up front
-    # and use it as the per-transition loss divisor (= batched-mean math).
     kept: List[Tuple[Transition, int]] = []
     for tr in batch:
         cand_idx = full_to_cand.get(tr.action_idx, -1)
@@ -98,9 +96,6 @@ def action_level_ppo_step(
     ) if kept else None
 
     if not kept:
-        # Degenerate mini-batch (all transitions filtered). No backward
-        # call this iteration — gradients from prior iterations stay
-        # accumulated; the outer loop's optimizer.step() will use them.
         return {
             "policy_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0,
             "clip_frac": 0.0, "ratio_max": 1.0, "ratio_mean": 1.0,
@@ -124,10 +119,6 @@ def action_level_ppo_step(
         cand_logp, pooled = rl_layer._score_actions(
             tr.prompt_text, candidate_set, with_grad=True,
         )
-        # Defensive: a non-finite forward (fp16 overflow, or weights already
-        # corrupted by an earlier bad step) would crash Categorical(). Skip the
-        # transition and warn rather than killing the whole run; the grad guard
-        # in run_ppo_update prevents the corruption that usually causes this.
         if not torch.isfinite(cand_logp).all():
             n_nonfinite += 1
             continue
@@ -166,9 +157,6 @@ def action_level_ppo_step(
             loss_term = (p_loss - entropy_coef * entropy_term) / N_kept
 
         # ── Backward releases the forward graph ──
-        # All retained tensors for this transition (out.logits, hidden
-        # states, gather indices, etc.) drop their grad refs after this
-        # call; peak memory now stays at one forward's worth.
         if scaler is not None:
             scaler.scale(loss_term).backward()
         else:
@@ -190,9 +178,6 @@ def action_level_ppo_step(
             n_nonfinite, N_kept,
         )
 
-    # Every transition produced non-finite logits → nothing to report and no
-    # gradient was accumulated. Return a degenerate info dict (mirrors the
-    # all-filtered case) instead of crashing on max([]) / div-by-zero below.
     if not ratio_values:
         return {
             "policy_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0,
@@ -253,8 +238,6 @@ def token_level_ppo_step(
     ).to(device)
 
     outputs = model(**enc, labels=enc.input_ids)
-    # Per-token NLL → sum per sequence → mean across batch
-    # outputs.loss is already mean over tokens; we need per-sequence
     logits = outputs.logits[:, :-1, :]  # (B, L-1, V)
     targets = enc.input_ids[:, 1:]  # (B, L-1)
     mask = enc.attention_mask[:, 1:].float()  # (B, L-1)
@@ -270,9 +253,6 @@ def token_level_ppo_step(
 
     # PPO ratio (sequence-level)
     ratio = (seq_log_probs - old_log_probs_seq).exp()
-    # Use mean-std normalization of rewards as a REINFORCE baseline (not raw _normalize,
-    # which would be reward-scaling without a value baseline — same issue as normalizing
-    # raw rewards and calling them advantages).
     advantages = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
     surr1 = ratio * advantages
     surr2 = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * advantages
