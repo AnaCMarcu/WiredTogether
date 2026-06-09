@@ -60,6 +60,7 @@ EXPERIMENTS=(
     "exp08_llm_9b_social_prompt.sbatch"
     "exp09_llm_9b_allied_all.sbatch"
     "exp10_llm_9b_allied_pair.sbatch"
+    "exp11_llm_9b_allied_none.sbatch"
 )
 
 # Resolved seed values for human-readable reporting only. Must match the

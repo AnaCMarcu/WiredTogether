@@ -73,7 +73,7 @@ local function _damage_source(reason)
     if reason.object then
         local le = reason.object:get_luaentity()
         if le and le.name then return le.name end
-        if reason.object:is_player and reason.object:is_player() then
+        if reason.object.is_player and reason.object:is_player() then
             return "player:" .. reason.object:get_player_name()
         end
         return "object"
