@@ -3,7 +3,12 @@ import os
 from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
 
 from agent_modules.llm_call import llm_call
-from agent_modules.util import BeliefResponse, create_model_client
+from agent_modules.util import (
+    BeliefResponse,
+    create_model_client,
+    load_belief,
+    coerce_belief_text,
+)
 
 _BELIEF_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts", "belief_system")
 
@@ -36,8 +41,22 @@ class BeliefSystem:
         self._partner_prompt = override_partner_prompt or partner_prompt
         self._interaction_prompt = override_interaction_prompt or interaction_prompt
         self._context_prompt = override_context_prompt or context_prompt
+        self.number_of_agents = number_of_agents
         self.perception_beliefs = ""
         self.partner_beliefs = {i: "" for i in range(number_of_agents - 1)}
+        self.interaction_beliefs = ""
+        self.task_beliefs = ""
+
+    def reset(self):
+        """Clear all beliefs back to their empty initial state.
+
+        Beliefs are WORKING memory — momentary inferences about the current
+        frame / task / teammates — not learned knowledge, so they are dropped
+        between episodes (see CustomAgent.on_reset). Durable social learning
+        lives in the Hebbian bond weights, not here.
+        """
+        self.perception_beliefs = ""
+        self.partner_beliefs = {i: "" for i in range(self.number_of_agents - 1)}
         self.interaction_beliefs = ""
         self.task_beliefs = ""
 
@@ -55,12 +74,14 @@ class BeliefSystem:
             user_prompt=self._perception_prompt,
             cancellation_token=cancellation_token,
             frame=frame,
-            parse_check=self.parse_check,
+            parser=load_belief,
             log_prefix="Belief System create_perception_beliefs: ",
             communications=communications,
             error=error,
         )
-        self.perception_beliefs = response.get("beliefs", self.perception_beliefs)
+        self.perception_beliefs = coerce_belief_text(
+            response.get("beliefs"), self.perception_beliefs
+        )
         return self.perception_beliefs
 
     async def update_partner_beliefs(
@@ -80,12 +101,14 @@ class BeliefSystem:
                 system_prompt=None,
                 user_prompt=self._partner_prompt,
                 cancellation_token=cancellation_token,
-                parse_check=self.parse_check,
+                parser=load_belief,
                 log_prefix="Belief System update_partner_beliefs: ",
                 convo=convo,
                 previous_partner_belief=previous_partner_belief,
             )
-            self.partner_beliefs[i] = response.get("beliefs", previous_partner_belief)
+            self.partner_beliefs[i] = coerce_belief_text(
+                response.get("beliefs"), previous_partner_belief
+            )
         return self.partner_beliefs
 
     async def update_interaction_beliefs(
@@ -99,13 +122,15 @@ class BeliefSystem:
             system_prompt=None,
             user_prompt=self._interaction_prompt,
             cancellation_token=cancellation_token,
-            parse_check=self.parse_check,
+            parser=load_belief,
             log_prefix="Belief System update_interaction_beliefs: ",
             task=task,
             conversations=conversations,
             previous_interaction_beliefs=self.interaction_beliefs,
         )
-        self.interaction_beliefs = response.get("beliefs", self.interaction_beliefs)
+        self.interaction_beliefs = coerce_belief_text(
+            response.get("beliefs"), self.interaction_beliefs
+        )
         return self.interaction_beliefs
 
     async def update_task_beliefs(self, task, cancellation_token):
@@ -116,14 +141,13 @@ class BeliefSystem:
             system_prompt=None,
             user_prompt=self._context_prompt,
             cancellation_token=cancellation_token,
+            parser=load_belief,
             log_prefix="Belief System update_task_beliefs: ",
             task=task,
             previous_context=previous_context,
             interaction_beliefs=interaction_beliefs,
         )
-        self.task_beliefs = response.get("beliefs", self.task_beliefs)
+        self.task_beliefs = coerce_belief_text(
+            response.get("beliefs"), self.task_beliefs
+        )
         return self.task_beliefs
-
-    def parse_check(self, content):
-        assert "beliefs" in content
-        return content

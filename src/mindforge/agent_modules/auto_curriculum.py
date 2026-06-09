@@ -32,6 +32,14 @@ _ACHIEVABLE_KEYWORDS = frozenset({
     "find", "move", "walk", "go", "run", "approach", # navigation
     "place", "build", "craft",                       # construction
     "collect", "gather", "get", "pick",              # generic gathering
+    # orientation / camera — directly executable via TurnLeft/TurnRight/
+    # LookUp/LookDown (or compositions). These were previously rejected as
+    # "non-actionable" and swapped for the vaguer "Explore" default, even
+    # though "TurnRight until the door is centered" is MORE primitive-aligned
+    # than the fallback. The system prompt itself tells agents to "centre it
+    # with TurnRight/TurnLeft then MoveForward", so aiming tasks are valid.
+    "turn", "rotate", "look", "face", "center", "centre", "aim",
+    "survey", "scan", "orient", "explore", "search",
 })
 
 # Tasks containing these get replaced even if they match a keyword — they
@@ -185,6 +193,7 @@ class AutoCurriculum:
         player_status_text=None,
         current_chamber=None,
         completed_milestones=None,
+        milestone_progress=None,
     ):
         completed = self.get_completed_tasks()
         failed = self.get_failed_tasks()
@@ -214,9 +223,17 @@ class AutoCurriculum:
             picked_object=picked_object,
             position_text=position_text or "Unknown",
             player_status_text=player_status_text
-                or "Health: ?/20 | Hunger: ?/20 | Time: Unknown",
+                or "Health: ?/20 | Time: Unknown",
             current_chamber=current_chamber or "Unknown",
             completed_milestones=self._format_milestones(completed_milestones),
+            # Per-chamber milestone-progress block (you-done / team-done /
+            # OPEN per chamber). Computed in multi_agent_craftium.py via
+            # format_milestone_progress(). Lets the curriculum LLM pick a
+            # task that targets a specific OPEN milestone in the agent's
+            # current chamber without inferring what's still left from
+            # the completed list alone.
+            milestone_progress=milestone_progress
+                or "(no milestone data yet)",
             inventory=picked_object or "empty",
         )
 

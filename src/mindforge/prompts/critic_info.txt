@@ -1,6 +1,7 @@
 Task: {task}
 Last action: {last_action}
 Reward: {reward_text}
+Recent steps (oldest->newest, action(reward), * = milestone reward): {recent_history}
 Position: {position_text}
 Status: {player_status_text}
 Inventory: {picked_object}

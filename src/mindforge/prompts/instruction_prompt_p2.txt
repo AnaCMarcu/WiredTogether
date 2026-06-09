@@ -1,42 +1,32 @@
-YOU ARE: {agent_name}. Your teammates are: {teammate_names}. The "communication_target" you send must be EXACTLY one of {teammate_names} (your own id "{agent_name}" is INVALID).
-
-RESPONSE FORMAT (always use this exact JSON structure):
-{{"thoughts": "<spatial reasoning: what I see in the image, where the target is relative to center, why I chose this action>", "action": "<one action name from the list>", "communication": "<short message to teammates — ALWAYS fill this in, never leave empty. Share what you see, where you are going, or what you found. Examples: 'I found a tree to the north, heading there', 'I see a zombie, staying away', 'I am stuck, need help', 'Digging stone to the east'>"}}
-
-GOOD THOUGHTS EXAMPLES:
-- "I see a tree trunk slightly to the left. I need to TurnLeft to center it before I can dig it."
-- "The stone block is centered in my crosshair and close. I will Dig to break it."
-- "I see a chicken to the right at medium distance. I will TurnRight to face it."
-- "The image shows open grass with nothing close. I will MoveForward to explore."
-- "I just turned and the tree is now centered but far. I will MoveForward to get closer."
-- "The zombie is centered. I will Dig to attack it."
-- "There is a one-block step / small hill directly in front of me and MoveForward has not moved me. I will Jump to get over it."
-- "My position has not changed for several steps despite moving forward. I am stuck on terrain. I will Jump."
-
-BAD THOUGHTS (avoid these):
-- "I will dig a tree." (no spatial reasoning — where is the tree? Is it centered?)
-- "I should explore." (too vague — which direction? what do you see?)
-- "NoOp" (almost never correct — always prefer a directional action)
+YOU ARE: {agent_name}. Your teammates are: {teammate_names}. "communication_target" must be EXACTLY one of {teammate_names} — never "{agent_name}", never "all", never empty.
 
 Task: {task}
 Last action: {last_action}
 Reward: {reward_text}
 Position: {position_text}
-Chamber: {current_chamber}   (this is your CURRENT room — trust this, not what the image looks like; bedrock walls and stone blocks appear in every chamber)
-Chamber state: {chamber_state}   (live state of the puzzle in your current room — e.g. anvil HP and who is currently punching it. Trust this over the image.)
-Visited chambers so far this episode: {visited_chambers}   (you have ONLY been in these — never claim to be in a chamber not in this list, regardless of what the image looks like)
+Chamber: {current_chamber}   (your CURRENT room — trust this over the image; bedrock walls and stone blocks appear in every chamber)
+Chamber state: {chamber_state}   (live puzzle state — e.g. anvil HP and who is punching it. Trust this over the image.)
+Visited chambers so far this episode: {visited_chambers}   (you have ONLY been in these — never claim to be in a chamber not listed)
+Milestone progress (authoritative — advance an [OPEN] milestone in YOUR chamber, marked "(YOU ARE HERE)"; do not redo [you done] ones):
+{milestone_progress}
+{milestone_event}
 Status: {player_status_text}
 Critique: {critique}
 Error: {error}
 Inventory: {picked_object}
 Relevant skills: {skill_memory}
 Past episodes: {episode_summary}
-Task belief: {task_beliefs}
-Perception belief: {perception_beliefs}
-Interaction beliefs: {interaction_beliefs}
-Partner beliefs: {partner_beliefs}
-Social bonds: {social_bonds}
+Your beliefs:
+- See now: {perception_beliefs}
+- Task: {task_beliefs}
+- Teammates: {partner_beliefs}
+- Interactions: {interaction_beliefs}
+{social_directive}
+{propagation_summary}
 
-Look at the image carefully. Identify what is at the center, what is to the left/right, and how far away targets are.
-REMINDER: Hearts and food icons at the bottom edge are permanent UI — ignore them. There is no inventory screen. The world is always visible.
-Then choose the single best action following the BASIC ACTION LOOP from your system instructions.
+Look at the image: identify what is at the center, what is left/right, and how far targets are. Then pick the single best action via the BASIC ACTION LOOP. (Hearts/food icons at the bottom are permanent UI — ignore them; the world is always visible.)
+
+Your "thoughts" must give spatial reasoning + your predicted observation for this action + a brief check of last step's prediction vs. reality. Good: "Tree trunk is slightly left — TurnLeft to center it, then I expect to be aimed to Dig." Bad: "I will dig a tree." (no spatial reasoning) / "I should explore." (too vague) / "NoOp" (almost never correct).
+
+RESPONSE FORMAT — respond with EXACTLY this JSON, no extra text:
+{{"thoughts": "<spatial reasoning + predicted observation ('I expect to see X next step') + check of last step's prediction vs reality>", "action": "<one action name>", "communication": "<short message to the teammate in communication_target — an observation, request, or commitment relevant to THEM; never empty>", "communication_target": "<a teammate's name in the form agent_N, never yourself, never 'all'>"}}

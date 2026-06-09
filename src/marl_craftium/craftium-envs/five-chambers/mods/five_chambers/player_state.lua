@@ -9,47 +9,28 @@
 -- Hunger drain neutralisation: VoxeLibre's mcl_hunger.exhaust() is the
 -- single function that drains saturation → hunger over wall time. It's
 -- called from mcl_hunger/hunger.lua on every Dig/Jump/Sprint/Attack.
--- Periodic set_hunger(20) calls (the previous fix) couldn't keep up — in
--- the gap between calls, exhaust() could fire 5-10× per second and drop
--- hunger faster than the 1Hz pin restored it. We instead monkey-patch
--- mcl_hunger.exhaust() to no-op when phase != "survival", which removes
--- the only path that REDUCES hunger. The mod's API stays loaded
--- (set_hunger / get_hunger / HUD updates still work), and survival mode
--- can re-enable drain by writing phase.txt = "survival".
--- Phase is cached in memory and refreshed every PHASE_REFRESH_TICKS to
--- avoid file I/O on every action call.
+-- We unconditionally monkey-patch mcl_hunger.exhaust() to a no-op so
+-- hunger never drops. The mod's API stays loaded (set_hunger /
+-- get_hunger / HUD updates still work) but the only path that REDUCES
+-- hunger is severed. Plus we periodically set_hunger(20) as a belt-and-
+-- suspenders for any code path (eating poisonous food, lava, etc.) that
+-- directly modifies hunger.
+--
+-- (The phase-based gating — survival vs exploration — used to live here
+-- but the survival mode was removed. Hunger is now always off.)
 
 local _tick = 0
 local WRITE_EVERY = 20  -- Lua ticks between writes (~1 second at 20 Hz)
-
-local PHASE_REFRESH_TICKS = 100  -- ~5 seconds; cheap-enough re-read cadence
-local _cached_phase = "exploration"
-local _phase_last_refresh_tick = 0
 
 local function write_file(path, content)
     local f = io.open(path, "w")
     if f then f:write(content); f:close() end
 end
 
-local function _read_phase(world_path)
-    local f = io.open(world_path .. "/phase.txt", "r")
-    if not f then return "exploration" end
-    local s = f:read("*a") or ""
-    f:close()
-    return (s:gsub("%s+", ""))
-end
-
-local function _refresh_phase_if_due()
-    if _tick - _phase_last_refresh_tick >= PHASE_REFRESH_TICKS then
-        _cached_phase = _read_phase(minetest.get_worldpath())
-        _phase_last_refresh_tick = _tick
-    end
-end
-
 -- Monkey-patch hunger drain. Done in on_mods_loaded so mcl_hunger is
 -- guaranteed initialised. We replace the global function rather than
 -- removing it so any caller that does `mcl_hunger.exhaust(...)` still
--- works — it just becomes a no-op in non-survival phases.
+-- works — it just becomes a no-op.
 minetest.register_on_mods_loaded(function()
     if not (mcl_hunger and mcl_hunger.exhaust) then
         minetest.log("warning",
@@ -57,21 +38,14 @@ minetest.register_on_mods_loaded(function()
             .. "patch skipped (agents may starve over long episodes).")
         return
     end
-    local _orig_exhaust = mcl_hunger.exhaust
-    mcl_hunger.exhaust = function(playername, increase)
-        if _cached_phase == "survival" then
-            return _orig_exhaust(playername, increase)
-        end
-        return true
-    end
+    mcl_hunger.exhaust = function(_playername, _increase) return true end
     minetest.log("action",
-        "[five_chambers] mcl_hunger.exhaust patched: hunger drain disabled "
-        .. "in non-survival phases.")
+        "[five_chambers] mcl_hunger.exhaust patched to no-op "
+        .. "(hunger drain unconditionally disabled).")
 end)
 
 minetest.register_globalstep(function(dtime)
     _tick = _tick + 1
-    _refresh_phase_if_due()
 
     if _tick % WRITE_EVERY ~= 0 then return end
 
@@ -86,12 +60,11 @@ minetest.register_globalstep(function(dtime)
             write_file(world_path .. "/health_agent" .. idx .. ".txt",
                        hp .. "/20")
 
-            -- Hunger: drain is now neutralised at the source via the
+            -- Hunger: drain is neutralised at the source via the
             -- mcl_hunger.exhaust monkey-patch above. Belt-and-suspenders:
             -- still call set_hunger(20) here in case any other code path
             -- (eating poisonous food, lava, etc.) directly modified it.
-            if _cached_phase ~= "survival" and mcl_hunger
-               and mcl_hunger.set_hunger then
+            if mcl_hunger and mcl_hunger.set_hunger then
                 pcall(mcl_hunger.set_hunger, player, 20)
                 if mcl_hunger.set_saturation then
                     pcall(mcl_hunger.set_saturation, player, 5)

@@ -1,0 +1,86 @@
+\section{Hyperparameters}
+\label{sec:hyperparams}
+
+\subsection{Reinforcement-learning hyperparameters}
+\label{sec:rl_hyperparams}
+
+\autoref{tab:rl_hyperparams} lists the settings used for the MAPPO layer described in \autoref{sec:rl_formulation}. Reward normalisation is applied only in the IPPO ablation: under the centralised critic both the per-agent and team rewards are kept on the raw milestone scale, so that the GAE deltas $r'_{i,t}+\gamma V_\psi(s^{t+1})-V_\psi(s^t)$ are computed on a single consistent scale.
+
+\begin{table}[h]
+\centering
+\caption{Reinforcement-learning hyperparameters for the WIRE MAPPO layer.}
+\label{tab:rl_hyperparams}
+\small
+\begin{tabular}{ll}
+\toprule
+Hyperparameter & Value \\
+\midrule
+\multicolumn{2}{l}{\emph{Base model \& adapters}} \\
+Base language model            & Qwen3.5-2B (frozen) \\
+LoRA rank $r$ / $\alpha$ / dropout & $8$ / $16$ / $0.05$ \\
+LoRA target modules            & \texttt{q\_proj}, \texttt{v\_proj} \\
+Adapter scope                  & one per agent (role) \\
+Precision / grad.\ checkpointing & fp16 / on \\
+Prompt length cap              & $256$ tokens \\
+\midrule
+\multicolumn{2}{l}{\emph{PPO / MAPPO}} \\
+Discount $\gamma$              & $0.995$ \\
+GAE $\lambda$                  & $0.95$ \\
+Clip $\epsilon$               & $0.2$ \\
+Entropy coef.\ $\beta_t$       & $0.05 \rightarrow 0.001$ over $500$ updates \\
+Value-loss coef.              & $0.5$ \\
+Actor value clip (IPPO)       & $1.0$ \\
+Critic value clip $\xi$       & $10.0$ \\
+Max gradient norm             & $0.5$ \\
+PPO epochs $E$                & $2$ \\
+Mini-batch size               & $4$ \\
+Update interval $K$           & $128$ steps \\
+Rollout buffer size           & $2048$ \\
+\midrule
+\multicolumn{2}{l}{\emph{Optimisation}} \\
+Optimiser                     & Adam \\
+Actor learning rate           & $1\times10^{-4}$ \\
+Critic learning rate          & $3\times10^{-4}$ \\
+Critic hidden width           & $256$ \\
+\midrule
+\multicolumn{2}{l}{\emph{Reward}} \\
+Reward normalisation          & on (IPPO) / off (MAPPO) \\
+Death penalty (env-applied)    & $-50$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Hebbian social-plasticity hyperparameters}
+\label{sec:hebbian_hyperparams}
+
+\autoref{tab:hebbian_hyperparams} lists the hyperparameters of the reward-modulated Hebbian social module (\autoref{sec:hebbian_method}). Unlike the RL settings above, none of these are learned: the graph $\mathbf{W}$ carries no gradient, and every value below is a fixed constant of the local update rule. The symbols match the co-activity signal (Eqs.~\eqref{eq:engagement}--\eqref{eq:coactivity}), the two-term bond update (Eq.~\eqref{eq:hebbian_update}), and reward diffusion (Eq.~\eqref{eq:diffusion}). The reward scale $r_{\max}$ is not a tuned constant but a running maximum of observed absolute rewards, kept here for completeness.
+
+\begin{table}[h]
+\centering
+\caption{Hebbian social-plasticity hyperparameters for the WIRE social module. Symbols match \autoref{sec:hebbian_method}. All values are fixed constants of the local update rule, not learned.}
+\label{tab:hebbian_hyperparams}
+\small
+\begin{tabular}{lll}
+\toprule
+Hyperparameter & Symbol & Value \\
+\midrule
+\multicolumn{3}{l}{\emph{Co-activity signal (Eqs.~\ref{eq:engagement}--\ref{eq:coactivity})}} \\
+Interaction radius                & $d$                    & $5.0$ \\
+Engagement reward weight          & $\alpha$               & $0.5$ \\
+Communication co-activity bonus   & $\delta_{\text{comm}}$ & $0.5$ \\
+Reward scale                      & $r_{\max}$             & running max \\
+\midrule
+\multicolumn{3}{l}{\emph{Reward-modulated update (Eq.~\ref{eq:hebbian_update})}} \\
+Association-floor growth          & $\eta_0$               & $0.01$ \\
+Reward-modulated growth rate      & $\eta_+$               & $0.05$ \\
+Salience reward normaliser        & $R$                    & $300$ \\
+Failure-gated decay rate          & $\eta_-$               & $0.025$ \\
+Co-activity threshold             & $\epsilon$             & $0.05$ \\
+Co-activity / loss window         & $n$                    & $50$ steps \\
+Loss threshold for $\mathrm{neg}_i$ & $\theta$             & $5.0$ \\
+\midrule
+\multicolumn{3}{l}{\emph{Reward diffusion (Eq.~\ref{eq:diffusion})}} \\
+Diffusion strength                & $\gamma_d$             & $0.2$ \\
+\bottomrule
+\end{tabular}
+\end{table}

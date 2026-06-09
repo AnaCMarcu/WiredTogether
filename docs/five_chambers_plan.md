@@ -614,7 +614,7 @@ alone.
 
 ### 6.1 New Lua environment
 
-Create under `src/craftium/craftium-envs/`:
+Create under `src/marl_craftium/craftium-envs/`:
 
 ```
 five-chambers/

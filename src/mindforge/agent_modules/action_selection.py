@@ -1,6 +1,12 @@
 import os
 from agent_modules.llm_call import llm_call
-from agent_modules.util import AgentResponse, TargetedCommunicationResponse, create_model_client, safe_format
+from agent_modules.util import (
+    AgentResponse,
+    TargetedCommunicationResponse,
+    create_model_client,
+    normalize_agent_target,
+    safe_format,
+)
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
@@ -11,8 +17,13 @@ with open(os.path.join(_PROMPT_DIR, "environment_prompt.txt"), "r") as f:
     environment_prompt = f.read()
 with open(os.path.join(_PROMPT_DIR, "instruction_prompt_p2.txt"), "r") as f:
     instruction_prompt_p2 = f.read()
-with open(os.path.join(_PROMPT_DIR, "rl_communication_prompt.txt"), "r") as f:
-    rl_communication_prompt = f.read()
+# Mirror of instruction_prompt_p2.txt with the `action` field stripped from
+# the JSON response, used for the pre-action thoughts call in RL mode. Same
+# context (chamber, chamber_state, milestones, beliefs, etc.) as the policy
+# scoring prompt — without the chain-of-thought call having full context, it
+# would reason in a vacuum and produce uninformed intent.
+with open(os.path.join(_PROMPT_DIR, "instruction_prompt_p2_thoughts.txt"), "r") as f:
+    instruction_prompt_p2_thoughts = f.read()
 
 
 class ActionSelection:
@@ -64,26 +75,55 @@ class ActionSelection:
             picked_object=picked_object,
             **beliefs,
         )
+        # Canonicalize "agent0"/"Agent_1"/"agent 2"/etc -> "agent_<N>" at
+        # the LLM-response boundary so every downstream consumer (metric,
+        # routing parser, social module, RL buffer) sees one identity
+        # per agent. Without this, exp1_llm's milestone_log contributors
+        # double-counted the same agent under "agent_0" and "agent0".
+        if isinstance(content, dict) and "communication_target" in content:
+            content["communication_target"] = normalize_agent_target(
+                content["communication_target"]
+            )
         return content
 
-    async def generate_communication(
+    async def generate_thoughts_and_comm(
         self,
-        action,
+        messages,
         task,
         last_action,
+        critique,
+        error,
+        skill_memory,
+        episode_summary,
         picked_object,
+        beliefs,
         last_frame,
         cancellation_token,
         agent_name,
         num_agents: int = 1,
         teammate_names: str = "",
     ):
-        """Generate a targeted natural-language message for an RL-selected action."""
-        # TargetedCommunicationResponse has communication_target: str (required, not
-        # Optional). The schema enforcer guarantees a recipient even when the prompt
-        # alone wouldn't (Optional fields can be silently skipped by the model).
+        """Generate per-step LLM reasoning + targeted message BEFORE action selection.
+
+        In RL mode the action comes from the constrained-generation scorer
+        (``RLLayer._score_actions``), which produces no freeform text. This
+        call runs FIRST and emits ``{thoughts, communication, communication_target}``
+        — the thoughts are then appended to the policy's scoring prompt so
+        the action is sampled from ``p(a | prompt, thoughts)``. That ordering
+        is chain-of-thought: reasoning drives action, not the reverse.
+
+        Uses ``instruction_prompt_p2_thoughts.txt`` — the SAME context as the
+        regular policy prompt (chamber, chamber_state, milestones, beliefs,
+        partner beliefs, social directive, propagation summary) minus the
+        ``action`` field in the JSON response. Same context as the non-RL
+        select_action path, just without asking the LLM to also pick a
+        keyword.
+
+        Note: there's no ``action`` parameter here because the action HASN'T
+        been chosen yet. The thoughts describe intent; the policy translates
+        that into one of the discrete candidate actions.
+        """
         comm_client = create_model_client(response_format=TargetedCommunicationResponse)
-        # Derive teammate_names from num_agents if the caller didn't pass it.
         if not teammate_names:
             try:
                 self_idx = int(str(agent_name).split("_")[-1])
@@ -92,18 +132,38 @@ class ActionSelection:
             teammate_names = ", ".join(
                 f"agent_{j}" for j in range(num_agents) if j != self_idx
             )
+        # Mirror the non-RL select_action path: append messages[0].content[0]
+        # so the LLM sees the fresh per-step env observation block (what the
+        # agent perceives this round + incoming communications). Without
+        # this the model has only the static beliefs/task fields and free-
+        # associates off the raw image — observed in the first run as
+        # confident hallucinations of bosses/conveyors/diamonds in Ch1.
+        per_step_observation = ""
+        if messages and getattr(messages[0], "content", None):
+            try:
+                per_step_observation = messages[0].content[0]
+            except (IndexError, TypeError):
+                per_step_observation = ""
         content = await llm_call(
             comm_client,
             system_prompt=self.system_prompt,
-            user_prompt=rl_communication_prompt,
+            user_prompt=instruction_prompt_p2_thoughts + per_step_observation,
             frame=last_frame,
             cancellation_token=cancellation_token,
-            log_prefix=f"Agent {agent_name} rl_comm: ",
+            log_prefix=f"Agent {agent_name} rl_thoughts: ",
             agent_name=agent_name,
             teammate_names=teammate_names,
             task=task,
             last_action=last_action,
-            action=action,
-            picked_object=picked_object or "empty",
+            critique=critique,
+            error=error,
+            skill_memory=skill_memory,
+            episode_summary=episode_summary,
+            picked_object=picked_object,
+            **beliefs,
         )
-        return content.get("communication", ""), content.get("communication_target", None)
+        return (
+            content.get("thoughts", ""),
+            content.get("communication", ""),
+            normalize_agent_target(content.get("communication_target", None)),
+        )

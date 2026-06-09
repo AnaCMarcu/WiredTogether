@@ -11,6 +11,7 @@ Tracks:
 import json
 import logging
 import os
+import statistics
 import subprocess
 from datetime import datetime
 
@@ -30,11 +31,7 @@ MILESTONE_TRACK = {
     "m6_kill_2_animals":       "ch1_solo",
     "m7_dig_3_stone":          "ch1_solo",
     "m8_anvil_A1":             "ch2_anvils",
-    "m9_anvil_A2":             "ch2_anvils",
-    "m10_anvil_A3":            "ch2_anvils",
-    "m11_anvil_B1":            "ch2_anvils",
-    "m12_anvil_B2":            "ch2_anvils",
-    "m13_anvil_B3":            "ch2_anvils",
+    "m9_anvil_B1":             "ch2_anvils",
     "m14_sword_equipped":      "ch2_anvils",
     "m15_chestplate_equipped": "ch2_anvils",
     "m16_enter_cell":          "ch3_switches",
@@ -65,8 +62,11 @@ TRACKS = {
         ("m6_kill_2_animals", 80.0), ("m7_dig_3_stone", 60.0),
     ],
     "ch2_anvils": [
-        ("m8_anvil_A1",  40.0), ("m9_anvil_A2",  40.0), ("m10_anvil_A3", 40.0),
-        ("m11_anvil_B1", 40.0), ("m12_anvil_B2", 40.0), ("m13_anvil_B3", 40.0),
+        # Ch2 has exactly 2 anvils. The 6-anvil m9/m10/m12/m13 entries
+        # were a LEGACY design and have been removed from Lua's
+        # MILESTONE_DEFS — keep them out here too so plots and the
+        # milestone-progress prompt block don't show ghost OPEN entries.
+        ("m8_anvil_A1",  40.0), ("m9_anvil_B1", 40.0),
         ("m14_sword_equipped", 50.0), ("m15_chestplate_equipped", 30.0),
     ],
     "ch3_switches": [
@@ -96,6 +96,98 @@ STAGE_REWARDS = {
 
 TRACK_ORDER = list(TRACKS.keys())
 
+
+# Chambers as the prompt sees them → track name in TRACKS.
+_PROMPT_CHAMBER_TO_TRACK = {
+    "ch1":           "ch1_solo",
+    "ch2":           "ch2_anvils",
+    "ch3":           "ch3_switches",
+    "ch3_communal":  "ch3_switches",
+    "ch4":           "ch4_combat",
+    "ch5":           "ch5_boss",
+}
+
+
+def format_milestone_progress(current_chamber, agent_completed, team_completed):
+    """Format a milestone-progress block for the agent prompts.
+
+    Used by BOTH the curriculum LLM (so it can pick a task targeting an
+    open milestone) and the action LLM (so it can pick an action that
+    advances an open milestone). Tells the model:
+
+      - exactly which milestones THIS agent has already fired,
+      - which ones a teammate fired (so we don't redundantly chase
+        team-shared milestones like M_door1_open),
+      - which ones are still open per chamber,
+      - which chamber the agent is CURRENTLY in (so it focuses there).
+
+    Returns a multi-line plain-string block, ready to drop into a
+    ``{milestone_progress}`` placeholder. Communication milestones
+    (m_comm_*) are stage-agnostic chatter rewards and are intentionally
+    excluded — they fire automatically whenever agents talk.
+    """
+    agent_completed = set(agent_completed or [])
+    team_completed  = set(team_completed  or [])
+    current_track   = _PROMPT_CHAMBER_TO_TRACK.get(current_chamber)
+
+    chamber_label = {
+        "ch1_solo":     "Ch1",
+        "ch2_anvils":   "Ch2",
+        "ch3_switches": "Ch3",
+        "ch4_combat":   "Ch4",
+        "ch5_boss":     "Ch5",
+    }
+
+    # Collapsed view: the CURRENT chamber gets the full per-milestone detail
+    # (its [OPEN] ids are what the curriculum and action LLMs actually need to
+    # decide what to do next); every other chamber compresses to a one-word
+    # status so the block stays short instead of listing all 5 rooms' ids
+    # every step. Falls back to a detail line for the first incomplete chamber
+    # if the current chamber is unknown.
+    current_line = None
+    others = []
+    for track in TRACK_ORDER:
+        if track == "communication":
+            continue
+        label = chamber_label.get(track, track)
+        all_mids   = [mid for mid, _ in TRACKS[track]]
+        you_done   = [m for m in all_mids if m in agent_completed]
+        team_only  = [
+            m for m in all_mids
+            if m in team_completed and m not in agent_completed
+        ]
+        remaining  = [m for m in all_mids if m not in team_completed]
+
+        is_current = (track == current_track) or (
+            current_track is None and current_line is None and remaining
+        )
+        if is_current:
+            parts = [f"  {label} (YOU ARE HERE):"]
+            if you_done:
+                parts.append(f"[you done] {', '.join(you_done)}")
+            if team_only:
+                parts.append(f"[team done, you didn't fire] {', '.join(team_only)}")
+            if remaining:
+                parts.append(f"[OPEN] {', '.join(remaining)}")
+            else:
+                parts.append("[chamber complete]")
+            current_line = " ".join(parts)
+        else:
+            done_ct = len(all_mids) - len(remaining)
+            if not remaining:
+                status = "complete"
+            elif done_ct == 0:
+                status = "not started"
+            else:
+                status = f"{done_ct}/{len(all_mids)} done"
+            others.append(f"{label}: {status}")
+
+    block = current_line or ""
+    if others:
+        sep = "\n  " if block else "  "
+        block += f"{sep}Other chambers: " + "; ".join(others)
+    return block
+
 # Two milestones fired by different agents within this many steps count as co-completion.
 _CO_COMPLETION_WINDOW = 5
 
@@ -103,10 +195,20 @@ _CO_COMPLETION_WINDOW = 5
 # ─── Module helpers ────────────────────────────────────────────────────
 
 def _agent_id_from_name(name: str) -> int:
-    """Return integer id from "agent_N" or -1 on malformed input."""
+    """Return integer id from "agent_N" / "agentN" or -1 on malformed input.
+
+    The Lua side emits player names without an underscore ('agent0') —
+    Craftium's player-name convention. Python often uses 'agent_0'. The
+    old `int(name.split('_')[1])` parser only handled the underscored form
+    and returned -1 for everything else. Every Lua-sourced contributor
+    name was silently bucketed as -1 and rejected by downstream
+    ``0 <= agent_id < num_agents`` guards — track_rewards and
+    co-completion bookkeeping never got credited from Lua milestones.
+    """
+    s = str(name).removeprefix("agent_").removeprefix("agent")
     try:
-        return int(name.split("_")[1])
-    except (IndexError, ValueError):
+        return int(s)
+    except ValueError:
         return -1
 
 
@@ -171,6 +273,16 @@ class CraftiumMetric:
 
         # Rewards
         self.cumulative_returns = [0.0] * num_agents
+        # Per-episode return for the CURRENTLY-RUNNING episode. Reset to
+        # zero by end_episode() after the previous episode's deltas are
+        # snapshotted into per_episode_returns. This is what gets reported
+        # in the per-step log and per-episode summary so episodes aren't
+        # contaminated by carry-over from prior episodes.
+        self.episode_returns = [0.0] * num_agents
+        # History: per_episode_returns[i] = list of returns for agent i,
+        # one entry per completed episode. Final-summary mean/std are
+        # computed from this list.
+        self.per_episode_returns = [[] for _ in range(num_agents)]
         self.reward_history = [[] for _ in range(num_agents)]
         # Reward decomposition: parallel to reward_history, splits each step
         # reward into its source streams. Lets us answer "how much of the
@@ -181,14 +293,49 @@ class CraftiumMetric:
         self.milestone_events = []                  # flat log: (milestone, contributor) pairs
         self._agent_milestones = {}                 # agent_name -> set of milestone ids
         self.first_milestone_step = {}              # mid -> first global step (any agent)
+        # Anvil-coop diagnostic events (NO reward). One entry per detected
+        # coop window; populated by record_anvil_coop_event() from the
+        # Lua-side anvil.lua globalstep. Shape: list of
+        # {step, anvil, row, n_active, active}. Surfaced in final_metrics.json
+        # and as an extra marker row in milestones.png so we can compare
+        # "attempted coop" across LLM-only / +Hebbian / +MAPPO conditions.
+        self.anvil_coop_events = []
         self.track_rewards = {                      # per-agent, per-track reward sum
             i: {track: 0.0 for track in TRACKS}
             for i in range(num_agents)
         }
+        # Per-episode mirrors for aggregable headline numbers. Reset by
+        # end_episode(), snapshotted into *_per_episode for cross-episode
+        # mean/std reporting in final_metrics.json / summary.txt.
+        self.track_rewards_episode = {
+            i: {track: 0.0 for track in TRACKS}
+            for i in range(num_agents)
+        }
+        self.track_rewards_per_episode = [[] for _ in range(num_agents)]
+        # agent_id -> set of milestone ids reached THIS episode (clears each ep)
+        self._agent_milestones_episode = {i: set() for i in range(num_agents)}
+        # per-agent list of per-episode milestone id sets (kept as sorted lists
+        # for JSON serialisation)
+        self.milestones_per_episode = [[] for _ in range(num_agents)]
+        # per-agent message-sent count for the current episode
+        self.comm_count_episode = [0] * num_agents
+        # per-agent list of per-episode message counts
+        self.comm_count_per_episode = [[] for _ in range(num_agents)]
+        # episode lengths (final_step at end_episode time), shared across agents
+        self.episode_lengths = []
 
         # Communication
         self.communication_log = []
         self.comm_counts_per_step = []
+
+        # Action health — idle-force diagnostics copied from the env
+        # (CraftiumEnvironmentInterface.idle_force_summary()) just before the
+        # summary is written. Shape: {agent_name: {"invalid_action": int,
+        # "explicit_noop": int}}. Empty if the trainer never populated it.
+        self.idle_force_counts = {}
+        # Per-agent count of actions recovered by the env's synonym/format
+        # canonicalizer (e.g. 'Attack' -> 'Dig'). {agent_name: int}.
+        self.action_recovered_counts = {}
 
         # RL
         self.rl_updates = []
@@ -223,19 +370,53 @@ class CraftiumMetric:
 
     def record_reward(self, agent_id: int, reward: float):
         self.cumulative_returns[agent_id] += reward
+        self.episode_returns[agent_id] += reward
         self.reward_history[agent_id].append((self.timestep, reward))
+
+    def end_episode(self, final_step: int = 0):
+        """Snapshot the just-finished episode's per-agent aggregables into
+        the *_per_episode histories and reset the per-episode mirrors.
+        Must be called once per episode, after the final record_* call and
+        before the next episode's first step.
+
+        Covers: reward, track_rewards, milestones reached, message count,
+        episode length. final_step is what gets stored in episode_lengths.
+        """
+        for i in range(self.num_agents):
+            self.per_episode_returns[i].append(self.episode_returns[i])
+            self.track_rewards_per_episode[i].append(
+                dict(self.track_rewards_episode[i])
+            )
+            self.milestones_per_episode[i].append(
+                sorted(self._agent_milestones_episode[i])
+            )
+            self.comm_count_per_episode[i].append(self.comm_count_episode[i])
+        self.episode_lengths.append(int(final_step))
+
+        self.episode_returns = [0.0] * self.num_agents
+        self.track_rewards_episode = {
+            i: {track: 0.0 for track in TRACKS}
+            for i in range(self.num_agents)
+        }
+        self._agent_milestones_episode = {
+            i: set() for i in range(self.num_agents)
+        }
+        self.comm_count_episode = [0] * self.num_agents
 
     def record_reward_decomposed(self, agent_id: int, components: dict):
         """Record a per-step reward broken down by source.
 
         components keys (all floats, default 0):
-          task              base reward from craftium.reward (milestones)
+          task              env-step reward + pitch-cap penalty + drained
+                            five-chambers milestone rewards (m1..m28) +
+                            drained death / would-die penalties (−50 / −10)
           comm_base         BASE_MSG_REWARD per valid message
           comm_milestone    Tier-2 per-chamber communication milestones
-          proximity         Hebbian-gated proximity bonus
-          hebbian_diffuse   reward bled from peers via Hebbian W
+          proximity         vestigial — the +0.3/pair proximity bonus was
+                            removed; field stays at 0 for schema back-compat
+          hebbian_diffuse   reward bled from peers via Hebbian W (signed)
 
-        The five streams must sum to the value passed to record_reward().
+        The five streams sum to the value passed to record_reward().
         Persisted to reward_history_decomposed so we can answer "what fraction
         of cumulative return came from each source".
         """
@@ -284,6 +465,9 @@ class CraftiumMetric:
         track = MILESTONE_TRACK.get(mid)
         if track and 0 <= agent_id < self.num_agents:
             self.track_rewards[agent_id][track] += reward
+            self.track_rewards_episode[agent_id][track] += reward
+        if 0 <= agent_id < self.num_agents:
+            self._agent_milestones_episode[agent_id].add(mid)
 
     def _register_co_completion(self, agent_id: int, mid: str):
         if not (0 <= agent_id < self.num_agents):
@@ -298,11 +482,36 @@ class CraftiumMetric:
                 })
         self._last_milestone_step[agent_id] = self.timestep
 
+    def record_anvil_coop_event(self, ev: dict):
+        """Record an anvil-coop diagnostic event from poll_anvil_coop_events().
+
+        ev = {"step": int (lua tick), "anvil": str, "row": str,
+              "n_active": int, "active": [str, ...]}
+
+        NO reward is attached — this is purely diagnostic. The event
+        is stored with the Python env step (self.timestep) for X-axis
+        consistency with other metrics, plus the raw Lua step from the
+        source dict so post-hoc analysis can correlate with anvil HP
+        evolution at Lua-tick granularity.
+        """
+        record = {
+            "step":     self.timestep,
+            "lua_step": ev.get("step", 0),
+            "anvil":    ev.get("anvil", ""),
+            "row":      ev.get("row", ""),
+            "n_active": int(ev.get("n_active", 0)),
+            "active":   list(ev.get("active", [])),
+        }
+        self.anvil_coop_events.append(record)
+
     def record_communication(self, source_agent: str, message: str, target: str = None):
         preview = message[:100] if message else ""
         self.communication_log.append(
             (self.timestep, source_agent, preview, target or "all")
         )
+        agent_id = _agent_id_from_name(source_agent)
+        if 0 <= agent_id < self.num_agents:
+            self.comm_count_episode[agent_id] += 1
 
     def record_rl_update(self, agent_id: int, info: dict):
         self.rl_updates.append((self.timestep, agent_id, info))
@@ -466,9 +675,88 @@ class CraftiumMetric:
                 "cli_args":             getattr(self, "cli_args", None),
             },
             "cumulative_returns":   list(self.cumulative_returns),
+            "per_episode_returns":  [list(r) for r in self.per_episode_returns],
+            "mean_return_per_agent": [
+                (statistics.fmean(r) if r else 0.0)
+                for r in self.per_episode_returns
+            ],
+            "std_return_per_agent": [
+                (statistics.pstdev(r) if len(r) >= 2 else 0.0)
+                for r in self.per_episode_returns
+            ],
+            "episode_lengths":      list(self.episode_lengths),
+            "mean_episode_length":  (
+                statistics.fmean(self.episode_lengths)
+                if self.episode_lengths else 0.0
+            ),
+            "std_episode_length":   (
+                statistics.pstdev(self.episode_lengths)
+                if len(self.episode_lengths) >= 2 else 0.0
+            ),
+            "track_rewards_per_episode": [
+                [dict(d) for d in agent_eps]
+                for agent_eps in self.track_rewards_per_episode
+            ],
+            "mean_track_reward_per_agent": [
+                {
+                    track: (
+                        statistics.fmean([d.get(track, 0.0) for d in agent_eps])
+                        if agent_eps else 0.0
+                    )
+                    for track in TRACKS
+                }
+                for agent_eps in self.track_rewards_per_episode
+            ],
+            "std_track_reward_per_agent": [
+                {
+                    track: (
+                        statistics.pstdev([d.get(track, 0.0) for d in agent_eps])
+                        if len(agent_eps) >= 2 else 0.0
+                    )
+                    for track in TRACKS
+                }
+                for agent_eps in self.track_rewards_per_episode
+            ],
+            "milestones_per_episode": [
+                [list(ms) for ms in agent_eps]
+                for agent_eps in self.milestones_per_episode
+            ],
+            "milestone_count_per_episode": [
+                [len(ms) for ms in agent_eps]
+                for agent_eps in self.milestones_per_episode
+            ],
+            "mean_milestone_count_per_agent": [
+                (
+                    statistics.fmean([len(ms) for ms in agent_eps])
+                    if agent_eps else 0.0
+                )
+                for agent_eps in self.milestones_per_episode
+            ],
+            "std_milestone_count_per_agent": [
+                (
+                    statistics.pstdev([len(ms) for ms in agent_eps])
+                    if len(agent_eps) >= 2 else 0.0
+                )
+                for agent_eps in self.milestones_per_episode
+            ],
+            "comm_count_per_episode": [
+                list(c) for c in self.comm_count_per_episode
+            ],
+            "mean_comm_count_per_agent": [
+                (statistics.fmean(c) if c else 0.0)
+                for c in self.comm_count_per_episode
+            ],
+            "std_comm_count_per_agent": [
+                (statistics.pstdev(c) if len(c) >= 2 else 0.0)
+                for c in self.comm_count_per_episode
+            ],
+            "idle_force_counts":    self.idle_force_counts,
+            "action_recovered_counts": self.action_recovered_counts,
             "steps_to_milestone":   self.steps_to_milestone_table(),
             "milestones_per_agent": self.milestones_per_agent(),
             "milestone_events":     self.milestone_events,
+            "anvil_coop_events":    list(self.anvil_coop_events),
+            "anvil_coop_attempts":  len(self.anvil_coop_events),
             "specialization_index": {
                 str(i): self.specialization_index(i) for i in range(self.num_agents)
             },
@@ -501,44 +789,617 @@ class CraftiumMetric:
 
     # ─── Plots ─────────────────────────────────────────────────────────
 
+    def _plots_dir(self) -> str:
+        """Return (and lazily create) the per-run plots subdirectory.
+
+        Centralises the choice so JSON / txt / log artifacts stay in the
+        run root while every .png lives under ``<run_root>/plots/``. The
+        directory is created on first call; subsequent calls just return
+        the path.
+        """
+        path = os.path.join(self.target_folder, "plots")
+        os.makedirs(path, exist_ok=True)
+        return path
+
     def _save_plots(self):
         if not self.ts_data["timesteps"]:
             return
         self._plot_cumulative_returns()
+        self._plot_returns_curve()
+        self._plot_chamber_returns()
         self._plot_milestones()
         self._plot_track_rewards()
         self._plot_reward_decomposition()
         self._write_steps_to_milestone_txt()
         self._plot_communication_frequency()
+        self._plot_comm_curve()
         self._plot_hebbian_bonds()
         self._plot_rl_losses()
 
-    def _plot_cumulative_returns(self):
-        ts = self.ts_data["timesteps"]
-        fig, ax = plt.subplots(figsize=(10, 5))
+    def _plot_chamber_returns(self):
+        """Per-chamber mean ± std return across episodes.
+
+        Left panel:  grouped bars per chamber, one bar per agent (showing
+                     that agent's mean across episodes for that chamber's
+                     reward track), with error bars = std across episodes.
+        Right panel: single bar per chamber for the TEAM-TOTAL (sum across
+                     agents, mean ± std across episodes). Headline view.
+
+        Uses self.track_rewards_per_episode (which is per-agent, per-
+        episode, per-track), which is reset cleanly at end_episode().
+        """
+        if not self.track_rewards_per_episode or not any(self.track_rewards_per_episode):
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.text(
+                0.5, 0.5,
+                "No completed episodes yet — per-chamber plot unavailable.",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=11, color="#666666",
+            )
+            ax.set_axis_off()
+            fig.savefig(
+                os.path.join(self._plots_dir(), "chamber_returns.png"),
+                dpi=150,
+            )
+            plt.close(fig)
+            return
+
+        # Track order is the canonical chamber progression + comm at the
+        # end so the bars read left-to-right in playthrough order.
+        tracks = list(TRACK_ORDER)
+        track_labels = {
+            "ch1_solo":      "Ch1",
+            "ch2_anvils":    "Ch2",
+            "ch3_switches":  "Ch3",
+            "ch4_combat":    "Ch4",
+            "ch5_boss":      "Ch5",
+            "communication": "Comm",
+        }
+        labels = [track_labels.get(t, t) for t in tracks]
+        n_eps = max(
+            (len(self.track_rewards_per_episode[i])
+             for i in range(self.num_agents)),
+            default=0,
+        )
+
+        # Per-(agent, chamber) mean/std across episodes.
+        per_agent_mean = [[] for _ in range(self.num_agents)]
+        per_agent_std  = [[] for _ in range(self.num_agents)]
         for i in range(self.num_agents):
-            ax.plot(ts, self.ts_data["cumulative_returns"][i], label=f"Agent {i}")
-        for pt in self.phase_transitions:
-            ax.axvline(x=pt["step"], color="red", linestyle="--", alpha=0.7, linewidth=1.5)
-        ax.set_xlabel("Timestep")
-        ax.set_ylabel("Cumulative Return")
-        ax.set_title("Cumulative Return per Agent")
-        ax.legend()
-        fig.savefig(os.path.join(self.target_folder, "cumulative_returns.png"), dpi=150)
+            agent_eps = self.track_rewards_per_episode[i]
+            for t in tracks:
+                vals = [d.get(t, 0.0) for d in agent_eps]
+                per_agent_mean[i].append(
+                    statistics.fmean(vals) if vals else 0.0
+                )
+                per_agent_std[i].append(
+                    statistics.pstdev(vals) if len(vals) >= 2 else 0.0
+                )
+
+        # Team-total per chamber per episode → mean / std across episodes.
+        team_means = []
+        team_stds  = []
+        for t in tracks:
+            ep_sums = []
+            for ep_idx in range(n_eps):
+                total = 0.0
+                for i in range(self.num_agents):
+                    if ep_idx < len(self.track_rewards_per_episode[i]):
+                        total += self.track_rewards_per_episode[i][ep_idx].get(t, 0.0)
+                ep_sums.append(total)
+            team_means.append(statistics.fmean(ep_sums) if ep_sums else 0.0)
+            team_stds.append(
+                statistics.pstdev(ep_sums) if len(ep_sums) >= 2 else 0.0
+            )
+
+        cmap = plt.get_cmap("tab10")
+        agent_colors = [cmap(i % 10) for i in range(self.num_agents)]
+        fig, (ax_l, ax_r) = plt.subplots(1, 2, figsize=(14, 5),
+                                          gridspec_kw={"width_ratios": [3, 2]})
+
+        # ── Left: grouped bars per chamber per agent ──
+        bar_w = 0.8 / max(1, self.num_agents)
+        x_chambers = np.arange(len(tracks))
+        for i in range(self.num_agents):
+            xs = x_chambers + (i - (self.num_agents - 1) / 2) * bar_w
+            ax_l.bar(
+                xs,
+                per_agent_mean[i],
+                bar_w,
+                yerr=per_agent_std[i],
+                capsize=3,
+                color=agent_colors[i],
+                edgecolor="black",
+                linewidth=0.4,
+                label=f"agent_{i}",
+                error_kw=dict(ecolor="#222222", lw=1.0),
+            )
+        ax_l.set_xticks(x_chambers)
+        ax_l.set_xticklabels(labels)
+        ax_l.set_xlabel("Chamber")
+        ax_l.set_ylabel("Reward (mean ± std across episodes)")
+        ax_l.set_title(
+            f"Per-agent return per chamber (n={n_eps} episode{'s' if n_eps != 1 else ''})"
+        )
+        ax_l.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_l.set_axisbelow(True)
+        ax_l.axhline(0, color="#888888", linewidth=0.5)
+        ax_l.legend(fontsize=8, loc="best", framealpha=0.9)
+
+        # ── Right: team total per chamber ──
+        ax_r.bar(
+            x_chambers,
+            team_means,
+            yerr=team_stds,
+            capsize=5,
+            color="#4c72b0",
+            edgecolor="black",
+            linewidth=0.4,
+            error_kw=dict(ecolor="#222222", lw=1.2),
+        )
+        # Annotate each bar with the team-total mean ± std.
+        max_h = max([m + s for m, s in zip(team_means, team_stds)] + [1.0])
+        for x, m, s in zip(x_chambers, team_means, team_stds):
+            ax_r.text(
+                x, m + max(s, 0) + max_h * 0.02,
+                f"{m:.0f}\n±{s:.0f}",
+                ha="center", va="bottom", fontsize=8,
+            )
+        ax_r.set_xticks(x_chambers)
+        ax_r.set_xticklabels(labels)
+        ax_r.set_xlabel("Chamber")
+        ax_r.set_ylabel("Team total reward (mean ± std across episodes)")
+        ax_r.set_title("Team total per chamber")
+        ax_r.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_r.set_axisbelow(True)
+        ax_r.axhline(0, color="#888888", linewidth=0.5)
+
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "chamber_returns.png"),
+            dpi=150,
+        )
+        plt.close(fig)
+
+    def _plot_returns_curve(self):
+        """RL-paper-style learning curve: mean ± std across EPISODES.
+
+        X-axis: within-episode step (0 .. max_ep_len).
+        Y-axis: within-episode cumulative team return (summed across the
+                N agents at each step, re-zeroed at the start of each ep).
+        Solid line: mean across the N episodes at each within-episode step.
+        Shaded band: ± 1 std across episodes.
+        Thin lines: per-episode trajectories (for context).
+
+        This is the canonical learning-curve framing for single-seed
+        multi-episode RL runs — "what does a typical episode look like,
+        and how much do episodes differ from each other?". For multi-seed
+        plots, aggregate across seeds in a separate post-hoc script.
+
+        Falls back to a "no episodes yet" placeholder if end_episode()
+        hasn't been called (e.g. mid-ep1 crash dump).
+        """
+        ts = self.ts_data["timesteps"]
+        series = self.ts_data["cumulative_returns"]  # per-agent cumulative across whole run
+        ep_lens = getattr(self, "episode_lengths", []) or []
+        if not ts or not series or not ep_lens:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.text(
+                0.5, 0.5,
+                "No completed episodes yet — learning curve unavailable.",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=11, color="#666666",
+            )
+            ax.set_axis_off()
+            fig.savefig(
+                os.path.join(self._plots_dir(), "returns_curve.png"),
+                dpi=150,
+            )
+            plt.close(fig)
+            return
+
+        T = min(len(s) for s in series)
+        arr = np.array([s[:T] for s in series], dtype=float)  # (n_agents, T)
+        # Sum across agents to get a team cumulative-return-over-the-run series.
+        team_cum = arr.sum(axis=0)  # (T,)
+        # Convert to per-step deltas so we can re-cumulate within each episode.
+        deltas = np.diff(team_cum, prepend=0.0)  # (T,)
+
+        # Slice into episode-aligned trajectories, re-cumulating each.
+        ep_curves = []  # list of (ep_len,) arrays
+        idx = 0
+        for ep_len in ep_lens:
+            seg = deltas[idx: idx + int(ep_len)]
+            if seg.size == 0:
+                break
+            ep_curves.append(np.cumsum(seg))
+            idx += int(ep_len)
+        if not ep_curves:
+            return
+
+        # Pad episodes to a common length with NaN so nanmean/nanstd
+        # handle ragged eps correctly (some may be shorter if truncated).
+        max_len = max(c.size for c in ep_curves)
+        padded = np.full((len(ep_curves), max_len), np.nan)
+        for i, c in enumerate(ep_curves):
+            padded[i, : c.size] = c
+        mean = np.nanmean(padded, axis=0)
+        std = np.nanstd(padded, axis=0, ddof=0)
+        x = np.arange(1, max_len + 1)
+
+        fig, ax = plt.subplots(figsize=(10, 4.5))
+        # Thin per-episode curves for context.
+        cmap = plt.get_cmap("tab10")
+        for i, c in enumerate(ep_curves):
+            ax.plot(np.arange(1, c.size + 1), c,
+                    color=cmap(i % 10), alpha=0.30,
+                    linewidth=0.9, label=f"ep{i+1}")
+        # Mean across episodes + std band.
+        ax.fill_between(
+            x, mean - std, mean + std,
+            color="#1f77b4", alpha=0.20,
+            label=f"± 1 std (across {len(ep_curves)} episodes)",
+        )
+        ax.plot(x, mean, color="#1f77b4", linewidth=2.2,
+                label=f"mean (across {len(ep_curves)} episodes)")
+
+        ax.set_xlabel("Within-episode step")
+        ax.set_ylabel("Cumulative team return")
+        ax.set_title(
+            f"Learning curve — mean ± std across {len(ep_curves)} episodes"
+        )
+        ax.legend(fontsize=8, loc="best", framealpha=0.9)
+        ax.grid(color="#e5e5e5", linewidth=0.5)
+        ax.set_axisbelow(True)
+        ax.axhline(0, color="#888888", linewidth=0.5)
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "returns_curve.png"),
+            dpi=150,
+        )
+        plt.close(fig)
+
+    def _plot_comm_curve(self):
+        """RL-paper-style communication-rate curve: mean ± std across EPISODES.
+
+        X-axis: within-episode step.
+        Y-axis: smoothed messages-per-step rate.
+        Solid line: mean across episodes at each within-episode step.
+        Shaded band: ± 1 std across episodes.
+        Thin lines: per-episode smoothed trajectories.
+
+        Same framing as _plot_returns_curve — answers "what does a typical
+        episode's comm rate look like, and how much do episodes differ?".
+        """
+        ccps = self.comm_counts_per_step
+        ep_lens = getattr(self, "episode_lengths", []) or []
+        if not ccps or not ep_lens:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.text(
+                0.5, 0.5,
+                "No completed episodes yet — comm curve unavailable.",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=11, color="#666666",
+            )
+            ax.set_axis_off()
+            fig.savefig(
+                os.path.join(self._plots_dir(), "comm_curve.png"),
+                dpi=150,
+            )
+            plt.close(fig)
+            return
+
+        arr = np.array(ccps, dtype=float)
+
+        # Slice into per-episode series; smooth within each episode so the
+        # smoothing kernel never crosses an episode boundary (which would
+        # bleed late-ep N traffic into early ep N+1).
+        ep_series = []
+        idx = 0
+        for ep_len in ep_lens:
+            seg = arr[idx: idx + int(ep_len)]
+            if seg.size == 0:
+                break
+            ep_series.append(seg)
+            idx += int(ep_len)
+        if not ep_series:
+            return
+
+        # Smoothing window: clip to the shortest episode so convolution
+        # produces at least one valid value per episode.
+        window = max(1, min(50, min(s.size for s in ep_series)))
+        smoothed = []
+        for s in ep_series:
+            if window > 1:
+                k = np.ones(window) / window
+                smoothed.append(np.convolve(s, k, mode="valid"))
+            else:
+                smoothed.append(s.copy())
+
+        max_len = max(c.size for c in smoothed)
+        padded = np.full((len(smoothed), max_len), np.nan)
+        for i, c in enumerate(smoothed):
+            padded[i, : c.size] = c
+        mean = np.nanmean(padded, axis=0)
+        std = np.nanstd(padded, axis=0, ddof=0)
+        x = np.arange(1, max_len + 1) + (window // 2)  # window-center offset
+
+        fig, ax = plt.subplots(figsize=(10, 4.5))
+        cmap = plt.get_cmap("tab10")
+        for i, c in enumerate(smoothed):
+            ax.plot(
+                np.arange(1, c.size + 1) + (window // 2), c,
+                color=cmap(i % 10), alpha=0.30, linewidth=0.9,
+                label=f"ep{i+1}",
+            )
+        ax.fill_between(
+            x, mean - std, mean + std,
+            color="#2ca02c", alpha=0.20,
+            label=f"± 1 std (across {len(smoothed)} episodes)",
+        )
+        ax.plot(
+            x, mean, color="#2ca02c", linewidth=2.2,
+            label=f"mean (across {len(smoothed)} episodes)",
+        )
+
+        ax.set_xlabel("Within-episode step")
+        ax.set_ylabel(f"Messages per step (smoothed, window={window})")
+        ax.set_title(
+            f"Communication rate — mean ± std across {len(smoothed)} episodes"
+        )
+        ax.legend(fontsize=8, loc="best", framealpha=0.9)
+        ax.grid(color="#e5e5e5", linewidth=0.5)
+        ax.set_axisbelow(True)
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "comm_curve.png"),
+            dpi=150,
+        )
+        plt.close(fig)
+
+    def _plot_cumulative_returns(self):
+        """Two-panel per-episode return plot.
+
+        Left:  grouped bars showing each agent's return for each episode
+               (one cluster per episode, one bar per agent). Lets you see
+               which episode each agent did well/poorly in at a glance.
+        Right: per-agent mean ± std across episodes (error bar). Single-
+               number summary for each agent, std captures cross-episode
+               variability within this seed.
+
+        Falls back to a single-panel "no per-episode data yet" plot if
+        end_episode() hasn't been called yet (e.g., a crashed run before
+        ep1 finished).
+        """
+        n_eps = len(self.per_episode_returns[0]) if self.per_episode_returns else 0
+        if n_eps == 0:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.text(
+                0.5, 0.5,
+                "No completed episodes yet — per-episode plot unavailable.",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=11, color="#666666",
+            )
+            ax.set_axis_off()
+            fig.savefig(
+                os.path.join(self._plots_dir(), "cumulative_returns.png"),
+                dpi=150,
+            )
+            plt.close(fig)
+            return
+
+        cmap = plt.get_cmap("tab10")
+        agent_colors = [cmap(i % 10) for i in range(self.num_agents)]
+        ep_indices = list(range(1, n_eps + 1))
+
+        fig, (ax_l, ax_r) = plt.subplots(1, 2, figsize=(13, 4.5),
+                                          gridspec_kw={"width_ratios": [2.5, 1]})
+
+        # ── Left: grouped bars per episode ──
+        bar_w = 0.8 / max(1, self.num_agents)
+        for i in range(self.num_agents):
+            xs = [ep + (i - (self.num_agents - 1) / 2) * bar_w
+                  for ep in ep_indices]
+            ys = self.per_episode_returns[i]
+            ax_l.bar(xs, ys, bar_w, color=agent_colors[i],
+                     edgecolor="black", linewidth=0.4,
+                     label=f"agent_{i}")
+        ax_l.set_xticks(ep_indices)
+        ax_l.set_xticklabels([f"ep{e}" for e in ep_indices])
+        ax_l.set_xlabel("Episode")
+        ax_l.set_ylabel("Return")
+        ax_l.set_title(f"Return per Episode (n={n_eps})")
+        ax_l.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_l.set_axisbelow(True)
+        ax_l.legend(fontsize=8, loc="best", framealpha=0.9)
+        ax_l.axhline(0, color="#888888", linewidth=0.5)
+
+        # ── Right: per-agent mean ± std across episodes ──
+        means = [statistics.fmean(self.per_episode_returns[i]) if self.per_episode_returns[i] else 0.0
+                 for i in range(self.num_agents)]
+        stds = [statistics.pstdev(self.per_episode_returns[i]) if len(self.per_episode_returns[i]) >= 2 else 0.0
+                for i in range(self.num_agents)]
+        x_pos = list(range(self.num_agents))
+        ax_r.bar(x_pos, means, yerr=stds, capsize=5,
+                 color=[agent_colors[i] for i in range(self.num_agents)],
+                 edgecolor="black", linewidth=0.4,
+                 error_kw=dict(ecolor="#222222", lw=1.2))
+        # Annotate each bar with the mean ± std value.
+        for i, (m, s) in enumerate(zip(means, stds)):
+            ax_r.text(i, m + max(s, 0) + 2,
+                      f"{m:.1f}\n±{s:.1f}",
+                      ha="center", va="bottom", fontsize=8)
+        ax_r.set_xticks(x_pos)
+        ax_r.set_xticklabels([f"a{i}" for i in range(self.num_agents)])
+        ax_r.set_xlabel("Agent")
+        ax_r.set_ylabel("Mean Return ± std")
+        ax_r.set_title("Per-agent mean ± std")
+        ax_r.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_r.set_axisbelow(True)
+        ax_r.axhline(0, color="#888888", linewidth=0.5)
+
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "cumulative_returns.png"),
+            dpi=150,
+        )
         plt.close(fig)
 
     def _plot_milestones(self):
-        ts = self.ts_data["timesteps"]
-        fig, ax = plt.subplots(figsize=(10, 5))
-        for i in range(self.num_agents):
-            ax.plot(ts, self.ts_data["milestone_count"][i], label=f"Agent {i}", alpha=0.7)
-        ax.plot(ts, self.ts_data["total_milestones"],
-                label="Joint (unique)", linewidth=2, color="black")
-        ax.set_xlabel("Timestep")
-        ax.set_ylabel("Milestones Achieved")
-        ax.set_title("Five-Chambers Milestone Progress")
-        ax.legend()
-        fig.savefig(os.path.join(self.target_folder, "milestones.png"), dpi=150)
+        """Gantt-style milestone timeline.
+
+        X-axis: env step.
+        Y-axis: every milestone in canonical order, grouped into chamber
+                bands (Ch1 at bottom → Ch5 → comm at top).
+        Markers: one per (agent, milestone, step) — colored by agent.
+        Episode boundaries: vertical dashed lines.
+
+        Reads from self.milestone_events (rich, includes contributor + step)
+        rather than the cumulative-count series, so you can see WHICH
+        milestone fired WHEN for WHICH agent — the actual story of the
+        run, not just a count.
+        """
+        # Y-axis ordering: walk TRACKS in canonical order so chambers
+        # stack bottom-up. Each entry gets a row index; we also remember
+        # which chamber each row belongs to for the background bands.
+        y_labels = []
+        y_chamber = []  # parallel: chamber name per row, for banding
+        for track in TRACK_ORDER:
+            for mid, _ in TRACKS[track]:
+                y_labels.append(mid)
+                y_chamber.append(track)
+        y_index = {mid: i for i, mid in enumerate(y_labels)}
+
+        # Chamber band colors. Lightly shaded horizontal stripes so the
+        # reader can see at a glance which chamber a milestone lives in
+        # without reading the y-tick label.
+        chamber_band_colors = {
+            "ch1_solo":     "#f4f0ff",
+            "ch2_anvils":   "#fff4e6",
+            "ch3_switches": "#e8f8ff",
+            "ch4_combat":   "#ffeeee",
+            "ch5_boss":     "#fff0c2",
+            "communication":"#eaeaea",
+        }
+
+        # Agent marker colors. Use a small categorical palette that
+        # stays readable when 3-6 agents overlap.
+        cmap = plt.get_cmap("tab10")
+        agent_colors = {i: cmap(i % 10) for i in range(self.num_agents)}
+
+        # Figure size scales with the milestone count so labels stay
+        # readable for the full 33-row layout (5 chambers + comm).
+        fig_h = max(6.5, 0.32 * len(y_labels))
+        fig, ax = plt.subplots(figsize=(13, fig_h))
+
+        # Background chamber bands. Draw rectangles from x=0 to the
+        # rightmost event x so they span the whole plot.
+        x_max = max(
+            (ev.get("step", 0) for ev in self.milestone_events),
+            default=self.timestep,
+        )
+        x_max = max(x_max, 1)
+        chamber_first_last = {}
+        for row_i, ch in enumerate(y_chamber):
+            if ch not in chamber_first_last:
+                chamber_first_last[ch] = [row_i, row_i]
+            chamber_first_last[ch][1] = row_i
+        for ch, (lo, hi) in chamber_first_last.items():
+            ax.axhspan(
+                lo - 0.5, hi + 0.5,
+                color=chamber_band_colors.get(ch, "#ffffff"),
+                zorder=0,
+            )
+            # Chamber label at the right edge of the band.
+            ax.text(
+                x_max * 1.005, (lo + hi) / 2, ch,
+                fontsize=8, va="center", ha="left",
+                color="#555555", style="italic",
+            )
+
+        # Episode boundary verticals (only if we tracked them).
+        if getattr(self, "episode_lengths", None):
+            cum = 0
+            for ep_i, ep_len in enumerate(self.episode_lengths):
+                cum += int(ep_len)
+                ax.axvline(
+                    cum, color="#888888", linestyle="--",
+                    linewidth=0.8, zorder=1,
+                )
+                ax.text(
+                    cum, len(y_labels) - 0.2, f" ep{ep_i+1} end",
+                    fontsize=7, color="#666666", va="top",
+                )
+
+        # Scatter every milestone event. Larger dot + slight jitter on y
+        # if multiple agents hit the same milestone at the same step, so
+        # they don't fully overlap.
+        agents_seen = set()
+        for ev in self.milestone_events:
+            mid = ev.get("milestone_id") or ev.get("milestone")
+            if mid not in y_index:
+                continue
+            row = y_index[mid]
+            step = ev.get("step")
+            contrib = ev.get("contributor", "")
+            agent_id = _agent_id_from_name(contrib)
+            if not (0 <= agent_id < self.num_agents):
+                continue
+            # Tiny vertical jitter per agent so 3 agents on same (step, mid)
+            # are visually distinct rather than stacked.
+            y_jitter = (agent_id - (self.num_agents - 1) / 2) * 0.12
+            ax.scatter(
+                step, row + y_jitter,
+                s=42,
+                color=agent_colors[agent_id],
+                edgecolors="black",
+                linewidths=0.4,
+                zorder=3,
+                label=f"agent_{agent_id}" if agent_id not in agents_seen else None,
+            )
+            agents_seen.add(agent_id)
+
+        # Overlay anvil-coop diagnostic events on the m8 / m9 anvil rows.
+        # Distinct marker (gray X) so they don't get confused with real
+        # milestone fires. Captures "the team tried to coordinate at this
+        # anvil at this step" — meaningful even when no anvil actually
+        # broke this episode.
+        m8_row = y_index.get("m8_anvil_A1")
+        m9_row = y_index.get("m9_anvil_B1")
+        coop_x, coop_y = [], []
+        for ev in getattr(self, "anvil_coop_events", []):
+            row = m8_row if ev.get("row") == "A" else m9_row
+            if row is None:
+                continue
+            coop_x.append(ev.get("step", 0))
+            coop_y.append(row)
+        if coop_x:
+            ax.scatter(
+                coop_x, coop_y,
+                marker="x", s=28, linewidths=1.0,
+                color="#666666", alpha=0.55, zorder=2,
+                label="coop attempts (≥2 agents punching, diagnostic)",
+            )
+
+        ax.set_yticks(range(len(y_labels)))
+        ax.set_yticklabels(y_labels, fontsize=8)
+        ax.set_xlabel("Env step")
+        ax.set_xlim(0, x_max * 1.08)
+        ax.set_ylim(-0.7, len(y_labels) - 0.3)
+        ax.set_title(
+            "Five-Chambers Milestone Timeline (markers = fire events; "
+            "gray X = anvil coop attempts; rows grouped by chamber)"
+        )
+        ax.grid(axis="x", color="#dddddd", linewidth=0.5, zorder=1)
+        ax.set_axisbelow(True)
+        if agents_seen:
+            ax.legend(loc="upper left", fontsize=8, framealpha=0.9)
+
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "milestones.png"),
+            dpi=150,
+        )
         plt.close(fig)
 
     def _plot_track_rewards(self):
@@ -562,7 +1423,7 @@ class CraftiumMetric:
         ax.set_xticks(x)
         ax.set_xticklabels([f"Agent {i}" for i in range(self.num_agents)])
         ax.legend(loc="upper right", fontsize=8)
-        fig.savefig(os.path.join(self.target_folder, "track_rewards.png"), dpi=150)
+        fig.savefig(os.path.join(self._plots_dir(), "track_rewards.png"), dpi=150)
         plt.close(fig)
 
     def _plot_reward_decomposition(self):
@@ -597,7 +1458,7 @@ class CraftiumMetric:
         ax.set_xticks(x)
         ax.set_xticklabels([f"Agent {i}" for i in range(self.num_agents)])
         ax.legend(loc="upper right", fontsize=8)
-        fig.savefig(os.path.join(self.target_folder, "reward_decomposition.png"), dpi=150)
+        fig.savefig(os.path.join(self._plots_dir(), "reward_decomposition.png"), dpi=150)
         plt.close(fig)
 
     def _write_steps_to_milestone_txt(self):
@@ -682,25 +1543,86 @@ class CraftiumMetric:
             ax.legend(lines1 + lines2, labels1 + labels2, fontsize=8, loc="best")
 
         fig.tight_layout()
-        fig.savefig(os.path.join(self.target_folder, "rl_losses.png"), dpi=150)
+        fig.savefig(os.path.join(self._plots_dir(), "rl_losses.png"), dpi=150)
         plt.close(fig)
 
     def _plot_communication_frequency(self):
-        if not self.comm_counts_per_step:
-            return
-        fig, ax = plt.subplots(figsize=(10, 4))
-        window = min(50, len(self.comm_counts_per_step))
-        if window > 1:
-            smoothed = np.convolve(
-                self.comm_counts_per_step, np.ones(window) / window, mode="valid"
+        """Two-panel per-episode communication plot.
+
+        Left:  grouped bars of messages-sent per episode per agent.
+        Right: per-agent mean ± std across episodes.
+
+        Falls back to a "no data" placeholder if no episode finished yet.
+        """
+        n_eps = len(self.comm_count_per_episode[0]) if self.comm_count_per_episode else 0
+        if n_eps == 0:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.text(
+                0.5, 0.5,
+                "No completed episodes yet — per-episode plot unavailable.",
+                ha="center", va="center", transform=ax.transAxes,
+                fontsize=11, color="#666666",
             )
-            ax.plot(range(len(smoothed)), smoothed)
-        else:
-            ax.plot(self.comm_counts_per_step)
-        ax.set_xlabel("Timestep")
-        ax.set_ylabel("Messages per Step (smoothed)")
-        ax.set_title("Communication Frequency")
-        fig.savefig(os.path.join(self.target_folder, "communication_frequency.png"), dpi=150)
+            ax.set_axis_off()
+            fig.savefig(
+                os.path.join(self._plots_dir(), "communication_frequency.png"),
+                dpi=150,
+            )
+            plt.close(fig)
+            return
+
+        cmap = plt.get_cmap("tab10")
+        agent_colors = [cmap(i % 10) for i in range(self.num_agents)]
+        ep_indices = list(range(1, n_eps + 1))
+
+        fig, (ax_l, ax_r) = plt.subplots(1, 2, figsize=(13, 4.5),
+                                          gridspec_kw={"width_ratios": [2.5, 1]})
+
+        # ── Left: grouped bars per episode ──
+        bar_w = 0.8 / max(1, self.num_agents)
+        for i in range(self.num_agents):
+            xs = [ep + (i - (self.num_agents - 1) / 2) * bar_w
+                  for ep in ep_indices]
+            ys = self.comm_count_per_episode[i]
+            ax_l.bar(xs, ys, bar_w, color=agent_colors[i],
+                     edgecolor="black", linewidth=0.4,
+                     label=f"agent_{i}")
+        ax_l.set_xticks(ep_indices)
+        ax_l.set_xticklabels([f"ep{e}" for e in ep_indices])
+        ax_l.set_xlabel("Episode")
+        ax_l.set_ylabel("Messages sent")
+        ax_l.set_title(f"Communication Volume per Episode (n={n_eps})")
+        ax_l.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_l.set_axisbelow(True)
+        ax_l.legend(fontsize=8, loc="best", framealpha=0.9)
+
+        # ── Right: per-agent mean ± std across episodes ──
+        means = [statistics.fmean(self.comm_count_per_episode[i]) if self.comm_count_per_episode[i] else 0.0
+                 for i in range(self.num_agents)]
+        stds = [statistics.pstdev(self.comm_count_per_episode[i]) if len(self.comm_count_per_episode[i]) >= 2 else 0.0
+                for i in range(self.num_agents)]
+        x_pos = list(range(self.num_agents))
+        ax_r.bar(x_pos, means, yerr=stds, capsize=5,
+                 color=[agent_colors[i] for i in range(self.num_agents)],
+                 edgecolor="black", linewidth=0.4,
+                 error_kw=dict(ecolor="#222222", lw=1.2))
+        for i, (m, s) in enumerate(zip(means, stds)):
+            ax_r.text(i, m + max(s, 0) + max(means + [1]) * 0.02,
+                      f"{m:.0f}\n±{s:.0f}",
+                      ha="center", va="bottom", fontsize=8)
+        ax_r.set_xticks(x_pos)
+        ax_r.set_xticklabels([f"a{i}" for i in range(self.num_agents)])
+        ax_r.set_xlabel("Agent")
+        ax_r.set_ylabel("Mean messages ± std")
+        ax_r.set_title("Per-agent mean ± std")
+        ax_r.grid(axis="y", color="#dddddd", linewidth=0.5)
+        ax_r.set_axisbelow(True)
+
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(self._plots_dir(), "communication_frequency.png"),
+            dpi=150,
+        )
         plt.close(fig)
 
     def _plot_hebbian_bonds(self):
@@ -737,7 +1659,7 @@ class CraftiumMetric:
         ax.set_ylabel("Bond Strength")
         ax.set_title("Hebbian Social Graph — Bond Evolution (mean view)")
         ax.legend()
-        fig.savefig(os.path.join(self.target_folder, "graph_bond_evolution.png"), dpi=150)
+        fig.savefig(os.path.join(self._plots_dir(), "graph_bond_evolution.png"), dpi=150)
         plt.close(fig)
 
     def _plot_hebbian_asymmetry(self):
@@ -801,7 +1723,7 @@ class CraftiumMetric:
         fig.suptitle("Asymmetric Hebbian Bonds Over One Episode",
                      fontsize=13, y=1.02)
         fig.savefig(
-            os.path.join(self.target_folder, "graph_bond_asymmetry.png"),
+            os.path.join(self._plots_dir(), "graph_bond_asymmetry.png"),
             dpi=150, bbox_inches="tight",
         )
         plt.close(fig)
@@ -824,10 +1746,12 @@ class CraftiumMetric:
         lines = []
         lines.extend(self._summary_header())
         lines.extend(self._summary_returns())
+        lines.extend(self._summary_per_episode_aggregates())
         lines.extend(self._summary_milestones())
         lines.extend(self._summary_steps_to_milestone())
         lines.extend(self._summary_specialization())
         lines.extend(self._summary_communication())
+        lines.extend(self._summary_action_health())
         lines.extend(self._summary_rl())
         lines.extend(self._summary_hebbian())
         lines.append("=" * 55)
@@ -848,17 +1772,79 @@ class CraftiumMetric:
         ]
 
     def _summary_returns(self):
-        lines = ["--- Cumulative Returns ---"]
+        lines = ["--- Cumulative Returns (run total) ---"]
         for i in range(self.num_agents):
             lines.append(f"  Agent {i} (agent): {self.cumulative_returns[i]:.2f}")
         lines.append("")
+        n_eps = max((len(r) for r in self.per_episode_returns), default=0)
+        if n_eps > 0:
+            lines.append(f"--- Per-Episode Returns (n={n_eps} episodes) ---")
+            for i in range(self.num_agents):
+                ep_returns = self.per_episode_returns[i]
+                mean = statistics.fmean(ep_returns) if ep_returns else 0.0
+                std = statistics.pstdev(ep_returns) if len(ep_returns) >= 2 else 0.0
+                ep_str = ", ".join(f"{r:.2f}" for r in ep_returns)
+                lines.append(
+                    f"  Agent {i}: mean={mean:.2f}  std={std:.2f}  "
+                    f"per-ep=[{ep_str}]"
+                )
+            lines.append("")
         return lines
 
     def _summary_milestones(self):
-        lines = ["--- Milestones per Agent ---"]
+        lines = ["--- Milestones per Agent (run total) ---"]
         for i in range(self.num_agents):
             earned = sorted(self._agent_milestones.get(f"agent_{i}", set()))
             lines.append(f"  Agent {i} (agent): {', '.join(earned) if earned else 'none'}")
+        lines.append("")
+        return lines
+
+    def _summary_per_episode_aggregates(self):
+        """Per-episode mean ± std block for the headline aggregable metrics:
+        episode length, milestone count, comm count, and per-track reward."""
+        n_eps = len(self.episode_lengths)
+        if n_eps == 0:
+            return []
+        lines = [f"--- Per-Episode Aggregates (n={n_eps} episodes) ---"]
+        mean_len = statistics.fmean(self.episode_lengths)
+        std_len = (
+            statistics.pstdev(self.episode_lengths)
+            if n_eps >= 2 else 0.0
+        )
+        lines.append(f"  Episode length:  mean={mean_len:.1f}  std={std_len:.1f}")
+        lines.append("  Milestones per episode (count):")
+        for i in range(self.num_agents):
+            counts = [len(ms) for ms in self.milestones_per_episode[i]]
+            mean_c = statistics.fmean(counts) if counts else 0.0
+            std_c = statistics.pstdev(counts) if len(counts) >= 2 else 0.0
+            lines.append(
+                f"    Agent {i}: mean={mean_c:.2f}  std={std_c:.2f}  "
+                f"per-ep={counts}"
+            )
+        lines.append("  Comm count per episode:")
+        for i in range(self.num_agents):
+            counts = self.comm_count_per_episode[i]
+            mean_c = statistics.fmean(counts) if counts else 0.0
+            std_c = statistics.pstdev(counts) if len(counts) >= 2 else 0.0
+            lines.append(
+                f"    Agent {i}: mean={mean_c:.2f}  std={std_c:.2f}  "
+                f"per-ep={counts}"
+            )
+        lines.append("  Track rewards per episode (mean):")
+        for i in range(self.num_agents):
+            agent_eps = self.track_rewards_per_episode[i]
+            if not agent_eps:
+                continue
+            per_track_means = {
+                track: statistics.fmean(
+                    [d.get(track, 0.0) for d in agent_eps]
+                )
+                for track in TRACKS
+            }
+            parts = "  ".join(
+                f"{track}={v:.2f}" for track, v in per_track_means.items()
+            )
+            lines.append(f"    Agent {i}: {parts}")
         lines.append("")
         return lines
 
@@ -888,6 +1874,35 @@ class CraftiumMetric:
             f"  Avg per step:   {total / max(self.timestep, 1):.2f}",
             "",
         ]
+
+    def _summary_action_health(self):
+        """Idle-force breakdown: how often the env had to rescue an agent that
+        emitted NoOp, split by cause. A high ``invalid`` count means the policy
+        is inventing action names (clamped to NoOp then force-moved); a high
+        ``explicit`` count means it is deliberately stalling. Both are masked
+        coordination failures — surfaced here so they are not silent.
+        """
+        total_inv = sum(c.get("invalid_action", 0) for c in self.idle_force_counts.values())
+        total_exp = sum(c.get("explicit_noop", 0) for c in self.idle_force_counts.values())
+        total_rec = sum(self.action_recovered_counts.values())
+        if total_inv == total_exp == total_rec == 0:
+            return []
+        lines = ["--- Action Health ---"]
+        lines.append(
+            f"  Forced MoveForward (idle): {total_inv + total_exp}  "
+            f"(invalid_action={total_inv}, explicit_noop={total_exp})"
+        )
+        lines.append(
+            f"  Recovered (synonym/format -> valid): {total_rec}"
+        )
+        agents = sorted(set(self.idle_force_counts) | set(self.action_recovered_counts))
+        for name in agents:
+            c = self.idle_force_counts.get(name, {})
+            inv, exp = c.get("invalid_action", 0), c.get("explicit_noop", 0)
+            rec = self.action_recovered_counts.get(name, 0)
+            lines.append(f"  {name}: invalid={inv}, explicit={exp}, recovered={rec}")
+        lines.append("")
+        return lines
 
     def _summary_rl(self):
         if not (self.rl_updates or self.rl_token_opts):
@@ -969,6 +1984,50 @@ class CraftiumMetric:
         metric.timestep = d.get("timestep", 0)
         metric.cumulative_returns = [
             float(x) for x in d.get("cumulative_returns", [0.0] * num_agents)
+        ]
+        metric.episode_returns = [
+            float(x) for x in d.get("episode_returns", [0.0] * num_agents)
+        ]
+        metric.per_episode_returns = [
+            [float(x) for x in ep_list]
+            for ep_list in d.get(
+                "per_episode_returns", [[] for _ in range(num_agents)]
+            )
+        ]
+        _tre = d.get("track_rewards_episode", {})
+        metric.track_rewards_episode = {
+            i: dict(_tre.get(str(i), {t: 0.0 for t in TRACKS}))
+            for i in range(num_agents)
+        }
+        for i in range(num_agents):
+            for t in TRACKS:
+                metric.track_rewards_episode[i].setdefault(t, 0.0)
+        metric.track_rewards_per_episode = [
+            [dict(d_ep) for d_ep in agent_eps]
+            for agent_eps in d.get(
+                "track_rewards_per_episode", [[] for _ in range(num_agents)]
+            )
+        ]
+        _ame = d.get("agent_milestones_episode", {})
+        metric._agent_milestones_episode = {
+            i: set(_ame.get(str(i), [])) for i in range(num_agents)
+        }
+        metric.milestones_per_episode = [
+            [list(ms) for ms in agent_eps]
+            for agent_eps in d.get(
+                "milestones_per_episode", [[] for _ in range(num_agents)]
+            )
+        ]
+        metric.comm_count_episode = [
+            int(x) for x in d.get("comm_count_episode", [0] * num_agents)
+        ]
+        metric.comm_count_per_episode = [
+            [int(x) for x in c] for c in d.get(
+                "comm_count_per_episode", [[] for _ in range(num_agents)]
+            )
+        ]
+        metric.episode_lengths = [
+            int(x) for x in d.get("episode_lengths", [])
         ]
         metric.reward_history = [
             [tuple(x) for x in agent_h]

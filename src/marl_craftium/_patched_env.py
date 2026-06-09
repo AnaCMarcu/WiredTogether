@@ -1,16 +1,20 @@
 """Patched ``MarlCraftiumEnv`` with HPC fixes.
 
-Five concerns layered on top of upstream:
+Six concerns layered on top of upstream:
 
 1. **Binary name** — newer Luanti builds renamed ``./bin/minetest`` → ``./bin/luanti``.
 2. **Headless clients** — upstream only forces ``SDL_VIDEODRIVER=offscreen`` on
    client 0; on display-less HPC nodes clients 1+ crash.
-3. **Persistent media cache** — without a stable cache symlink, every reset
+3. **Subprocess env inheritance** — upstream sets ``proc_env = {"SDL_VIDEODRIVER":
+   "offscreen"}`` and passes it as ``env=`` to Popen, which *replaces* the parent
+   env. Anything the launcher set in ``os.environ`` (e.g. ``CH1_TIMEOUT_TICKS``
+   read by Lua) is dropped; we merge ``os.environ`` in.
+4. **Persistent media cache** — without a stable cache symlink, every reset
    re-downloads VoxeLibre media (5-60 minutes). Symlink each client's
    ``cache/`` to ``$SCRATCH/.craftium_media_cache``.
-4. **Pre-listen sockets** — upstream calls ``listen()`` only inside
+5. **Pre-listen sockets** — upstream calls ``listen()`` only inside
    ``server_listen()`` which races with the client's ``connect()`` call.
-5. **Server-ready polling** — upstream ``time.sleep(5)`` is far too short for
+6. **Server-ready polling** — upstream ``time.sleep(5)`` is far too short for
    VoxeLibre on HPC; we poll the server's stderr for ``"listening on"``.
 
 All of these wrap upstream rather than fork it, so we stay forward-compatible
@@ -40,10 +44,27 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         super().__init__(**kwargs)
         self._fix_binary_names()
         self._fix_headless_clients()
+        self._inherit_parent_env()
         self._fix_media_cache()
         # Per-agent position tracking for exploration reward.
         self._prev_pos = [None] * self.num_agents
         self._positions = [None] * self.num_agents
+        # Native vector observations delivered by mt_channel every step.
+        # Pre-refactor the patched env discarded vel/pitch/yaw/dtime by
+        # assigning them to `_vel`, `_pitch`, `_yaw`, `_dtime` locals; T1.3
+        # stashes them on `self` instead so downstream code can access the
+        # native Craftium values without having to re-read from Lua state
+        # files. Units: pos/vel in world blocks (already divided by 1000
+        # from Lua's internal int units); pitch/yaw in degrees (divided by
+        # 100); dtime in seconds.
+        self._velocities = [None] * self.num_agents
+        self._pitches    = [0.0] * self.num_agents
+        self._yaws       = [0.0] * self.num_agents
+        self._dtimes     = [0.0] * self.num_agents
+        # T2.1 voxel observation buffer. Populated only when the env was
+        # constructed with voxel_obs=True; otherwise the mt_channel
+        # returns an empty tensor and these stay None.
+        self._voxobs = [None] * self.num_agents
 
     # ─── Patches at construction time ─────────────────────────────────
 
@@ -81,6 +102,22 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
             elif "SDL_VIDEODRIVER" not in client.proc_env:
                 client.proc_env["SDL_VIDEODRIVER"] = "offscreen"
         print(f"* Forced all {len(self.mt_clients)} clients to headless (offscreen SDL)")
+
+    def _inherit_parent_env(self) -> None:
+        """Merge ``os.environ`` into each subprocess's ``proc_env``.
+
+        Upstream sets ``proc_env = {"SDL_VIDEODRIVER": "offscreen"}`` and passes
+        that as ``env=`` to Popen, which **replaces** the parent env. That drops
+        anything the launcher set in ``os.environ`` — e.g. ``CH1_TIMEOUT_TICKS``
+        (read by Lua's ``config.lua``), so Lua silently falls back to its
+        hardcoded default (1200 ticks ≈ 133 env steps) and agents get
+        teleported out of Ch1 almost immediately.
+
+        Merging with proc_env overrides on top preserves both: the parent env
+        propagates, and the headless SDL override still wins.
+        """
+        for sub in (self.mt_server, *self.mt_clients):
+            sub.proc_env = {**os.environ, **(sub.proc_env or {})}
 
     def _fix_media_cache(self) -> None:
         """Symlink a persistent cache dir into each client's run_dir.
@@ -156,7 +193,7 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
                 keys[ACTION_ORDER.index(k)] = v
 
         self.mt_channs[agent_id].send(keys, mouse_x, mouse_y)
-        observation, _voxobs, pos, _vel, _pitch, _yaw, _dtime, reward, termination = (
+        observation, voxobs, pos, vel, pitch, yaw, dtime, reward, termination = (
             self.mt_channs[agent_id].receive()
         )
         if not self.gray_scale_keepdim and not self.rgb_observations:
@@ -165,6 +202,18 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         self.last_observations[agent_id] = observation
         self._prev_pos[agent_id] = self._positions[agent_id]
         self._positions[agent_id] = pos
+        # Stash the native vector observations so downstream code (the
+        # custom env adapter, the prompt builder, the stuck detector)
+        # can read them without re-going through Lua-side state files.
+        self._velocities[agent_id] = vel
+        self._pitches[agent_id]    = pitch
+        self._yaws[agent_id]       = yaw
+        self._dtimes[agent_id]     = dtime
+        # Voxel observation (None when not enabled at construction). The
+        # tensor shape is (2rx+1, 2ry+1, 2rz+1, 3); channel 0 = node id,
+        # channel 1 = light, channel 2 = param2. Coordinate convention is
+        # NUE (North / Up / East).
+        self._voxobs[agent_id] = voxobs
 
         info = self._get_info()
         truncated = self.max_timesteps is not None and self.timesteps >= self.max_timesteps

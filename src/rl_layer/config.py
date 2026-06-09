@@ -61,7 +61,13 @@ class RLConfig:
 
     # ── Reward shaping ──
     normalize_rewards: bool = True   # running mean/std normalisation before buffer storage
-    death_penalty: float = -50.0     # added to reward when agent terminates (done=True)
+    # The environment (deaths.lua) already applies the -50 terminal death
+    # penalty into the env reward stream on a real Ch5 death — the SAME
+    # transition that has done=True here. Adding it again would double-count
+    # (-100) on RL runs, so this is 0: the env owns the death penalty, giving a
+    # single -50 consistent across LLM and RL runs. Set non-zero only if you
+    # want an *additional* RL-side termination penalty on top of the env's.
+    death_penalty: float = 0.0       # added to reward when agent terminates (done=True)
 
     # ── Entropy annealing ──
     # Linearly decay entropy coefficient from entropy_start to entropy_end over
@@ -88,19 +94,15 @@ class RLConfig:
     token_opt_epochs: int = 2
 
     # ── Action space (must match VALID_ACTIONS in custom_environment_craftium.py) ──
-    # Primitive actions first (indices 0-21), macros appended at the end (22-26)
-    # so existing checkpoints retain correct primitive indices.
-    # Macros execute over multiple environment ticks; the RL buffer receives a
-    # single store_action() when the macro is chosen and one store_reward() with
-    # the accumulated total once is_macro_running() returns False.
+    # Primitives ONLY (indices 0-21). The 4 macro actions were removed: agents
+    # commit to single-tick primitives and re-decide every step (macros spent
+    # ~30% of env-time on autopilot with no perception/comm, harming coordination).
     actions: tuple = (
         "NoOp", "MoveForward", "MoveBackward", "MoveLeft", "MoveRight",
         "Jump", "Sneak", "Dig", "Place",
         "Slot1", "Slot2", "Slot3", "Slot4", "Slot5",
         "TurnRight", "TurnLeft", "LookDown", "LookUp",
         "Drop", "Slot6", "Slot7", "Slot8",
-        # ── Macro actions (multi-step, rewards accumulated across ticks) ──
-        "TurnAround", "ScanArea", "ApproachTarget", "Escape",
     )
 
     # Mask Slot*-prefixed actions out of the policy distribution.

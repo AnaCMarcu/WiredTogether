@@ -6,25 +6,57 @@ Completed milestones for this agent: {completed_milestones}
 Inventory (wielded + main slots): {inventory}
 Position: {position_text}
 
-Suggest ONE specific next task appropriate to the current chamber and progress.
-The task MUST target the next unfinished milestone for the current chamber.
-Use {completed_milestones} to identify which chamber milestones are still open,
-and pick a concrete action that directly advances one of those open milestones.
-Do not suggest tasks for a different chamber or milestones that are already done.
+The user prompt gives a per-chamber milestone-progress block showing what THIS agent fired,
+what teammates fired, and what is still [OPEN]. Treat that block as AUTHORITATIVE — do not
+infer remaining work from {completed_milestones} alone. The "(YOU ARE HERE)" line is the
+current chamber.
+
+Suggest ONE specific next task for the current chamber. It MUST target an [OPEN] milestone on
+the "(YOU ARE HERE)" line. Prefer milestones that are: (1) in the current chamber, and (2)
+[OPEN] for the whole team, OR [team done, you didn't fire] for per-agent rewards (e.g. M1
+move_5 fires per-agent). Do NOT suggest tasks for [you done] milestones, or for chambers the
+agent hasn't entered (unless the goal is to reach the next door).
 
 Respond in JSON: {{"reasoning": "...", "task": "..."}}
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GROUNDING — THE ONLY ENTITIES THAT EXIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Ch1: trees (brown trunks), stone blocks (gray 2-block pillars), chickens (white, small),
+  sheep (white, bigger), dirt floor, and "Door 1" (a red bedrock-textured block in the north
+  wall, locked).
+- Ch2: 2 purple anvils on gray stone pedestals — only the PURPLE top block is interactive;
+  the gray pedestal is inert. Bedrock floor.
+- Ch3: 3 isolation cells (one per agent), each with one BLUE cube switch on the south wall;
+  a north communal room to regroup in.
+- Ch4: 3 zombies (hostile). Agents arrive holding a diamond sword (Slot1) and chestplate.
+- Ch5: 1 boss zombie (60 HP, 3 damage/hit).
+
+ENTITIES THAT DO NOT EXIST and MUST NEVER appear in your task: redstone, lever, button,
+valve, gear (as a separate item — diamond gear is fine), pickaxe, ore, ladder, rail, plank,
+chest, furnace, crafting table, bed, torch, lectern, sign. If the agent's thoughts mention any
+of these, it is a perception error — propose a task on a REAL entity instead.
+
+TASK NAMING RULES:
+- Use plain-English descriptions of REAL entities only; do not invent items/blocks/interactions.
+- Allowed verbs: Dig, MoveForward, MoveBackward, TurnLeft, TurnRight, LookUp, LookDown, Jump,
+  Slot1..Slot8.
+- DO NOT propose "Equip the sword" — gear auto-equips on anvil break, no Slot1 action needed.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 Guidance by chamber (use only what applies):
-- Ch1, no digs yet:                "Dig a tree (move to nearest wood block and use Dig)"
-- Ch1, no animals killed:          "Find and attack a chicken or sheep"
-- Ch1, all solo tasks done:        "Move north through the open door into Chamber 2"
-- Ch2, no anvils broken:           "Stand next to a teammate at the sword anvil and both use Dig together"
-- Ch2, 1 anvil broken:             "Move to the chestplate anvil and dig it together with a teammate"
-- Ch2, both anvils broken:         "Wait — Door 2 is opening, you'll be teleported to Chamber 3 shortly"
-NOTE for Ch2: there are EXACTLY 2 anvils total (one sword, one chestplate). Solo digging makes ZERO progress (DECAY cancels SOLO_DIG_RATE). 2+ agents punching the same anvil within ~1 second = +3 hp/tick. When an anvil breaks, EVERY agent automatically receives the gear (sword auto-wielded, chestplate auto-equipped) — no pickup or Slot1 action needed.
-- Ch3, in isolation cell:          "Announce your cell in chat, then press the switch"
-- Ch3, door opened, in cell:       "Walk out of your cell into the communal room"
-- Ch3, in communal, teammates not: "Wait near the north door for teammates"
-- Ch4, zombies present:            "Attack the nearest zombie with your sword"
-- Ch4, zombies dead:               "Move north into Chamber 5"
-- Ch5, boss alive:                 "Attack the boss together with your teammates"
+- Ch1, no digs yet:           "Dig a tree (move to nearest wood block and use Dig)"
+- Ch1, no animals killed:     "Find and attack a chicken or sheep"
+- Ch1, Door 1 still locked:   "Complete one Ch1 task — ANY of M2/M3/M4/M5/M6/M7 unlocks the red Door 1 for the whole team"
+- Ch1, Door 1 open:           "Move north through the now-open Door 1 into Chamber 2"
+- Ch2, no anvils broken:      "Stand next to a teammate near an anvil and use Dig"
+- Ch2, 1 anvil broken:        "Move to the anvil and dig it together with a teammate"
+- Ch2, both anvils broken:    "Wait — Door 2 is opening; you'll be teleported to Chamber 3 shortly"
+- Ch3, in isolation cell:     "Announce your cell in chat, then press the BLUE switch on the south wall"
+- Ch3, door opened, in cell:  "Walk out of your cell into the communal room"
+- Ch3, in communal, others not: "Wait near the north door for teammates"
+- Ch4, zombies present:       "Attack the nearest zombie with your sword"
+- Ch4, zombies dead:          "Move north into Chamber 5"
+- Ch5, boss alive:            "Attack the boss together with your teammates"
+NOTE for Ch2: EXACTLY 2 anvils total (one will give them swords, one chestplate). Solo digging makes ZERO
+progress (decay cancels the solo dig rate). On break, EVERY agent auto-receives the gear (sword wielded, chestplate equipped) no pickup or Slot1 action needed.

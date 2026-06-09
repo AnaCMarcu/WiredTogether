@@ -1,18 +1,23 @@
 """Per-agent (IPPO) PPO update steps.
 
-Each agent owns its own actor (LoRA + action head) and value head, and runs
-this update independently. MAPPO is achieved by *adding* a shared
-``CentralizedCritic`` (in ``rl_layer/centralized_critic.py``) and passing
+Each agent owns its own actor (LoRA + value head) and runs this update
+independently. MAPPO is achieved by *adding* a shared ``CentralizedCritic``
+(in ``rl_layer/centralized_critic.py``) and passing
 ``value_loss_enabled=False`` to ``action_level_ppo_step`` so the per-agent
 value head is bypassed.
 
-Action-level:  optimises log π(action | prompt) for the discrete Craftium
-actions using a classification head on the LLM's last hidden state.
+Action-level:  optimises log π(action | prompt) where π is the LLM's own
+sequence-log-probability over the candidate action strings (constrained
+generation — see ``RLLayer._score_actions``). ``action_level_ppo_step``
+runs the PPO loss + per-transition gradient accumulation in-function and
+returns only the info dict; the caller in ``ppo_update.py`` does
+zero_grad → call → clip → step around it.
 
 Token-level:   optimises the full token-level log-likelihood of the generated
 response (only triggered by the agent's learning-belief mechanism).
 """
 
+import logging
 from typing import List, Optional, Tuple
 
 import torch
@@ -20,6 +25,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from rl_layer.trajectory_buffer import Transition
+
+logger = logging.getLogger(__name__)
 
 
 # ── Helpers ──
@@ -31,127 +38,189 @@ def _normalize(x: torch.Tensor, eps: float = 1e-5) -> torch.Tensor:
 # ── Action-level PPO update ──
 
 def action_level_ppo_step(
-    model: nn.Module,               # base LM (with LoRA active)
-    action_head: nn.Module,         # linear: hidden_size → n_actions
-    value_head: nn.Module,          # linear: hidden_size → 1
-    tokenizer,
+    rl_layer,                       # RLLayer instance (owns LoRA model + value head + scorer)
     batch: List[Transition],
     clip_eps: float,
     value_clip_eps: float,
     entropy_coef: float,
     value_coef: float,
     device: torch.device,
-    max_length: int = 512,
+    max_length: int = 512,          # accepted for API symmetry; ignored (rl_layer carries cfg)
     value_loss_enabled: bool = True,
-    action_mask: Optional[torch.Tensor] = None,  # (A,) bool, True = allowed
-) -> Tuple[torch.Tensor, dict]:
-    """Single PPO mini-batch update.  Returns scalar loss + info dict.
+    scaler=None,                    # torch.amp.GradScaler the caller is using
+) -> dict:
+    """Per-transition gradient-accumulating PPO mini-batch step.
 
-    When ``value_loss_enabled`` is False (MAPPO mode with a centralised critic),
-    the per-agent value head is bypassed entirely — no forward, no value loss —
-    so the optimizer only updates the actor (LoRA + action head). The critic
-    is updated separately by ``CentralizedCritic.update``.
+    Returns only the diagnostic ``info`` dict — backward + gradient
+    accumulation happen INSIDE this function, per transition.
+
+    Why per-transition: the constrained-generation actor (``_score_actions``)
+    runs ONE full LLM forward per transition. The previous batched version
+    kept all those forward graphs alive until a single end-of-mini-batch
+    backward, with peak memory growing linearly in ``mini_batch_size``. On
+    the 9B + 22-candidate × ~514-token-prompt scoring path that gives
+    ~4 GB of retained ``out.logits`` × N graphs and OOMs even a 45 GB L40
+    by the first PPO update. Doing forward → loss_term/N → backward each
+    iteration releases the graph immediately; peak stays at a single
+    forward regardless of how large the mini-batch is.
+
+    Math equivalence: PPO's mean-reduction loss
+        L = (1/N) Σ_i [ −min(surr1_i, surr2_i) + value_coef·v_loss_i
+                       − entropy_coef·H_i ]
+    Gradient via per-transition backward of (loss_term_i / N):
+        ∂L/∂θ = Σ_i ∂(loss_term_i / N)/∂θ
+    so accumulating gradients across iterations yields the exact same
+    parameter update as the batched form. Adv-stat diagnostics are
+    computed on stored buffer scalars (no autograd needed).
+
+    A transition whose stored canonical action_idx is NOT in the current
+    candidate set is dropped (e.g. checkpoint resumed after
+    mask_slot_actions toggled). When every transition is dropped we
+    return an empty info dict without calling backward.
     """
 
-    prompts = [t.prompt_text for t in batch]
-    action_idxs = torch.tensor([t.action_idx for t in batch], device=device)
-    old_log_probs = torch.tensor([t.old_log_prob for t in batch],
-                                 dtype=torch.float32, device=device)
-    advantages = torch.tensor([t.advantage for t in batch],
-                              dtype=torch.float32, device=device)
+    candidate_set = rl_layer._candidate_actions
+    full_to_cand = rl_layer._full_idx_to_cand_idx
 
-    # Advantages are already normalized over the full rollout in compute_gae().
-    # Do NOT normalize here — per-mini-batch normalization would destroy the
-    # signal about which parts of the rollout were better than others.
+    # ── Pre-filter dropped transitions BEFORE any forward ──
+    # The drop predicate is buffer-only, so we can count N_kept up front
+    # and use it as the per-transition loss divisor (= batched-mean math).
+    kept: List[Tuple[Transition, int]] = []
+    for tr in batch:
+        cand_idx = full_to_cand.get(tr.action_idx, -1)
+        if cand_idx >= 0:
+            kept.append((tr, cand_idx))
 
-    # Tokenize prompts — cap at max_length to bound activation memory.
-    # At 512 tokens the RL prompt fits comfortably; model_max_length (32768)
-    # would make the padded batch 64× larger and OOM during backprop.
-    enc = tokenizer(
-        prompts,
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-        max_length=max_length,
-    ).to(device)
+    # Batch-level advantage statistics (no autograd; just numpy on stored scalars).
+    advantages_stats = torch.tensor(
+        [tr.advantage for tr, _ in kept],
+        dtype=torch.float32, device=device,
+    ) if kept else None
 
-    # Forward pass – get last hidden state
-    outputs = model(**enc, output_hidden_states=True)
-    # Use last token of each sequence (like causal LM pooling)
-    seq_lengths = (enc.attention_mask.sum(dim=1) - 1).to(device)  # (B,)
-    last_hidden = outputs.hidden_states[-1]  # (B, L, H)
-    batch_idx = torch.arange(last_hidden.size(0), device=device)
-    pooled = last_hidden[batch_idx, seq_lengths].float()  # (B, H) — upcast to fp32 to prevent NaN from fp16 overflow
+    if not kept:
+        # Degenerate mini-batch (all transitions filtered). No backward
+        # call this iteration — gradients from prior iterations stay
+        # accumulated; the outer loop's optimizer.step() will use them.
+        return {
+            "policy_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0,
+            "clip_frac": 0.0, "ratio_max": 1.0, "ratio_mean": 1.0,
+            "adv_mean": 0.0, "adv_std": 0.0, "adv_min": 0.0, "adv_max": 0.0,
+            "frac_pos_advantage": 0.5, "value_loss": 0.0,
+            "n_kept": 0, "n_dropped": len(batch),
+        }
 
-    # Action head → policy distribution over discrete actions
-    action_logits = action_head(pooled)  # (B, n_actions)
-    # Apply the same action mask used at sampling time so that log-prob /
-    # entropy computation is consistent with the policy that produced the
-    # behaviour. Without this the ratio = exp(new − old) would be biased.
-    if action_mask is not None:
-        action_logits = action_logits.masked_fill(
-            ~action_mask.unsqueeze(0), float("-inf")
+    N_kept = len(kept)
+
+    # ── Per-transition forward → loss → backward (graph released each iter) ──
+    policy_loss_sum = 0.0
+    entropy_sum     = 0.0
+    approx_kl_sum   = 0.0
+    clip_count      = 0
+    ratio_values: List[float] = []
+    value_loss_sum  = 0.0
+    n_nonfinite     = 0
+
+    for tr, cand_idx in kept:
+        cand_logp, pooled = rl_layer._score_actions(
+            tr.prompt_text, candidate_set, with_grad=True,
         )
-    action_dist = torch.distributions.Categorical(logits=action_logits)
-    new_log_probs = action_dist.log_prob(action_idxs)
-    entropy = action_dist.entropy().mean()
+        # Defensive: a non-finite forward (fp16 overflow, or weights already
+        # corrupted by an earlier bad step) would crash Categorical(). Skip the
+        # transition and warn rather than killing the whole run; the grad guard
+        # in run_ppo_update prevents the corruption that usually causes this.
+        if not torch.isfinite(cand_logp).all():
+            n_nonfinite += 1
+            continue
+        dist = torch.distributions.Categorical(logits=cand_logp)
+        idx_t = torch.tensor(cand_idx, device=device)
+        new_log_prob = dist.log_prob(idx_t).to(torch.float32)
+        entropy_term = dist.entropy().to(torch.float32)
 
-    # ── PPO clipped policy loss ──
-    ratio = (new_log_probs - old_log_probs).exp()
-    surr1 = ratio * advantages
-    surr2 = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * advantages
-    policy_loss = -torch.min(surr1, surr2).mean()
+        old_log_prob = torch.tensor(
+            tr.old_log_prob, dtype=torch.float32, device=device,
+        )
+        advantage = torch.tensor(
+            tr.advantage, dtype=torch.float32, device=device,
+        )
 
-    # Diagnostics for the audit (section 5): ratio distribution + advantage
-    # sign balance. After per-rollout normalisation in compute_gae() the
-    # advantage mean should be ~0; if frac_pos drifts far from 0.5 the
-    # advantages are degenerate. ratio_max > 2.0 means the data is heavily
-    # off-policy by the time we update.
-    with torch.no_grad():
-        _ratio_diff = (ratio - 1.0).abs()
-        ratio_max  = float(ratio.max().item())
-        ratio_mean = float(ratio.mean().item())
-        adv_mean   = float(advantages.mean().item())
-        adv_std    = float(advantages.std().item())
-        adv_min    = float(advantages.min().item())
-        adv_max    = float(advantages.max().item())
-        frac_pos_advantage = float((advantages > 0).float().mean().item())
+        # PPO clipped surrogate — scalar per transition.
+        ratio = (new_log_prob - old_log_prob).exp()
+        surr1 = ratio * advantage
+        surr2 = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * advantage
+        p_loss = -torch.min(surr1, surr2)
 
+        if value_loss_enabled:
+            returns_t   = torch.tensor(tr.returns,   dtype=torch.float32, device=device)
+            old_value_t = torch.tensor(tr.old_value, dtype=torch.float32, device=device)
+            new_value = rl_layer.value_head(pooled).squeeze(-1).to(torch.float32)
+            value_clipped = old_value_t + torch.clamp(
+                new_value - old_value_t, -value_clip_eps, value_clip_eps,
+            )
+            v_loss1 = F.mse_loss(new_value, returns_t, reduction="none").squeeze()
+            v_loss2 = F.mse_loss(value_clipped, returns_t, reduction="none").squeeze()
+            # PPO2 value clipping uses MAX, not min — see centralized_critic.py.
+            v_loss  = torch.max(v_loss1, v_loss2)
+            loss_term = (p_loss + value_coef * v_loss - entropy_coef * entropy_term) / N_kept
+            value_loss_sum += float(v_loss.item())
+        else:
+            loss_term = (p_loss - entropy_coef * entropy_term) / N_kept
+
+        # ── Backward releases the forward graph ──
+        # All retained tensors for this transition (out.logits, hidden
+        # states, gather indices, etc.) drop their grad refs after this
+        # call; peak memory now stays at one forward's worth.
+        if scaler is not None:
+            scaler.scale(loss_term).backward()
+        else:
+            loss_term.backward()
+
+        # Diagnostics — scalars only, no autograd-connected tensors retained.
+        r_val = float(ratio.item())
+        ratio_values.append(r_val)
+        policy_loss_sum += float(p_loss.item())
+        entropy_sum     += float(entropy_term.item())
+        approx_kl_sum   += float((old_log_prob - new_log_prob).item())
+        if abs(r_val - 1.0) > clip_eps:
+            clip_count += 1
+
+    if n_nonfinite:
+        logger.warning(
+            "action_level_ppo_step: %d/%d transitions had non-finite logits "
+            "and were skipped (model may be diverging — check grad norms).",
+            n_nonfinite, N_kept,
+        )
+
+    # Every transition produced non-finite logits → nothing to report and no
+    # gradient was accumulated. Return a degenerate info dict (mirrors the
+    # all-filtered case) instead of crashing on max([]) / div-by-zero below.
+    if not ratio_values:
+        return {
+            "policy_loss": 0.0, "entropy": 0.0, "approx_kl": 0.0,
+            "clip_frac": 0.0, "ratio_max": 1.0, "ratio_mean": 1.0,
+            "adv_mean": 0.0, "adv_std": 0.0, "adv_min": 0.0, "adv_max": 0.0,
+            "frac_pos_advantage": 0.5, "value_loss": 0.0,
+            "n_kept": 0, "n_dropped": len(batch), "n_nonfinite": n_nonfinite,
+        }
+
+    # ── Build info dict (means over the kept mini-batch) ──
     info = {
-        "policy_loss": policy_loss.item(),
-        "entropy": entropy.item(),
-        "approx_kl": (old_log_probs - new_log_probs).mean().item(),
-        "clip_frac": (_ratio_diff > clip_eps).float().mean().item(),
-        "ratio_max":  ratio_max,
-        "ratio_mean": ratio_mean,
-        "adv_mean":   adv_mean,
-        "adv_std":    adv_std,
-        "adv_min":    adv_min,
-        "adv_max":    adv_max,
-        "frac_pos_advantage": frac_pos_advantage,
+        "policy_loss": policy_loss_sum / N_kept,
+        "entropy":     entropy_sum / N_kept,
+        "approx_kl":   approx_kl_sum / N_kept,
+        "clip_frac":   clip_count / N_kept,
+        "ratio_max":   max(ratio_values),
+        "ratio_mean":  sum(ratio_values) / N_kept,
+        "adv_mean":    float(advantages_stats.mean().item()),
+        "adv_std":     float(advantages_stats.std().item()) if N_kept > 1 else 0.0,
+        "adv_min":     float(advantages_stats.min().item()),
+        "adv_max":     float(advantages_stats.max().item()),
+        "frac_pos_advantage": float((advantages_stats > 0).float().mean().item()),
+        "n_kept":      N_kept,
+        "n_dropped":   len(batch) - N_kept,
+        "n_nonfinite": n_nonfinite,
+        "value_loss":  value_loss_sum / N_kept if value_loss_enabled else 0.0,
     }
-
-    if value_loss_enabled:
-        returns = torch.tensor([t.returns for t in batch],
-                               dtype=torch.float32, device=device)
-        old_values = torch.tensor([t.old_value for t in batch],
-                                  dtype=torch.float32, device=device)
-        new_values = value_head(pooled).squeeze(-1)  # (B,)
-        value_clipped = old_values + torch.clamp(
-            new_values - old_values, -value_clip_eps, value_clip_eps
-        )
-        v_loss1 = F.mse_loss(new_values, returns, reduction="none")
-        v_loss2 = F.mse_loss(value_clipped, returns, reduction="none")
-        # PPO2 value clipping uses MAX, not min (see centralized_critic.py
-        # for the rationale). Active in independent-critic mode only.
-        value_loss = torch.max(v_loss1, v_loss2).mean()
-        loss = policy_loss + value_coef * value_loss - entropy_coef * entropy
-        info["value_loss"] = value_loss.item()
-    else:
-        loss = policy_loss - entropy_coef * entropy
-        info["value_loss"] = 0.0
-
-    return loss, info
+    return info
 
 
 # ── Token-level PPO update (for self-triggered fine-tuning) ──

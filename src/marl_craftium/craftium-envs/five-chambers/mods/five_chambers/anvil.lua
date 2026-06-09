@@ -20,11 +20,27 @@ five_chambers.total_anvils       = 0  -- set in init_anvils(); door 2 fires when
 
 -- ── Helpers ──────────────────────────────────────────────────────────
 
-local function anvil_positions()
+-- SINGLE SOURCE OF TRUTH for anvil positions. Called by init_anvils() below
+-- AND by world_gen.lua when it places the physical anvil nodes. Keeping these
+-- in sync was previously a manual job that drifted — world_gen used a 3-column
+-- N-agents loop while this file specified one centre column, so the placed
+-- nodes had no state and the state entries had no nodes. Every anvil punch
+-- silently early-returned. Exposing this function publicly makes the two
+-- callers share one definition.
+function five_chambers.anvil_positions()
     -- Two anvils: sword (row A) and chestplate (row B). Centred along x in
     -- Ch2 so all 3 agents can reach either from the south-side spawn.
+    --
+    -- pos is the eye-level (FLOOR_Y+2) position of the PURPLE punchable
+    -- anvil — the ONLY interactive block in the pillar. world_gen.lua
+    -- additionally places a gray, non-interactive pedestal node
+    -- (`five_chambers:anvil_pedestal`) one block below at FLOOR_Y+1. The
+    -- pedestal is purely cosmetic: it lifts the anvil into the agent's
+    -- field of view but has no on_punch handler, so digging it does
+    -- nothing (and it isn't in the `stone` group, so it can't be mistaken
+    -- for an M7 dig target either).
     local c  = five_chambers.CH2
-    local y  = five_chambers.FLOOR_Y + 1
+    local y  = five_chambers.FLOOR_Y + 2
     local cx = math.floor((c.x0 + c.x1) / 2)  -- 6 for default Ch2 bounds
     return {
         {
@@ -34,7 +50,7 @@ local function anvil_positions()
         },
         {
             pos          = {x = cx, y = y, z = c.z0 + 5},
-            milestone_id = "m11_anvil_B1",
+            milestone_id = "m9_anvil_B1",
             row          = "B",  -- drops chestplates
         },
     }
@@ -72,6 +88,27 @@ minetest.register_node("five_chambers:anvil", {
     end,
 })
 
+-- Cosmetic gray pedestal block. Lifts the purple anvil block into the
+-- agent's field of view (eye level at FLOOR_Y+2 instead of foot level)
+-- without itself being interactive: no on_punch handler, marked
+-- unbreakable, and deliberately NOT in the `stone` group so digging it
+-- could never count toward M7 (m7_dig_3_stone). One pedestal per anvil
+-- is placed at FLOOR_Y+1 by world_gen.lua, directly below the
+-- corresponding `five_chambers:anvil` block.
+minetest.register_node("five_chambers:anvil_pedestal", {
+    description = "Anvil Pedestal (Gray)",
+    -- Plain mid-gray over the same stone base used for the anvil — visually
+    -- a neutral architectural block, clearly distinct from the purple anvil
+    -- above it and from the red locked-door blocks elsewhere in Ch2.
+    tiles  = {
+        "default_stone.png^[colorize:#808080:160",  -- top
+        "default_stone.png^[colorize:#808080:160",  -- bottom
+        "default_stone.png^[colorize:#909090:160",  -- sides (slightly brighter)
+    },
+    groups = {unbreakable = 1},
+    -- Intentionally no on_punch.
+})
+
 -- Keep as no-op so init.lua call (legacy) does nothing harmful.
 function five_chambers.register_anvil_node() end
 
@@ -81,7 +118,7 @@ function five_chambers.init_anvils()
     five_chambers.anvil_state        = {}
     five_chambers.anvil_breaks_total = 0
     five_chambers.anvil_first_breaks = 0
-    local positions = anvil_positions()
+    local positions = five_chambers.anvil_positions()
     five_chambers.total_anvils = #positions
     for _, info in ipairs(positions) do
         local key = minetest.pos_to_string(info.pos)
@@ -92,6 +129,10 @@ function five_chambers.init_anvils()
             milestone_id = info.milestone_id,
             row          = info.row,
             first_break  = false,
+            -- Edge-trigger cooldown for the coop-detected diagnostic.
+            -- nil → never logged this episode yet. Reset by init_anvils
+            -- which runs in the episode-reset handler in init.lua.
+            coop_logged_at = nil,
         }
     end
 end
@@ -114,6 +155,46 @@ minetest.register_globalstep(function(dtime)
             end
         end
         local n = #active
+
+        -- Edge-triggered coop detector: when ≥2 agents are punching the
+        -- same anvil within W ticks, emit a diagnostic log line + a
+        -- JSONL event row (NO reward — purely for post-hoc analysis).
+        -- Edge-trigger prevents a 1-tick coop window from spamming N
+        -- duplicate events; coop_logged_at acts as a cooldown so the
+        -- next event for the same anvil requires another W-tick gap.
+        if n >= 2 and (tick - (state.coop_logged_at or -99999)) > W then
+            state.coop_logged_at = tick
+            local active_str = table.concat(active, ",")
+            minetest.log("action", string.format(
+                "[five_chambers] anvil_coop: anvil=%s row=%s n=%d active=[%s] step=%d",
+                key, tostring(state.row), n, active_str, tick))
+            if io and io.stderr then
+                io.stderr:write(string.format(
+                    "[ANVIL_COOP] anvil=%s n=%d active=%s step=%d\n",
+                    key, n, active_str, tick))
+                io.stderr:flush()
+            end
+            -- Append a JSONL line to anvil_coop_events.jsonl. Python's
+            -- poll_anvil_coop_events() reads this and forwards to the
+            -- metric. We build JSON manually (no LuaJIT JSON dep) the
+            -- same way state_files.lua does for milestone events.
+            local wp = minetest.get_worldpath()
+            if wp then
+                local parts = {}
+                for _, name in ipairs(active) do
+                    table.insert(parts, '"' .. name .. '"')
+                end
+                local json_line = string.format(
+                    '{"step":%d,"anvil":"%s","row":"%s","n_active":%d,"active":[%s]}\n',
+                    tick, key, tostring(state.row), n,
+                    table.concat(parts, ","))
+                local jf = io.open(wp .. "/anvil_coop_events.jsonl", "a")
+                if jf then
+                    jf:write(json_line)
+                    jf:close()
+                end
+            end
+        end
 
         local dig_rate
         if     n == 0 then dig_rate = 0
@@ -154,10 +235,11 @@ minetest.register_globalstep(function(dtime)
             end
 
             -- Destroy the anvil so it cannot be broken again this episode.
-            -- Replaces the node with air (the floor below at y0 stays intact)
-            -- and drops the entry from anvil_state so the globalstep loop
-            -- stops ticking it. Lua's `pairs` allows clearing the current
-            -- key during iteration, so this is safe inside the for loop.
+            -- Only the upper (purple, stateful) block is removed — the
+            -- gray pedestal at state.pos.y - 1 stays as a visible marker
+            -- that an anvil USED to be here. Lua's `pairs` allows clearing
+            -- the current key during iteration, so dropping the entry
+            -- inside the for loop is safe.
             minetest.set_node(state.pos, {name = "air"})
             five_chambers.anvil_state[key] = nil
             minetest.log("action",
