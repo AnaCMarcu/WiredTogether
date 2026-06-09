@@ -108,8 +108,8 @@ def parse_args():
                         help="Enable Weights & Biases logging. Requires WANDB_API_KEY "
                              "in the environment. Failures during init/log are "
                              "tolerated and do not kill training.")
-    parser.add_argument("--wandb-project", type=str, default="final_wired_together",
-                        help="W&B project name (default 'final_wired_together').")
+    parser.add_argument("--wandb-project", type=str, default="wired-together",
+                        help="W&B project name (default 'wired-together').")
     parser.add_argument("--wandb-entity", type=str, default=None,
                         help="W&B entity (team or user). Defaults to your "
                              "wandb-configured default entity.")
@@ -1326,17 +1326,8 @@ async def run(args):
                     print(f"  Saved GIF checkpoint: {gif_path}")
                     _frames_to_mp4(agent_frames, gif_path.replace(".gif", ".mp4"))
 
-        # Per-episode flags so each chamber→next force-teleport fires at most
-        # once per episode (the Lua side also dedupes via door{N}_force_teleported,
-        # but resetting here keeps the Python state in sync after env.reset).
         _force_teleport_fired = {1: False, 2: False, 3: False, 4: False}
 
-        # Per-chamber timer config: each chamber gets 20% of max_steps. The
-        # Ch1→Ch2 trigger fires at step 20% (end of Ch1's budget), Ch2→Ch3 at
-        # 40%, Ch3→Ch4 at 60%, Ch4→Ch5 at 80%. Honest milestone measurement
-        # is preserved — the teleport only relocates agents, never credits a
-        # door/anvil milestone. The "chamber_entry_step" record will show
-        # which chambers were reached organically vs by timer rescue.
         _CHAMBER_PCT = 0.2
         _chamber_trigger_steps = {
             n: max(1, int(max_steps * _CHAMBER_PCT * n))
@@ -1354,15 +1345,6 @@ async def run(args):
             global_step += 1
             logging.info(f"ep={episode+1} step={step+1}/{max_steps} global_step={global_step}")
 
-            # Python-driven per-chamber force-teleport. Each chamber gets
-            # 20% of the episode; once that budget is up, force-advance the
-            # team to the next chamber's spawn. Verb is informational only:
-            #   0 advanced past the source chamber → RESCUE
-            #   1..N-1                              → REGROUP
-            #   N                                   → NUDGE
-            # The teleport always relocates ALL connected agents — agents
-            # who were already further along will be pulled back to cluster
-            # the team. This is intentional: keeps coop puzzles solvable.
             for _from_ch in (1, 2, 3, 4):
                 _trigger_step = _chamber_trigger_steps[_from_ch]
                 if (_force_teleport_fired[_from_ch]
@@ -1397,8 +1379,6 @@ async def run(args):
                           f"chambers={_trigger_chambers})")
 
             if step % log_interval == 0:
-                # W&B: throttled per-step view of the in-progress episode.
-                # Logged at log_interval cadence so we don't spam the API.
                 _wb.log({
                     "step/ep": episode + 1,
                     "step/step_in_ep": step + 1,
@@ -1431,20 +1411,10 @@ async def run(args):
                 print(f"  All agents done at step {step+1}")
                 break
 
-            # Team wipe in Ch5 (boss): deaths.lua signals episode_over once every
-            # agent is permanently dead. Ends the episode early (death is final
-            # only in the boss room; Ch4 deaths respawn).
             if environment.episode_over():
                 print(f"  Team wipe (all agents dead in Ch5) at step {step+1} — ending episode")
                 break
 
-            # Collect current frames for GIF / MP4 capture.
-            #   1. Stream each agent's frame straight to its end-of-ep MP4
-            #      writer (no in-RAM accumulation; bounded RSS).
-            #   2. Push the same frames into the bounded rolling window
-            #      `frames_list` (a deque with maxlen=gif_interval). The
-            #      window drops the oldest frame automatically when full,
-            #      so RSS stays flat regardless of episode length.
             current_frames = []
             for i in range(num_agents):
                 frame = environment.get_agent_frame(i)
@@ -1455,56 +1425,30 @@ async def run(args):
                     try:
                         _mp4_writers[i].append_data(frame)
                     except Exception as _exc:
-                        # Don't crash the run on a transient encode error;
-                        # next step will retry, and the deque-fallback
-                        # still produces an end-of-ep video from the last
-                        # gif_interval frames.
                         logging.warning(
                             "[GIF] streaming MP4 append failed for agent %d "
                             "step %d: %s", i, step + 1, _exc)
             frames_list.append(current_frames)
 
-            # Periodic GIF checkpoint so partial episodes are visible on HPC time limits
             if save_gif and gif_interval > 0 and (step + 1) % gif_interval == 0:
                 _save_gif_checkpoint(step + 1)
 
-            # ── Phase 1: All agents act (collect data for Hebbian) ──
             step_comm_count = 0
             step_rewards_raw = [0.0] * num_agents
-            # Per-source accumulators for the reward decomposition. Populated
-            # at the same sites that mutate step_rewards_raw so the post-step
-            # decomp can split each agent's reward into its true streams
-            # without re-deriving from snapshot differences (which previously
-            # mislabeled drained milestones as "proximity").
             _step_envstep_reward = [0.0] * num_agents   # environment.get_step_reward
             _step_pitch_penalty  = [0.0] * num_agents   # negative; pitch-cap futile
             _step_milestone_drain = [0.0] * num_agents  # poll_milestone_events drain
             _step_death_drain    = [0.0] * num_agents   # negative; poll_death_events drain
             step_contents = [None] * num_agents
             comm_events = []
-            # Per-message metadata staged here in Phase 1a; rewards stamped
-            # and the records flushed to messages.jsonl in Phase 1b.
             _messages_this_step = []
-            # Five-chambers milestone events polled in Phase 1c (drained into
-            # step_rewards_raw before Hebbian) and re-consumed in Phase 3b for
-            # metric/log emission. Reset per step so a `break` upstream cannot
-            # leak last step's events into the next iteration.
             _milestone_events_this_step: list = []
-
-            # Build per-agent social bond summaries for the LLM prompt.
-            # Cached on hebbian_graph._step_count so unchanged bonds skip
-            # the O(N²) rebuild (T1.5).
             _bond_strings = {}
-            # Parallel dicts of raw (weight, delta) per teammate, consumed by
-            # the SocialModule when --social-module != none. Empty when
-            # Hebbian is disabled — the social module then can't run either
-            # since it has no graph to reason about.
             _bond_weights: dict[int, dict[str, float]] = {}
             _bond_deltas: dict[int, dict[str, float]] = {}
             if hebbian_config.enabled:
                 _current_version = int(getattr(hebbian_graph, "_step_count", 0))
                 if _current_version != _bond_cache_version:
-                    # Bonds changed (or first step) → rebuild and refresh cache.
                     for i in range(num_agents):
                         parts = []
                         for j in range(num_agents):
@@ -2234,6 +2178,35 @@ async def run(args):
             for agent_id, agent in enumerate(agents):
                 agent_name = f"agent_{agent_id}"
                 if environment._terminations.get(agent_name, False):
+                    # Terminated (Ch5 permadeath). We must NOT keep accumulating
+                    # ongoing per-step reward for a frozen dead client — but if a
+                    # death penalty was drained for this agent THIS step, that
+                    # terminal −50 still belongs in the episode return. Whether
+                    # the engine flips termination on the death step is
+                    # unreliable (see CraftiumEnvironmentInterface.episode_over),
+                    # so without this the −50 is silently dropped whenever it
+                    # does flip. Book it once — same diffused value + decomp as
+                    # the live path, so no double-count — then skip the RL
+                    # transition (a dead agent has no further actions to credit).
+                    if abs(_step_death_drain[agent_id]) > 1e-6:
+                        metric.record_reward(agent_id, diffused_rewards[agent_id])
+                        metric.record_reward_decomposed(
+                            agent_id, _reward_decomp_this_step[agent_id]
+                        )
+                        # Close the dead agent's last RL transition with the
+                        # terminal reward and done=True, so the value head
+                        # actually learns the death. store_reward() adds
+                        # config.death_penalty on done — exactly as the live path
+                        # would have, had the agent not been skipped — and the
+                        # buffer safely no-ops if there was no pending
+                        # transition. Gated on the death-drain so it fires once,
+                        # only on the step the agent actually died.
+                        if agent.rl_layer and agent.rl_layer.enabled:
+                            agent.rl_layer.store_reward(
+                                diffused_rewards[agent_id], done=True,
+                                reward_task=_task_rewards_this_step.get(agent_id, 0.0),
+                                reward_comm=_comm_rewards_this_step.get(agent_id, 0.0),
+                            )
                     continue
 
                 reward = diffused_rewards[agent_id]
@@ -2532,6 +2505,14 @@ async def run(args):
         }
         for i in range(num_agents):
             _wb_episode_payload[f"ep/return/agent_{i}"] = _ep_return_per_agent[f"agent_{i}"]
+            # Final flush of the per-step return series so the coarse
+            # (log_interval-sampled, default 10) step/episode_return curve always
+            # ends on the TRUE episode total. Otherwise late-episode rewards —
+            # e.g. Ch5 −50 deaths, which land in the last ~20% of steps, after
+            # the final sampled step on short runs — never appear on that curve.
+            _wb_episode_payload[f"step/episode_return/agent_{i}"] = (
+                _ep_return_per_agent[f"agent_{i}"]
+            )
             _wb_episode_payload[f"ep/milestones_reached/agent_{i}"] = _ep_milestone_count[i]
             _wb_episode_payload[f"ep/comm_count/agent_{i}"] = int(_ep_comm_count[i])
             for _track, _val in _ep_track_rewards[i].items():
@@ -2734,6 +2715,12 @@ if __name__ == "__main__":
     print = functools.partial(print, flush=True)
     args = parse_args()
     if args.social_module != "none" and not args.hebbian:
+        # The social module reads from bond_weights / bond_deltas, which
+        # are only populated when the Hebbian graph is enabled. Without
+        # --hebbian, deliberation never runs and the directive falls back
+        # to "Social bonds: N/A" every step — a silent no-op. Fail loudly
+        # rather than letting an experiment run for 24h producing useless
+        # output.
         raise SystemExit(
             "--social-module requires --hebbian to be set (the social "
             "module needs bond weights to reason over)"

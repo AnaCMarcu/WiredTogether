@@ -10,11 +10,13 @@
 --   * Ch1-Ch4: the agent takes NO real damage. register_on_player_hpchange
 --     intercepts every incoming hit, drains a per-agent "virtual HP" pool by
 --     what the hit WOULD have done, and returns 0 so real HP never changes.
---     When that pool would have hit 0 we RECORD a would-have-died (the -10 RL
---     penalty + a [WOULDDIE] log + a counter), then refill the pool. No engine
---     death, no respawn, no teleport, no heal — the agent just keeps playing
---     exactly where it is. Zombies become harmless; only their kill-milestones
---     and the recorded would-deaths matter.
+--     When that pool would have hit 0 we refill it — and ONLY in Ch4 (the
+--     combat chamber) do we also RECORD a would-have-died (the -10 RL penalty
+--     + a [WOULDDIE] log + a counter). In Ch1-Ch3 the refill is silent and
+--     free: a near-death costs nothing. No engine death, no respawn, no
+--     teleport, no heal — the agent just keeps playing exactly where it is.
+--     Zombies become harmless; only their kill-milestones and the recorded
+--     Ch4 would-deaths matter.
 --   * Ch5 (boss): damage is REAL and a lethal hit is a real PERMADEATH. The
 --     agent stays down; once EVERY agent is permanently dead we write an
 --     episode_over flag the Python loop polls to end the episode.
@@ -32,10 +34,10 @@ five_chambers.would_die_count_ch4 = five_chambers.would_die_count_ch4 or {}
 -- Real (terminal) death in the lethal boss chamber (Ch5) — the only place a
 -- death actually ends the agent's episode.
 local DEATH_PENALTY = -50
--- Would-have-died near-miss in the FORGIVING chambers (Ch1-Ch4): the agent is
+-- Would-have-died near-miss in Ch4 (the combat chamber): the agent is
 -- invincible and keeps playing, so this is a smaller graded penalty, not a
--- termination. Real death and a near-death are deliberately different
--- magnitudes (-50 vs -10).
+-- termination. Ch1-Ch3 near-deaths are free (no penalty fires). Real death and
+-- a near-death are deliberately different magnitudes (-50 vs -10).
 local WOULD_DIE_PENALTY = -10
 local MAX_HP = 20
 
@@ -117,28 +119,32 @@ minetest.register_on_player_hpchange(function(player, hp_change, reason)
     end
 
     if vhp <= 0 then
-        -- Authoritative RL channel: JSONL drained by Python (server-side
-        -- craftium.reward below does NOT reach env.step()'s reward channel
-        -- in multi-agent five-chambers — see emit_death_event / state_files.lua).
-        five_chambers.emit_death_event("woulddie", name, chamber, WOULD_DIE_PENALTY)
-        if craftium and craftium.reward then
-            craftium.reward(player, WOULD_DIE_PENALTY)  -- backup (LLM-visibility only)
-        end
-        local n = (five_chambers.would_die_count[name] or 0) + 1
-        five_chambers.would_die_count[name] = n
-        -- Track Ch4 near-deaths separately so M23 can reward a clean run.
+        -- The -10 would-have-died penalty fires ONLY in Ch4 (the combat
+        -- chamber). Ch1-Ch3 are fully forgiving: the agent is still invincible
+        -- and the pool refills below, but a near-death there is recorded with
+        -- NO penalty / event / counter, so it costs the agent nothing.
         if chamber == "ch4" then
+            -- Authoritative RL channel: JSONL drained by Python (server-side
+            -- craftium.reward below does NOT reach env.step()'s reward channel
+            -- in multi-agent five-chambers — see emit_death_event / state_files.lua).
+            five_chambers.emit_death_event("woulddie", name, chamber, WOULD_DIE_PENALTY)
+            if craftium and craftium.reward then
+                craftium.reward(player, WOULD_DIE_PENALTY)  -- backup (LLM-visibility only)
+            end
+            local n = (five_chambers.would_die_count[name] or 0) + 1
+            five_chambers.would_die_count[name] = n
+            -- Ch4 near-deaths tracked separately so M23 can reward a clean run.
             five_chambers.would_die_count_ch4[name] =
                 (five_chambers.would_die_count_ch4[name] or 0) + 1
-        end
-        minetest.log("action", string.format(
-            "[WOULDDIE] %s would have died in %s (#%d, penalty %d) — no respawn",
-            name, tostring(chamber), n, WOULD_DIE_PENALTY))
-        if io and io.stderr then
-            io.stderr:write(string.format(
-                "[WOULDDIE] %s would have died in %s #%d penalty=%d\n",
+            minetest.log("action", string.format(
+                "[WOULDDIE] %s would have died in %s (#%d, penalty %d) — no respawn",
                 name, tostring(chamber), n, WOULD_DIE_PENALTY))
-            io.stderr:flush()
+            if io and io.stderr then
+                io.stderr:write(string.format(
+                    "[WOULDDIE] %s would have died in %s #%d penalty=%d\n",
+                    name, tostring(chamber), n, WOULD_DIE_PENALTY))
+                io.stderr:flush()
+            end
         end
         vhp = MAX_HP  -- refill so the next accumulated lethal damage records again
     end
