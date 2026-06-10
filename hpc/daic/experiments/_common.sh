@@ -162,7 +162,19 @@ run_exp() {
     # Bind-mounting an empty dir OVER /dev/dri hides every render node on EVERY
     # node, so Mesa falls back to CPU llvmpipe (LIBGL_ALWAYS_SOFTWARE=1 +
     # GALLIUM_DRIVER=llvmpipe below). CUDA is unaffected — it uses /dev/nvidia*.
+    #
+    # --pid: give the container its OWN pid namespace. Craftium leaves the
+    # Minetest server + clients running after python exits; in the default
+    # (shared host) pid namespace they linger, hold the squashfuse FUSE mount
+    # open, and Apptainer hangs on teardown ("Terminating squashfuse_ll after
+    # timeout … running background process") until the wall limit — which is
+    # ALSO what leaves the un-cleanable FUSE orphans. With --pid, python is
+    # pid 1, so when it exits the kernel reaps every other process in the ns
+    # (MT + Xvfb), the FUSE unmounts, and exec returns cleanly so the cleanup
+    # below can run. Pid-only isolation; networking is untouched so the
+    # localhost MT server↔client sockets still work.
     apptainer exec --nv \
+        --pid \
         --bind /tmp:/tmp \
         --bind /tudelft.net:/tudelft.net \
         --bind "$WORK_DIR/empty_dri:/dev/dri" \
