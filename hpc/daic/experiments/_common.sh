@@ -64,10 +64,27 @@ run_exp() {
     # cross-referencing.
     local ARTIFACTS_DIR="$REPO/run_artifacts/${RUN_GROUP}/${EXP_NAME}/seed_${SEED}"
     local WORK_DIR="/tmp/$USER/${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
-    mkdir -p "$RUN_DIR" "$ARTIFACTS_DIR" "$WORK_DIR"
+    # Apptainer's own squashfuse/session files + any in-container tempfiles —
+    # kept OUT of WORK_DIR so the salvage rsync doesn't copy them to PRB, but
+    # still under /tmp/$USER so the cleanup below removes them with the rest.
+    local TMP_ROOT="/tmp/$USER/tmp_${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
+    export APPTAINER_TMPDIR="$TMP_ROOT/apptainer"
+    export TMPDIR="$TMP_ROOT"
+    mkdir -p "$RUN_DIR" "$ARTIFACTS_DIR" "$WORK_DIR" "$APPTAINER_TMPDIR"
     # Empty dir bind-mounted OVER /dev/dri (below) to hide all GPU render nodes
     # so Mesa is forced onto CPU/llvmpipe on every node — see the apptainer block.
     mkdir -p "$WORK_DIR/empty_dri"
+
+    # HPC-support requirement: a job MUST clean up everything it writes to the
+    # node's /tmp — orphaned WORK_DIR (craftium minetest-* run dirs, worlds,
+    # wandb, gifs) plus Apptainer's FUSE/session files, which their monitoring
+    # flags as un-cleanable. Remove both on ANY exit: normal finish, error, or a
+    # SLURM cancel/timeout (which sends SIGTERM, firing the EXIT trap; only a
+    # hard SIGKILL can escape). Paths are expanded NOW (double quotes) because
+    # they are function locals that no longer exist when the trap fires.
+    # Tradeoff: on a timeout/cancel this deletes WORK_DIR before the salvage
+    # rsync below runs, so that job's artifacts are lost but /tmp is left clean.
+    trap "rm -rf '$WORK_DIR' '$TMP_ROOT' 2>/dev/null || true" EXIT INT TERM
 
     # The node-wide `pkill -9 -u $USER -f minetest/luanti` pre-flight was
     # REMOVED. It cleared stale procs from crashed jobs, but it ALSO killed the
@@ -152,6 +169,7 @@ run_exp() {
         --env PYTHONPATH="$REPO/src" \
         --env PYTHONUNBUFFERED=1 \
         --env PYTHONIOENCODING=utf-8 \
+        --env TMPDIR="$TMPDIR" \
         --env LANG=C.UTF-8 \
         --env LC_ALL=C.UTF-8 \
         --env LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/craftium.libs \
@@ -270,6 +288,11 @@ run_exp() {
             python -m wandb sync "$ARTIFACTS_DIR/work_artifacts/wandb/offline-run-"* \
             2>&1 | tail -20 || echo "[wandb] auto-sync failed (will need a manual retry)"
     fi
+
+    # Free the node's /tmp now that artifacts are salvaged to PRB. The EXIT
+    # trap is the backstop for abnormal exits; this is the normal-path cleanup.
+    echo "── cleaning node /tmp: $WORK_DIR + $TMP_ROOT ──"
+    rm -rf "$WORK_DIR" "$TMP_ROOT" 2>/dev/null || true
 
     echo "── $EXP_NAME (seed=$SEED) python exit: $EXIT_CODE ──"
     return "$EXIT_CODE"
