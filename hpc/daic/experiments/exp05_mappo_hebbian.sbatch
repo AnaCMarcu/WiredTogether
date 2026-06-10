@@ -34,9 +34,7 @@ run_exp "exp05_mappo_hebbian" "$MODEL_2B" \
     --rl-update-interval 64 \
     --rl-lr 3e-4 \
     --hebbian \
-    --hebbian-ltp 0.01 \
-    --hebbian-ltd 0.005 \
+    --hebbian-eta-0 0.005 \
+    --hebbian-reward-norm 50 \
     --hebbian-decay 0.005 \
-    --hebbian-beta 1.0 \
-    --hebbian-rho 0.3 \
     --hebbian-gamma 0.2 --simultaneous

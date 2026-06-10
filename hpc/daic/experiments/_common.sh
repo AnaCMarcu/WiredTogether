@@ -56,7 +56,7 @@ run_exp() {
     # RUN_GROUP selects the runs/<group>/ subtree. Defaults to "legacy" for
     # backward-compat; the final experiment suite sets RUN_GROUP=final in each
     # sbatch file so results land in runs/final/<exp>/seed_<N>/.
-    local RUN_GROUP="${RUN_GROUP:-legacy}"
+    local RUN_GROUP="${RUN_GROUP:-final}"
     local RUN_DIR="$REPO/runs/${RUN_GROUP}/${EXP_NAME}/seed_${SEED}"
     # Heavy artifacts (craftium debug.txt, wandb offline-runs, intermediate
     # per-100-step gifs) live in a PARALLEL tree so the runs/ dir stays

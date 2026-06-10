@@ -499,13 +499,17 @@ class HebbianSocialGraph:
     ) -> np.ndarray:
         """One gated-Hebbian step (Variant A or B). Vectorised over N×N.
 
-        ΔW_ij  = growth_ij − decay_ij
+        ΔW_ij  = growth_ij − decay_ij − λ·W_ij
         growth_ij = coeff_i · c_ij · (1 − W_ij)
         decay_ij  = η₋ · 1[coop_ij < ε  AND  neg_i] · W_ij
+        λ·W_ij    = homeostatic weight decay (Oja-style; λ = cfg.decay),
+                    ALWAYS on, so the rule has a stable interior fixed point
+                    W* = coeff·c_ij / (coeff·c_ij + λ) instead of the growth
+                    branch running monotonically to the W=1 clip.
 
-        The two branches are mutually exclusive (decay needs coop<ε ⇒ c_ij=0 ⇒
-        no growth), so a per-pair np.where picks exactly one — this also makes
-        the exclusivity invariant exact regardless of fractional gates.
+        The growth/failure-decay branches are mutually exclusive (failure-decay
+        needs coop<ε ⇒ c_ij=0 ⇒ no growth), so a per-pair np.where picks exactly
+        one; the homeostatic λ·W is then subtracted unconditionally on top.
 
         This whole method is a pure NumPy forward rule: NO autograd, no torch.
         """
@@ -551,11 +555,19 @@ class HebbianSocialGraph:
         decay_mask = (coop < cfg.coop_eps) & neg[:, None]        # (N,N) bool
         decay = cfg.eta_minus * self.W                           # (N,N)
 
-        delta = np.where(decay_mask, -decay, growth)
+        # Homeostatic weight decay (Oja-style / synaptic scaling): an always-on
+        # −λ·W term the gated rule otherwise lacked. Without it the growth branch
+        # is monotone and co-present bonds run to the W=1 clip (the saturate→1
+        # failure); with it the system has a stable interior fixed point
+        # W* = coeff·c_ij/(coeff·c_ij + λ), and pairs that stop co-acting
+        # (growth≈0) decay back toward 0 — so the graph differentiates instead of
+        # uniformly saturating. λ = cfg.decay (set via --hebbian-decay).
+        homeostatic = cfg.decay * self.W
+        delta = np.where(decay_mask, -decay, growth) - homeostatic
         np.fill_diagonal(delta, 0.0)
         self._last_growth = np.where(decay_mask, 0.0, growth)
         np.fill_diagonal(self._last_growth, 0.0)
-        self._last_decay = np.where(decay_mask, decay, 0.0)
+        self._last_decay = np.where(decay_mask, decay, 0.0) + homeostatic
         np.fill_diagonal(self._last_decay, 0.0)
 
         if not self.config.freeze_weights:

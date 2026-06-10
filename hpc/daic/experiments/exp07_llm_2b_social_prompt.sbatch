@@ -26,10 +26,8 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,2b,hebbian,social_prompt,final}
 # of the social-module ablation — text-only directive into the action prompt.
 run_exp "exp07_llm_2b_social_prompt" "$MODEL_2B" \
     --hebbian \
-    --hebbian-ltp 0.01 \
-    --hebbian-ltd 0.005 \
+    --hebbian-eta-0 0.005 \
+    --hebbian-reward-norm 50 \
     --hebbian-decay 0.005 \
-    --hebbian-beta 1.0 \
-    --hebbian-rho 0.3 \
     --hebbian-gamma 0.2 \
     --social-module prompt --simultaneous

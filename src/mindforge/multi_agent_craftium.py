@@ -49,8 +49,9 @@ def parse_args():
                         help="Number of episodes to run")
     parser.add_argument("--max-steps", type=int, default=1500,
                         help="Maximum steps per episode (default 1500 — fits the "
-                             "DAIC 36h SLURM budget). Ch1 timeout fires at 50%% "
-                             "(step 750), leaving ~750 steps for Ch2-Ch5. "
+                             "DAIC 36h SLURM budget). Each chamber timeout fires at "
+                             "20%% of this budget (Ch1->Ch2 at step ~300 of 1500), "
+                             "so the five chambers get a 20%% window apiece. "
                              "Override with a larger value (e.g. 2500) when "
                              "running on qos=long / --time=72:00:00 to give "
                              "agents more headroom for organic Ch2-Ch3 "
@@ -1069,21 +1070,6 @@ async def run(args):
         print("[FEATURES] Hardcoded W (row i = agent i's bonds toward j):")
         print(_np.array2string(hebbian_graph.get_all_weights(),
                                precision=2, suppress_small=True))
-    if hebbian_config.enabled:
-        if hebbian_config.mode == "legacy":
-            print(f"Hebbian social plasticity ENABLED [legacy]: "
-                  f"ltp={hebbian_config.ltp_lr}, ltd={hebbian_config.ltd_lr}, "
-                  f"radius={hebbian_config.interaction_radius}, "
-                  f"γ={hebbian_config.reward_diffusion_gamma}")
-        else:
-            print(f"Hebbian social plasticity ENABLED [{hebbian_config.mode}]: "
-                  f"η+={hebbian_config.eta_plus}, η0={hebbian_config.eta_0}, "
-                  f"η-={hebbian_config.eta_minus}, ε={hebbian_config.coop_eps}, "
-                  f"n={hebbian_config.coop_window}, θ={hebbian_config.neg_theta}, "
-                  f"R={hebbian_config.reward_norm_R}, "
-                  f"radius={hebbian_config.interaction_radius}, "
-                  f"γ={hebbian_config.reward_diffusion_gamma}")
-
     comm_mode = "off" if not communication else "targeted"
     print(f"\nConfig: {num_agents} agents, {num_episodes} episodes, "
           f"{max_steps} max steps, comm={comm_mode}, "
@@ -1096,12 +1082,22 @@ async def run(args):
     _roles_str = ", ".join(f"agent_{i}={rc['name']}" for i, rc in enumerate(role_configs))
     print(f"[FEATURES] Role assignment:  {_roles_str}")
     if hebbian_config.enabled:
-        print(f"[FEATURES] Hebbian:          ENABLED  ltp={hebbian_config.ltp_lr}  "
-              f"ltd={hebbian_config.ltd_lr}  gamma={hebbian_config.reward_diffusion_gamma}  "
-              f"radius={hebbian_config.interaction_radius}  decay={hebbian_config.decay}")
+        if hebbian_config.mode == "legacy":
+            print(f"[FEATURES] Hebbian:          ENABLED [legacy]  "
+                  f"ltp={hebbian_config.ltp_lr}  ltd={hebbian_config.ltd_lr}  "
+                  f"decay={hebbian_config.decay}  "
+                  f"radius={hebbian_config.interaction_radius}  "
+                  f"gamma={hebbian_config.reward_diffusion_gamma}")
+        else:
+            print(f"[FEATURES] Hebbian:          ENABLED [{hebbian_config.mode}]  "
+                  f"eta+={hebbian_config.eta_plus}  eta0={hebbian_config.eta_0}  "
+                  f"eta-={hebbian_config.eta_minus}  eps={hebbian_config.coop_eps}  "
+                  f"n={hebbian_config.coop_window}  theta={hebbian_config.neg_theta}  "
+                  f"R={hebbian_config.reward_norm_R}  decay={hebbian_config.decay}  "
+                  f"radius={hebbian_config.interaction_radius}  "
+                  f"gamma={hebbian_config.reward_diffusion_gamma}")
     else:
         print(f"[FEATURES] Hebbian:          OFF")
-    print(f"[FEATURES] Dig reward fixes: stage-gated dig_stage_res + diminishing returns active (Lua)")
     print(f"{_feat_sep}\n")
     # ─────────────────────────────────────────────────────────────────────────
 
