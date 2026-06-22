@@ -1074,3 +1074,8 @@ class HebbianSocialGraph:
         self._coact_window.clear()
         self._reward_window.clear()
         self._max_bond_reward_seen = 0.0
+        # Bond-delta snapshot window: without this, bond_delta_row() right
+        # after reset() compares fresh W against a stale pre-reset snapshot.
+        # Re-seed with the fresh W, mirroring __init__.
+        self._W_history.clear()
+        self._W_history.append(self.W.copy())

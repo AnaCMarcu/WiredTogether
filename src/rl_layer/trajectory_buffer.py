@@ -154,7 +154,9 @@ class RolloutBuffer:
 
         # Normalise advantages over the full rollout (not per mini-batch).
         adv = torch.tensor([tr.advantage for tr in self._buf], dtype=torch.float32)
-        if adv.numel() >= 1:
+        # std() of a single element is NaN (unbiased estimator) — skip
+        # standardisation below 2 transitions instead of corrupting the buffer.
+        if adv.numel() >= 2:
             adv = (adv - adv.mean()) / (adv.std() + 1e-5)
             for i, tr in enumerate(self._buf):
                 tr.advantage = adv[i].item()

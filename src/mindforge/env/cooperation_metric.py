@@ -227,7 +227,7 @@ class CooperationMetric:
     # ── Per-chamber cooperation scoring ───────────────────────────────
     _COOPERATIVE_CHAMBERS = ("ch2", "ch3", "ch4", "ch5")
 
-    _CH2_ANVIL_PREFIXES = ("m8_", "m11_")
+    _CH2_ANVIL_PREFIXES = ("m8_", "m9_")
     _CH3_PRESS_PREFIXES = ("m17_",)
     _CH3_DOOR_PREFIXES  = ("m18_",)
     _CH3_REGROUP_PREFIX = ("m19_",)
@@ -256,7 +256,7 @@ class CooperationMetric:
         """Performance in [0, 1] — how much of the chamber's cooperative
         content the team actually completed."""
         if chamber == "ch2":
-            # 2 anvils to break (m8 sword + m11 chestplate), once-each.
+            # 2 anvils to break (m8 Row A sword + m9 Row B chestplate), once-each.
             return min(self._milestone_count(self._CH2_ANVIL_PREFIXES) / 2.0, 1.0)
         if chamber == "ch3":
             total = (self._milestone_count(self._CH3_PRESS_PREFIXES)

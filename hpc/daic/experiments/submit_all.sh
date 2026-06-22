@@ -49,6 +49,18 @@ set -euo pipefail
 
 EXP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# SLURM opens each job's stdout/stderr file BEFORE running the script, and it
+# will NOT create the parent dir. The sbatch files write to a RELATIVE
+# slurm_logs/ path (#SBATCH --output=slurm_logs/<exp>_%j.out), resolved against
+# the submission CWD. If that dir is missing, every job dies instantly with
+# ExitCode 1:0 and NO log written — exactly the 2026-06-19 final-suite wipeout
+# (all of exp01..exp11 FAILED in 0-4s, runs/final/ never created). So: pin the
+# submission CWD to the repo root (three levels up from this script) and make
+# sure slurm_logs/ exists before we submit anything.
+REPO_ROOT="$(cd "$EXP_DIR/../../.." && pwd)"
+cd "$REPO_ROOT"
+mkdir -p slurm_logs
+
 EXPERIMENTS=(
     "exp01_llm_2b.sbatch"
     "exp02_llm_9b.sbatch"

@@ -30,6 +30,7 @@ MILESTONE_TRACK = {
     "m5_kill_1_animal":        "ch1_solo",
     "m6_kill_2_animals":       "ch1_solo",
     "m7_dig_3_stone":          "ch1_solo",
+    "m_door1_open":            "ch1_solo",
     "m8_anvil_A1":             "ch2_anvils",
     "m9_anvil_B1":             "ch2_anvils",
     "m14_sword_equipped":      "ch2_anvils",
@@ -60,6 +61,7 @@ TRACKS = {
         ("m1_move_5", 10.0), ("m2_dig_3_any", 30.0), ("m3_pickup_3", 30.0),
         ("m4_dig_5_wood", 50.0), ("m5_kill_1_animal", 50.0),
         ("m6_kill_2_animals", 80.0), ("m7_dig_3_stone", 60.0),
+        ("m_door1_open", 50.0),
     ],
     "ch2_anvils": [
         ("m8_anvil_A1",  40.0), ("m9_anvil_B1", 40.0),

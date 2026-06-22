@@ -69,3 +69,9 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+markers = [
+    "slow: takes >5s; excluded from a quick run with -m 'not slow'",
+    "needs_game: requires the Luanti/Craftium game binary; never run locally",
+    "needs_llm: requires model weights or network access",
+]
+addopts = "-m 'not needs_game and not needs_llm'"

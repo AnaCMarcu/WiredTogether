@@ -64,16 +64,47 @@ def _credit_equal(contribs: list, *_a) -> dict:
     return {c: share for c in contribs}
 
 
+def _agent_key(name) -> int:
+    """Normalise heterogeneous agent ids to an int index, or -1 if unparseable.
+
+    Damage dicts (from CooperationMetric.episode_summary) are keyed by int
+    agent index, JSON-encoded as '0'/'1'/...; event-log contributors arrive as
+    'agent0' (Lua naming) or 'agent_0' (Python comm milestones)."""
+    if isinstance(name, int):
+        return name
+    s = str(name)
+    for prefix in ("agent_", "agent"):
+        if s.startswith(prefix):
+            s = s[len(prefix):]
+            break
+    try:
+        return int(s)
+    except ValueError:
+        return -1
+
+
 def _credit_damage_share(contribs: list, damage_for_target: dict) -> dict:
     """Split credit by damage dealt. Falls back to equal split when no damage
-    info is available (which happens for episodes without infos.damage_events)."""
+    info is available (which happens for episodes without infos.damage_events).
+
+    Both sides of the lookup are normalised with _agent_key: without that, the
+    '0'/'1' damage keys never match 'agent0'/'agent_0' contributors and every
+    combat milestone silently degrades to an equal split."""
     if not damage_for_target or sum(damage_for_target.values()) == 0:
         return _credit_equal(contribs)
-    total = sum(damage_for_target.values())
+    dmg = defaultdict(float)
+    for k, v in damage_for_target.items():
+        idx = _agent_key(k)
+        if idx >= 0:
+            dmg[idx] += float(v)
+    total = sum(dmg.values())
+    if total == 0:
+        return _credit_equal(contribs)
     out = {}
     for c in contribs:
-        if c in damage_for_target:
-            out[c] = damage_for_target[c] / total
+        idx = _agent_key(c)
+        if idx in dmg:
+            out[c] = dmg[idx] / total
     if not out:
         return _credit_equal(contribs)
     # Renormalise in case some contributors had zero damage.
