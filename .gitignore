@@ -1,3 +1,7 @@
+# Secrets — LLM/API keys (e.g. TULIP). Never commit these.
+api.key
+*.key
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

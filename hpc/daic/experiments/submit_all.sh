@@ -117,6 +117,11 @@ SEEDS_USED=("${SEED_VALUES_REFERENCE[@]:0:$N_SEEDS}")
 echo "== submit_all.sh =="
 echo "  experiments : ${#FILTERED[@]} of ${#EXPERIMENTS[@]}"
 echo "  N_SEEDS     : $N_SEEDS  (seeds=${SEEDS_USED[*]} from _common.sh)"
+if [ -n "${QOS:-}" ];       then echo "  qos         : $QOS (overrides #SBATCH)"; fi
+if [ -n "${TIME:-}" ];      then echo "  time        : $TIME (overrides #SBATCH)"; fi
+if [ -n "${RUN_GROUP:-}" ]; then echo "  run_group   : $RUN_GROUP"; fi
+if [ -n "${EPISODES:-}" ];  then echo "  episodes    : $EPISODES"; fi
+if [ -n "${MAX_STEPS:-}" ]; then echo "  max_steps   : $MAX_STEPS"; fi
 if [ -n "${ONLY:-}" ]; then echo "  only        : $ONLY"; fi
 if [ -n "${SKIP:-}" ]; then echo "  skip        : $SKIP"; fi
 if [ "${DRY_RUN:-0}" = "1" ]; then echo "  mode        : DRY_RUN (no submission)"; fi
@@ -128,12 +133,26 @@ if [ "$N_SEEDS" -gt 1 ]; then
     SBATCH_ARRAY=(--array="0-$((N_SEEDS-1))")
 fi
 
+# Optional sbatch CLI overrides. Flags on the sbatch command line take
+# precedence over the #SBATCH directives baked into each exp file, so a shorter
+# sweep needs NO per-file edits — e.g. a 36h medium-qos run (3 ep x 1000 steps):
+#     QOS=medium TIME=36:00:00 EPISODES=3 MAX_STEPS=1000 RUN_GROUP=medium \
+#         N_SEEDS=3 bash hpc/daic/experiments/submit_all.sh
+# (EPISODES/MAX_STEPS/RUN_GROUP are forwarded via --export below; the exp files
+#  read them as ${EPISODES:-5} etc., so unset = the full final-suite defaults.)
+SBATCH_OVERRIDES=()
+[ -n "${QOS:-}" ]  && SBATCH_OVERRIDES+=(--qos="$QOS")
+[ -n "${TIME:-}" ] && SBATCH_OVERRIDES+=(--time="$TIME")
+
 # Vars to forward into the job's environment. Each is single-token-safe
 # (no spaces, no commas) so it passes cleanly through sbatch --export.
 EXPORT_VARS=()
 [ -n "${WANDB:-}" ]              && EXPORT_VARS+=("WANDB=$WANDB")
 [ -n "${WANDB_PROJECT:-}" ]      && EXPORT_VARS+=("WANDB_PROJECT=$WANDB_PROJECT")
 [ -n "${WANDB_MODE:-}" ]         && EXPORT_VARS+=("WANDB_MODE=$WANDB_MODE")
+[ -n "${RUN_GROUP:-}" ]          && EXPORT_VARS+=("RUN_GROUP=$RUN_GROUP")
+[ -n "${EPISODES:-}" ]           && EXPORT_VARS+=("EPISODES=$EPISODES")
+[ -n "${MAX_STEPS:-}" ]          && EXPORT_VARS+=("MAX_STEPS=$MAX_STEPS")
 # WANDB_EXTRA_TAGS may contain commas; pass it via env inheritance only.
 # (Each sbatch file re-exports its own default if unset.)
 if [ ${#EXPORT_VARS[@]} -gt 0 ]; then
@@ -151,11 +170,12 @@ for exp in "${FILTERED[@]}"; do
         continue
     fi
     if [ "${DRY_RUN:-0}" = "1" ]; then
-        echo "  [dry] sbatch ${SBATCH_ARRAY[*]:-} $EXPORT_FLAG $exp"
+        echo "  [dry] sbatch ${SBATCH_ARRAY[*]:-} ${SBATCH_OVERRIDES[*]:-} $EXPORT_FLAG $exp"
         continue
     fi
     jobid=$(sbatch --parsable \
         ${SBATCH_ARRAY[@]:+"${SBATCH_ARRAY[@]}"} \
+        ${SBATCH_OVERRIDES[@]:+"${SBATCH_OVERRIDES[@]}"} \
         "$EXPORT_FLAG" \
         "$script")
     if [ "$N_SEEDS" -gt 1 ]; then
