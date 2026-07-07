@@ -39,6 +39,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -58,15 +59,15 @@ CONDITIONS = [
     # label          dir name                      group   hebbian?
     ("LLM-2B",       "exp01_llm_2b",               "main", False),
     ("LLM-9B",       "exp02_llm_9b",               "main", False),
-    ("LLM-2B+Heb",   "exp07_llm_2b_hebbian",       "main", True),
-    ("LLM-9B+Heb",   "exp08_llm_9b_hebbian",       "main", True),
+    ("LLM-2B+Heb",   "exp07_llm_2b_social_prompt", "main", True),
+    ("LLM-9B+Heb",   "exp08_llm_9b_social_prompt", "main", True),
     ("IPPO",         "exp04_ippo",                 "main", False),
     ("MAPPO",        "exp03_mappo",                "main", False),
     ("IPPO+Heb",     "exp06_ippo_hebbian",         "main", True),
     ("MAPPO+Heb",    "exp05_mappo_hebbian",        "main", True),
-    ("No-bonds",     "exp11_topology_null",        "topo", False),
-    ("Allied-pair",  "exp10_topology_pair",        "topo", False),
-    ("Allied-all",   "exp09_topology_all",         "topo", False),
+    ("No-bonds",     "exp11_llm_9b_allied_none",   "topo", False),
+    ("Allied-pair",  "exp10_llm_9b_allied_pair",   "topo", False),
+    ("Allied-all",   "exp09_llm_9b_allied_all",    "topo", False),
 ]
 TOPO_REFERENCE = "LLM-9B"   # reference row repeated in the topology table
 EXCLUDED_AGENT = "agent_2"  # the excluded agent in Allied-pair
@@ -96,6 +97,55 @@ MILESTONE_ORDER = [m for t in TRACK_ORDER
                    for m in [k for k, v in MILESTONE_TRACK.items() if v == t]]
 COOP_TRACKS = {"ch2_anvils", "ch3_switches", "ch4_combat", "ch5_boss"}
 COOP_MAX = sum(1 for v in MILESTONE_TRACK.values() if v in COOP_TRACKS)
+
+# Internal repo id -> (paper label, display name) for tab:steps_to_milestone.
+# Internal ids keep the legacy numbering (m14..m28); the paper schedule
+# renumbered compactly (M8..M24), so this map is the single source of truth
+# for how a row is labelled. Keep in sync with tab:milestone_schedule.
+PAPER_LABEL = {
+    "m1_move_5":               ("M1",        "Move $>$5 from spawn"),
+    "m2_dig_3_any":            ("M2",        "Dig 3 any"),
+    "m3_pickup_3":             ("M3",        "Pick up 3 items"),
+    "m4_dig_5_wood":           ("M4",        "Dig 5 wood"),
+    "m5_kill_1_animal":        ("M5",        "Kill 1 animal"),
+    "m6_kill_2_animals":       ("M6",        "Kill 2 animals"),
+    "m7_dig_3_stone":          ("M7",        "Dig 3 stone"),
+    "m_door1_open":            ("M\\_door1", "Door 1 unlocked"),
+    "m8_anvil_A1":             ("M8",        "First anvil break"),
+    "m9_anvil_B1":             ("M9",        "Second anvil break"),
+    "m14_sword_equipped":      ("M10",       "Sword equipped"),
+    "m15_chestplate_equipped": ("M11",       "Chestplate equipped"),
+    "m16_enter_cell":          ("M12",       "Enter isolation cell"),
+    "m17_switch_pressed":      ("M13",       "Press switch"),
+    "m18_door_opened":         ("M14",       "Door opened"),
+    "m19_all_in_communal":     ("M15",       "All in communal room"),
+    "m20_enter_ch4":           ("M16",       "Enter Chamber 4"),
+    "m21_first_mob_kill":      ("M17",       "First mob kill"),
+    "m22_all_mobs_killed":     ("M18",       "All mobs killed"),
+    "m23_all_alive_ch4":       ("M19",       "All survive (damage)"),
+    "m24_enter_ch5":           ("M20",       "Enter Chamber 5"),
+    "m25_first_boss_dmg":      ("M21",       "First boss damage"),
+    "m26_boss_half_hp":        ("M22",       "Boss at 50\\% HP"),
+    "m27_boss_defeated":       ("M23",       "Boss defeated"),
+    "m28_all_alive_bonus":     ("M24",       "All alive at kill"),
+    "m_comm_ch1":              ("M\\_comm\\_ch1", "Valid messaging, Ch1"),
+    "m_comm_ch2":              ("M\\_comm\\_ch2", "Valid messaging, Ch2"),
+    "m_comm_ch3":              ("M\\_comm\\_ch3", "Valid messaging, Ch3"),
+    "m_comm_ch4":              ("M\\_comm\\_ch4", "Valid messaging, Ch4"),
+    "m_comm_ch5":              ("M\\_comm\\_ch5", "Valid messaging, Ch5"),
+}
+# Track section titles for the grouped header rows in tab:steps_to_milestone.
+TRACK_TITLE = {
+    "ch1_solo":     "Chamber 1 --- solo skill acquisition",
+    "ch2_anvils":   "Chamber 2 --- cooperative resource acquisition",
+    "ch3_switches": "Chamber 3 --- communication under partial obs.",
+    "ch4_combat":   "Chamber 4 --- team combat",
+    "ch5_boss":     "Chamber 5 --- cooperative boss fight",
+    "communication": "Communication track",
+}
+# Rows of tab:steps_to_milestone, in order (incl. the comm track, which
+# has its own row group at the bottom of the table and the timeline fig).
+STEPS_MILESTONES = list(MILESTONE_ORDER)
 
 # repo id of the four key milestones (paper numbering in comments)
 KEY_MILESTONES = [
@@ -248,7 +298,7 @@ def aggregate(runs) -> dict:
     coop, allms, task, furthest, boss = [], [], [], [], 0
     n_eps_total = 0
     used_decomp = True
-    steps = {mid: [] for _, mid in KEY_MILESTONES}
+    steps = {m: [] for m in STEPS_MILESTONES}
     graph = defaultdict(list)
     per_seed_coop = []
 
@@ -271,7 +321,7 @@ def aggregate(runs) -> dict:
 
         ff = episode_first_fire(run)
         for e in range(len(sets_)):
-            for _, mid in KEY_MILESTONES:
+            for mid in STEPS_MILESTONES:
                 if (e, mid) in ff:
                     steps[mid].append(ff[(e, mid)])
 
@@ -279,15 +329,25 @@ def aggregate(runs) -> dict:
             for k, v in rec.items():
                 graph[k].append(v)
 
+    # Credit Gini / exclusion share. The logged milestone_credit_total mixes
+    # two key styles for the same agent ('agent_0' from Python, 'agent0'
+    # from Lua contributors), so the stored credit_gini is computed over 2N
+    # phantom agents and is wrong — merge the keys and recompute here.
     gini, excl = [], []
     for run in runs:
         cm = run.get("coop_metrics") or {}
-        if "credit_gini" in cm:
-            gini.append(float(cm["credit_gini"]))
-        tot = cm.get("milestone_credit_total") or {}
-        s = sum(tot.values())
+        merged = defaultdict(float)
+        for k, v in (cm.get("milestone_credit_total") or {}).items():
+            m = re.fullmatch(r"agent_?(\d+)", k)
+            if m:
+                merged[f"agent_{m.group(1)}"] += float(v)
+        vals = sorted(merged.values())
+        s = sum(vals)
         if s > 0:
-            excl.append(float(tot.get(EXCLUDED_AGENT, 0.0)) / s)
+            n = len(vals)
+            gini.append(sum(abs(a - b) for a in vals for b in vals)
+                        / (2 * n * s))
+            excl.append(merged.get(EXCLUDED_AGENT, 0.0) / s)
 
     return {
         "n_runs": len(runs), "n_eps": n_eps_total,
@@ -320,19 +380,28 @@ def emit_tables(stats: dict, out: Path):
         a = stats[label]
         L.append(
             f"{label:<12} & {fmt(a['coop'])} & {fmt(a['allms'])} & "
-            f"{fmt(a['task'], 0)} & Ch{a['furthest_mode'] or '--'} & "
-            f"${a['boss']}/{a['n_eps']}$ \\\\")
+            f"{fmt(a['task'], 0)} \\\\")
     L.append("")
-    L.append("% ── tab:steps_to_milestone rows ───────────────────────")
-    for label, _, grp, _ in CONDITIONS:
-        if grp != "main" or label not in stats:
-            continue
+    L.append("% ── tab:steps_to_milestone rows (milestone × condition) ──")
+    L.append("% Paste between \\midrule and \\bottomrule, replacing the manual")
+    L.append("% milestone rows. Cell = $median_{n}$; '--' = never completed.")
+    main_labels = [lab for lab, _, g, _ in CONDITIONS if g == "main"]
+    ncol = len(main_labels) + 2  # ID + Milestone + one column per condition
+    cur_track = None
+    for mid in STEPS_MILESTONES:
+        track = MILESTONE_TRACK[mid]
+        if track != cur_track:
+            if cur_track is not None:
+                L.append("\\addlinespace")
+            L.append(f"\\multicolumn{{{ncol}}}{{l}}"
+                     f"{{\\emph{{{TRACK_TITLE[track]}}}}}\\\\")
+            cur_track = track
+        plabel, name = PAPER_LABEL[mid]
         cells = []
-        for _, mid in KEY_MILESTONES:
-            med, n = stats[label]["steps"][mid]
-            cells.append(f"${med:.0f}$ & ${n}$" if med is not None
-                         else f"-- & $0$")
-        L.append(f"{label:<12} & " + " & ".join(cells) + " \\\\")
+        for lab in main_labels:
+            med, n = stats.get(lab, {}).get("steps", {}).get(mid, (None, 0))
+            cells.append(f"${med:.0f}_{{{n}}}$" if med is not None else "--")
+        L.append(f"{plabel:<9} & {name:<22} & " + " & ".join(cells) + " \\\\")
     L.append("")
     L.append("% ── tab:topology_ablation rows ────────────────────────")
     topo_rows = [(TOPO_REFERENCE + " (ref.)", TOPO_REFERENCE)] + \
@@ -433,14 +502,14 @@ def fig_progression(all_runs: dict, out: Path, max_steps: int):
 
 def fig_timeline(all_runs: dict, out: Path):
     """Raster: rows = milestones (chamber-grouped), x = median first step."""
-    rows = [m for m in MILESTONE_ORDER
-            if MILESTONE_TRACK[m] != "communication"]
+    rows = list(MILESTONE_ORDER)
     y_of = {m: i for i, m in enumerate(rows)}
     fig, ax = plt.subplots(figsize=(8, 0.28 * len(rows) + 1.5))
-    # chamber bands
-    band_cols = ["#f4f0ff", "#fff4e6", "#e8f8ff", "#ffeeee", "#fff0c2"]
+    # chamber bands (+ comm track)
+    band_cols = ["#f4f0ff", "#fff4e6", "#e8f8ff", "#ffeeee", "#fff0c2",
+                 "#eef7ee"]
     lo = 0
-    for ti, t in enumerate(TRACK_ORDER[:5]):
+    for ti, t in enumerate(TRACK_ORDER):
         n = sum(1 for m in rows if MILESTONE_TRACK[m] == t)
         ax.axhspan(lo - 0.5, lo + n - 0.5, color=band_cols[ti], zorder=0)
         lo += n
@@ -469,7 +538,8 @@ def fig_timeline(all_runs: dict, out: Path):
     if not plotted:
         plt.close(fig); return
     ax.set_yticks(range(len(rows)))
-    ax.set_yticklabels(rows, fontsize=7)
+    ax.set_yticklabels([PAPER_LABEL[m][0].replace("\\_", "_") for m in rows],
+                       fontsize=7)
     ax.set_xlabel("Within-episode step of first completion")
     ax.set_ylim(-0.7, len(rows) - 0.3)
     ax.grid(axis="x", alpha=0.25)
@@ -479,7 +549,7 @@ def fig_timeline(all_runs: dict, out: Path):
     plt.close(fig)
 
 
-def fig_bonds(run: dict, out: Path):
+def fig_bonds(run: dict, out: Path, max_steps: int = 1000):
     """Per-pair W_ij vs W_ji over one run, asymmetry shaded."""
     snaps = run.get("graph_snapshots") or []
     snaps = [s for s in snaps if s.get("W")]
@@ -503,8 +573,16 @@ def fig_bonds(run: dict, out: Path):
                 label=f"$W_{{{j}{i}}}$")
         ax.fill_between(steps, np.minimum(wij, wji), np.maximum(wij, wji),
                         color="#888", alpha=0.18)
+        # dotted: within-episode chamber timer boundaries (20% of the
+        # episode budget each); dashed: episode boundaries
+        chamber_len = max_steps // 5
+        for s0, s1 in run["_ep_bounds"]:
+            for k in range(1, 5):
+                b = s0 + k * chamber_len
+                if b < s1:
+                    ax.axvline(b, color="#bbb", ls=":", lw=0.5)
         for s0, _ in run["_ep_bounds"][1:]:
-            ax.axvline(s0, color="#999", ls="--", lw=0.6)
+            ax.axvline(s0, color="#666", ls="--", lw=0.9)
         ax.set_ylim(0, 1); ax.set_ylabel("Bond")
         ax.grid(alpha=0.25)
         ax.legend(fontsize=8, loc="upper left", framealpha=0.85)
@@ -573,7 +651,7 @@ def main():
             if bond_run:
                 break
     if bond_run:
-        fig_bonds(bond_run, args.out)
+        fig_bonds(bond_run, args.out, args.max_steps)
 
     print(f"\nWrote: {args.out}/table_rows.tex, summary.csv, "
           f"milestone_progression.pdf, milestone_timeline.pdf"
