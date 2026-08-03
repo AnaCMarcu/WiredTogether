@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=new-exp-0-gemma
 #SBATCH --partition=general
-#SBATCH --qos=long
-#SBATCH --time=168:00:00
+#SBATCH --qos=medium
+#SBATCH --time=36:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
@@ -31,6 +31,12 @@
 #
 # One arm, one seed:
 #   SEED=42 HEBBIAN=1 sbatch new_exp_0_gemma.sbatch
+#
+# Scheduled on medium qos / 36 h rather than the long-qos 168 h the other exp
+# files ask for: 3 × 1000 steps is a fraction of the final suite's 5 × 2500 and
+# medium queues sooner. If a vision-on run turns out slower than that fits,
+# give one arm more room without editing this file:
+#   sbatch --qos=long --time=168:00:00 new_exp_0_gemma.sbatch
 #
 # The Hebbian hyper-parameters mirror exp07 exactly, so the only differences
 # from that established condition are the base model and the vision input.
