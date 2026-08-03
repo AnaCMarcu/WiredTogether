@@ -69,10 +69,19 @@ run_exp() {
     local LLM_MODEL="$2"
     shift 2
 
-    # RUN_GROUP selects the runs/<group>/ subtree. Defaults to "legacy" for
-    # backward-compat; the final experiment suite sets RUN_GROUP=final in each
-    # sbatch file so results land in runs/final/<exp>/seed_<N>/.
-    local RUN_GROUP="${RUN_GROUP:-final}"
+    # RUN_GROUP selects the runs/<group>/ subtree. The final experiment suite
+    # sets RUN_GROUP=final in each sbatch file so results land in
+    # runs/final/<exp>/seed_<N>/.
+    #
+    # It is forwarded into the container as WIREDTOGETHER_RUN_GROUP (see the
+    # --env block below) so PYTHON writes there too. Before that it was a
+    # shell-only variable: RUN_DIR/ARTIFACTS_DIR honoured it but
+    # RunPaths.create_tagged() hardcoded runs/legacy/, so every suite's
+    # episodes/, final_metrics.json and plots overwrote the previous one in
+    # runs/legacy/ while the submit scripts' "already complete" check looked
+    # in a runs/<group>/ tree that never filled up. It also namespaces the
+    # W&B run id, so a new group no longer resumes the old suite's run.
+    local RUN_GROUP="${RUN_GROUP:-legacy}"
     local RUN_DIR="$REPO/runs/${RUN_GROUP}/${EXP_NAME}/seed_${SEED}"
     # Heavy artifacts (craftium debug.txt, wandb offline-runs, intermediate
     # per-100-step gifs) live in a PARALLEL tree so the runs/ dir stays
@@ -135,6 +144,7 @@ run_exp() {
     echo "Host:      $(hostname)"
     echo "Image:     $IMG"
     echo "Repo:      $REPO"
+    echo "Run group: $RUN_GROUP"
     echo "Run dir:   $RUN_DIR"
     echo "Work dir:  $WORK_DIR"
     echo "Model:     $LLM_MODEL"
@@ -210,6 +220,7 @@ run_exp() {
         --env TRANSFORMERS_OFFLINE=1 \
         --env CRAFTIUM_ENV_DIR="$REPO/src/marl_craftium/craftium-envs/five-chambers" \
         --env WIREDTOGETHER_RUNS_ROOT="$REPO/runs" \
+        --env WIREDTOGETHER_RUN_GROUP="$RUN_GROUP" \
         --env SDL_VIDEODRIVER=dummy \
         --env SDL_AUDIODRIVER=dummy \
         --env LIBGL_ALWAYS_SOFTWARE=1 \

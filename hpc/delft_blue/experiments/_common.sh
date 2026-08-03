@@ -99,12 +99,16 @@ run_exp() {
     local LLM_MODEL="$2"
     shift 2
 
-    local RUN_DIR="$PROJECT_DIR/runs/legacy/${EXP_NAME}/seed_${SEED}"
+    # RUN_GROUP selects the runs/<group>/ subtree, same as DAIC. Defaults to
+    # "legacy", which is where every DelftBlue run has always landed, so an
+    # unset RUN_GROUP keeps the existing paths byte-for-byte.
+    local RUN_GROUP="${RUN_GROUP:-legacy}"
+    local RUN_DIR="$PROJECT_DIR/runs/${RUN_GROUP}/${EXP_NAME}/seed_${SEED}"
     # Heavy artifacts (craftium debug.txt, wandb offline-runs, intermediate
     # per-100-step gifs) live in a PARALLEL tree so the runs/ dir stays
     # small and fast to scp. Mirror the same exp/seed structure for easy
     # cross-referencing — same convention as DAIC.
-    local ARTIFACTS_DIR="$PROJECT_DIR/run_artifacts/legacy/${EXP_NAME}/seed_${SEED}"
+    local ARTIFACTS_DIR="$PROJECT_DIR/run_artifacts/${RUN_GROUP}/${EXP_NAME}/seed_${SEED}"
     local WORK_DIR="/tmp/$USER/${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
     mkdir -p "$RUN_DIR" "$ARTIFACTS_DIR" "$WORK_DIR"
 
@@ -143,10 +147,14 @@ run_exp() {
     export WANDB_SILENT=true
     export WIREDTOGETHER_INTERMEDIATE_GIF_DIR="$WORK_DIR/intermediate_gifs"
     export LLM_MODEL_PATH="$LLM_MODEL"
+    # Python reads this to place runs/<group>/<tag>/seed_<N>/ and to namespace
+    # the W&B run id, so shell and Python can't disagree about the suite.
+    export WIREDTOGETHER_RUN_GROUP="$RUN_GROUP"
 
     echo "== $EXP_NAME =="
     echo "Host:      $(hostname)"
     echo "Repo:      $PROJECT_DIR"
+    echo "Run group: $RUN_GROUP"
     echo "Run dir:   $RUN_DIR"
     echo "Work dir:  $WORK_DIR"
     echo "Model:     $LLM_MODEL"

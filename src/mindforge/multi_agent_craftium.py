@@ -285,9 +285,17 @@ def parse_args():
     # ── Experiment tracking ──
     parser.add_argument("--experiment-id", type=str, default=None,
                         help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
+    parser.add_argument("--run-group", type=str, default=None,
+                        help="Suite subtree for --tag runs: output lands at "
+                             "runs/<group>/<tag>/seed_<seed>/ and the W&B run "
+                             "id is namespaced by <group> so re-running an "
+                             "exp+seed under a new group starts a new W&B run "
+                             "instead of resuming the old suite's. Defaults to "
+                             "$WIREDTOGETHER_RUN_GROUP, then 'legacy' (which "
+                             "keeps the pre-grouping paths and ids).")
     parser.add_argument("--tag", type=str, default=None,
                         help="Phase B++ tagged-run layout: when set, output "
-                             "lands at runs/legacy/<tag>/seed_<seed>/ instead "
+                             "lands at runs/<group>/<tag>/seed_<seed>/ instead "
                              "of the default runs/<timestamp>_<experiment_id>/. "
                              "Lines up with the GRPO runs/grpo/<tag>/seed_<N>/ "
                              "pattern so build_results.py and the legacy "
@@ -896,10 +904,10 @@ async def run(args):
     if args.tag is not None:
         seed_for_path = args.seed if args.seed is not None else 0
         run_paths = RunPaths.create_tagged(
-            tag=args.tag, seed=seed_for_path,
+            tag=args.tag, seed=seed_for_path, group=args.run_group,
         )
         run_id = run_paths.run_id
-        print(f"[RUN ID] {run_id} (tagged)")
+        print(f"[RUN ID] {run_id} (tagged, group={run_paths.group})")
     else:
         from uuid import uuid4
         _ts = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -919,6 +927,7 @@ async def run(args):
         tags=_wb_tags,
         config=vars(args),
         explicit_id=args.wandb_id,
+        group=run_paths.group,
     )
 
     if args.gif_dir == "auto":

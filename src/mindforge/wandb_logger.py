@@ -11,6 +11,13 @@ Why a wrapper:
 Resume across chunked SLURM jobs: wandb id is derived from the run_id
 (sanitised to wandb's allowed charset) so re-launching the same
 experiment+seed continues the same wandb run via resume="allow".
+
+That resume is deliberate WITHIN a suite and wrong ACROSS suites: the
+run_id is only "<tag>/seed_<N>", so a fresh suite re-running the same
+exp+seed used to silently reopen the previous suite's run instead of
+creating a new one (it already cost the 2000-step exp11 runs — see the
+note in wandb_compute_budget.py). ``group`` namespaces the id to keep
+suites apart; see :func:`_scoped_id`.
 """
 from __future__ import annotations
 
@@ -18,6 +25,8 @@ import logging
 import os
 import re
 from typing import Any, Dict, List, Optional
+
+from run_layout import DEFAULT_RUN_GROUP
 
 _log = logging.getLogger(__name__)
 _WB = None  # active wandb run handle; None when disabled / init failed
@@ -29,6 +38,24 @@ def _sanitize_id(s: str) -> str:
     return s[:64]
 
 
+def _scoped_name(run_id: str, group: Optional[str]) -> str:
+    """Human-facing run name, prefixed with the suite it belongs to."""
+    if not group or group == DEFAULT_RUN_GROUP:
+        return run_id
+    return f"{group}/{run_id}"
+
+
+def _scoped_id(run_id: str, group: Optional[str]) -> str:
+    """wandb run id, namespaced by run group.
+
+    ``legacy`` (and no group at all) keeps the bare ``<tag>_seed_<N>`` id so
+    runs recorded before groups existed still resume into themselves. Any
+    other group is prefixed, so re-running the same exp+seed under a new
+    group creates a NEW wandb run rather than appending to the old suite's.
+    """
+    return _sanitize_id(_scoped_name(run_id, group))
+
+
 def init(
     enabled: bool,
     project: str,
@@ -37,6 +64,7 @@ def init(
     tags: List[str],
     config: Dict[str, Any],
     explicit_id: Optional[str] = None,
+    group: Optional[str] = None,
 ) -> bool:
     """Start a wandb run. Returns True iff successfully initialised.
 
@@ -53,19 +81,21 @@ def init(
         _log.warning("[wandb] import failed: %s — disabling", e)
         return False
     try:
-        wb_id = _sanitize_id(explicit_id or run_id)
+        wb_id = _sanitize_id(explicit_id) if explicit_id else _scoped_id(run_id, group)
         _WB = wandb.init(
             project=project,
             entity=entity,
             id=wb_id,
             resume="allow",
-            name=run_id,
+            name=_scoped_name(run_id, group),
+            group=group or None,
             tags=tags or None,
             config=config,
         )
         url = getattr(_WB, "url", None) if _WB is not None else None
-        _log.info("[wandb] init ok: project=%s id=%s url=%s", project, wb_id, url)
-        print(f"[wandb] tracking → {url} (id={wb_id})")
+        _log.info("[wandb] init ok: project=%s group=%s id=%s url=%s",
+                  project, group, wb_id, url)
+        print(f"[wandb] tracking → {url} (project={project} group={group} id={wb_id})")
         return True
     except Exception as e:
         _log.warning("[wandb] init failed: %s", e)
