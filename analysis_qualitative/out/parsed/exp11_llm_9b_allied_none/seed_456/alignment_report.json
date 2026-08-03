@@ -1,0 +1,132 @@
+{
+ "run": "exp11_llm_9b_allied_none/seed_456",
+ "degraded": false,
+ "is_rl": false,
+ "quarantine_step_keyed": true,
+ "align": {
+  "0": {
+   "offset": 0,
+   "match_rate": 0.006206040546131568,
+   "n_compared": 2417,
+   "n_units": 6177,
+   "n_rows": 2417,
+   "status": "clock",
+   "clock_coverage": 0.7547,
+   "coverage": 0.7547
+  },
+  "1": {
+   "offset": 0,
+   "match_rate": 0.0,
+   "n_compared": 2415,
+   "n_units": 6206,
+   "n_rows": 2417,
+   "status": "clock",
+   "clock_coverage": 0.7542,
+   "coverage": 0.7542
+  },
+  "2": {
+   "offset": 0,
+   "match_rate": 0.0008274720728175424,
+   "n_compared": 2417,
+   "n_units": 6246,
+   "n_rows": 2417,
+   "status": "clock",
+   "clock_coverage": 0.7584,
+   "coverage": 0.7584
+  }
+ },
+ "attribution": {
+  "attributed": 21742,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 14252
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 0.14941672871680317,
+   "n": 4029
+  },
+  "critic": {
+   "rate": 0.06756756756756757,
+   "n": 962
+  },
+  "social": {
+   "rate": 0.11081081081081082,
+   "n": 2220
+  }
+ },
+ "clock": {
+  "segments": 2,
+  "chosen": {
+   "den": 2500,
+   "span": [
+    "2026-06-27 21:31:34",
+    "2026-06-29 20:09:05"
+   ],
+   "n_markers": 5305
+  },
+  "coverage": 0.7558
+ },
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 18041,
+   "comm_metrics_total": 11427,
+   "ok": false
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 18021,
+    "social_bias": 16,
+    "hebbian_fallback:self_target": 4
+   },
+   "comm_metrics": {
+    "model": 11411,
+    "social_bias": 15,
+    "hebbian_fallback:self_target": 1
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "action_selection": {
+    "n": 18628,
+    "fail": 1371
+   },
+   "auto_curriculum": {
+    "n": 853,
+    "fail": 1
+   },
+   "belief_system": {
+    "n": 16840,
+    "fail": 786
+   },
+   "critic": {
+    "n": 962,
+    "fail": 3
+   },
+   "episodic_memory": {
+    "n": 864,
+    "fail": 0
+   },
+   "llm_other": {
+    "n": 4,
+    "fail": 2
+   },
+   "social_module": {
+    "n": 2220,
+    "fail": 21
+   }
+  }
+ },
+ "n_units": 40371,
+ "n_timeline_rows": 7251,
+ "elapsed_s": 5.3
+}

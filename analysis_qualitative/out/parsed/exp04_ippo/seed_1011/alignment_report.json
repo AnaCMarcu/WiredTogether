@@ -1,0 +1,119 @@
+{
+ "run": "exp04_ippo/seed_1011",
+ "degraded": false,
+ "is_rl": true,
+ "align": {
+  "0": {
+   "offset": 0,
+   "match_rate": 0.0019825535289452814,
+   "n_compared": 2522,
+   "n_units": 2527,
+   "n_rows": 2527,
+   "status": "clock",
+   "clock_coverage": 1.0,
+   "coverage": 1.0
+  },
+  "1": {
+   "offset": 0,
+   "match_rate": 0.001190003966679889,
+   "n_compared": 2521,
+   "n_units": 2527,
+   "n_rows": 2527,
+   "status": "clock",
+   "clock_coverage": 1.0,
+   "coverage": 1.0
+  },
+  "2": {
+   "offset": 0,
+   "match_rate": 0.0023828435266084196,
+   "n_compared": 2518,
+   "n_units": 2527,
+   "n_rows": 2527,
+   "status": "clock",
+   "clock_coverage": 1.0,
+   "coverage": 1.0
+  }
+ },
+ "attribution": {
+  "attributed": 5758,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 0
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 1.0,
+   "n": 1515
+  },
+  "critic": {
+   "rate": 1.0,
+   "n": 378
+  },
+  "social": {
+   "rate": null,
+   "n": 0
+  }
+ },
+ "clock": {
+  "segments": 1,
+  "chosen": {
+   "den": 1000,
+   "span": [
+    "2026-07-10 09:16:48",
+    "2026-07-11 21:53:35"
+   ],
+   "n_markers": 2530
+  },
+  "coverage": 1.0
+ },
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 14,
+   "comm_metrics_total": 14,
+   "ok": true
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 14
+   },
+   "comm_metrics": {
+    "model": 14
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "auto_curriculum": {
+    "n": 322,
+    "fail": 0
+   },
+   "belief_system": {
+    "n": 4680,
+    "fail": 249
+   },
+   "critic": {
+    "n": 378,
+    "fail": 0
+   },
+   "episodic_memory": {
+    "n": 378,
+    "fail": 0
+   },
+   "rl_thoughts": {
+    "n": 7581,
+    "fail": 5
+   }
+  }
+ },
+ "n_units": 13339,
+ "n_timeline_rows": 7581,
+ "elapsed_s": 2.5
+}

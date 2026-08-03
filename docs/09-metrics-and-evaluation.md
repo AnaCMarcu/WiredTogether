@@ -132,3 +132,23 @@ Comm-milestone rewards counted into the `communication` track come from `CHAMBER
 > PAPER MISMATCH — see PAPER_INCONSISTENCIES.md #1 (values), #3 (cap), #11 (threshold wording). Note craftium_metric.py's own `TRACKS["communication"]` tuples (:81-85) carry the *paper* values 40/20/30/15/20 — but no consumer ever reads the reward element of TRACKS (all use `for mid, _ in ...`); booked track rewards come from each event's own `reward` field (craftium_metric.py:428-432).
 
 See 05-five-chambers-world.md for milestone semantics, 06-rewards.md for the reward streams being measured, 11-operations.md for where runs/ land on HPC.
+
+## 8. Qualitative pipeline: analysis_qualitative/ (post-hoc, local)
+
+One CLI, `python analysis_qualitative/run.py <stage>`, stages
+`parse | metrics | sample | validate | cases | report` over
+`runs_from_daic/medium_runs/`. See `analysis_qualitative/README.md` for
+mechanics. Non-obvious facts discovered while building it:
+
+- `final_metrics.json["coop_metrics"]` pair/dwell/damage totals are ZERO for
+  all real runs: coop_eval.py reads episode summaries at top level but the
+  pipeline nests them under `"cooperation_metrics"`
+  (multi_agent_craftium.py finalize call). Read episode summaries directly.
+- llm_logs are APPEND-mode: relaunched jobs leave the aborted attempt's lines
+  in place (parse marks them `stale`); log.txt can even interleave a
+  concurrent different-config job's step markers (exp03/seed_42,
+  exp11/seed_456). The parse stage's alignment_report.json records how each
+  run was aligned (text-ordinal vs log.txt step-clock) and its cross-checks.
+- Step alignment for LLM runs is exact (message text matches step_log 100%);
+  RL runs need the log.txt step-marker clock because the routed message text
+  is NOT the rl_thoughts unit's communication field.

@@ -55,7 +55,21 @@ def _inner_tokenizer(tok):
 
 
 def _detect_is_vision(model_path: str, config) -> bool:
-    """Vision model = vision keyword in model_type, OR preprocessor file, OR vision_config."""
+    """Vision model = vision keyword in model_type, OR preprocessor file, OR vision_config.
+
+    LLM_VISION_MODE overrides the sniff: "text" forces the text-only path even
+    for a multimodal checkpoint, "vision" forces the VL path, "auto" (default)
+    sniffs. Gemma 4 is multimodal at every size, so "text" is what reproduces
+    the older text-only Qwen behaviour where frames were dropped.
+    """
+    mode = os.environ.get("LLM_VISION_MODE", "auto").strip().lower()
+    if mode in ("text", "text_only", "0"):
+        logger.info("LLM_VISION_MODE=%s — forcing TEXT-ONLY path", mode)
+        return False
+    if mode in ("vision", "vl", "1"):
+        logger.info("LLM_VISION_MODE=%s — forcing VISION path", mode)
+        return True
+
     model_type = getattr(config, "model_type", "unknown").lower()
     has_keyword = any(kw in model_type for kw in ("vl", "vision", "visual", "multimodal"))
     has_preprocessor = os.path.isfile(
@@ -75,26 +89,109 @@ def _ensure_pad_token(processor):
 
 
 def _vision_model_class():
-    """Prefer AutoModelForImageTextToText; fall back to AutoModelForCausalLM."""
+    """Newest multimodal auto-class the installed transformers actually has.
+
+    AutoModelForMultimodalLM is what Gemma 4 documents (text+image+audio);
+    AutoModelForImageTextToText covers the Gemma 3 / Qwen-VL generation;
+    AutoModelForCausalLM is the last resort on older transformers.
+    """
+    import transformers
+
+    for name in ("AutoModelForMultimodalLM",
+                 "AutoModelForImageTextToText",
+                 "AutoModelForCausalLM"):
+        cls = getattr(transformers, name, None)
+        if cls is not None:
+            logger.info("Using %s for VL model", name)
+            return cls
+    raise ImportError("transformers exposes no usable auto-class for a VL model")
+
+
+def _dtype_kwarg_name() -> str:
+    """Whichever of ``dtype`` / ``torch_dtype`` the installed transformers reads.
+
+    The kwarg was renamed in 4.56. Chosen by version rather than by try/except
+    because ``from_pretrained`` takes ``**kwargs``: the wrong name is silently
+    swallowed and the model loads in the checkpoint's default precision instead
+    of failing.
+    """
     try:
-        from transformers import AutoModelForImageTextToText
-        logger.info("Using AutoModelForImageTextToText for VL model")
-        return AutoModelForImageTextToText
-    except ImportError:
-        from transformers import AutoModelForCausalLM
-        logger.info("AutoModelForImageTextToText not available, using AutoModelForCausalLM")
-        return AutoModelForCausalLM
+        from packaging.version import Version
+        import transformers
+        version = Version(transformers.__version__.split("+")[0])
+        return "dtype" if version >= Version("4.56") else "torch_dtype"
+    except Exception:  # unparseable version — assume a current release
+        return "dtype"
+
+
+def _from_pretrained(model_cls, model_path, torch_dtype, **kwargs):
+    """from_pretrained with the dtype kwarg rename absorbed."""
+    name = _dtype_kwarg_name()
+    try:
+        model = model_cls.from_pretrained(model_path, **{name: torch_dtype}, **kwargs)
+    except TypeError:  # version heuristic was wrong and this one is strict
+        other = "torch_dtype" if name == "dtype" else "dtype"
+        model = model_cls.from_pretrained(model_path, **{other: torch_dtype}, **kwargs)
+
+    # Belt and braces: if the kwarg was ignored, cast rather than run in the
+    # wrong precision (a silent fp32 load doubles memory and halves throughput).
+    loaded = getattr(model, "dtype", None)
+    if torch_dtype != "auto" and loaded is not None and loaded != torch_dtype:
+        logger.warning("Model loaded as %s, expected %s — casting", loaded, torch_dtype)
+        model = model.to(torch_dtype)
+    return model
+
+
+def _merge_system_into_first_user(chat_messages: list) -> list:
+    """Fold system turns into the first user turn, for templates without a system role.
+
+    Handles both content shapes: a plain string, and the VL parts list (where
+    the system text becomes a leading ``{"type": "text"}`` part so it still
+    precedes the frame).
+    """
+    system_text = "\n\n".join(
+        m["content"] if isinstance(m["content"], str) else
+        " ".join(p.get("text", "") for p in m["content"] if isinstance(p, dict))
+        for m in chat_messages if m["role"] == "system"
+    ).strip()
+    rest = [m for m in chat_messages if m["role"] != "system"]
+    if not system_text:
+        return rest
+    if not rest:
+        return [{"role": "user", "content": system_text}]
+
+    first = dict(rest[0])
+    if isinstance(first["content"], str):
+        first["content"] = f"{system_text}\n\n{first['content']}"
+    else:
+        first["content"] = [{"type": "text", "text": system_text}] + list(first["content"])
+    return [first] + rest[1:]
 
 
 def _apply_chat_template(tokenizer, chat_messages, *, tokenize, enable_thinking):
     """apply_chat_template with graceful fallback for tokenizers that don't accept enable_thinking."""
     base_kwargs = dict(tokenize=tokenize, add_generation_prompt=True)
+
+    def _render(msgs):
+        try:
+            return tokenizer.apply_chat_template(
+                msgs, **base_kwargs, enable_thinking=enable_thinking
+            )
+        except TypeError:
+            return tokenizer.apply_chat_template(msgs, **base_kwargs)
+
     try:
-        return tokenizer.apply_chat_template(
-            chat_messages, **base_kwargs, enable_thinking=enable_thinking
-        )
-    except TypeError:
-        return tokenizer.apply_chat_template(chat_messages, **base_kwargs)
+        return _render(chat_messages)
+    except Exception as exc:
+        # Some chat templates (the Gemma line historically) raise on role=system
+        # rather than ignoring it. Retry once with the system text folded into
+        # the first user turn; if THAT still fails the template is the problem,
+        # so let it surface.
+        if not any(m["role"] == "system" for m in chat_messages):
+            raise
+        logger.warning("Chat template rejected the system role (%s) — merging it "
+                       "into the first user turn", exc)
+        return _render(_merge_system_into_first_user(chat_messages))
 
 
 def _strip_thinking_and_extract_json(text: str) -> str:
@@ -144,9 +241,10 @@ def _load_vision_model(model_path, torch_dtype):
     from transformers import AutoProcessor
     processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
     _ensure_pad_token(processor)
-    model = _vision_model_class().from_pretrained(
+    model = _from_pretrained(
+        _vision_model_class(),
         model_path,
-        torch_dtype=torch_dtype,
+        torch_dtype,
         device_map="auto",
         trust_remote_code=True,
     )
@@ -156,12 +254,27 @@ def _load_vision_model(model_path, torch_dtype):
 def _load_text_only_model(model_path, torch_dtype):
     from transformers import AutoModelForCausalLM, AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        torch_dtype=torch_dtype,
-        device_map="auto",
-        trust_remote_code=True,
-    )
+    try:
+        model = _from_pretrained(
+            AutoModelForCausalLM,
+            model_path,
+            torch_dtype,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+    except (ValueError, KeyError) as exc:
+        # LLM_VISION_MODE=text on a multimodal checkpoint (Gemma 4 at any size):
+        # AutoModelForCausalLM has no mapping for it. Load the multimodal class
+        # anyway — we simply never hand it images.
+        logger.info("AutoModelForCausalLM rejected %s (%s); loading multimodal class "
+                    "and running it text-only", model_path, exc)
+        model = _from_pretrained(
+            _vision_model_class(),
+            model_path,
+            torch_dtype,
+            device_map="auto",
+            trust_remote_code=True,
+        )
     return tokenizer, model
 
 

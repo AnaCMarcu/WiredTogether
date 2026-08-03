@@ -1,0 +1,25 @@
+{"id": "006129f149f2", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "006170815dcb", "hallucination": true, "stale": true, "verifiable_claims": 0, "correct_claims": 0, "notes": "tree/wool (ch1 content) presupposed in ch2; all claims future"}
+{"id": "0061ce625ebc", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "anvil referenced in ch1"}
+{"id": "0061e8ef7081", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "both teammates' actions misstated"}
+{"id": "0062979c1db4", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 1, "notes": "self-localizes to ch2 facing anvil while actually in ch4"}
+{"id": "0062a1c5cbe5", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "0062b8cd2f94", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "pure view claims, unverifiable"}
+{"id": "00637d523394", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": ""}
+{"id": "0063b071bce0", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "anvil and ch3 cell described in ch5"}
+{"id": "0063da80074b", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 5, "notes": ""}
+{"id": "0064106a679d", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "0064498c8670", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": ""}
+{"id": "0064c3ddec54", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 5, "notes": ""}
+{"id": "006542fa7ec8", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": ""}
+{"id": "0065bbec1fce", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": "refers to self as teammate"}
+{"id": "0065be009a04", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": ""}
+{"id": "006613319ff0", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "anvil in ch3 cell; partner described in ch3 while team in ch4"}
+{"id": "0066b93e892e", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 1, "notes": "ch3 cell/switch concepts imported into ch4"}
+{"id": "0066d2f7830b", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "0067065a4269", "hallucination": true, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "teammate visible from sealed ch3 cell"}
+{"id": "0067179f80a4", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "0067807e0766", "hallucination": true, "stale": true, "verifiable_claims": 5, "correct_claims": 2, "notes": "switch in ch4 impossible"}
+{"id": "0067eb536c96", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": ""}
+{"id": "0068a05c96b7", "hallucination": true, "stale": true, "verifiable_claims": 1, "correct_claims": 0, "notes": "ch3 switch/cell content described as current in ch4"}
+{"id": "00693460d5f4", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}

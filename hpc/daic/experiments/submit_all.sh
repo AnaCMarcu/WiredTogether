@@ -62,25 +62,25 @@ cd "$REPO_ROOT"
 mkdir -p slurm_logs
 
 EXPERIMENTS=(
-    "exp01_llm_2b.sbatch"
-    "exp02_llm_9b.sbatch"
-    "exp03_mappo.sbatch"
-    "exp04_ippo.sbatch"
-    "exp05_mappo_hebbian.sbatch"
+    # "exp01_llm_2b.sbatch"
+    # "exp02_llm_9b.sbatch"
+    # "exp03_mappo.sbatch"
+    # "exp04_ippo.sbatch"
+    # "exp05_mappo_hebbian.sbatch"
     "exp06_ippo_hebbian.sbatch"
-    "exp07_llm_2b_social_prompt.sbatch"
-    "exp08_llm_9b_social_prompt.sbatch"
-    "exp09_llm_9b_allied_all.sbatch"
-    "exp10_llm_9b_allied_pair.sbatch"
-    "exp11_llm_9b_allied_none.sbatch"
+    # "exp07_llm_2b_social_prompt.sbatch"
+    # "exp08_llm_9b_social_prompt.sbatch"
+    # "exp09_llm_9b_allied_all.sbatch"
+    # "exp10_llm_9b_allied_pair.sbatch"
+    # "exp11_llm_9b_allied_none.sbatch"
 )
 
 # Resolved seed values for human-readable reporting only. Must match the
 # hardcoded SEEDS=(42 123 456) array in _common.sh.
-SEED_VALUES_REFERENCE=(42 123 456)
+SEED_VALUES_REFERENCE=(42 123 456 789 1011 1213)
 
 N_SEEDS="${N_SEEDS:-1}"
-if ! [[ "$N_SEEDS" =~ ^[1-3]$ ]]; then
+if ! [[ "$N_SEEDS" =~ ^[1-6]$ ]]; then
     echo "ERROR: N_SEEDS must be 1, 2, or 3 (got '$N_SEEDS'). To use other" >&2
     echo "       seeds, edit the SEEDS=(...) array in _common.sh and bump" >&2
     echo "       SEED_VALUES_REFERENCE here so reporting matches." >&2

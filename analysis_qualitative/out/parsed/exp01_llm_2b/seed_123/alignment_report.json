@@ -1,0 +1,109 @@
+{
+ "run": "exp01_llm_2b/seed_123",
+ "degraded": false,
+ "is_rl": false,
+ "align": {
+  "0": {
+   "offset": -2600,
+   "match_rate": 0.9907407407407407,
+   "n_compared": 3024,
+   "n_units": 5632,
+   "n_rows": 3804,
+   "status": "repaired",
+   "coverage": 0.7971
+  },
+  "1": {
+   "offset": -2600,
+   "match_rate": 0.9907499174099769,
+   "n_compared": 3027,
+   "n_units": 5632,
+   "n_rows": 3804,
+   "status": "repaired",
+   "coverage": 0.7971
+  },
+  "2": {
+   "offset": -2600,
+   "match_rate": 0.9907346128391793,
+   "n_compared": 3022,
+   "n_units": 5632,
+   "n_rows": 3804,
+   "status": "repaired",
+   "coverage": 0.7971
+  }
+ },
+ "attribution": {
+  "attributed": 17707,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 15917
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 0.9644760213143873,
+   "n": 3378
+  },
+  "critic": {
+   "rate": 0.9525504151838672,
+   "n": 843
+  },
+  "social": {
+   "rate": null,
+   "n": 0
+  }
+ },
+ "clock": null,
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 11380,
+   "comm_metrics_total": 7783,
+   "ok": false
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 11138,
+    "random_fallback:self_target": 241,
+    "random_fallback:unparseable": 1
+   },
+   "comm_metrics": {
+    "model": 7676,
+    "random_fallback:self_target": 102,
+    "random_fallback:unparseable": 5
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "action_selection": {
+    "n": 16896,
+    "fail": 1
+   },
+   "auto_curriculum": {
+    "n": 2512,
+    "fail": 272
+   },
+   "belief_system": {
+    "n": 13509,
+    "fail": 589
+   },
+   "critic": {
+    "n": 843,
+    "fail": 0
+   },
+   "episodic_memory": {
+    "n": 843,
+    "fail": 0
+   }
+  }
+ },
+ "n_units": 34603,
+ "n_timeline_rows": 11412,
+ "elapsed_s": 6.3
+}

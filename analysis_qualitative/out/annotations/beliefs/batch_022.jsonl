@@ -1,0 +1,25 @@
+{"id": "00e727b14671", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "Ch1-consistent scene; agent_2 turning to find door, not ready at stone"}
+{"id": "00eab1dd725a", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "agent_1 backing away from wall, not turning left"}
+{"id": "00ec2ac82cae", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": "Tree trunk corroborated by agent_0's message; scene ch1-consistent"}
+{"id": "00ef36156b09", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "GT self reports looking at floor searching for anvils, not facing bedrock wall"}
+{"id": "00f2d3ea3c6e", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "Self-contradictory: agent_2 placed in both ch1 and ch2; GT shows ch1; no chicken combat"}
+{"id": "00f2d9eb3c1d", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "Self is turning to find corridor, not facing a centered zombie; teammates attacking matches"}
+{"id": "00f2e13c8c27", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": "Matches GT: agent_1 in ch2 aiming at cobblestone block with diamond sword"}
+{"id": "00f3a3ea942c", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "agent_2 turning toward door, not digging stone"}
+{"id": "00f50b6d4d08", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "Self stone dig and animal presence match; agent_2 seeking exit, not at stone block"}
+{"id": "00f5271f2320", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": "agent_1 attacking zombie at center (matches); wall-facing claim off"}
+{"id": "00f8422b1f7a", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "Iron ore never exists in env (GT messages echo the confabulation); teammate with sword visible matches"}
+{"id": "00f99ac23501", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "Closed cell door and ceiling redstone impossible in ch1"}
+{"id": "00fb70bd402a", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "agent_2 turning right not left; no zombie question in GT"}
+{"id": "00ff2f42012a", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "Zombies and wielded diamond sword impossible in ch1 at ep1 t=9"}
+{"id": "010d69442661", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "Purple anvils and held sword impossible in ch1 ep2; meat row fabricated"}
+{"id": "010e046cb19f", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "agent_1 seeking zombies, not clearing wall to reveal corridor; focus-fire matches"}
+{"id": "010e7e8a209b", "hallucination": true, "stale": true, "verifiable_claims": 6, "correct_claims": 5, "notes": "'Cell A' is a ch3 feature applied to ch4; combat beliefs otherwise accurate"}
+{"id": "01135cade51e", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "Claims Ch4 corridor/zombies/sword while GT shows ch1 at ep1 start"}
+{"id": "01150374843d", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "Anvil break, Cell C, and switch beliefs impossible in ch1 at ep2 t=75"}
+{"id": "011863c96e4e", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "Row A anvil pair-dig and sword equip impossible at ep2 t=19 in ch1"}
+{"id": "01225466cd1e", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "Switch press and agent_1 door-open report match GT; self already pressing (not unenacted)"}
+{"id": "0124cc016a16", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "Held sword, anvil, and zombies-in-ch3 beliefs impossible in ch1 ep1; tree/teammate claim matches"}
+{"id": "0134abc44e98", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "Anvil and held sword impossible in ch1 ep2"}
+{"id": "013607433bfa", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 0, "notes": "agent_1 placed in ch2 (GT: ch1); self tree-digging claim outdated; agent_0 not digging stone"}
+{"id": "013797c4b23d", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "Identity confusion (believer is agent_0, listed as teammate); teammate directions/targets wrong"}

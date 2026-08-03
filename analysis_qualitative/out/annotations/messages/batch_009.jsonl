@@ -1,0 +1,25 @@
+{"id": "0051f2ea699f", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "correctly states C-opens-A switch mapping"}
+{"id": "0051fde001c3", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "005204d42be5", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "echoes teammate's request back at sender"}
+{"id": "00523fc1e3bf", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "005257ab0c2d", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "tree impossible in ch2"}
+{"id": "0052af5cb339", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "self-contradictory: says centered, then asks to center it"}
+{"id": "0052d2fc6336", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "0053d151ad01", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "0053f1f3940b", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "misstates ch3 mechanic (own switch opens own door)"}
+{"id": "005408c43c87", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "005429c239c1", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "tree impossible in ch2; sword-on-ceiling odd"}
+{"id": "005458e03523", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "00546b2932c3", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "sword-from-cobblestone causality fabricated"}
+{"id": "005471ee228f", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "0056a0f0e63e", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "0057c39f00fb", "categories": ["inform", "question"], "coordination_function": "request", "is_grounded": true, "specificity": 1}
+{"id": "0057cbfa1027", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "0057d94bdc37", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "anvil impossible in ch3"}
+{"id": "005846f57bb7", "categories": ["request", "inform"], "coordination_function": "request", "is_grounded": true, "specificity": 2}
+{"id": "00589c8e2f0e", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "0058a3145d1a", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2}
+{"id": "005905147619", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "lever/switch impossible in ch1"}
+{"id": "005914ec5bbd", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "005956651d9e", "categories": ["inform", "question"], "coordination_function": "request", "is_grounded": true, "specificity": 1}
+{"id": "00595743392a", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "terse; referent only via context"}

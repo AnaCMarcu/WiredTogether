@@ -1,0 +1,25 @@
+{"id": "009d728df26a", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "009db86bc194", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "parrots agent_0's line; fallback routing"}
+{"id": "009df94f6077", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "009e6da4b80f", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 0, "notes": "vague exploration status"}
+{"id": "009ef15fd4a6", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "lever/switch in ch1 (switches only ch3)"}
+{"id": "009f18bed65c", "categories": ["inform"], "coordination_function": "none", "is_grounded": true, "specificity": 1, "notes": "self-prediction with no coordination value"}
+{"id": "00a0e3f03b8d", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "switch in ch4; tells agent_2 to summon itself"}
+{"id": "00a1befc7348", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00a2b0c69340", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "misstates mechanic: ch3 switch opens another's door"}
+{"id": "00a88734fd61", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00a9e7ed71b1", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00aabcf425b9", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00ac382994e2", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "formulaic instruction echoed in context"}
+{"id": "00ad4f9a666d", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "zombie claimed in ch1 (zombies only ch4/ch5)"}
+{"id": "00ae5cd7aaa8", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "switch in ch4 (switches only ch3)"}
+{"id": "00af6fb07837", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00b0585fa9d3", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "anvil in ch3 (anvils only ch2)"}
+{"id": "00b2162aca52", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00b317e952c1", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "00b3afea9974", "categories": ["request", "commit"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "anvil not possible in ch1/ch4 context"}
+{"id": "00b3fe3e75a4", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "echo of receiver's earlier message, third-person confusion"}
+{"id": "00b42c20edc6", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "tree in ch3 (trees only ch1); self-directed planning"}
+{"id": "00b597aaab82", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "00b74432b9e2", "categories": ["request", "question"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00b7cceb827b", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}

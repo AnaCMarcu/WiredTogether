@@ -1,0 +1,25 @@
+{"id": "001cc93cd377", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "001d2774dbd7", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "agent_2 still in ch3, not exiting"}
+{"id": "001d72dc13be", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": "mostly unverifiable plan chatter"}
+{"id": "001debc62c0c", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "references nonexistent Agent_3"}
+{"id": "001e7b9c8b27", "hallucination": true, "stale": true, "verifiable_claims": 5, "correct_claims": 2, "notes": "boss/switch/cell claims in ch4"}
+{"id": "001ec86e4fd4", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "001f221b23b4", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 2, "notes": "anvil and tree in ch3 cell"}
+{"id": "001f4dfe8f9b", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "ch3/ch5 concepts while in ch1"}
+{"id": "001fcb6766a2", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "zombie not centered; agents still searching"}
+{"id": "002161102379", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": ""}
+{"id": "0021ccb9478f", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": ""}
+{"id": "0022111f47a6", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 4, "notes": ""}
+{"id": "00227a2ecfd1", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "boss not located; agent_1 still searching"}
+{"id": "002282e10eb1", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "agent_2 in ch2, not ch3"}
+{"id": "0022e4f6c5bf", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "locations right, actions wrong"}
+{"id": "0024594e32dd", "hallucination": true, "stale": true, "verifiable_claims": 1, "correct_claims": 0, "notes": "anvil in ch4"}
+{"id": "0024680bb0c8", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "0024b5340f74", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": ""}
+{"id": "00250e9fd9ff", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 2, "notes": "anvil+teammates visible from ch3 cell"}
+{"id": "00251eeebdcc", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": ""}
+{"id": "002595bb08eb", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "switch in ch4; 'sword base' confab"}
+{"id": "0025bbb7ecae", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 0, "notes": "tree in ch2; phantom boss retreat"}
+{"id": "0025cc911502", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 1, "notes": "anvil+teammate visible in ch3"}
+{"id": "002693c0c7e5", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": ""}
+{"id": "0026af6b9ce5", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 1, "notes": "ch3 cell described while in ch4"}

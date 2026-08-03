@@ -1,0 +1,25 @@
+{"id": "013311a6337d", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "messages join zombie attack despite stay-focused decision"}
+{"id": "0135c613ad99", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "01385b223950", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "referenced_bonds empty"}
+{"id": "013a7b39add7", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "013e1f284dc3", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "referenced_bonds empty"}
+{"id": "0146eac9f89f", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "01472743c616", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "0149ca251a50", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "follows deltas over levels (0.27 decaying vs 0.17 rising)"}
+{"id": "014a6cd7cdb9", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "014c5986e31d", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "referenced_bonds empty"}
+{"id": "014d7f427b59", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "0151ab96e5f6", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "0151deb74cc8", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "015cf8a640b0", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "016092967bf6", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "0166102c64d0", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "table has negative bond value (-0.03)"}
+{"id": "016a01b4a4f7", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "017202c2f900", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "0175a2972c88", "mentions_bond_values": false, "values_match_table": "absent", "decision_follows_bonds": "partial", "explanation_quality": 0, "notes": "all thought fields null (parse failure)"}
+{"id": "01795cc6f6fc", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "messages urge agent_2 to co-dig despite ignoring their request"}
+{"id": "01865da0ab32", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "referenced_bonds empty"}
+{"id": "018ba58a3342", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "0190ad00d1b7", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "0190d73a51b2", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "0199d9a00b8b", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1}

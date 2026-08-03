@@ -1,0 +1,25 @@
+{"id": "007e640616a2", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "007fab98aae8", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "reinforces receiver's ongoing task"}
+{"id": "007fdb8b15c8", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "iron ore likely hallucinated but unverifiable"}
+{"id": "0080727f70bd", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0080878b631c", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "directs receiver to anvils in ch3 (only ch2)"}
+{"id": "008094278646", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "lever phrasing echoed heavily in context"}
+{"id": "008101e7be3f", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "switch claimed pressed in ch4 (switches only ch3)"}
+{"id": "0083a48795f4", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "refers to receiver in third person"}
+{"id": "008644e6a11a", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "0088f3da2f26", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00893488ac45", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "self-referential confusion; fallback routing"}
+{"id": "0089601d8430", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "008a4d228944", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "008be5d33fcd", "categories": ["inform", "noise"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "speaker is agent_2 yet describes Agent 2 in third person; parroted"}
+{"id": "008c333c99d2", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "008db7a53d2a", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "008e3b1d9ab3", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "contradicts own earlier claim gear was broken"}
+{"id": "009175d2b0ce", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "00924e594294", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0095b5a1f1bb", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "tells receiver to pair-dig with itself"}
+{"id": "0096bc8674bf", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "claims Ch5 door open while in ch1 early in episode"}
+{"id": "0097b3dccd82", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "generic readiness line repeated in context"}
+{"id": "009a42ca6435", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "009aae32a4be", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "009be0ff84ac", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "turns right to find zombies said to be on left"}

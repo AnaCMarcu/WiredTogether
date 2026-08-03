@@ -1,0 +1,25 @@
+{"id": "004b8cd9bb99", "hallucination": true, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "self waiting in communal room; GT ch1 turning"}
+{"id": "004c04a0d1e6", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "red sand block not corroborated"}
+{"id": "004c05f4d81f", "hallucination": true, "stale": true, "verifiable_claims": 1, "correct_claims": 0, "notes": "agent_2 in Cell C (ch3); GT ch4"}
+{"id": "004c1a7fc3bf", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "future-only claims; anvil/boss misplaced for ch3"}
+{"id": "004c5176d950", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": ""}
+{"id": "004cc64007fd", "hallucination": true, "stale": true, "verifiable_claims": 6, "correct_claims": 2, "notes": "both partners placed in ch3 cells; GT ch4"}
+{"id": "004d49978ebb", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "wood block in ch3 dubious"}
+{"id": "004da2824733", "hallucination": true, "stale": true, "verifiable_claims": 5, "correct_claims": 3, "notes": "agent_1 in ch5, not ch4"}
+{"id": "004e6467e58a", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "solo anvil break contradicts two-agent mechanic; GT blank"}
+{"id": "004e94e1e086", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "door to ch2 locked per GT, not open"}
+{"id": "004e9f9e3a1a", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 1, "notes": "anvils in ch3 impossible"}
+{"id": "004ef501523a", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "zombie/tree in ch2 impossible"}
+{"id": "00500ff9d8e0", "hallucination": true, "stale": true, "verifiable_claims": 1, "correct_claims": 0, "notes": "teammates at anvil in ch4 impossible"}
+{"id": "00501948b6c0", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "agent_0 'in boss room'; GT ch1"}
+{"id": "00501d119948", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "anvil break scene in ch4 impossible"}
+{"id": "005091507754", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": "agent_2 in ch2 digging stone, not attacking sheep in ch1"}
+{"id": "0050acdebcc0", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "anvil pedestal in ch1; self mislocated to ch2"}
+{"id": "0050f530e170", "hallucination": true, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "GT: agent looking at stone block, not zombie"}
+{"id": "0050ffe4c6d3", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 6, "notes": ""}
+{"id": "005174bd00eb", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "0051b2ade8ea", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": ""}
+{"id": "0051be683fff", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 3, "notes": "switch-found status contradicts GT exit search"}
+{"id": "0051e34dfa94", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "claims agent_2 not in ch4; GT ch4"}
+{"id": "0052421edc14", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "invented ch3-switch controls ch5-door mechanic"}
+{"id": "00527b218af3", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "teammates seeking exit, not zombies; ch3-door focus lingering"}

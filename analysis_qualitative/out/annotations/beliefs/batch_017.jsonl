@@ -1,0 +1,25 @@
+{"id": "0084d616aeb9", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 3, "notes": "agent_1 turning to find doorway, not digging the anvil; joint-effort request correct"}
+{"id": "0084f0aa7990", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 1, "notes": "anvils cannot exist in ch3 (ch2 leftover); GT messages parrot the anvil too"}
+{"id": "008598344e01", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "pig does not exist (only chickens/sheep); sword in ch1 impossible; agent_1 mislocated to ch2 in list1"}
+{"id": "00861ae5ca68", "hallucination": false, "stale": false, "verifiable_claims": 7, "correct_claims": 5, "notes": "Door 1 not opened yet; agent_2 digging, not turning left"}
+{"id": "0087007ebf3d", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "diamond sword and zombies in ch2 at ep1 t=39 impossible; teammates in ch1, not nearby"}
+{"id": "0088cdc4e74c", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "diamond sword in ch1 ep2 impossible; own GT says stone (not dirt) centered and dig not yet enacted"}
+{"id": "0088e135f944", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 2, "notes": "anvil, diamond sword, and cell door all impossible in ch1"}
+{"id": "008923cfff89", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "attacking overstated: agent_0 and agent_2 are both still turning/searching for zombies"}
+{"id": "00894d0713d9", "hallucination": true, "stale": true, "verifiable_claims": 6, "correct_claims": 3, "notes": "sheep in ch2 impossible (ch1 leftover); anvil-break coordination claims correct"}
+{"id": "00896ae99b96", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "anvil, zombies, and diamond sword all impossible in ch1"}
+{"id": "008a4027ce38", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 3, "notes": "'Cell A' in ch4 (cells are ch3); locations in ch4 correct"}
+{"id": "008aa97617b4", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "says find door to proceed to Ch4 but already in ch4; wall/turn claims match GT"}
+{"id": "008b71858db0", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "'breaking the diamond sword' and anvil in ch1 impossible; locations and no-gear correct"}
+{"id": "008be71baae4", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "teleporter never exists; 'greenstone block' fabricated; both locations (ch2) correct"}
+{"id": "008d10110c14", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": "agent_1 still in ch1; agent_2 breaking stone, not attacking sheep; own turn direction wrong"}
+{"id": "008d14aad84f", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 2, "notes": "agent_2 self-reports being in ch1; belief places them in ch2 searching for anvils"}
+{"id": "008d50202055", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "cells and switches do not exist in ch2; anvil-break coordination correct"}
+{"id": "008ed2e38fde", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": "wall-blocked view consistent with own GT (circling a wall)"}
+{"id": "008eda2539d3", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 1, "notes": "partner in ch2 with sword+chestplate at ep1 t=14 impossible; all agents in ch1"}
+{"id": "008f40f370ad", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 1, "notes": "anvil in ch4 impossible; lever never exists; communal room reference stale"}
+{"id": "008f4e61c050", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "agent_0 digging stone, not investigating a wall gap"}
+{"id": "0090482ee424", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 4, "notes": "anvil-focus instruction was agent_0's own message, misattributed to agent_1"}
+{"id": "009126959677", "hallucination": false, "stale": true, "verifiable_claims": 3, "correct_claims": 1, "notes": "agent_0 seeking exit, not attacking boss (agent_2 is); ch4 zombie gating + 'communal room door' referenced from ch5"}
+{"id": "00913a8fd780", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "agent_2 centering tree, not locating Door 1; agent_0 turn direction wrong in list2"}
+{"id": "00920c3fb3d3", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "mostly uncertainty/self-report statements; nothing cleanly checkable against GT"}

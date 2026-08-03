@@ -1,0 +1,25 @@
+{"id": "009e34a0136f", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "agent_2 switch-press beliefs match GT; agent_1 active, not waiting"}
+{"id": "009e4fd472a2", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "agent_1 mining stone confirmed; exit-seeking claims wrong"}
+{"id": "009e73c5cd12", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "GT reports a tree in view, not bedrock wall; 'north door leading to Ch4' but already in ch4; teammates are in ch4"}
+{"id": "009f5452bc62", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": "'diamond sword base' fabricated and switch-drops-sword mechanic false; agent_2 coordinating with agent_0, not agent_1"}
+{"id": "009fcf02ae42", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "agent_2 already centering the stone block, not still searching"}
+{"id": "00a0924fa2ec", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "switch press in ch1 impossible; cell B and communal room misplaced; agent_0 is in ch2"}
+{"id": "00a24263014d", "hallucination": false, "stale": false, "verifiable_claims": 7, "correct_claims": 6, "notes": "agent_2 pivoting to find the door, not scanning for anvils/zombies"}
+{"id": "00a261566a3f", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "self-reference confusion (agent_0 told to check rooms for agent_0); teammates are in the same chamber"}
+{"id": "00a2ebfd3c5c", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 3, "notes": "anvil in ch3 impossible; list1 says switch already pressed, GT shows not yet (list2 gets it right)"}
+{"id": "00a30d6ecf84", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "diamond sword in ch1 before any anvil break; teammates not in ch1 to be visible"}
+{"id": "00a353f63e63", "hallucination": false, "stale": false, "verifiable_claims": 7, "correct_claims": 3, "notes": "attacking overstated (agent_1 still turning to find zombies); focus-urging misattributed"}
+{"id": "00a4370b23a8", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 0, "notes": "agent_2 actually in ch1; anvil in ch3 impossible; contradictory ch2/ch3 locations across lists"}
+{"id": "00a612348b9b", "hallucination": false, "stale": true, "verifiable_claims": 4, "correct_claims": 1, "notes": "both partners believed at ch2 anvils but are in ch4"}
+{"id": "00a62d771d1b", "hallucination": true, "stale": false, "verifiable_claims": 7, "correct_claims": 4, "notes": "switch-dropped-anvil mechanic impossible; 'cell A of communal room' and ch2 location wrong (all in ch1)"}
+{"id": "00a70fbe1ecf", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "all agents NoOp; 'dark zone' fabricated; internally contradictory about agent_0's location"}
+{"id": "00a732d21d4f", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": "agent_2 surveying for zombies matches GT; agent_1 location unverifiable (blank chamber)"}
+{"id": "00a849bb6272", "hallucination": true, "stale": false, "verifiable_claims": 8, "correct_claims": 6, "notes": "lever never exists; list1 mislocates agent_0 to ch3, later correctly ch2"}
+{"id": "00a8c30eaebb", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 1, "notes": "targets wrong: agents orienting toward the door, not tree/dirt/stone clearing"}
+{"id": "00aa2cc982b9", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "diamond block never exists; pair-dig-to-raise-HP mechanic fabricated; agent_0 focused on tree per GT"}
+{"id": "00ab79defed4", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "duplicated unverifiable view claim; GT shows agent aligning with open Door 1"}
+{"id": "00abd241e723", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 0, "notes": "boss (ch5) invoked while agents in ch1/ch2; cell C misplaced; claims duplicated verbatim"}
+{"id": "00abe26865f0", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "switch in ch5 impossible; agent_1/agent_0 mislocated to adjacent chambers (all three in ch5)"}
+{"id": "00ac36500f9b", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "zombie-centered matches GT; agent_2 is actually in ch3, not visibly assisting"}
+{"id": "00ad84ea45e5", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "agent_0 turning left not right; agent_2 digging stone, not returning through the door"}
+{"id": "00ae4d1d1ff4", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": "stone-block obstruction and red-glow-block-via-teammate-comm consistent with GT"}

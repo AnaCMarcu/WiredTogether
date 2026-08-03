@@ -1,0 +1,18 @@
+[
+ {
+  "archetype": "bonds_track_behaviour",
+  "record": {
+   "label": "Allied-pair",
+   "ep": 1,
+   "i": 0,
+   "j": 1,
+   "W": 0.800000011920929,
+   "messages": 837.0,
+   "joint_dig": 27.0,
+   "proximity": 387.0,
+   "joint_kill": 0.0,
+   "ch5_damage_overlap": 0.0
+  },
+  "reason": "highest W x interaction product"
+ }
+]

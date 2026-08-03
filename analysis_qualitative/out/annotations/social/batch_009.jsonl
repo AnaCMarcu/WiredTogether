@@ -1,0 +1,19 @@
+{"id": "56ad4d6b76dd", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "674e55afc809", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "excluded agent in allied-pair; ask justified despite zero bonds"}
+{"id": "6e9c31de4dff", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "71595930a614", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "73727b71ba98", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "asks stuck agent for guidance; slightly incoherent"}
+{"id": "812381b04151", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "812904f97fb3", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "urgency explicitly overrides zero bond"}
+{"id": "86b35c1e0222", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "8a94604c6e84", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "9c2fa8d78346", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "referenced_bonds empty; 'near zero' claim unverifiable"}
+{"id": "adeb8a71e446", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "c8716bfcc299", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "d083c14c94d3", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "equal 0.80 bonds; combat-request-driven choice"}
+{"id": "d6c59a32d319", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "describes 0.80 as 'near 1.0'"}
+{"id": "da5d11a8aa3a", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "db93a3c9deea", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "zero bonds; ask justified as alliance initiation"}
+{"id": "dbdad534b183", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "long self-debating reasoning"}
+{"id": "fd78ec650ad0", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "partial", "explanation_quality": 2, "notes": "referenced_bonds empty; says won't help then offers help"}
+{"id": "fd88a50dc56d", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}

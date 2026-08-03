@@ -1,0 +1,25 @@
+{"id": "0087007ebf3d", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "teammates in ch1 not nearby; sword/zombies impossible early ch2"}
+{"id": "0087fec350f1", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 0, "notes": "cell C and boss referenced from ch4"}
+{"id": "00881e34edd6", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": ""}
+{"id": "008826a728e1", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "boss in ch4"}
+{"id": "0088cdc4e74c", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": ""}
+{"id": "008923cfff89", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": ""}
+{"id": "00896ae99b96", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "anvil and zombies in ch1"}
+{"id": "008a11838d70", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": ""}
+{"id": "008a4027ce38", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 1, "notes": "cell A in ch4"}
+{"id": "008aa97617b4", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": ""}
+{"id": "008b36f1674f", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "lever is not an environment object"}
+{"id": "008b71858db0", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": "tracks teammates' sword-in-ch1 confabulation"}
+{"id": "008be71baae4", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "008d10110c14", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": ""}
+{"id": "008d14aad84f", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "agent_2 self-reports ch1; belief says ch2"}
+{"id": "008d50202055", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "cell A and switch in ch2"}
+{"id": "008daa883ef2", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "self in ch2 but believes cell C; zombie/boss impossible here"}
+{"id": "008ed2e38fde", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "008eda2539d3", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": "cell A in ch2; diamond gear impossible at episode start"}
+{"id": "008f40f370ad", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 1, "notes": "anvil in ch4"}
+{"id": "008f4e61c050", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": ""}
+{"id": "0090482ee424", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": ""}
+{"id": "009126959677", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": ""}
+{"id": "00913a8fd780", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "belief sets contradict on agent_0 turn direction"}
+{"id": "00920c3fb3d3", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": ""}

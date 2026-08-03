@@ -1,0 +1,25 @@
+{"id": "00da4ba701b3", "hallucination": true, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "ch3 cell/switch imagery while agent forages ch1 tree"}
+{"id": "00dd51e7b0a0", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "teammates claimed in ch2; all in ch1"}
+{"id": "00de1a839e8f", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "agent_0 in ch1 not ch2; agent_1 turning not digging"}
+{"id": "00de4d9b089d", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "anvil claimed in ch1"}
+{"id": "00df39dcf754", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "switch and cell attributed to ch1"}
+{"id": "00dfd1e62383", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "self-claims contradict own current pair-dig offer"}
+{"id": "00e01846f687", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "agent_2 actually in ch2"}
+{"id": "00e11a161428", "hallucination": true, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "grey anvil impossible; both anvils purple, ch2 only"}
+{"id": "00e1c1d6ae31", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": "zombie worry future-framed, off-context for ch3"}
+{"id": "00e25690ce47", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "anvil and zombies claimed in ch1"}
+{"id": "00e348f685c0", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 1, "notes": "ch2 anvil/tree scene described while in ch3 cell"}
+{"id": "00e38147513e", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1}
+{"id": "00e602407fae", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "anvils described in ch4"}
+{"id": "00e704bc2269", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "agent_1 heading to open door, not hole/stone"}
+{"id": "00e727b14671", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": "agent_2 turning for door, not ready to dig"}
+{"id": "00eab1dd725a", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3}
+{"id": "00ec2ac82cae", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 4}
+{"id": "00edce7fcc71", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 6}
+{"id": "00ee1c6171e5", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "players and zombie seen from sealed ch3 cell"}
+{"id": "00ef36156b09", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1}
+{"id": "00f0d72719f6", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "animals and zombie claimed in ch2"}
+{"id": "00f27422d207", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "anvil in ch3 (echoes partner's message)"}
+{"id": "00f2d3ea3c6e", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "agent_2 location self-contradictory; no chicken combat"}
+{"id": "00f2d9eb3c1d", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3}
+{"id": "00f2e13c8c27", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 5}

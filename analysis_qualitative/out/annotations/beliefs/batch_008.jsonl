@@ -1,0 +1,25 @@
+{"id": "003dc0e359de", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "sword-from-cobblestone in ch3 impossible; block not yet broken"}
+{"id": "003e1d9893dc", "hallucination": false, "stale": false, "verifiable_claims": 8, "correct_claims": 8, "notes": ""}
+{"id": "003e717e6625", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "generic visual claims only"}
+{"id": "003ee8fcabe7", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 1, "notes": "anvil/sealed cell/switch impossible in ch4"}
+{"id": "003f20e0a54b", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "003fd29c8c11", "hallucination": true, "stale": true, "verifiable_claims": 6, "correct_claims": 3, "notes": "agent_1 placed in ch2; ep2-start gear carryover"}
+{"id": "003ff642ba65", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "attack claim contradicts ongoing zombie search"}
+{"id": "00402a8cb998", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": "anvil auto-equip expectation misplaced in ch3"}
+{"id": "0040db11f906", "hallucination": true, "stale": true, "verifiable_claims": 1, "correct_claims": 0, "notes": "claims ch1 while in ch4"}
+{"id": "00411cf531bf", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": "tree in ch2 impossible; communal-room claim wrong"}
+{"id": "004145e54c7e", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": ""}
+{"id": "0041b81f90ac", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": ""}
+{"id": "0041b967e9dc", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": "agent_1 placed in ch2; GT ch1"}
+{"id": "0041e4a46d6e", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": ""}
+{"id": "0042272c5e82", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": "turn direction wrong (left vs right)"}
+{"id": "0042efec23d1", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 2, "notes": "attributes agent_2's stone dig to agent_0"}
+{"id": "00432c0ded59", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 3, "notes": "second list places agent_0 in ch2; GT ch1"}
+{"id": "004343fa6575", "hallucination": false, "stale": false, "verifiable_claims": 7, "correct_claims": 3, "notes": "agent_2 hunting sheep, not joining anvil"}
+{"id": "00438ae14936", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "all future-tense claims"}
+{"id": "00439679927f", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": "wall switch/T-button in ch2 impossible"}
+{"id": "004453c6a18f", "hallucination": false, "stale": false, "verifiable_claims": 8, "correct_claims": 5, "notes": "agent_2 seeking zombies, not exit gap"}
+{"id": "00449fbf8794", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "cell A / iron-ore details off"}
+{"id": "0044c495d29b", "hallucination": true, "stale": true, "verifiable_claims": 1, "correct_claims": 0, "notes": "purple anvils in ch4 impossible"}
+{"id": "0044df339062", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "0044fbbcb9ce", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "zombies in ch2 impossible"}

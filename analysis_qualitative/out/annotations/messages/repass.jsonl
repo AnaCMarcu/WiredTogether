@@ -1,0 +1,50 @@
+{"id": "0001b7625685", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "generic 'the block'; context heavily hallucinated"}
+{"id": "0001d91e6bf7", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 2, "notes": "correct ch3 mechanic: pressing switch for another agent"}
+{"id": "00099190deb6", "categories": ["inform", "request", "question"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "000be87df987", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "000cbc9bfff9", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "asks receiver to break block only speaker faces; anvil speculation outside ch2"}
+{"id": "001281f2cd5c", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00172046b565", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "002242c0a54e", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "lever not a ch1 object; verbatim repetition loop"}
+{"id": "0025055ef99c", "categories": ["commit", "inform"], "coordination_function": "commit", "is_grounded": false, "specificity": 1, "notes": "'lever anchor' not a ch4 object"}
+{"id": "002574b5e6b8", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0026a848bb6c", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0029e901f21a", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "anvil impossible in ch1; 'on the ceiling' also odd"}
+{"id": "002a48a57e47", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "'sword base' dubious object but unverifiable"}
+{"id": "002aae6163d5", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "abrupt target switch amid lever spam"}
+{"id": "002cbb2fc51f", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "002ec610da63", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "confused instruction but switch valid in ch3"}
+{"id": "0031cb2758d6", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "action is MoveForward not Dig; front/back roles swapped vs t=269"}
+{"id": "00382afafcf2", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0040fd9d2332", "categories": ["inform", "noise"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "echoes agent_2's own words back; centered yet needs centering"}
+{"id": "00415e5dc345", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "receiver is door-searching, not attacking zombies"}
+{"id": "0046d071d62b", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "chamber claims flip Ch3/Ch4/Ch1 in adjacent steps"}
+{"id": "0047dd303d94", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "claims Ch1 while tagged ch2"}
+{"id": "005204d42be5", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "digging a drop is incoherent action-object"}
+{"id": "005471ee228f", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "matches ongoing zombie combat"}
+{"id": "006914060c16", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "teleporter nonexistent; Ch3 regression from Ch4"}
+{"id": "0069ceb0a770", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "hebbian_fallback routing; tree valid in ch1"}
+{"id": "006cd06a0bdf", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "door centered yet still searching for exit"}
+{"id": "006ded5c1f08", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0072454f44fc", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "anvil impossible in ch4"}
+{"id": "007668d06946", "categories": ["inform", "noise"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "verbatim repetition of own/others' prior messages"}
+{"id": "007c0b51c5af", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "008094278646", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "lever/switch plausible in ch3"}
+{"id": "00924e594294", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "bare imperative, no location"}
+{"id": "00a1befc7348", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00ad4f9a666d", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "zombie in Ch1 impossible; claimed Ch4 one step earlier"}
+{"id": "00b9c9f776d8", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00d6f0d63f66", "categories": ["acknowledge", "commit"], "coordination_function": "acknowledge", "is_grounded": true, "specificity": 2, "notes": "turn right to center object on left edge is inconsistent"}
+{"id": "00fbe2755631", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": false, "specificity": 2, "notes": "lever in ch4 context; invented HP-heal mechanic"}
+{"id": "012be78cc7c6", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "clear spatial request with purpose"}
+{"id": "01464bd61661", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 1, "notes": "chamber null; later context consistent with switch press"}
+{"id": "014abc696867", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "contradicts own t=337 claim anvil already broken"}
+{"id": "0218327e39c7", "categories": ["inform", "request", "noise"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "'gear block' nonexistent; verbatim loop across all agents"}
+{"id": "02468b6f73fe", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "switch not a ch4 object"}
+{"id": "0327c11f79c8", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "0333e9fc2e58", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0335ac64d55b", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "034fee5c9a93", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "refers to receiver in third person; 'red sandstone block' unverifiable"}
+{"id": "0356106f78d1", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "phrase echoed verbatim among agents"}
+{"id": "039252c230be", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "1cc23cbe7510", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 1, "notes": "self-narration with prediction"}

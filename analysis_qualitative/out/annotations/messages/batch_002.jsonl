@@ -1,0 +1,25 @@
+{"id": "0012455d0f27", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "001255e3044e", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "001268729c31", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "001281f2cd5c", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0013bf34acd8", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0013f7116b17", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "claims exited cell but later steps show still inside seeking switch; echoes agent_2"}
+{"id": "001432678829", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "001435cf8182", "categories": ["request", "commit"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "lever (switch-like) narrative in ch2; switches only ch3"}
+{"id": "00145065508e", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 1, "notes": "speaker agent_1 addresses 'Agent 1'; routed self_target"}
+{"id": "00150e307db5", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "0015525af6bf", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "self-addressed: agent_1 instructs 'Agent 1'"}
+{"id": "001579c5580f", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0015ea808fcc", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00160dc98b37", "categories": ["inform", "request", "noise"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "switch named in ch2 (switches only ch3); degenerate echo loop"}
+{"id": "001611f05428", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "001684f61be4", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "hallucinated 'gear block' confirm loop"}
+{"id": "00172046b565", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00175ea11561", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "tree trunk in ch2; trees only ch1"}
+{"id": "0017a2c953cd", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "hallucinated 'DigForward'/HP-gain narrative"}
+{"id": "0017c47f9d28", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00180c0fea59", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0019936fc8db", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0019daf1a708", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "degenerate echo loop across all agents"}
+{"id": "0019dec7361d", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "001a47b8b0b7", "categories": ["inform", "acknowledge"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}

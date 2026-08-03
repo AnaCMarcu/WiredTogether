@@ -1,0 +1,25 @@
+{"id": "00001b6d7a1e", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "0000f5aeec48", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "cites 0.00 but referenced_bonds empty"}
+{"id": "0004dbc03ad2", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "picks lower-weight agent_1 (0.28<0.33) via delta claim; ask framed as offer"}
+{"id": "000d7e337fd2", "mentions_bond_values": true, "values_match_table": "no", "decision_follows_bonds": "no", "explanation_quality": 1, "notes": "calls agent_1 (0.20) too low while targeting agent_0 (0.05)"}
+{"id": "000dee9ecdb2", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "000feb70edb3", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "001020677c43", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "0016198e36dc", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "cites 0.00 but referenced_bonds empty"}
+{"id": "0016d01ff8c7", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "001774c9be4c", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "partial", "explanation_quality": 1, "notes": "weights cited as deltas; contradicts itself, picks lower-bond agent_2"}
+{"id": "00183519e99c", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "cites 0.00 but referenced_bonds empty"}
+{"id": "001b0c894c9f", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "001e8a236834", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "next messages help agent_2 anyway"}
+{"id": "001ebe8b0c24", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "cites agent_2 value absent from table"}
+{"id": "001ff42a2a81", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "0023db0467d3", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "cites 0.00 but referenced_bonds empty"}
+{"id": "00259707e1d5", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "002709a2c09f", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "00270b0d0130", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "0028487b665f", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "002a86950ca2", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "cites 0.00 but referenced_bonds empty"}
+{"id": "002aca605edc", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "002b8a93d2ed", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "002d34ead4aa", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "003053b21876", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "cites 0.00 but referenced_bonds empty"}

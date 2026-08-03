@@ -1,0 +1,25 @@
+{"id": "0022e4151722", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "addressee + object + turn direction; ch4 context but sword item plausible"}
+{"id": "0022f5c19859", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "phrase echoed verbatim from teammates at t=402-403"}
+{"id": "002393d69ca0", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0023e0a045de", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "object + compass direction"}
+{"id": "0023e854757f", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "verbatim duplicate of agent_1 t=729 message"}
+{"id": "00241f33b880", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "claims to see agent_1 who per context is in ch1 at a tree/red door"}
+{"id": "002434fb11d9", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00244d8340e3", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0024b7922c50", "categories": ["inform", "request", "noise"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "verbatim echo loop across agents t=447-452; 'next phase' vague"}
+{"id": "0025055ef99c", "categories": ["commit", "inform"], "coordination_function": "commit", "is_grounded": false, "specificity": 1, "notes": "lever/switch object impossible in ch4; heavy echo loop"}
+{"id": "002573078f4f", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "002574b5e6b8", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "receiver is indeed digging the anvil in ch2"}
+{"id": "00265e9961bd", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "lever switch impossible in ch1; verbatim echo loop"}
+{"id": "00266401748d", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "claims centered while action is TurnLeft; same agent hallucinates ch4 anvil nearby"}
+{"id": "00267f143651", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0026a848bb6c", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00272797e877", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "verbatim 'dig the stone block' echo loop across all agents"}
+{"id": "00277e39eab5", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "lever impossible in ch2; verbatim echo loop"}
+{"id": "002818c7df02", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "switch impossible in ch2"}
+{"id": "002830cf8f0e", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00289b2d2228", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "claims tree dug but same agent still centering tree at t=23"}
+{"id": "0029147206c8", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00291c058f74", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00293e46f7ec", "categories": ["inform", "commit", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "002947b0a33e", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "switch impossible in ch4; pair-dig echo loop"}

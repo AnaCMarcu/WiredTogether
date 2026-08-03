@@ -1,0 +1,123 @@
+{
+ "run": "exp04_ippo/seed_123",
+ "degraded": false,
+ "is_rl": true,
+ "align": {
+  "0": {
+   "offset": 0,
+   "match_rate": 0.01646090534979424,
+   "n_compared": 1458,
+   "n_units": 5571,
+   "n_rows": 2873,
+   "status": "clock",
+   "clock_coverage": 0.8677,
+   "coverage": 0.8677
+  },
+  "1": {
+   "offset": 0,
+   "match_rate": 0.017123287671232876,
+   "n_compared": 1460,
+   "n_units": 5574,
+   "n_rows": 2873,
+   "status": "clock",
+   "clock_coverage": 0.8691,
+   "coverage": 0.8691
+  },
+  "2": {
+   "offset": 0,
+   "match_rate": 0.01634877384196185,
+   "n_compared": 1468,
+   "n_units": 5580,
+   "n_rows": 2873,
+   "status": "clock",
+   "clock_coverage": 0.8705,
+   "coverage": 0.8705
+  }
+ },
+ "attribution": {
+  "attributed": 18715,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 16218
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 0.7615933412604042,
+   "n": 3364
+  },
+  "critic": {
+   "rate": 0.4292565947242206,
+   "n": 834
+  },
+  "social": {
+   "rate": null,
+   "n": 0
+  }
+ },
+ "clock": {
+  "segments": 3,
+  "chosen": {
+   "den": 1000,
+   "span": [
+    "2026-07-01 03:22:41",
+    "2026-07-02 03:46:00"
+   ],
+   "n_markers": 2554
+  },
+  "coverage": 0.8691
+ },
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 8609,
+   "comm_metrics_total": 6309,
+   "ok": false
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 7990,
+    "random_fallback:out_of_range": 2,
+    "random_fallback:self_target": 617
+   },
+   "comm_metrics": {
+    "model": 5786,
+    "random_fallback:out_of_range": 2,
+    "random_fallback:self_target": 521
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "auto_curriculum": {
+    "n": 3561,
+    "fail": 0
+   },
+   "belief_system": {
+    "n": 13482,
+    "fail": 598
+   },
+   "critic": {
+    "n": 834,
+    "fail": 1
+   },
+   "episodic_memory": {
+    "n": 838,
+    "fail": 0
+   },
+   "rl_thoughts": {
+    "n": 16725,
+    "fail": 86
+   }
+  }
+ },
+ "n_units": 35440,
+ "n_timeline_rows": 8619,
+ "elapsed_s": 6.4
+}

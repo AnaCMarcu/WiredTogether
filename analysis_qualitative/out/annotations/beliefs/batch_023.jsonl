@@ -1,0 +1,19 @@
+{"id": "013966020e8b", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "Anvil, zombies, and dropped diamond sword impossible in ch1 ep1"}
+{"id": "013a0af383a5", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "Levers never exist in env (GT messages echo the lever confabulation)"}
+{"id": "013f6c01b384", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "Sealed cell with switch and bedrock door are ch3 features; agent in ch1"}
+{"id": "01463ed7cb66", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "Claims agent_0 entered ch2; GT shows agent_0 in ch1 digging; agent_2 stone dig matches"}
+{"id": "014706ec2915", "hallucination": true, "stale": true, "verifiable_claims": 6, "correct_claims": 3, "notes": "Switch in ch4 impossible (ch3 feature); turn directions wrong (GT: right, belief: left)"}
+{"id": "01476f631b9a", "hallucination": true, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "Held diamond sword impossible in ch1 ep2 before anvil break"}
+{"id": "016b0d4dab41", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "GT self is targeting a stone block on the right, not a tree ahead; scene otherwise ch1-plausible"}
+{"id": "016b66a8a262", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": "agent_2 already digging stone in ch2, not turning to find it"}
+{"id": "016e353d06c6", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "Believer is stuck in a pit per GT, contradicting open-clear view; agent_0 not near door"}
+{"id": "0171ee77a8f7", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": "Matches GT self digging stone for team milestone; accurate ch1 inventory"}
+{"id": "01757288eecf", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 6, "notes": "Accurate on both partners including anvil pair-dig request in ch2"}
+{"id": "017b69c0dd59", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "agent_2 seeking tree, not digging stone block"}
+{"id": "0182a1611e70", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": "Tree-to-left matches GT self turning left toward tree"}
+{"id": "01a019812399", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "Anvil, zombies, and diamond sword impossible in ch1 ep1"}
+{"id": "01db8d8f9405", "hallucination": false, "stale": true, "verifiable_claims": 5, "correct_claims": 3, "notes": "Both partners actually on stone blocks; chicken attack plausibly true earlier"}
+{"id": "01ef2ca18216", "hallucination": false, "stale": true, "verifiable_claims": 5, "correct_claims": 3, "notes": "agent_0 digging stone now; tree-chopping is the believer's own activity misattributed; wall claim plausibly earlier"}
+{"id": "01fc36fdde78", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 4, "notes": "Matches GT: agent_1 in ch1 breaking a stone block"}
+{"id": "031f6b181d3f", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "Anvil and cell door impossible in ch1"}
+{"id": "0339f23a8319", "hallucination": true, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "Held diamond sword impossible; believer stayed in ch1, no anvil break attainable solo"}

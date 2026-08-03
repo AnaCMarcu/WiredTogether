@@ -1,0 +1,25 @@
+{"id": "0074e7ccce61", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": ""}
+{"id": "007672db8415", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "0076adf1a34c", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "cell switch in ch1"}
+{"id": "007707264fc3", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "refers to self as teammate"}
+{"id": "0077197e9e5f", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 2, "notes": "tree and anvil in ch3"}
+{"id": "0077265f4928", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "0077bc8dce8d", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 1, "notes": "self placed in ch3; actually ch5"}
+{"id": "007854e46826", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "007ad52e632c", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": ""}
+{"id": "007b23ee3439", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": ""}
+{"id": "007b424d7ea2", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "007b60404429", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "switch in ch1; zombie in ch2"}
+{"id": "007b66773893", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": ""}
+{"id": "007b9ba034be", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "misses that anvil already broken per GT"}
+{"id": "007b9f7a75db", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "zombies in ch2"}
+{"id": "007baa6d0459", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": ""}
+{"id": "007bb222ec10", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": ""}
+{"id": "007bba9c01d2", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": ""}
+{"id": "007c64b90887", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "007c7d5328af", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 0, "notes": "sheep referenced as present in ch2"}
+{"id": "007d08f24376", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 1, "notes": "anvil and ch3 cell door asserted in ch4"}
+{"id": "0080ec594d83", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": ""}
+{"id": "00813a4a18a0", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 2, "notes": "cell A in ch4; anvil task carried into ch4"}
+{"id": "00841396b40f", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "lever is not an environment object"}
+{"id": "0084f0aa7990", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "anvil and visible teammate from ch3 cell"}

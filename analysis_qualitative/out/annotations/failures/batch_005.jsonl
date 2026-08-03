@@ -1,0 +1,25 @@
+{"id": "03f25e580dcc", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "switch re-press loop (51 digs) without door-state feedback", "notes": ""}
+{"id": "0414a76377b7", "is_failure": true, "matches_detector": true, "severity": 2, "cause_hypothesis": "door/switch wiring confusion; all agents scan-turn instead of pressing", "notes": "near-total turn deadlock in cells"}
+{"id": "0467044f6702", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "own-door vs other-door wiring confusion; redundant re-pressing", "notes": "partial exits occur"}
+{"id": "048b9fdac6ab", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "message codebook collapse to dig imperative; cross-agent parroting", "notes": ""}
+{"id": "049998dc7836", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "deferral loop: each agent asks others to press the switch; parroted message", "notes": "false switch-broken claim at t=460"}
+{"id": "04ab307abc7c", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "confabulated wood-drop collection claims; pair-dig chatter without alignment", "notes": "agent_2 intermittently in limbo"}
+{"id": "04f7def36607", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "dig-stone template loop; Ch3 switch task mostly ignored", "notes": ""}
+{"id": "05103fd06909", "is_failure": true, "matches_detector": true, "severity": 2, "cause_hypothesis": "hallucinated lever in Ch4; echoed dig-lever message; zombies ignored", "notes": ""}
+{"id": "051dbcd7f25a", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "endless align/ready chatter without synchronized anvil dig; false readiness claims", "notes": "anvil is a real Ch2 target but never jointly dug"}
+{"id": "053a6ff1fb43", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "repeated ready-to-press claim while actions never press", "notes": ""}
+{"id": "056b34b6278e", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "hallucinated lever/red-cloth mechanism attributed to doors; belief carried into Ch4", "notes": "agent_0 targets zombies occasionally"}
+{"id": "058ca95e7ad3", "is_failure": true, "matches_detector": true, "severity": 2, "cause_hypothesis": "policy collapse to NoOp", "notes": ""}
+{"id": "059901634989", "is_failure": true, "matches_detector": false, "severity": 1, "cause_hypothesis": "repetitive dig-command chatter; drop-collection fixation", "notes": "no clear critic false-success pattern visible; detector detail is an empty critique"}
+{"id": "059bccacd029", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "repeatedly digging non-yielding block ('dropped nothing')", "notes": ""}
+{"id": "05cd32859198", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "templated plan messages echoed across agents; false break/readiness claims; interspersed NoOps", "notes": ""}
+{"id": "05db59287f05", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "misbelief that cell switch opens a communal door; door-state confusion", "notes": ""}
+{"id": "05f115b930d3", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "repeated seek-door task with oscillating turns; contradictory door-open claims", "notes": "agent_1 does exit at t=39"}
+{"id": "062ea23d636c", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "hallucinated diamond; 'centered and ready to Dig' template echoed by all agents", "notes": "agent_2 retains some tree-centering activity"}
+{"id": "0634ec42c099", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "cross-chamber message bleed; hallucinated anvil/sword in Ch1; misaddressed messages", "notes": ""}
+{"id": "065aeb09a17b", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "switch re-press loop (23 digs) without door-state feedback", "notes": ""}
+{"id": "065aee360f2b", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "door-state uncertainty; agents search and turn instead of resolving switch wiring", "notes": ""}
+{"id": "06617728bd71", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "own-switch-opens-own-door misconception; redundant pressing", "notes": "agent_2 exits mid-window"}
+{"id": "06750224d0e4", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "orientation loss; compass-seeking turn circling in Ch4", "notes": "teammates engage zombies"}
+{"id": "067685288412", "is_failure": true, "matches_detector": true, "severity": 2, "cause_hypothesis": "policy collapse to NoOp", "notes": ""}
+{"id": "068240b69b97", "is_failure": true, "matches_detector": true, "severity": 1, "cause_hypothesis": "repeated dig-stone/anvil template; anvil hallucinated in Ch1", "notes": ""}

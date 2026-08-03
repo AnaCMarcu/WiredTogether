@@ -1,0 +1,25 @@
+{"id": "005299601f27", "hallucination": false, "stale": false, "verifiable_claims": 7, "correct_claims": 3, "notes": "lever alignment status contradicts GT"}
+{"id": "0052b999cd87", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "agent_0 in Cell C (ch3) at ep1 start; GT ch1"}
+{"id": "00534f27a9b8", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 5, "notes": ""}
+{"id": "00539c021d80", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "005412748468", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 0, "notes": "Row A anvil / communal-room claims; all agents in ch4"}
+{"id": "0054fe0d0c46", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 5, "notes": ""}
+{"id": "0055056cea32", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "sheep mechanism in ch2; agent_0 not at anvil per GT"}
+{"id": "0055593aeba7", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 1, "notes": "describes ch1 digging; GT ch4 all NoOp"}
+{"id": "005590cf801b", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 0, "notes": "believes ch2 anvil scene; GT ch4"}
+{"id": "005675b89775", "hallucination": true, "stale": true, "verifiable_claims": 1, "correct_claims": 0, "notes": "anvil in ch3 impossible"}
+{"id": "0057d2bb246c", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "0058279013f0", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "anvils in ch1 impossible"}
+{"id": "00583d387561", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 3, "notes": "agent_2 placed in ch1 with zombie; team in ch4"}
+{"id": "005973abf6e7", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": "agent_1 facing door/north, not anvil zone"}
+{"id": "0059e78108b2", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 4, "notes": "internally contradicts on agent_0 readiness"}
+{"id": "005ac7b65360", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "tree trunk in ch3 impossible; a2 seeking trunk, not switch"}
+{"id": "005aee9d969a", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": ""}
+{"id": "005c2e8df8a5", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "ep3 start; ch2/anvil-break carryover, self mislocated"}
+{"id": "005c5872ded6", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 1, "notes": "anvil Row A scene in ch3; a2 digging stone"}
+{"id": "005e0636aea7", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "Dig already being enacted per GT"}
+{"id": "005e761ada18", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 0, "notes": "anvil/zombies/visible teammate impossible in ch3 cell"}
+{"id": "005f8089570c", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "0060376286bd", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "0060e7bee4a0", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "0060fb786d6a", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 4, "notes": ""}

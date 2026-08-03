@@ -1,0 +1,121 @@
+{
+ "run": "exp04_ippo/seed_456",
+ "degraded": false,
+ "is_rl": true,
+ "align": {
+  "0": {
+   "offset": 0,
+   "match_rate": 0.4743643184660275,
+   "n_compared": 2399,
+   "n_units": 4517,
+   "n_rows": 2400,
+   "status": "clock",
+   "clock_coverage": 0.9996,
+   "coverage": 0.9996
+  },
+  "1": {
+   "offset": 0,
+   "match_rate": 0.32263443101292205,
+   "n_compared": 2399,
+   "n_units": 4517,
+   "n_rows": 2399,
+   "status": "clock",
+   "clock_coverage": 1.0,
+   "coverage": 1.0
+  },
+  "2": {
+   "offset": 0,
+   "match_rate": 0.5254166666666666,
+   "n_compared": 2400,
+   "n_units": 4517,
+   "n_rows": 2400,
+   "status": "clock",
+   "clock_coverage": 1.0,
+   "coverage": 0.9996
+  }
+ },
+ "attribution": {
+  "attributed": 15017,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 13703
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 0.5736434108527132,
+   "n": 2709
+  },
+  "critic": {
+   "rate": 0.4666666666666667,
+   "n": 675
+  },
+  "social": {
+   "rate": null,
+   "n": 0
+  }
+ },
+ "clock": {
+  "segments": 2,
+  "chosen": {
+   "den": 1000,
+   "span": [
+    "2026-07-04 13:41:55",
+    "2026-07-05 12:08:48"
+   ],
+   "n_markers": 2403
+  },
+  "coverage": 0.9999
+ },
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 7191,
+   "comm_metrics_total": 7191,
+   "ok": true
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 6709,
+    "random_fallback:self_target": 482
+   },
+   "comm_metrics": {
+    "model": 6709,
+    "random_fallback:self_target": 482
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "auto_curriculum": {
+    "n": 2836,
+    "fail": 0
+   },
+   "belief_system": {
+    "n": 10831,
+    "fail": 447
+   },
+   "critic": {
+    "n": 675,
+    "fail": 0
+   },
+   "episodic_memory": {
+    "n": 675,
+    "fail": 0
+   },
+   "rl_thoughts": {
+    "n": 13551,
+    "fail": 0
+   }
+  }
+ },
+ "n_units": 28568,
+ "n_timeline_rows": 7199,
+ "elapsed_s": 4.6
+}

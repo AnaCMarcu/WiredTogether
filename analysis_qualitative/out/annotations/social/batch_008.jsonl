@@ -1,0 +1,25 @@
+{"id": "163a1aa54e95", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "equal 0.80 bonds; decision driven by teammate request"}
+{"id": "17fafaffad71", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "19c0bf8d5073", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "19eb7487d799", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "1b44be36b068", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "1ccf370e428c", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "1e5cd8a6b54b", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "agent_1 weakening claim absent from table"}
+{"id": "1eae9f541e0d", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "identical boilerplate bond explanation for both teammates"}
+{"id": "1ed6a9f70c49", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "agent_1 decay claim absent from table"}
+{"id": "20b85a9ffed6", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "23befbf4ba46", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "asks zero-bond agent for capability; next messages diverge from ask"}
+{"id": "25cdffe553dc", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "targets lower-weight but strengthening agent_2; coherent deviation"}
+{"id": "2766f15b7e7b", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "2a835b85bb8f", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "zero-bond regime; ask framed as bond-building"}
+{"id": "2a9a9d9f1442", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "2af76421f0b1", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "speculative 'likely due to' bond explanations"}
+{"id": "3732bbf9de2c", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "380d76ecf62c", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "39d183e97a4d", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "3f7f32d8b2f8", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "41c127b73f41", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "agent_2 0.00 cited but absent from table"}
+{"id": "4641bdb8f401", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "equal 0.80 bonds; task-driven choice"}
+{"id": "4aaaa4120d4f", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "rambling self-debating deliberation"}
+{"id": "4b206f403abb", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "equal bonds; asks digger to help finish that agent's own dig"}
+{"id": "54ee158e1067", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}

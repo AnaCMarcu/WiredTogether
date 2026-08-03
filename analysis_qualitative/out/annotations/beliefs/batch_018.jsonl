@@ -1,0 +1,25 @@
+{"id": "009228f10411", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 0, "notes": "anvil break in communal room impossible; agent_1 in ch1, agent_2 in ch2; no break occurred"}
+{"id": "009294660289", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "chests never exist in this environment; stone block claim consistent with GT"}
+{"id": "00929c5762a1", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "diamond sword and anvils in ch1 impossible; 'no stone to break' wrong, ch1 has stone blocks"}
+{"id": "0092e9a4d836", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 3, "notes": "'Cell C' in ch5 and chestplate drop in ch5 impossible; agent_2 centering boss matches GT"}
+{"id": "009404273498", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "diamond sword, cell door, and 'Ch4 facing zombies' all impossible in ch1 at ep3 start"}
+{"id": "00950043addd", "hallucination": false, "stale": false, "verifiable_claims": 7, "correct_claims": 4, "notes": "breaking/mining overstated (agent_0 turning); agent_2 attacking a zombie, not turning to locate"}
+{"id": "009601dd7d67", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "anvil break confirmation in ch1 ep1 impossible; all agents NoOp"}
+{"id": "0096bee006b5", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "agent_0 with sword+chestplate before any anvil break impossible; agent_2 anvil intent correct"}
+{"id": "0096c72b43b7", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "cells (ch3) and purple anvil applied to ch1; boss assigned to ch3 (boss is ch5)"}
+{"id": "00977cce7c7e", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "'boss zombie' in ch4 impossible (boss is ch5 only); door-ahead claim matches GT"}
+{"id": "0097dbae9e5c", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "switch cube and diamond block do not exist in ch4; self claimed not-entered but is in ch4"}
+{"id": "00989e91f08d", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 0, "notes": "gear/chestplate-dig in ch1 and sheep in ch2 impossible; Door 1 not locked (agent_1 already in ch2)"}
+{"id": "0098d2b9bbd4", "hallucination": false, "stale": false, "verifiable_claims": 7, "correct_claims": 3, "notes": "locations all correct but activities wrong: all three agents turning, none digging"}
+{"id": "0099047befd7", "hallucination": true, "stale": false, "verifiable_claims": 7, "correct_claims": 2, "notes": "zombie, cells, and diamond sword in ch1 impossible; contradictory locations across lists; two reported-speech claims match GT"}
+{"id": "0099778a028b", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 1, "notes": "role swap: agent_0 is digging (not advancing through door), agent_1 already moving through door"}
+{"id": "0099ba4e6056", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "broken switch in ch4 and pair-dig zombie in ch3 impossible"}
+{"id": "009a106c216e", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "diamond sword in ch1 ep1 impossible; stone-ahead claim matches own GT"}
+{"id": "009a230b8775", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "communal-room location and Ch5 readiness while all agents NoOp in ch1; combat threats impossible in ch1"}
+{"id": "009ad1c5e0ed", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "'diamond gear'/'gear block' fabricated; both agents mislocated to ch3 (actually ch2)"}
+{"id": "009b3abeb3bf", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "internally contradictory (unbreakable bedrock vs 'Dig-on-bedrock' scheme); iron bar matches GT"}
+{"id": "009c1c67fe71", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": "consistent with being walled in an isolation cell; blue water block unverifiable"}
+{"id": "009c39d42b91", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "agent_1 not yet attacking (searching); agent_2 turn direction wrong"}
+{"id": "009cfa49b9e9", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 4, "notes": "'one has already broke the anvil' unsupported by GT"}
+{"id": "009d67fa693d", "hallucination": false, "stale": true, "verifiable_claims": 5, "correct_claims": 4, "notes": "zombie-clearing state matches GT; 'converge on communal room' is a ch3 leftover"}
+{"id": "009da419e47c", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 0, "notes": "anvils cannot exist in ch3 (GT messages parrot them too); agent_2 turning at a wall, not digging"}

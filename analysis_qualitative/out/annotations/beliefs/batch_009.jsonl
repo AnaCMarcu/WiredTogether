@@ -1,0 +1,25 @@
+{"id": "00464badd6c0", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "0046ab950711", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "anvil pair-dig claimed in ch1; partners mislocated"}
+{"id": "0046adc9c13d", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "believes self not yet in ch2; GT ch2"}
+{"id": "0046d9c067a3", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": "own-switch-opens-own-door mechanic confusion, unverifiable"}
+{"id": "0046ea5b661e", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "0047259880c9", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "generic visual claims only"}
+{"id": "00475038ef94", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "implies agent_0 in communal room; GT ch1"}
+{"id": "004753badf7b", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "anvil in ch4 impossible"}
+{"id": "004793a72d80", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}
+{"id": "00479b614adc", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": ""}
+{"id": "0047c502a9cc", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": "mostly future-tense claims"}
+{"id": "0047ed76abb0", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "boss retreat in ch1; all agents NoOp"}
+{"id": "0047f7eac5cf", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "0048ff68139d", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "zombie/sword-pickup in ch1; agent_2 mislocated to ch3"}
+{"id": "004931f689ec", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "zombie targeting in ch1 impossible"}
+{"id": "004961f382fd", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "agent_0 placed in communal room; GT ch4"}
+{"id": "00497a3de6a5", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": ""}
+{"id": "0049c9f4d827", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": "'no actions/reports' contradicts agent_2's own report"}
+{"id": "0049e0faba87", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": ""}
+{"id": "0049ec9af232", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "zombie kill in ch1 fabricated; agent_0 mislocated"}
+{"id": "004a08b2a48a", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "generic visual claims only"}
+{"id": "004a6d993293", "hallucination": true, "stale": true, "verifiable_claims": 5, "correct_claims": 1, "notes": "boss/ch3-cell claims in ch4; only sword-drop correct"}
+{"id": "004b03cf2029", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": ""}
+{"id": "004b05333fac", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 1, "notes": "ch3 cell/switch beliefs; agent_2 is in ch4"}
+{"id": "004b5426d263", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "claims to see 'Agent0' (self)"}

@@ -1,0 +1,25 @@
+{"id": "000a2527b346", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "000aa8c2feac", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 0, "notes": "bare action token as message"}
+{"id": "000ad76bd3eb", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "verbatim echo of agent_2's repeated line"}
+{"id": "000aef2b68e1", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "phrase echoed among agents; cobblestone/diamond narrative unverifiable"}
+{"id": "000b719dfc8e", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "000b89693030", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "000be87df987", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "000c04ecf2d7", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 1, "notes": "'gear' hallucination; speaker repeats line verbatim across steps"}
+{"id": "000c46006028", "categories": ["inform", "noise"], "coordination_function": "inform", "is_grounded": false, "specificity": 0, "notes": "'next cell' — cells only ch3; vague echo of teammate"}
+{"id": "000c640e010b", "categories": ["request", "inform"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "second clause garbled"}
+{"id": "000cbc9bfff9", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "asks receiver to break block in front of speaker; confused framing"}
+{"id": "000ceb1cf4b8", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "says receiver's door is in Chamber 2; all agents in ch3"}
+{"id": "000d2644d05b", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "000d4da89461", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "000d6376c66a", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "part of hallucinated lever/sword narrative in ch1"}
+{"id": "000d71079a61", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "000d85b532d9", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "000ec52eb0a4", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "000f1ac5310e", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "directs other agent to block in front of speaker"}
+{"id": "000f9cc0a034", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0010c8a9c63a", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "001110246bbf", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00117fecb495", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "001188bae708", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00121e43400b", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}

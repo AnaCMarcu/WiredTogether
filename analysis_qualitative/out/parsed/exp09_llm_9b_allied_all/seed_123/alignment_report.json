@@ -1,0 +1,124 @@
+{
+ "run": "exp09_llm_9b_allied_all/seed_123",
+ "degraded": false,
+ "is_rl": false,
+ "align": {
+  "0": {
+   "offset": -194,
+   "match_rate": 0.9982898674647285,
+   "n_compared": 2339,
+   "n_units": 2536,
+   "n_rows": 2341,
+   "status": "repaired",
+   "coverage": 1.0
+  },
+  "1": {
+   "offset": 0,
+   "match_rate": 0.6552755232806493,
+   "n_compared": 2341,
+   "n_units": 2537,
+   "n_rows": 2341,
+   "status": "clock",
+   "clock_coverage": 0.9996,
+   "coverage": 0.9996
+  },
+  "2": {
+   "offset": 0,
+   "match_rate": 0.654421187526698,
+   "n_compared": 2341,
+   "n_units": 2537,
+   "n_rows": 2342,
+   "status": "clock",
+   "clock_coverage": 0.9996,
+   "coverage": 0.9996
+  }
+ },
+ "attribution": {
+  "attributed": 8139,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 839
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 0.809335963182117,
+   "n": 1521
+  },
+  "critic": {
+   "rate": 0.8386243386243386,
+   "n": 378
+  },
+  "social": {
+   "rate": 0.7869884575026233,
+   "n": 953
+  }
+ },
+ "clock": {
+  "segments": 1,
+  "chosen": {
+   "den": 1000,
+   "span": [
+    "2026-06-27 16:25:00",
+    "2026-06-28 21:44:29"
+   ],
+   "n_markers": 2537
+  },
+  "coverage": 0.7496
+ },
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 7008,
+   "comm_metrics_total": 7600,
+   "ok": false
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 7000,
+    "social_bias": 8
+   },
+   "comm_metrics": {
+    "model": 7592,
+    "social_bias": 8
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "action_selection": {
+    "n": 7610,
+    "fail": 9
+   },
+   "auto_curriculum": {
+    "n": 347,
+    "fail": 5
+   },
+   "belief_system": {
+    "n": 6083,
+    "fail": 192
+   },
+   "critic": {
+    "n": 378,
+    "fail": 0
+   },
+   "episodic_memory": {
+    "n": 378,
+    "fail": 0
+   },
+   "social_module": {
+    "n": 953,
+    "fail": 3
+   }
+  }
+ },
+ "n_units": 15749,
+ "n_timeline_rows": 7025,
+ "elapsed_s": 2.8
+}

@@ -1,0 +1,25 @@
+{"id": "006f06ee2009", "categories": ["inform", "noise"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "status echoed near-verbatim by all agents"}
+{"id": "006f53047689", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "mantra repeated by all three agents"}
+{"id": "006f92cd1bcd", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "007019a93c3d", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0070a749c45b", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "007112e4b03c", "categories": ["inform", "acknowledge"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "includes praise of teammate"}
+{"id": "00716a2a1f02", "categories": ["request", "question"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "clear addressee task, vague object"}
+{"id": "0072454f44fc", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "anvil named in ch4 (only exists in ch2)"}
+{"id": "0072a2329f24", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0073c557e968", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "lantern likely hallucinated but unverifiable"}
+{"id": "0073fa94c97e", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "anvil named in ch4 (only ch2)"}
+{"id": "00759dbc6a3d", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "00764a6faed3", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "007668d06946", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "near-identical line repeated across steps"}
+{"id": "00766aa49a3e", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "receiver is actually searching, not digging"}
+{"id": "00774a255092", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "tree trunk in ch2 (trees only ch1)"}
+{"id": "00791ac34642", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "anvil claimed present in ch3 (only ch2)"}
+{"id": "00792dac0ef8", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "mantra echoed by all agents; fallback routing"}
+{"id": "007ae27c3d9f", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "lever/switch in ch4; confabulated sword-drop scheme"}
+{"id": "007b78785296", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "007b91063009", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "receiver reports facing a wall, not a zombie"}
+{"id": "007c0b51c5af", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "007c98d24533", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "vague coordination proposal"}
+{"id": "007ca1d6b546", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "007cf377efec", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}

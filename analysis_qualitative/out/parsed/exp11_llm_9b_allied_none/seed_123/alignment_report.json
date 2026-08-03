@@ -1,0 +1,114 @@
+{
+ "run": "exp11_llm_9b_allied_none/seed_123",
+ "degraded": false,
+ "is_rl": false,
+ "quarantine_step_keyed": false,
+ "align": {
+  "0": {
+   "offset": -6940,
+   "match_rate": 1.0,
+   "n_compared": 2519,
+   "n_units": 9460,
+   "n_rows": 2520,
+   "status": "repaired",
+   "coverage": 1.0
+  },
+  "1": {
+   "offset": -6941,
+   "match_rate": 1.0,
+   "n_compared": 2520,
+   "n_units": 9461,
+   "n_rows": 2520,
+   "status": "repaired",
+   "coverage": 1.0
+  },
+  "2": {
+   "offset": -6941,
+   "match_rate": 1.0,
+   "n_compared": 2520,
+   "n_units": 9461,
+   "n_rows": 2520,
+   "status": "repaired",
+   "coverage": 1.0
+  }
+ },
+ "attribution": {
+  "attributed": 30308,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 42985
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 0.645877378435518,
+   "n": 5676
+  },
+  "critic": {
+   "rate": 0.7216349541930938,
+   "n": 1419
+  },
+  "social": {
+   "rate": 0.41012658227848103,
+   "n": 3555
+  }
+ },
+ "clock": null,
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 7559,
+   "comm_metrics_total": 9069,
+   "ok": false
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 7549,
+    "hebbian_fallback:self_target": 2,
+    "social_bias": 8
+   },
+   "comm_metrics": {
+    "model": 9059,
+    "hebbian_fallback:self_target": 2,
+    "social_bias": 8
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "action_selection": {
+    "n": 28382,
+    "fail": 9
+   },
+   "auto_curriculum": {
+    "n": 1218,
+    "fail": 6
+   },
+   "belief_system": {
+    "n": 22697,
+    "fail": 645
+   },
+   "critic": {
+    "n": 1419,
+    "fail": 0
+   },
+   "episodic_memory": {
+    "n": 1419,
+    "fail": 0
+   },
+   "social_module": {
+    "n": 3555,
+    "fail": 3
+   }
+  }
+ },
+ "n_units": 58690,
+ "n_timeline_rows": 7560,
+ "elapsed_s": 5.7
+}

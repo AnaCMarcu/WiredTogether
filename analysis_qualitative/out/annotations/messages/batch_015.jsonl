@@ -1,0 +1,25 @@
+{"id": "00b98d6ffe7e", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00b9c9f776d8", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00be2a678b55", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "lever/switch in ch4; refers to receiver in third person"}
+{"id": "00beaf1addcf", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "zombie in ch2 (zombies only ch4/ch5)"}
+{"id": "00beb4432331", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "fallback routing"}
+{"id": "00bfe4d57877", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00c08f76cba3", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "anvil in ch5 (anvils only ch2)"}
+{"id": "00c19cbc82b8", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00c2a97a2787", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00c3f9f57ccb", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "00c594080b4d", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "door locked at episode start per context"}
+{"id": "00c68f8e4403", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "gear switch in ch4 (switches only ch3)"}
+{"id": "00c6c755bee9", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "says block centered yet will turn to center it"}
+{"id": "00c8f4b1d899", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00cbfbea4974", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "receiver is in ch5, not fighting zombie in ch4"}
+{"id": "00cdc07d593a", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "pressure plate/switch outside ch3"}
+{"id": "00cf867aada8", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "speaker chamber unknown; ch2 anvil plausible"}
+{"id": "00d0fb4cc098", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 1, "notes": "speaker chamber unknown"}
+{"id": "00d2398d2c98", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "00d4634f046d", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "00d5e178c1ef", "categories": ["inform", "noise"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "verbatim echo of teammate's line"}
+{"id": "00d6f0d63f66", "categories": ["acknowledge", "commit"], "coordination_function": "acknowledge", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "00dbf69bc4d3", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00de336f582a", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "identical sentence echoed by multiple agents"}
+{"id": "00e033e47cc4", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "echoes agent_0's phrasing"}

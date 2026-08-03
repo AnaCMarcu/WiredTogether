@@ -1,0 +1,29 @@
+% Requires: \usepackage{booktabs} and \usepackage[table]{xcolor}
+\begin{table}[t]
+\centering
+\caption{\textbf{Frozen-topology ablation (LLM-9B, social-bias coupling).}
+Three \emph{imposed} bond graphs, run with the social-bias machinery frozen:
+\emph{No-bonds} (empty graph), \emph{Allied-pair} (one agent pair allied),
+and \emph{Allied-all} (fully connected). Mean~$\pm$~std over pooled episodes
+($n{=}6$; 2 seeds $\times$ 3 episodes). \emph{Coop.\ milest.}\ = distinct
+team milestones in Ch2--Ch5; \emph{All milest.}\ = team total including Ch1
+and the communication track; \emph{Task return} = team-summed undiffused
+reward. \emph{Credit Gini} measures inequality of per-agent milestone credit
+($0$ = equal, $1$ = one agent earns all); \emph{Excl.\ share} = fraction of
+milestone credit earned by agent~2 (the excluded agent under
+\emph{Allied-pair}; uniform $\approx 0.33$). Best in each $\uparrow$ column in
+\textbf{bold}; the maximal-coupling arm is shaded.}
+\label{tab:topology_ablation}
+\small
+\begin{tabular}{lccccc}
+\toprule
+Condition & Coop.\ milest.\ $\uparrow$ & All milest.\ $\uparrow$ &
+Task return $\uparrow$ & Credit Gini & Excl.\ share \\
+\midrule
+No-bonds     & $2.7 \pm 1.1$ & $11.3 \pm 1.8$          & $\mathbf{821 \pm 230}$ & $0.03 \pm 0.00$ & $0.32 \pm 0.00$ \\
+Allied-pair  & $2.8 \pm 1.1$ & $\mathbf{11.8 \pm 0.7}$ & $644 \pm 124$          & $0.04 \pm 0.02$ & $0.32 \pm 0.03$ \\
+\rowcolor{gray!12}
+Allied-all   & $\mathbf{3.0 \pm 1.2}$ & $\mathbf{11.8 \pm 1.6}$ & $796 \pm 222$ & $0.07 \pm 0.03$ & $0.27 \pm 0.02$ \\
+\bottomrule
+\end{tabular}
+\end{table}

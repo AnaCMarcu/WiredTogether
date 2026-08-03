@@ -162,11 +162,78 @@ WARM_START_W = 0.1  # sparsity threshold = init weight
 PALETTE = plt.get_cmap("tab10")
 
 
+# ─── Entry-milestone honesty filter ─────────────────────────────────────
+# m20_enter_ch4 / m24_enter_ch5 are position-triggered in Lua (mobs.lua
+# globalstep detectors) and leak through two race conditions: (a) the
+# episode-reset handler clears the door*_force_teleported suppression flags
+# and milestone state while agents are still physically standing in Ch4/Ch5
+# from the previous episode's rescue teleport (init.lua reset), and (b) in
+# some runs the Lua reset modchannel message is lost, desyncing the whole
+# timer/suppression state machine (lua_step >> episode length). A GENUINE
+# entry requires the enabling door milestone in the SAME episode; events
+# without it are teleport/reset artifacts and are removed from every
+# downstream number: the event list (steps table + both milestone figures),
+# the per-episode team milestone sets (coop / all-milestone counts), and the
+# episode task return (their +30/+50 per-contributor rewards, which were
+# drained into the task stream).
+ENTRY_REQUIRES = {
+    "m20_enter_ch4": "m18_door_opened",       # Ch3 puzzle door must be open
+    "m24_enter_ch5": "m22_all_mobs_killed",   # Ch4 arena must be cleared
+}
+
+
+def _apply_entry_honesty_filter(run: dict) -> None:
+    """Strip physically-impossible chamber-entry milestones from a run, in place."""
+    bounds = run["_ep_bounds"]
+    per_agent = run.get("milestones_per_episode", [])
+    n_eps = max((len(a) for a in per_agent), default=len(bounds))
+
+    # Team milestone set per episode (union over agents) — used to decide
+    # whether the enabling milestone fired in that episode.
+    team = [set() for _ in range(n_eps)]
+    for a in per_agent:
+        for e, ms in enumerate(a):
+            team[e].update(ms)
+
+    def dishonest(e: int, mid: str) -> bool:
+        req = ENTRY_REQUIRES.get(mid)
+        if req is None:
+            return False
+        return e is None or e >= n_eps or req not in team[e]
+
+    # 1. Filter the event list (feeds steps-to-milestone + both figures) and
+    #    accumulate the per-episode task-return adjustment (one event row per
+    #    contributor, each carrying the full per-contributor reward).
+    adjust = defaultdict(float)
+    kept = []
+    for ev in run.get("milestone_events", []):
+        mid = ev.get("milestone_id") or ev.get("milestone")
+        if mid in ENTRY_REQUIRES:
+            e, _ = ep_of_step(bounds, int(ev.get("step", -1)))
+            if dishonest(e, mid):
+                if e is not None:
+                    adjust[e] += float(ev.get("reward", 0.0))
+                continue
+        kept.append(ev)
+    run["milestone_events"] = kept
+    run["_task_adjust"] = dict(adjust)
+
+    # 2. Filter the per-agent per-episode milestone sets (feed coop /
+    #    all-milestone counts and furthest-chamber).
+    for a in per_agent:
+        for e in range(len(a)):
+            a[e] = [m for m in a[e] if not dishonest(e, m)]
+
+
 # ─── Loading ────────────────────────────────────────────────────────────
-def load_runs(runs_root: Path, dir_name: str) -> list[dict]:
+def load_runs(runs_root: Path, dir_name: str,
+              exclude: frozenset = frozenset()) -> list[dict]:
     """All seed runs for one condition, each augmented with episode slicing."""
     runs = []
     for f in sorted((runs_root / dir_name).glob("seed_*/final_metrics.json")):
+        if f"{dir_name}/{f.parent.name}" in exclude:
+            print(f"  [excluded] {dir_name}/{f.parent.name}", file=sys.stderr)
+            continue
         try:
             d = json.loads(f.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as e:
@@ -179,6 +246,7 @@ def load_runs(runs_root: Path, dir_name: str) -> list[dict]:
             bounds.append((c, c + L))  # [start, end) in global steps
             c += L
         d["_ep_bounds"] = bounds
+        _apply_entry_honesty_filter(d)
         runs.append(d)
     return runs
 
@@ -213,6 +281,7 @@ def coop_count(ms_set) -> int:
 def episode_task_returns(run) -> tuple[list[float], bool]:
     """Team task return per episode (excl. hebbian_diffuse).
     Returns (values, used_decomposition)."""
+    adjust = run.get("_task_adjust", {})  # honesty filter: fake entry rewards
     dec = run.get("reward_history_decomposed") or []
     bounds = run["_ep_bounds"]
     if bounds and dec and any(dec):
@@ -224,11 +293,12 @@ def episode_task_returns(run) -> tuple[list[float], bool]:
                     sums[e] += (float(rec.get("task", 0.0))
                                 + float(rec.get("comm_base", 0.0))
                                 + float(rec.get("comm_milestone", 0.0)))
-        return sums, True
+        return [s - adjust.get(e, 0.0) for e, s in enumerate(sums)], True
     # Fallback: logged returns (include diffuse in Hebbian runs!)
     per_ep = run.get("per_episode_returns", [])
     n_eps = max((len(a) for a in per_ep), default=0)
-    return [sum(a[e] for a in per_ep if e < len(a)) for e in range(n_eps)], False
+    return [sum(a[e] for a in per_ep if e < len(a)) - adjust.get(e, 0.0)
+            for e in range(n_eps)], False
 
 
 def episode_first_fire(run) -> dict:
@@ -459,14 +529,18 @@ def emit_csv(stats: dict, out: Path):
 
 # ─── Figures ────────────────────────────────────────────────────────────
 def fig_progression(all_runs: dict, out: Path, max_steps: int):
-    """Cumulative distinct Ch2–5 team milestones vs within-episode step."""
-    fig, ax = plt.subplots(figsize=(8, 4.2))
-    plotted = False
-    for ci, (label, _, grp, _) in enumerate(CONDITIONS):
-        if grp != "main" or label not in all_runs:
-            continue
+    """Cumulative distinct Ch2–5 team milestones vs within-episode step,
+    one panel per baseline / +Hebbian backbone pair (shared y-scale)."""
+    PAIRS = [("LLM-2B", "LLM-2B+Heb"), ("LLM-9B", "LLM-9B+Heb"),
+             ("IPPO", "IPPO+Heb"), ("MAPPO", "MAPPO+Heb")]
+    pairs = [(b, h) for b, h in PAIRS if b in all_runs or h in all_runs]
+    if not pairs:
+        return
+    BASE_C, HEB_C = "#2c7fb8", "#d95f0e"  # CVD-safe blue/orange, matches fig:milestone_timeline
+
+    def mean_std_curve(label):
         curves = []
-        for run in all_runs[label]:
+        for run in all_runs.get(label, []):
             ff = episode_first_fire(run)
             n_eps = len(run["_ep_bounds"])
             for e in range(n_eps):
@@ -479,72 +553,149 @@ def fig_progression(all_runs: dict, out: Path, max_steps: int):
                         curve[ws:] = k
                 curves.append(curve)
         if not curves:
-            continue
+            return None, None
         arr = np.vstack(curves)
-        m, s = arr.mean(0), arr.std(0)
-        x = np.arange(max_steps)
-        c = PALETTE(ci % 10)
-        ax.plot(x, m, color=c, lw=1.8, label=label)
-        ax.fill_between(x, m - s, m + s, color=c, alpha=0.15, lw=0)
-        plotted = True
-    if not plotted:
-        plt.close(fig); return
-    for b in range(1, 5):
-        ax.axvline(b * max_steps // 5, color="#999", ls="--", lw=0.7)
-    ax.set_xlabel("Within-episode step")
-    ax.set_ylabel("Distinct team milestones (Ch2–Ch5)")
-    ax.set_xlim(0, max_steps); ax.set_ylim(bottom=0)
-    ax.grid(alpha=0.25); ax.legend(fontsize=8, ncol=2, framealpha=0.9)
-    fig.tight_layout()
+        return arr.mean(0), arr.std(0)
+
+    fig, axes = plt.subplots(1, len(pairs), sharey=True,
+                             figsize=(2.15 * len(pairs) + 1.0, 2.7))
+    axes = np.atleast_1d(axes)
+    x = np.arange(max_steps)
+    y_top = 0.0
+
+    for ax, (base, heb) in zip(axes, pairs):
+        for cond, color, ls in ((base, BASE_C, "-"), (heb, HEB_C, "--")):
+            m, s = mean_std_curve(cond)
+            if m is None:
+                continue
+            ax.plot(x, m, color=color, lw=1.8, ls=ls)
+            ax.fill_between(x, m - s, m + s, color=color, alpha=0.14, lw=0)
+            y_top = max(y_top, float((m + s).max()))
+        for b in range(1, 5):
+            ax.axvline(b * max_steps // 5, color="#c9c9c9", ls=":", lw=0.7)
+        ax.set_xlim(0, max_steps)
+        ax.set_xticks(range(0, max_steps + 1, max_steps // 5))
+        ax.tick_params(labelsize=7)
+        ax.set_title(base, fontsize=9)
+        ax.grid(alpha=0.2)
+        for spine in ("top", "right"):
+            ax.spines[spine].set_visible(False)
+
+    axes[0].set_ylim(0, max(1.0, y_top * 1.05))
+    axes[0].set_ylabel("Distinct team milestones\n(Ch2–Ch5)", fontsize=8)
+    fig.supxlabel("Within-episode step", fontsize=9)
+    handles = [
+        plt.Line2D([], [], color=BASE_C, lw=1.8, ls="-", label="baseline"),
+        plt.Line2D([], [], color=HEB_C, lw=1.8, ls="--", label="+Hebbian"),
+    ]
+    fig.legend(handles=handles, loc="upper right", fontsize=8, ncol=2,
+               frameon=True, framealpha=0.95, columnspacing=1.2,
+               handletextpad=0.5, bbox_to_anchor=(0.995, 1.0))
+    fig.tight_layout(rect=(0, 0.04, 1, 0.90))
     fig.savefig(out / "milestone_progression.pdf")
     plt.close(fig)
 
 
-def fig_timeline(all_runs: dict, out: Path):
-    """Raster: rows = milestones (chamber-grouped), x = median first step."""
-    rows = list(MILESTONE_ORDER)
+def fig_timeline(all_runs: dict, out: Path, max_steps: int = 1000):
+    """Paired dot plot: one panel per baseline / +Hebbian backbone pair.
+
+    Rows = milestones (chamber-grouped, labelled with paper ID + name);
+    marker = median within-episode step of first completion (circle =
+    baseline, diamond = +Hebbian), thin bar = min--max over completing
+    episodes. Milestones never completed by ANY plotted condition are
+    dropped, except the load-bearing M15/M18/M23 which stay as
+    deliberately-empty rows.
+    """
+    PAIRS = [("LLM-2B", "LLM-2B+Heb"), ("LLM-9B", "LLM-9B+Heb"),
+             ("IPPO", "IPPO+Heb"), ("MAPPO", "MAPPO+Heb")]
+    pairs = [(b, h) for b, h in PAIRS if b in all_runs or h in all_runs]
+    if not pairs:
+        return
+    BASE_C, HEB_C = "#2c7fb8", "#d95f0e"  # CVD-safe blue/orange, matches fig:bond_evolution
+
+    def pooled_first_fires(label):
+        per_mid = defaultdict(list)
+        for run in all_runs.get(label, []):
+            for (_e, mid), ws in episode_first_fire(run).items():
+                per_mid[mid].append(ws)
+        return per_mid
+
+    fires = {lab: pooled_first_fires(lab)
+             for pair in pairs for lab in pair}
+    ever = set().union(*(set(f) for f in fires.values()))
+    KEEP_EMPTY = {"m19_all_in_communal", "m22_all_mobs_killed",
+                  "m27_boss_defeated"}
+    rows = [m for m in MILESTONE_ORDER if m in ever or m in KEEP_EMPTY]
     y_of = {m: i for i, m in enumerate(rows)}
-    fig, ax = plt.subplots(figsize=(8, 0.28 * len(rows) + 1.5))
-    # chamber bands (+ comm track)
-    band_cols = ["#f4f0ff", "#fff4e6", "#e8f8ff", "#ffeeee", "#fff0c2",
-                 "#eef7ee"]
-    lo = 0
-    for ti, t in enumerate(TRACK_ORDER):
+
+    def row_label(mid):
+        pid, name = PAPER_LABEL[mid]
+        pid = pid.replace("\\_", "_")
+        name = name.replace("\\%", "%").replace("\\_", "_")
+        return f"{pid}  {name}"
+
+    # Chamber band extents over the pruned row list.
+    TRACK_SHORT = {"ch1_solo": "Ch1", "ch2_anvils": "Ch2",
+                   "ch3_switches": "Ch3", "ch4_combat": "Ch4",
+                   "ch5_boss": "Ch5", "communication": "Comm"}
+    band_edges, lo = [], 0
+    for t in TRACK_ORDER:
         n = sum(1 for m in rows if MILESTONE_TRACK[m] == t)
-        ax.axhspan(lo - 0.5, lo + n - 0.5, color=band_cols[ti], zorder=0)
-        lo += n
-    mains = [(ci, lab) for ci, (lab, _, g, _) in enumerate(CONDITIONS)
-             if g == "main" and lab in all_runs]
-    plotted = False
-    for k, (ci, label) in enumerate(mains):
-        jitter = (k - (len(mains) - 1) / 2) * (0.8 / max(len(mains), 1))
-        for run_set in [all_runs[label]]:
-            per_mid = defaultdict(list)
-            for run in run_set:
-                for (e, mid), ws in episode_first_fire(run).items():
-                    per_mid[mid].append(ws)
-            for mid, v in per_mid.items():
+        if n:
+            band_edges.append((t, lo, lo + n))
+            lo += n
+
+    fig, axes = plt.subplots(
+        1, len(pairs), sharey=True,
+        figsize=(1.75 * len(pairs) + 2.5, 0.21 * len(rows) + 1.15))
+    axes = np.atleast_1d(axes)
+
+    for ax, (base, heb) in zip(axes, pairs):
+        for bi, (_t, r0, r1) in enumerate(band_edges):
+            if bi % 2 == 0:
+                ax.axhspan(r0 - 0.5, r1 - 0.5, color="#f2f2f2", zorder=0)
+        for cond, color, marker, dy in ((base, BASE_C, "o", -0.18),
+                                        (heb, HEB_C, "D", 0.18)):
+            for mid, v in fires.get(cond, {}).items():
                 if mid not in y_of:
                     continue
-                y = y_of[mid] + jitter
-                ax.plot([min(v), max(v)], [y, y], color=PALETTE(ci % 10),
-                        lw=1.0, alpha=0.5, zorder=2)
-                ax.scatter(statistics.median(v), y, s=22,
-                           color=PALETTE(ci % 10), edgecolors="black",
-                           linewidths=0.3, zorder=3,
-                           label=label if mid == next(
-                               m for m in rows if m in per_mid) else None)
-                plotted = True
-    if not plotted:
-        plt.close(fig); return
-    ax.set_yticks(range(len(rows)))
-    ax.set_yticklabels([PAPER_LABEL[m][0].replace("\\_", "_") for m in rows],
-                       fontsize=7)
-    ax.set_xlabel("Within-episode step of first completion")
-    ax.set_ylim(-0.7, len(rows) - 0.3)
-    ax.grid(axis="x", alpha=0.25)
-    ax.legend(fontsize=7, loc="lower right", framealpha=0.9)
-    fig.tight_layout()
+                y = y_of[mid] + dy
+                if len(v) > 1:
+                    ax.plot([min(v), max(v)], [y, y], color=color,
+                            lw=1.1, alpha=0.45, zorder=2,
+                            solid_capstyle="butt")
+                ax.scatter(statistics.median(v), y, s=26, marker=marker,
+                           color=color, edgecolors="white",
+                           linewidths=0.5, zorder=3)
+        for b in range(max_steps // 5, max_steps, max_steps // 5):
+            ax.axvline(b, color="#c9c9c9", ls=":", lw=0.6, zorder=1)
+        ax.set_xlim(0, max_steps)
+        ax.set_xticks(range(0, max_steps + 1, max_steps // 5))
+        ax.tick_params(axis="x", labelsize=7)
+        ax.set_title(base, fontsize=9)
+        for spine in ("top", "right"):
+            ax.spines[spine].set_visible(False)
+
+    axes[0].set_ylim(-0.7, len(rows) - 0.3)
+    axes[0].invert_yaxis()  # Ch1 at top, communication track at bottom
+    axes[0].set_yticks(range(len(rows)))
+    axes[0].set_yticklabels([row_label(m) for m in rows], fontsize=7)
+    # Chamber tags along the right edge of the last panel.
+    for t, r0, r1 in band_edges:
+        axes[-1].text(1.03, (r0 + r1 - 1) / 2, TRACK_SHORT[t],
+                      transform=axes[-1].get_yaxis_transform(),
+                      fontsize=7, color="#666666", va="center", rotation=90)
+    fig.supxlabel("Within-episode step of first completion", fontsize=9)
+    handles = [
+        plt.Line2D([], [], color=BASE_C, marker="o", ls="", ms=6,
+                   label="baseline"),
+        plt.Line2D([], [], color=HEB_C, marker="D", ls="", ms=5.5,
+                   label="+Hebbian"),
+    ]
+    fig.legend(handles=handles, loc="upper right", fontsize=8, ncol=2,
+               frameon=True, framealpha=0.95, columnspacing=1.2,
+               handletextpad=0.4, bbox_to_anchor=(0.995, 1.0))
+    fig.tight_layout(rect=(0, 0.02, 1, 0.93))
     fig.savefig(out / "milestone_timeline.pdf")
     plt.close(fig)
 
@@ -601,12 +752,16 @@ def main():
     p.add_argument("--bond-run", type=Path, default=None,
                    help="run dir for fig:bond_evolution (default: first "
                         "Hebbian run that stored W snapshots)")
+    p.add_argument("--exclude", nargs="*", default=[], metavar="EXP/seed_N",
+                   help="runs to leave out of the aggregation, e.g. "
+                        "exp04_ippo/seed_1011")
     args = p.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
+    exclude = frozenset(args.exclude)
 
     all_runs, stats = {}, {}
     for label, dirname, _, _ in CONDITIONS:
-        runs = load_runs(args.runs_root, dirname)
+        runs = load_runs(args.runs_root, dirname, exclude)
         if not runs:
             print(f"[skip] {label}: no runs under "
                   f"{args.runs_root / dirname}")
@@ -626,7 +781,7 @@ def main():
     emit_tables(stats, args.out)
     emit_csv(stats, args.out)
     fig_progression(all_runs, args.out, args.max_steps)
-    fig_timeline(all_runs, args.out)
+    fig_timeline(all_runs, args.out, args.max_steps)
 
     bond_run = None
     if args.bond_run:

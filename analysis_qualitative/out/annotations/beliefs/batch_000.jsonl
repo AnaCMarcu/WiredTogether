@@ -1,0 +1,25 @@
+{"id": "00001c35ea6f", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 4, "notes": "locations and lever-confirmation match GT"}
+{"id": "00001fe75738", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": "claims door opened and heading ch2 while GT shows a1 still digging in ch1"}
+{"id": "0000581c5ae5", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "sword-equip claim unsupported; zombie engagement matches"}
+{"id": "00008ee87652", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": "purple anvil placed in ch3"}
+{"id": "0000a6e1e521", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": "consistent with ch3 cell isolation"}
+{"id": "0000a95a8bac", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 1, "notes": "anvil area in ch1; describes ch1 as current while team is in ch2"}
+{"id": "0000b101d8cc", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "agents' current activities swapped vs their explicit GT statements"}
+{"id": "0000b512125d", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "purple anvil and zombie head in ch3"}
+{"id": "0000b621271c", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": "zombie engagement in ch4 matches GT"}
+{"id": "0000be81196a", "hallucination": false, "stale": false, "verifiable_claims": 7, "correct_claims": 6, "notes": "a2 not coordinating anvils (stuck at ceiling)"}
+{"id": "00015073099d", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "Row A anvil pair-dig asserted in ch5"}
+{"id": "000190004502", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "bizarre claim that agent is not a team member"}
+{"id": "0001a204a0e4", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 1, "notes": "self and a1 placed in ch1 while GT shows ch2; zombie-kill door rule invented"}
+{"id": "0001cd687bb0", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 4, "notes": "central anvils asserted in ch3"}
+{"id": "00025d0c90a3", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 4, "notes": "sheep-search misattributed to a1"}
+{"id": "0002ab4137c7", "hallucination": true, "stale": false, "verifiable_claims": 7, "correct_claims": 4, "notes": "switch, anvil, and tree asserted in ch4"}
+{"id": "0002c2df04e6", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "ch3-style cells and M5 zombie invoked in ch1; mostly future claims"}
+{"id": "0002d818de55", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "boss retreat in ch2; anvil claimed broken while still being worked"}
+{"id": "0002f176aca1", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "self placed in ch3 cell while GT shows ch2; switch in ch2"}
+{"id": "000305605b69", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": "mostly unverifiable visual claims"}
+{"id": "000327dab50f", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "zombie head seen in ch2 (no zombies in ch2)"}
+{"id": "0003ebcecc7c", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": ""}
+{"id": "00042732472a", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "anvil and switch asserted in ch4"}
+{"id": "00051863a2b2", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "claims self absent from room though GT shows self present in ch2"}
+{"id": "000560d21f24", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": ""}

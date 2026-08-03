@@ -1,0 +1,25 @@
+{"id": "0066a395e0fd", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "actionable door-status broadcast"}
+{"id": "0066d3bca71e", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "tree impossible in ch2"}
+{"id": "0066e93a052c", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "006772655f67", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "zombies impossible in ch1; boss relay is accurate"}
+{"id": "0067a3733da3", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "0067c92355e1", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "near-echo of teammates"}
+{"id": "0067d617fd59", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "0067f263419b", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "'gear block' is a fuzzy referent"}
+{"id": "006865b7bd00", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1}
+{"id": "0068b01cd93a", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "0068c977ba51", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "asserts teammate's state without evidence"}
+{"id": "006914060c16", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "teleporter to Ch3 likely fabricated"}
+{"id": "006955912b5b", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "lever/switch impossible in ch2"}
+{"id": "0069656a90f3", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "same sentence echoed verbatim between agents"}
+{"id": "0069ceb0a770", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "hebbian fallback self-target routing"}
+{"id": "006a0b224ede", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "006a5ebd9f1f", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "006b63c227f0", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "anvil impossible in ch3; iron ore fabricated"}
+{"id": "006c47b9ce70", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "006c5ada0c11", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "006cd06a0bdf", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "006cf11d8d92", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "006d6eb8cac2", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "cells impossible in ch4"}
+{"id": "006ded5c1f08", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "006ef3d6c7f8", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "says door 'to Ch3' while already in ch3"}

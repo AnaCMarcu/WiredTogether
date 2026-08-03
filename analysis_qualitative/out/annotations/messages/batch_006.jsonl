@@ -1,0 +1,25 @@
+{"id": "003adc85f6f9", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "003b3108211a", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "switch impossible in ch4; 'activate the stone block' incoherent"}
+{"id": "003b444486cf", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "lever impossible in ch2; says centered yet asks to center it; echo loop"}
+{"id": "003c02d013c1", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "role confusion: agent speaks as the switch ('Press me'); echo loop"}
+{"id": "003c074c5880", "categories": ["request", "inform"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "object + explicit 90-degree turn"}
+{"id": "003cde61f9eb", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "matches concurrent Dig actions on anvil"}
+{"id": "003d98e56f01", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "claims 'block I just broke' but no prior dig in window; was scanning for zombies"}
+{"id": "003d9e6829c8", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "NoOp while claiming readiness; echoes agent_2's phrasing"}
+{"id": "003dfaa7ffa4", "categories": ["inform", "commit", "request"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "claims to be in Ch1 but tagged ch2"}
+{"id": "003e379f204a", "categories": ["inform", "request", "noise"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "claims turned left but actions show TurnRight/Sneak; verbatim echo of agent_1 t=140"}
+{"id": "003ec3f8c439", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "003eecfbccb5", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "003f4bec43a2", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "003fcc52beff", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "'top block' vague target amid zombie fight"}
+{"id": "0040c1adab84", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "hallucinated torch/gear pair-dig mechanics, but no impossible object"}
+{"id": "0040fd9d2332", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "internally contradictory (centered yet will turn to center); copied from agent_2 t=193"}
+{"id": "004134388b0f", "categories": ["commit", "inform"], "coordination_function": "commit", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00415e5dc345", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "'keep attacking' though no one in window is attacking"}
+{"id": "00426da9b4ee", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0042ae50d3f0", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "switch impossible in ch1"}
+{"id": "003a0a7be0aa", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "grounded ch3 switch coordination"}
+{"id": "003a0aa89fe8", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "sheep (animal) impossible in ch2"}
+{"id": "003a184c395b", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "clear addressee confirmation task; matches Dig action"}
+{"id": "003a27c2e24f", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "lever impossible in ch2; massive verbatim echo loop"}
+{"id": "003ac79e9d51", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "anvil impossible in ch1; quoted-instruction phrasing"}

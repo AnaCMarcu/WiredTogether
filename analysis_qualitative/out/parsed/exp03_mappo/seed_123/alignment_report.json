@@ -1,0 +1,107 @@
+{
+ "run": "exp03_mappo/seed_123",
+ "degraded": false,
+ "is_rl": true,
+ "align": {
+  "0": {
+   "offset": 0,
+   "match_rate": 1.0,
+   "n_compared": 2798,
+   "n_units": 2800,
+   "n_rows": 2800,
+   "status": "exact",
+   "coverage": 1.0
+  },
+  "1": {
+   "offset": 0,
+   "match_rate": 1.0,
+   "n_compared": 2796,
+   "n_units": 2800,
+   "n_rows": 2800,
+   "status": "exact",
+   "coverage": 1.0
+  },
+  "2": {
+   "offset": 0,
+   "match_rate": 1.0,
+   "n_compared": 2800,
+   "n_units": 2800,
+   "n_rows": 2800,
+   "status": "exact",
+   "coverage": 1.0
+  }
+ },
+ "attribution": {
+  "attributed": 9029,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 0
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 0.9732142857142857,
+   "n": 1680
+  },
+  "critic": {
+   "rate": 0.9523809523809523,
+   "n": 420
+  },
+  "social": {
+   "rate": null,
+   "n": 0
+  }
+ },
+ "clock": null,
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 8394,
+   "comm_metrics_total": 8394,
+   "ok": true
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 7970,
+    "random_fallback:self_target": 424
+   },
+   "comm_metrics": {
+    "model": 7970,
+    "random_fallback:self_target": 424
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "auto_curriculum": {
+    "n": 1472,
+    "fail": 0
+   },
+   "belief_system": {
+    "n": 6717,
+    "fail": 257
+   },
+   "critic": {
+    "n": 420,
+    "fail": 0
+   },
+   "episodic_memory": {
+    "n": 420,
+    "fail": 0
+   },
+   "rl_thoughts": {
+    "n": 8400,
+    "fail": 0
+   }
+  }
+ },
+ "n_units": 17429,
+ "n_timeline_rows": 8400,
+ "elapsed_s": 3.0
+}

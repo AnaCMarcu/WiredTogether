@@ -1,0 +1,114 @@
+{
+ "run": "exp09_llm_9b_allied_all/seed_789",
+ "degraded": false,
+ "is_rl": false,
+ "quarantine_step_keyed": false,
+ "align": {
+  "0": {
+   "offset": 0,
+   "match_rate": 1.0,
+   "n_compared": 2400,
+   "n_units": 2401,
+   "n_rows": 2401,
+   "status": "exact",
+   "coverage": 1.0
+  },
+  "1": {
+   "offset": 0,
+   "match_rate": 1.0,
+   "n_compared": 2400,
+   "n_units": 2401,
+   "n_rows": 2401,
+   "status": "exact",
+   "coverage": 1.0
+  },
+  "2": {
+   "offset": 0,
+   "match_rate": 1.0,
+   "n_compared": 2401,
+   "n_units": 2401,
+   "n_rows": 2401,
+   "status": "exact",
+   "coverage": 1.0
+  }
+ },
+ "attribution": {
+  "attributed": 7693,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 0
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 0.9833333333333333,
+   "n": 1440
+  },
+  "critic": {
+   "rate": 0.9388888888888889,
+   "n": 360
+  },
+  "social": {
+   "rate": 1.0,
+   "n": 903
+  }
+ },
+ "clock": null,
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 7201,
+   "comm_metrics_total": 7201,
+   "ok": true
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 7174,
+    "hebbian_fallback:self_target": 3,
+    "social_bias": 24
+   },
+   "comm_metrics": {
+    "model": 7174,
+    "hebbian_fallback:self_target": 3,
+    "social_bias": 24
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "action_selection": {
+    "n": 7203,
+    "fail": 0
+   },
+   "auto_curriculum": {
+    "n": 316,
+    "fail": 0
+   },
+   "belief_system": {
+    "n": 5754,
+    "fail": 163
+   },
+   "critic": {
+    "n": 360,
+    "fail": 0
+   },
+   "episodic_memory": {
+    "n": 360,
+    "fail": 0
+   },
+   "social_module": {
+    "n": 903,
+    "fail": 0
+   }
+  }
+ },
+ "n_units": 14896,
+ "n_timeline_rows": 7203,
+ "elapsed_s": 3.0
+}

@@ -1,0 +1,25 @@
+{"id": "0059b32ebc55", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "0059dbc2eec6", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "switch impossible in ch1"}
+{"id": "005a2764245d", "categories": ["inform", "request", "question"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "regresses from own earlier 'door open, exiting' claim"}
+{"id": "005a4d7ebbf1", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2}
+{"id": "005ac5e80767", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "005b0cde1deb", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2}
+{"id": "005ba84a0713", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "instructs digging a door"}
+{"id": "005bad033b9e", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "005c406017e2", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "005c5eade280", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "005e01c55bf8", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "005e94933829", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "agent_1 refers to agent_1 in third person; identity confusion"}
+{"id": "005fd781655f", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "lever outside ch3 (agents in ch1/ch2)"}
+{"id": "0060ee88e517", "categories": ["request", "inform"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "lever/switch impossible in ch4; sword-drop fabricated"}
+{"id": "006134ab64d9", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "00618eae5974", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "verbatim echo-loop phrase"}
+{"id": "0062222fd061", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "0062f06b7ac7", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "clean cross-chamber division of labor"}
+{"id": "0063c954f855", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "0063f1d42448", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "explicit pair-dig request, correct ch2 mechanic"}
+{"id": "006419455ed2", "categories": ["inform", "question"], "coordination_function": "request", "is_grounded": true, "specificity": 1}
+{"id": "00651125d9f9", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "anvil impossible in ch3"}
+{"id": "00656d9503b8", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "echo-loop phrasing"}
+{"id": "006628960a15", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "0066843cc168", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}

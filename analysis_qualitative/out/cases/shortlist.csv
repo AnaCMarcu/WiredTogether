@@ -1,0 +1,15 @@
+archetype,rank,run,label,ep,t0,t1,score,reason
+best_ch3_coordination,0,exp07_llm_2b_social_prompt/seed_42,LLM-2B+Heb,3,381,431,-406,m18 door opened; first non-timer switch press at t=406
+best_ch3_coordination,1,exp10_llm_9b_allied_pair/seed_456,Allied-pair,3,381,431,-406,m18 door opened; first non-timer switch press at t=406
+anvil_coop,0,exp02_llm_9b/seed_123,LLM-9B,1,199,234,1,"m9_anvil_B1 at t=229, comm_before_coop=True"
+anvil_coop,1,exp02_llm_9b/seed_42,LLM-9B,2,173,208,1,"m8_anvil_A1 at t=203, comm_before_coop=True"
+hebbian_fallback_heavy,0,exp05_mappo_hebbian/seed_123,MAPPO+Heb,3,675,705,588,588 hebbian_fallback-routed messages in run
+hebbian_fallback_heavy,1,exp06_ippo_hebbian/seed_456,IPPO+Heb,2,774,804,476,476 hebbian_fallback-routed messages in run
+social_directive_chain,0,exp07_llm_2b_social_prompt/seed_1213,LLM-2B+Heb,2,365,402,60,ask agent_2 -> message sent -> m17_switch_pressed
+social_directive_chain,1,exp07_llm_2b_social_prompt/seed_1213,LLM-2B+Heb,3,729,766,60,ask agent_0 -> message sent -> m21_first_mob_kill
+hallucination_cascade,0,exp01_llm_2b/seed_1011,LLM-2B,1,4,24,1,belief mentions ['zombie'] in ch1
+hallucination_cascade,1,exp01_llm_2b/seed_1011,LLM-2B,2,0,19,1,"belief mentions ['anvil', 'zombie'] in ch1"
+stuck_ch1_failure,0,exp02_llm_9b/seed_789,LLM-9B,1,322,329,8,task repeated x8: dig the purple anvil directly in front of you; expect the an
+stuck_ch1_failure,1,exp10_llm_9b_allied_pair/seed_456,Allied-pair,2,621,634,8,task repeated x8: turnright until a green zombie mob is centered in view; expe
+rl_action_collapse,0,exp04_ippo/seed_1011,IPPO,1,200,240,1.0,RL emits NoOp 1.0 of window
+rl_action_collapse,1,exp04_ippo/seed_1011,IPPO,2,0,40,1.0,RL emits NoOp 1.0 of window

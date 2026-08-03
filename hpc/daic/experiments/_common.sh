@@ -11,11 +11,27 @@
 # ────────────────────────────────────────────────────────────────────────────
 
 WORKSPACE=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu
-IMG="$WORKSPACE/images/wiredtogether.sif"
+# Gemma 4 needs a transformers release that knows its architecture, which the
+# original image predates — hence a SECOND image built from
+# wiredtogether_gemma4.def. WT_IMAGE lets a submit script pick which one runs
+# without editing any sbatch file; the default stays the old image so nothing
+# that already worked changes silently.
+IMG="${WT_IMAGE:-$WORKSPACE/images/wiredtogether.sif}"
 REPO="$WORKSPACE/WiredTogether"
 
-MODEL_2B="$WORKSPACE/models/Qwen3.5-2B"
-MODEL_9B="$WORKSPACE/models/Qwen3.5-9B"
+# ── Reasoning core ────────────────────────────────────────────────────────
+# ONE model for the whole suite: Gemma 4 E4B instruction-tuned (4.5B effective
+# / 8B total, multimodal, Apache-2.0). Override to run something else, e.g. to
+# reproduce the earlier Qwen3.5 numbers:
+#     MODEL_LLM=$WORKSPACE/models/Qwen3.5-2B sbatch hpc/daic/experiments/exp01_llm_2b.sbatch
+MODEL_LLM="${MODEL_LLM:-$WORKSPACE/models/gemma-4-E4B-it}"
+
+# Back-compat: every exp*.sbatch still names MODEL_2B / MODEL_9B from the old
+# Qwen size ablation. Both now resolve to the single MODEL_LLM, which makes
+# exp01≡exp02 and exp07≡exp08 duplicates — submit_gemma4.sh drops the "9b"
+# twins. Setting either var explicitly restores a genuine two-model sweep.
+MODEL_2B="${MODEL_2B:-$MODEL_LLM}"
+MODEL_9B="${MODEL_9B:-$MODEL_LLM}"
 
 # Seed resolution: SLURM array index → SEED env var → 42.
 SEEDS=(42 123 456)
@@ -187,6 +203,7 @@ run_exp() {
         --env LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/craftium.libs \
         --env LLM_MODEL_PATH="$LLM_MODEL" \
         --env LLM_ENABLE_THINKING=0 \
+        --env LLM_VISION_MODE="${LLM_VISION_MODE:-auto}" \
         --env ST_MODEL_NAME="$WORKSPACE/models/all-MiniLM-L6-v2" \
         --env SENTENCE_TRANSFORMERS_HOME="$WORKSPACE/models" \
         --env HF_HUB_OFFLINE=1 \

@@ -1,0 +1,57 @@
+% Requires: \usepackage{booktabs}, \usepackage{multirow}, \usepackage{makecell}
+\begin{table*}[t]
+\centering
+\caption{\textbf{Episode-horizon ablation of the frozen topologies (LLM-9B,
+social-bias coupling).} The three imposed graphs re-run at $1{,}000$ vs.\
+$2{,}000$ steps. To isolate the horizon from sampling, both budgets use the
+\emph{same} two seeds (42, 123; $n{=}6$, 3 episodes each); the full six-seed
+$1{,}000$-step figures are in \autoref{tab:conditions_results}.
+\emph{Coop.\ milest.}\ = distinct Ch2--Ch5 team milestones; \emph{All
+milest.}\ = team total incl.\ Ch1 and the comm.\ track; \emph{Task return} =
+team-summed undiffused reward; \emph{Credit Gini} = inequality of per-agent
+milestone credit ($0$ = equal); \emph{Excl.\ share} = share earned by
+agent~2 (excluded under \emph{Allied-pair}; uniform $\approx 0.33$).
+\emph{Eps.\ completing} counts the six episodes reaching each load-bearing
+milestone: M8 (first Ch2 anvil), M13 (Ch3 switch), M15 (Ch3 regroup --- all
+three in the communal room), M17 (first Ch4 mob kill); the Ch4 arena clear
+(M18) and Ch5 boss (M23) are never reached ($0/6$ throughout, omitted).
+Doubling the horizon lifts every condition on every performance metric, but
+the gain is individually-reachable progression --- M13 saturates to $6/6$
+and M17 rises to $2$--$3/6$ --- while the milestones that demand tight
+coordination, the Ch2 anvil (M8) and the Ch3 regroup (M15), stay at
+${\leq}1$ episode regardless of budget: no topology separates from the null
+at either horizon and the imposed exclusion is never realised.}
+\label{tab:topology_horizon}
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{l l ccc cc cccc}
+\toprule
+& & \multicolumn{5}{c}{\textbf{Task performance}}
+& \multicolumn{4}{c}{\textbf{Eps.\ completing (of 6)}} \\
+\cmidrule(lr){3-7}\cmidrule(lr){8-11}
+\textbf{Condition} & \textbf{Steps}
+& \makecell{\textbf{Coop.}\\\textbf{milest.} $\uparrow$}
+& \makecell{\textbf{All}\\\textbf{milest.} $\uparrow$}
+& \makecell{\textbf{Task}\\\textbf{return} $\uparrow$}
+& \makecell{\textbf{Credit}\\\textbf{Gini}}
+& \makecell{\textbf{Excl.}\\\textbf{share}}
+& \makecell{\textbf{M8}\\\textbf{anvil}}
+& \makecell{\textbf{M13}\\\textbf{switch}}
+& \makecell{\textbf{M15}\\\textbf{regroup}}
+& \makecell{\textbf{M17}\\\textbf{mob}} \\
+\midrule
+\multirow{2}{*}{No-bonds}
+  & $1{,}000$ & $2.5 \pm 0.8$ & $11.2 \pm 1.3$ & $571 \pm 98$  & $0.07 \pm 0.01$ & $0.34 \pm 0.05$ & $1$ & $5$ & $0$ & $1$ \\
+  & $2{,}000$ & $2.7 \pm 1.1$ & $11.3 \pm 1.8$ & $821 \pm 230$ & $0.03 \pm 0.00$ & $0.32 \pm 0.00$ & $0$ & $6$ & $1$ & $2$ \\
+\addlinespace
+\multirow{2}{*}{Allied-pair}
+  & $1{,}000$ & $1.8 \pm 0.9$ & $10.7 \pm 0.7$ & $532 \pm 91$  & $0.06 \pm 0.02$ & $0.29 \pm 0.03$ & $0$ & $5$ & $0$ & $1$ \\
+  & $2{,}000$ & $2.8 \pm 1.1$ & $11.8 \pm 0.7$ & $644 \pm 124$ & $0.04 \pm 0.02$ & $0.32 \pm 0.03$ & $0$ & $6$ & $0$ & $3$ \\
+\addlinespace
+\multirow{2}{*}{Allied-all}
+  & $1{,}000$ & $2.2 \pm 0.4$ & $10.7 \pm 0.9$ & $539 \pm 84$  & $0.05 \pm 0.01$ & $0.29 \pm 0.00$ & $0$ & $6$ & $0$ & $1$ \\
+  & $2{,}000$ & $3.0 \pm 1.2$ & $11.8 \pm 1.6$ & $796 \pm 222$ & $0.07 \pm 0.03$ & $0.27 \pm 0.02$ & $1$ & $6$ & $1$ & $2$ \\
+\bottomrule
+\end{tabular}
+\end{table*}

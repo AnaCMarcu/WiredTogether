@@ -1,0 +1,67 @@
+slug,type,success,label,run,ep,t0,t1,score,W,reason
+collab_success_Allied-all_0,coop_milestone,True,Allied-all,exp09_llm_9b_allied_all/seed_1011,1,398,433,12.0,,"m18_door_opened (+60) at t=428, comm_before_coop=True"
+collab_success_Allied-all_1,coop_milestone,True,Allied-all,exp09_llm_9b_allied_all/seed_1011,2,442,477,12.0,,"m18_door_opened (+60) at t=472, comm_before_coop=True"
+collab_success_Allied-all_2,coop_milestone,True,Allied-all,exp09_llm_9b_allied_all/seed_1011,2,664,699,12.0,,"m21_first_mob_kill (+60) at t=694, comm_before_coop=True"
+collab_failure_Allied-all_0,ch3_stall,False,Allied-all,exp09_llm_9b_allied_all/seed_42,1,506,566,5.33,,locked >? steps before NO real press (202 switch-talk msgs)
+collab_failure_Allied-all_1,ch2_neglect,False,Allied-all,exp09_llm_9b_allied_all/seed_1213,2,328,378,5.0,,"reached ch2, first anvil never broken (265 anvil msgs, 244 ch2 digs)"
+collab_failure_Allied-all_2,mutual_deadlock,False,Allied-all,exp09_llm_9b_allied_all/seed_1011,1,424,472,4.0,0.8,"a1<->a0 both ask, nobody presses: ""Agent_0, I am looking down to find the exit path. My door st"" / ""I am turning left to find the exit gap in my cell. Let me kn"""
+collab_success_Allied-pair_0,coop_milestone,True,Allied-pair,exp10_llm_9b_allied_pair/seed_1011,1,474,509,12.0,,"m18_door_opened (+60) at t=504, comm_before_coop=True"
+collab_success_Allied-pair_1,request_outcome,True,Allied-pair,exp10_llm_9b_allied_pair/seed_1011,1,492,522,4.0,0.0,"fulfilled request/status_report a0->a2 -> m17_switch_pressed,m18_door_opened: ""I am moving forward to explore the cell. Please confirm if your door is open aft"""
+collab_success_Allied-pair_2,coop_milestone,True,Allied-pair,exp10_llm_9b_allied_pair/seed_1011,1,733,768,12.0,,"m21_first_mob_kill (+60) at t=763, comm_before_coop=True"
+collab_failure_Allied-pair_0,ch3_stall,False,Allied-pair,exp10_llm_9b_allied_pair/seed_1213,3,538,598,5.33,,locked >? steps before NO real press (133 switch-talk msgs)
+collab_failure_Allied-pair_1,ch2_neglect,False,Allied-pair,exp10_llm_9b_allied_pair/seed_1011,2,264,314,5.0,,"reached ch2, first anvil never broken (242 anvil msgs, 240 ch2 digs)"
+collab_failure_Allied-pair_2,mutual_deadlock,False,Allied-pair,exp10_llm_9b_allied_pair/seed_1011,1,397,445,4.0,0.8,"a0<->a1 both ask, nobody presses: ""I am pressing the switch in my cell now to open your door. P"" / ""I am searching for the blue switch in my cell. Please check """
+collab_success_IPPO_0,coop_milestone,True,IPPO,exp04_ippo/seed_123,2,435,470,12.0,,"m18_door_opened (+60) at t=465, comm_before_coop=True"
+collab_success_IPPO_1,coop_milestone,True,IPPO,exp04_ippo/seed_123,3,482,517,12.0,,"m18_door_opened (+60) at t=512, comm_before_coop=True"
+collab_success_IPPO_2,coop_milestone,True,IPPO,exp04_ippo/seed_42,2,462,497,12.0,,"m18_door_opened (+60) at t=492, comm_before_coop=True"
+collab_failure_IPPO_0,request_outcome,False,IPPO,exp04_ippo/seed_42,3,715,745,7.0,,"ignored directive/commitment a0->a1 streak x7: ""Move forward to collect the cobblestone and continue toward the teleporter in Ch"""
+collab_failure_IPPO_1,ch3_stall,False,IPPO,exp04_ippo/seed_456,3,711,771,5.33,,locked >? steps before NO real press (179 switch-talk msgs)
+collab_failure_IPPO_2,ch2_neglect,False,IPPO,exp04_ippo/seed_123,1,700,750,5.0,,"reached ch2, first anvil never broken (332 anvil msgs, 271 ch2 digs)"
+collab_success_IPPOpHeb_0,coop_milestone,True,IPPO+Heb,exp06_ippo_hebbian/seed_123,3,429,464,12.0,,"m18_door_opened (+60) at t=459, comm_before_coop=True"
+collab_success_IPPOpHeb_1,coop_milestone,True,IPPO+Heb,exp06_ippo_hebbian/seed_42,3,496,531,12.0,,"m18_door_opened (+60) at t=526, comm_before_coop=True"
+collab_success_IPPOpHeb_2,coop_milestone,True,IPPO+Heb,exp06_ippo_hebbian/seed_456,1,409,444,12.0,,"m18_door_opened (+60) at t=439, comm_before_coop=True"
+collab_failure_IPPOpHeb_0,ch3_stall,False,IPPO+Heb,exp06_ippo_hebbian/seed_42,1,660,720,5.33,,locked >? steps before NO real press (89 switch-talk msgs)
+collab_failure_IPPOpHeb_1,request_outcome,False,IPPO+Heb,exp06_ippo_hebbian/seed_42,2,488,518,4.5,0.1746,"ignored request/status_report a0->a1 streak x4: ""Switch is centered and ready for cooperative Dig. Please press it to open the do"""
+collab_failure_IPPOpHeb_2,ch2_neglect,False,IPPO+Heb,exp06_ippo_hebbian/seed_42,1,297,347,4.5,,"reached ch2, first anvil never broken (152 anvil msgs, 100 ch2 digs)"
+collab_success_LLM-2B_0,coop_milestone,True,LLM-2B,exp01_llm_2b/seed_1011,1,414,449,12.0,,"m18_door_opened (+60) at t=444, comm_before_coop=True"
+collab_success_LLM-2B_1,coop_milestone,True,LLM-2B,exp01_llm_2b/seed_1011,2,416,451,12.0,,"m18_door_opened (+60) at t=446, comm_before_coop=True"
+collab_success_LLM-2B_2,coop_milestone,True,LLM-2B,exp01_llm_2b/seed_1011,3,402,437,12.0,,"m18_door_opened (+60) at t=432, comm_before_coop=True"
+collab_failure_LLM-2B_0,request_outcome,False,LLM-2B,exp01_llm_2b/seed_1213,3,428,458,6.5,,"ignored directive a2->a0 streak x6: ""Press the switch to open my door."""
+collab_failure_LLM-2B_1,ch3_stall,False,LLM-2B,exp01_llm_2b/seed_123,1,1623,1683,5.33,,locked >? steps before NO real press (168 switch-talk msgs)
+collab_failure_LLM-2B_2,ch2_neglect,False,LLM-2B,exp01_llm_2b/seed_1011,1,278,328,5.0,,"reached ch2, first anvil never broken (71 anvil msgs, 222 ch2 digs)"
+collab_success_LLM-2BpHeb_0,coop_milestone,True,LLM-2B+Heb,exp07_llm_2b_social_prompt/seed_1213,3,728,763,12.0,,"m21_first_mob_kill (+60) at t=758, comm_before_coop=True"
+collab_success_LLM-2BpHeb_1,coop_milestone,True,LLM-2B+Heb,exp07_llm_2b_social_prompt/seed_123,1,418,453,12.0,,"m18_door_opened (+60) at t=448, comm_before_coop=True"
+collab_success_LLM-2BpHeb_2,coop_milestone,True,LLM-2B+Heb,exp07_llm_2b_social_prompt/seed_123,3,396,431,12.0,,"m18_door_opened (+60) at t=426, comm_before_coop=True"
+collab_failure_LLM-2BpHeb_0,request_outcome,False,LLM-2B+Heb,exp07_llm_2b_social_prompt/seed_456,3,557,587,17.5,0.2797,"ignored request a1->a2 streak x17: ""Please press the switch to enter Ch4."""
+collab_failure_LLM-2BpHeb_1,ch3_stall,False,LLM-2B+Heb,exp07_llm_2b_social_prompt/seed_1011,3,667,727,5.33,,locked >? steps before NO real press (84 switch-talk msgs)
+collab_failure_LLM-2BpHeb_2,ch2_neglect,False,LLM-2B+Heb,exp07_llm_2b_social_prompt/seed_1011,1,334,384,5.0,,"reached ch2, first anvil never broken (143 anvil msgs, 245 ch2 digs)"
+collab_success_LLM-9B_0,coop_milestone,True,LLM-9B,exp02_llm_9b/seed_1011,1,472,507,12.0,,"m18_door_opened (+60) at t=502, comm_before_coop=True"
+collab_success_LLM-9B_1,request_outcome,True,LLM-9B,exp02_llm_9b/seed_1011,1,481,511,4.0,,"fulfilled request a0->a1 -> m18_door_opened: ""I am turning left to find the blue switch. I cannot see it yet, please check you"""
+collab_success_LLM-9B_2,coop_milestone,True,LLM-9B,exp02_llm_9b/seed_1011,1,608,643,12.0,,"m21_first_mob_kill (+60) at t=638, comm_before_coop=True"
+collab_failure_LLM-9B_0,request_outcome,False,LLM-9B,exp02_llm_9b/seed_1011,1,504,534,7.5,,"ignored request/status_report a2->a0 streak x7: ""I am pressing my switch now, please press yours to open your door."""
+collab_failure_LLM-9B_1,ch3_stall,False,LLM-9B,exp02_llm_9b/seed_1011,3,482,542,5.33,,locked >? steps before NO real press (248 switch-talk msgs)
+collab_failure_LLM-9B_2,ch2_neglect,False,LLM-9B,exp02_llm_9b/seed_1011,2,256,306,5.0,,"reached ch2, first anvil never broken (327 anvil msgs, 246 ch2 digs)"
+collab_success_LLM-9BpHeb_0,coop_milestone,True,LLM-9B+Heb,exp08_llm_9b_social_prompt/seed_1011,2,381,416,12.0,,"m18_door_opened (+60) at t=411, comm_before_coop=True"
+collab_success_LLM-9BpHeb_1,request_outcome,True,LLM-9B+Heb,exp08_llm_9b_social_prompt/seed_1011,2,401,431,4.0,0.2685,"fulfilled request/status_report a0->a1 -> m18_door_opened,m17_switch_pressed,m18_door_opened: ""I am pressing my switch now. Please move to your cell and press your switch next"""
+collab_success_LLM-9BpHeb_2,coop_milestone,True,LLM-9B+Heb,exp08_llm_9b_social_prompt/seed_1011,3,419,454,12.0,,"m18_door_opened (+60) at t=449, comm_before_coop=True"
+collab_failure_LLM-9BpHeb_0,ch3_stall,False,LLM-9B+Heb,exp08_llm_9b_social_prompt/seed_1213,1,538,598,5.33,,locked >? steps before NO real press (90 switch-talk msgs)
+collab_failure_LLM-9BpHeb_1,ch2_neglect,False,LLM-9B+Heb,exp08_llm_9b_social_prompt/seed_1213,1,200,250,5.0,,"reached ch2, first anvil never broken (250 anvil msgs, 257 ch2 digs)"
+collab_failure_LLM-9BpHeb_2,mutual_deadlock,False,LLM-9B+Heb,exp08_llm_9b_social_prompt/seed_1011,1,395,443,4.0,0.212,"a1<->a0 both ask, nobody presses: ""I am pressing my switch now. Wait for me to free you."" / ""I am turning right to face South. Once I find the switch, I'"""
+collab_success_MAPPO_0,coop_milestone,True,MAPPO,exp03_mappo/seed_123,2,521,556,12.0,,"m18_door_opened (+60) at t=551, comm_before_coop=True"
+collab_success_MAPPO_1,coop_milestone,True,MAPPO,exp03_mappo/seed_456,2,457,492,12.0,,"m18_door_opened (+60) at t=487, comm_before_coop=True"
+collab_success_MAPPO_2,coop_milestone,True,MAPPO,exp03_mappo/seed_456,3,483,518,12.0,,"m18_door_opened (+60) at t=513, comm_before_coop=True"
+collab_failure_MAPPO_0,request_outcome,False,MAPPO,exp03_mappo/seed_1213,3,194,224,12.5,,"ignored request/status_report a0->a1 streak x12: ""I see the iron ore block centered in front of us. Please pair-dig with me to rai"""
+collab_failure_MAPPO_1,ch3_stall,False,MAPPO,exp03_mappo/seed_1011,1,744,799,5.33,,locked >? steps before NO real press (68 switch-talk msgs)
+collab_failure_MAPPO_2,ch2_neglect,False,MAPPO,exp03_mappo/seed_42,1,268,318,4.64,,"reached ch2, first anvil never broken (375 anvil msgs, 129 ch2 digs)"
+collab_success_MAPPOpHeb_0,coop_milestone,True,MAPPO+Heb,exp05_mappo_hebbian/seed_1213,1,484,519,12.0,,"m18_door_opened (+60) at t=514, comm_before_coop=True"
+collab_success_MAPPOpHeb_1,coop_milestone,True,MAPPO+Heb,exp05_mappo_hebbian/seed_123,1,474,509,12.0,,"m18_door_opened (+60) at t=504, comm_before_coop=True"
+collab_success_MAPPOpHeb_2,coop_milestone,True,MAPPO+Heb,exp05_mappo_hebbian/seed_42,2,494,529,12.0,,"m18_door_opened (+60) at t=524, comm_before_coop=True"
+collab_failure_MAPPOpHeb_0,request_outcome,False,MAPPO+Heb,exp05_mappo_hebbian/seed_789,3,259,289,10.5,0.1101,"ignored directive a0->a2 streak x10: ""Turn left to center the tree trunk so we can start digging the anvil."""
+collab_failure_MAPPOpHeb_1,ch3_stall,False,MAPPO+Heb,exp05_mappo_hebbian/seed_123,2,664,724,5.33,,locked >? steps before NO real press (72 switch-talk msgs)
+collab_failure_MAPPOpHeb_2,ch2_neglect,False,MAPPO+Heb,exp05_mappo_hebbian/seed_789,1,136,186,4.71,,"reached ch2, first anvil never broken (48 anvil msgs, 157 ch2 digs)"
+collab_success_No-bonds_0,coop_milestone,True,No-bonds,exp11_llm_9b_allied_none/seed_1011,1,735,770,12.0,,"m21_first_mob_kill (+60) at t=765, comm_before_coop=True"
+collab_success_No-bonds_1,request_outcome,True,No-bonds,exp11_llm_9b_allied_none/seed_1011,2,388,418,4.0,0.0,"fulfilled request/status_report a1->a2 -> m18_door_opened: ""I am digging the anvil now, please dig it too to break it faster."""
+collab_success_No-bonds_2,coop_milestone,True,No-bonds,exp11_llm_9b_allied_none/seed_1011,3,378,413,12.0,,"m18_door_opened (+60) at t=408, comm_before_coop=True"
+collab_failure_No-bonds_0,ch3_stall,False,No-bonds,exp11_llm_9b_allied_none/seed_1213,3,527,587,5.33,,locked >? steps before NO real press (220 switch-talk msgs)
+collab_failure_No-bonds_1,ch2_neglect,False,No-bonds,exp11_llm_9b_allied_none/seed_1011,2,252,302,5.0,,"reached ch2, first anvil never broken (289 anvil msgs, 205 ch2 digs)"
+collab_failure_No-bonds_2,request_outcome,False,No-bonds,exp11_llm_9b_allied_none/seed_42,1,592,622,4.5,0.0,"ignored request/status_report a2->a1 streak x4: ""I am in Cell C and have pressed my switch. This should open your door in Cell A."""

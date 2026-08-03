@@ -1,0 +1,25 @@
+{"id": "00693d656c18", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "anvil in ch1"}
+{"id": "00699b0dec16", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 1, "notes": "purple anvil in ch3"}
+{"id": "006a8ee726f6", "hallucination": true, "stale": true, "verifiable_claims": 5, "correct_claims": 2, "notes": "cell A and switch in ch4"}
+{"id": "006aa8581607", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "ch3 cells/communal room asserted while team in ch1"}
+{"id": "006ae6fd0167", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "teammate and zombie seen from ch3 cell"}
+{"id": "006ba66f3f99", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": ""}
+{"id": "006cd5398b23", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": ""}
+{"id": "006d40f5b92c", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "heavily duplicated claims"}
+{"id": "006dc1dd678c", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "claims no other teammates in ch1; all three present"}
+{"id": "006e7a58d0c3", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "agent_0 placed in ch2; actually ch1"}
+{"id": "006f69df5265", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 4, "notes": ""}
+{"id": "006f92eee701", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": ""}
+{"id": "0070280b7e6c", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "claims zombie visible; own GT says wall blocks view"}
+{"id": "0070a08cc641", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "places agent_2 in ch3/ch2; actually ch1"}
+{"id": "0070e0c4a2b3", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "believes self in ch3 communal room; actually ch1"}
+{"id": "00718e64ad0c", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "00721be729ca", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 2, "notes": "tree and cell A in ch4"}
+{"id": "00722234780c", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 5, "notes": "accurate cross-chamber partner tracking"}
+{"id": "007274f6ca80", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "0072ae57c397", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": ""}
+{"id": "007353ca22b5", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "partners placed in ch1; all agents in ch4"}
+{"id": "00748c13e7d4", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": ""}
+{"id": "0074aceb7a0e", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "ch3 sealed cell claimed present in ch2"}
+{"id": "0074b169807c", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": ""}
+{"id": "0074b2c1d90e", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": "claims agent_1 alone; all three in ch1"}

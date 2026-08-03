@@ -1,0 +1,58 @@
+% Requires: \usepackage{booktabs}
+\begin{table}[t]
+\centering
+\caption{\textbf{Per-milestone completion under the frozen-topology ablation
+(LLM-9B).} Companion to \autoref{tab:topology_ablation}. Cell =
+$\text{median}_{n}$: within-episode step of the \emph{first} completion
+(median over completing episodes); subscript $n$ = how many of the 6 episodes
+(2 seeds $\times$ 3 ep) reached it. `--' = never completed.}
+\label{tab:milestones_topology}
+\small
+\begin{tabular}{llccc}
+\toprule
+ & Milestone & No-bonds & Allied-pair & Allied-all \\
+\midrule
+\multicolumn{5}{l}{\emph{Chamber 1 --- solo skill acquisition}}\\
+M1           & Move $>$5 from spawn   & $6_{6}$ & $10_{6}$ & $8_{6}$ \\
+M2           & Dig 3 any              & $6_{6}$ & $8_{6}$ & $8_{6}$ \\
+M3           & Pick up 3 items        & $25_{6}$ & $33_{5}$ & $19_{6}$ \\
+M4           & Dig 5 wood             & $115_{1}$ & $77_{2}$ & $301_{1}$ \\
+M5           & Kill 1 animal          & -- & -- & -- \\
+M6           & Kill 2 animals         & -- & -- & -- \\
+M7           & Dig 3 stone            & $83_{3}$ & $89_{3}$ & $123_{3}$ \\
+M\_door1     & Door 1 unlocked        & $4_{5}$ & $8_{6}$ & $8_{6}$ \\
+\addlinespace
+\multicolumn{5}{l}{\emph{Chamber 2 --- cooperative resource acquisition}}\\
+M8           & First anvil break      & -- & -- & $493_{1}$ \\
+M9           & Second anvil break     & -- & $468_{1}$ & -- \\
+M10          & Sword equipped         & -- & -- & $493_{1}$ \\
+M11          & Chestplate equipped    & -- & $468_{1}$ & -- \\
+\addlinespace
+\multicolumn{5}{l}{\emph{Chamber 3 --- communication under partial obs.}}\\
+M12          & Enter isolation cell   & -- & -- & -- \\
+M13          & Press switch           & $803_{6}$ & $809_{6}$ & $817_{6}$ \\
+M14          & Door opened            & $803_{6}$ & $809_{6}$ & $817_{6}$ \\
+M15          & All in communal room   & $850_{1}$ & -- & $1117_{1}$ \\
+\addlinespace
+\multicolumn{5}{l}{\emph{Chamber 4 --- team combat}}\\
+M16          & Enter Chamber 4        & $1099_{1}$ & -- & $1181_{1}$ \\
+M17          & First mob kill         & $1426_{2}$ & $1296_{3}$ & $1348_{2}$ \\
+M18          & All mobs killed        & -- & -- & -- \\
+M19          & All survive (damage)   & -- & -- & -- \\
+\addlinespace
+\multicolumn{5}{l}{\emph{Chamber 5 --- cooperative boss fight}}\\
+M20          & Enter Chamber 5        & -- & -- & -- \\
+M21          & First boss damage      & -- & -- & -- \\
+M22          & Boss at 50\% HP        & -- & -- & -- \\
+M23          & Boss defeated          & -- & -- & -- \\
+M24          & All alive at kill      & -- & -- & -- \\
+\addlinespace
+\multicolumn{5}{l}{\emph{Communication track}}\\
+M\_comm\_ch1 & Valid messaging, Ch1   & $5_{6}$ & $5_{6}$ & $5_{6}$ \\
+M\_comm\_ch2 & Valid messaging, Ch2   & $260_{6}$ & $228_{6}$ & $229_{6}$ \\
+M\_comm\_ch3 & Valid messaging, Ch3   & $911_{6}$ & $961_{6}$ & $1026_{6}$ \\
+M\_comm\_ch4 & Valid messaging, Ch4   & $1208_{6}$ & $1211_{6}$ & $1211_{6}$ \\
+M\_comm\_ch5 & Valid messaging, Ch5   & -- & $1616_{2}$ & $1605_{1}$ \\
+\bottomrule
+\end{tabular}
+\end{table}

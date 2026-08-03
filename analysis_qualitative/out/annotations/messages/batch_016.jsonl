@@ -1,0 +1,25 @@
+{"id": "00e04a23e90d", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "anvil claimed present in ch1"}
+{"id": "00e0aa826322", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "00e73ec8190a", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "says digging but concurrent action is TurnLeft"}
+{"id": "00e7562c4ace", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00e9e39ffc5e", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "echoed verbatim by several agents nearby steps"}
+{"id": "00f1ad83dc37", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "00f285c9e259", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "lever/switch scheme in ch4; no lever there"}
+{"id": "00f352db7910", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00f35723bf36", "categories": ["question", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00fa444f91b4", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00fbe2755631", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "lever plus heal-HP scheme confabulated in ch4"}
+{"id": "00fd1eda68a7", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "gear-block/HP scheme likely confabulated; loop-repeated"}
+{"id": "00fd7c660631", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "0100bf8abe79", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 2, "notes": "pair-dig-for-chestplate scheme confabulated"}
+{"id": "0107da19dcc1", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0109697de130", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "anvil named in ch5"}
+{"id": "010ae1abfa9a", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "lever scheme; ch4 has no lever"}
+{"id": "010e292e77e7", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "lever not present in ch4 context"}
+{"id": "0114a21f0cc9", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "lever hallucination in ch4"}
+{"id": "011c672930cb", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "011cf2ff560c", "categories": ["request", "inform"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "lever named in ch2 context"}
+{"id": "0125499b4118", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "sender chamber unknown while claiming anvil dig"}
+{"id": "012b58a92d75", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "012be78cc7c6", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "01355e16e34a", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "switch named in ch5"}

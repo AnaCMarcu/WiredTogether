@@ -1,0 +1,66 @@
+% ── tab:main_results rows ─────────────────────────────
+LLM-2B       & $1.6 \pm 0.8$ & $9.8 \pm 1.2$ & $358 \pm 163$ \\
+LLM-9B       & $3.0 \pm 1.1$ & $12.0 \pm 1.5$ & $622 \pm 150$ \\
+LLM-2B+Heb   & $1.2 \pm 1.0$ & $9.3 \pm 1.5$ & $363 \pm 196$ \\
+LLM-9B+Heb   & $2.4 \pm 1.0$ & $10.9 \pm 1.3$ & $574 \pm 123$ \\
+IPPO         & $0.8 \pm 1.0$ & $6.2 \pm 3.7$ & $255 \pm 259$ \\
+MAPPO        & $0.8 \pm 1.0$ & $8.7 \pm 1.2$ & $390 \pm 86$ \\
+IPPO+Heb     & $0.5 \pm 0.9$ & $5.5 \pm 4.0$ & $200 \pm 261$ \\
+MAPPO+Heb    & $0.6 \pm 0.8$ & $7.6 \pm 3.0$ & $360 \pm 168$ \\
+
+% ── tab:steps_to_milestone rows (milestone × condition) ──
+% Paste between \midrule and \bottomrule, replacing the manual
+% milestone rows. Cell = $median_{n}$; '--' = never completed.
+\multicolumn{10}{l}{\emph{Chamber 1 --- solo skill acquisition}}\\
+M1        & Move $>$5 from spawn   & $10_{18}$ & $6_{18}$ & $7_{15}$ & $5_{18}$ & $10_{16}$ & $6_{18}$ & $5_{13}$ & $10_{17}$ \\
+M2        & Dig 3 any              & $14_{18}$ & $8_{18}$ & $11_{17}$ & $8_{18}$ & $18_{13}$ & $38_{18}$ & $42_{9}$ & $24_{16}$ \\
+M3        & Pick up 3 items        & $23_{17}$ & $36_{17}$ & $23_{17}$ & $20_{16}$ & $107_{5}$ & $72_{12}$ & $66_{5}$ & $83_{11}$ \\
+M4        & Dig 5 wood             & $115_{1}$ & $143_{8}$ & $90_{2}$ & $150_{3}$ & -- & -- & -- & $132_{1}$ \\
+M5        & Kill 1 animal          & -- & -- & -- & -- & -- & -- & -- & -- \\
+M6        & Kill 2 animals         & -- & -- & -- & -- & -- & -- & -- & -- \\
+M7        & Dig 3 stone            & $84_{3}$ & $35_{7}$ & $183_{1}$ & $34_{7}$ & -- & -- & -- & -- \\
+M\_door1  & Door 1 unlocked        & $13_{17}$ & $8_{17}$ & $11_{13}$ & $8_{16}$ & $18_{13}$ & $37_{17}$ & $42_{9}$ & $24_{16}$ \\
+\addlinespace
+\multicolumn{10}{l}{\emph{Chamber 2 --- cooperative resource acquisition}}\\
+M8        & First anvil break      & -- & $201_{2}$ & -- & $301_{1}$ & -- & -- & -- & -- \\
+M9        & Second anvil break     & -- & $218_{2}$ & -- & -- & -- & -- & -- & -- \\
+M10       & Sword equipped         & -- & $201_{2}$ & -- & $301_{1}$ & -- & -- & -- & -- \\
+M11       & Chestplate equipped    & -- & $218_{2}$ & -- & -- & -- & -- & -- & -- \\
+\addlinespace
+\multicolumn{10}{l}{\emph{Chamber 3 --- communication under partial obs.}}\\
+M12       & Enter isolation cell   & -- & -- & -- & -- & -- & -- & -- & -- \\
+M13       & Press switch           & $434_{14}$ & $415_{18}$ & $421_{10}$ & $403_{17}$ & $488_{7}$ & $486_{7}$ & $451_{4}$ & $509_{4}$ \\
+M14       & Door opened            & $434_{14}$ & $415_{18}$ & $421_{10}$ & $403_{17}$ & $488_{7}$ & $486_{7}$ & $451_{4}$ & $509_{4}$ \\
+M15       & All in communal room   & -- & -- & -- & -- & -- & -- & -- & -- \\
+\addlinespace
+\multicolumn{10}{l}{\emph{Chamber 4 --- team combat}}\\
+M16       & Enter Chamber 4        & -- & -- & -- & -- & -- & -- & -- & -- \\
+M17       & First mob kill         & -- & $679_{10}$ & $756_{1}$ & $696_{7}$ & -- & -- & -- & $789_{2}$ \\
+M18       & All mobs killed        & -- & -- & -- & -- & -- & -- & -- & -- \\
+M19       & All survive (damage)   & -- & -- & -- & -- & -- & -- & -- & -- \\
+\addlinespace
+\multicolumn{10}{l}{\emph{Chamber 5 --- cooperative boss fight}}\\
+M20       & Enter Chamber 5        & -- & -- & -- & -- & -- & -- & -- & -- \\
+M21       & First boss damage      & -- & -- & -- & -- & -- & -- & -- & -- \\
+M22       & Boss at 50\% HP        & -- & -- & -- & -- & -- & -- & -- & -- \\
+M23       & Boss defeated          & -- & -- & -- & -- & -- & -- & -- & -- \\
+M24       & All alive at kill      & -- & -- & -- & -- & -- & -- & -- & -- \\
+\addlinespace
+\multicolumn{10}{l}{\emph{Communication track}}\\
+M\_comm\_ch1 & Valid messaging, Ch1   & $5_{18}$ & $5_{18}$ & $5_{18}$ & $5_{18}$ & $5_{12}$ & $5_{18}$ & $5_{9}$ & $5_{15}$ \\
+M\_comm\_ch2 & Valid messaging, Ch2   & $204_{18}$ & $204_{18}$ & $204_{18}$ & $204_{18}$ & $143_{12}$ & $178_{18}$ & $128_{9}$ & $110_{15}$ \\
+M\_comm\_ch3 & Valid messaging, Ch3   & $604_{18}$ & $502_{18}$ & $604_{18}$ & $560_{18}$ & $603_{12}$ & $604_{18}$ & $604_{9}$ & $605_{15}$ \\
+M\_comm\_ch4 & Valid messaging, Ch4   & $612_{18}$ & $613_{18}$ & $612_{18}$ & $614_{18}$ & $610_{12}$ & $610_{18}$ & $613_{9}$ & $609_{15}$ \\
+M\_comm\_ch5 & Valid messaging, Ch5   & $850_{1}$ & $805_{4}$ & $810_{3}$ & $806_{2}$ & $805_{1}$ & $807_{5}$ & $811_{2}$ & $809_{5}$ \\
+
+% ── tab:topology_ablation rows ────────────────────────
+LLM-9B (ref.)    & $3.0 \pm 1.1$ & $622 \pm 150$ & $0.08 \pm 0.03$ & $0.32 \pm 0.05$ \\
+No-bonds         & $2.2 \pm 0.6$ & $572 \pm 97$ & $0.07 \pm 0.03$ & $0.36 \pm 0.05$ \\
+Allied-pair      & $1.9 \pm 0.7$ & $542 \pm 103$ & $0.06 \pm 0.04$ & $0.30 \pm 0.03$ \\
+Allied-all       & $2.3 \pm 0.6$ & $573 \pm 113$ & $0.07 \pm 0.03$ & $0.31 \pm 0.02$ \\
+
+% ── tab:graph_stats rows ──────────────────────────────
+LLM-2B+Heb   & $0.23 \pm 0.02$ & $0.28 \pm 0.01$ & $0.11 \pm 0.16$ & $0.004 \pm 0.003$ \\
+LLM-9B+Heb   & $0.24 \pm 0.01$ & $0.29 \pm 0.02$ & $0.04 \pm 0.10$ & $0.005 \pm 0.005$ \\
+IPPO+Heb     & $0.13 \pm 0.11$ & $0.18 \pm 0.14$ & $0.56 \pm 0.38$ & $0.001 \pm 0.001$ \\
+MAPPO+Heb    & $0.19 \pm 0.08$ & $0.24 \pm 0.11$ & $0.26 \pm 0.36$ & $0.001 \pm 0.001$ \\

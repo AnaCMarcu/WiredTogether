@@ -1,0 +1,25 @@
+{"id": "0218327e39c7", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "gear-block scheme parroted verbatim by all agents"}
+{"id": "0236011c9caf", "categories": ["inform", "question", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "0244ba8e3418", "categories": ["acknowledge", "inform"], "coordination_function": "acknowledge", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "0244cea54377", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "red-sandstone coop-dig scheme confabulated"}
+{"id": "02468b6f73fe", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "switch named in ch4"}
+{"id": "024b8d76c752", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0252c533893a", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "boss health claim unverifiable"}
+{"id": "0262aa10b7aa", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0266651fda62", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0273176c31f7", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "027580d546fb", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "027b15c36328", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "028128316f10", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "028830a54f91", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "029ecd404bd9", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "digging stone to open door is confabulated causal claim"}
+{"id": "02ca925cb227", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 1, "notes": "gear-block/HP mechanic confabulated"}
+{"id": "02d4c1bf5e4b", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "02d9b8712df1", "categories": ["inform", "commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 2, "notes": "pair-dig on boss is confabulated mechanic"}
+{"id": "02dab50f7166", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "02e7b1d6b1b1", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "lever named in ch2"}
+{"id": "02ebfea897ff", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "0300436c161e", "categories": ["acknowledge", "inform"], "coordination_function": "acknowledge", "is_grounded": true, "specificity": 1, "notes": "complies with agent_1 focus-fire request"}
+{"id": "0327c11f79c8", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "0333b8f63a6e", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "coop-Dig scheme parroted in ch5"}
+{"id": "0333e9fc2e58", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "claims exit found while context suggests still searching"}

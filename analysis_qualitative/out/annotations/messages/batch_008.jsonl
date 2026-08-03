@@ -1,0 +1,25 @@
+{"id": "0046d071d62b", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "chamber claims flip Ch1/Ch3/Ch4 across adjacent steps"}
+{"id": "00476e33d7b2", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "self-prediction only"}
+{"id": "0047dd303d94", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "claims to be in Ch1 while tagged ch2"}
+{"id": "004817a82f53", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "wood in ch4 contradicts own ROOM FACTS in context"}
+{"id": "0048496536db", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "clear status with cell/door/dependency"}
+{"id": "0049651912ee", "categories": ["inform", "noise"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "verbatim copy of teammates' messages"}
+{"id": "004b138fdfd1", "categories": ["inform", "request", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "good division-of-labor update"}
+{"id": "004b95b8b7c4", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2}
+{"id": "004bc3441567", "categories": ["acknowledge", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "part of an echo loop; lever read as ch3 switch"}
+{"id": "004c1a787096", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "routing is random fallback self-target"}
+{"id": "004c3ce0f615", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "sheep impossible in ch2"}
+{"id": "004cb5813f0b", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "004d379ef53a", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "vague directive, echoed by teammate"}
+{"id": "004de5774ae8", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "004f1ef7a3d4", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "lever/switch impossible in ch1"}
+{"id": "004f269bf16f", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "echo-loop phrase with addressee added"}
+{"id": "004f4b08f6b4", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "matches Slot1 action"}
+{"id": "004f703d78e2", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "0050354183c6", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1}
+{"id": "00505ee15b75", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "cooperative dig on a tree is unnecessary but not impossible"}
+{"id": "0050dedbfa15", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "incoherent causality: cobblestone dropping wood"}
+{"id": "005102c5dc16", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "within heavy echo loop"}
+{"id": "00511f97ac10", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "0051ab21141e", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}
+{"id": "0051d6fef7d5", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2}

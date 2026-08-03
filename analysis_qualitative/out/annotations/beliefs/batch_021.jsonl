@@ -1,0 +1,25 @@
+{"id": "00c6356790c9", "hallucination": true, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "Held diamond sword impossible in ch1 ep2 before any anvil break"}
+{"id": "00c7d6320179", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "agent_1 door-hunting, not assisting the dig"}
+{"id": "00c8d05c6399", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "agent_1 in ch1 not moving into ch2; agent_2 tree claim matches"}
+{"id": "00c8e4b66e7f", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "GT self is digging a tree, contradicting stone-at-center; agent_2 not digging stone"}
+{"id": "00c9394bb7f9", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 5, "notes": "Accurate self and partner beliefs"}
+{"id": "00c968a0df7f", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 2, "notes": "Switch in ch4 impossible; believer claims itself in ch1 while GT shows ch4"}
+{"id": "00ca2cae6e6d", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 6, "notes": "Accurate: matches sword-switching and zombie attacks"}
+{"id": "00cbe9acb3c0", "hallucination": false, "stale": true, "verifiable_claims": 4, "correct_claims": 2, "notes": "Door-transit/turning beliefs outdated; agent_2 now digging anvil requesting pair-dig (matches)"}
+{"id": "00cd3aac9f9b", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "a1 digs stone not wood; conflicting sub-beliefs about a2 (digging vs stuck)"}
+{"id": "00cd601cfd93", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "agent_1 digging tree in ch1, not entering ch2; three-digs claim consistent with GT"}
+{"id": "00cd7f090b09", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "agent_2 not yet facing stone block (must exit hole and turn first)"}
+{"id": "00cfe5362d71", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": "agent_2 finishing zombie matches GT; self block-clearing unsupported"}
+{"id": "00d011f4c391", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "agent_0 turning left, not right"}
+{"id": "00d1de3cef27", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "Held sword, sealed cell, and ceiling redstone all impossible in ch1 ep2"}
+{"id": "00d2c9be4bea", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "Digging dirt matches GT; dirt does not drop cobblestone"}
+{"id": "00d46683fd00", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "Anvil, zombies, and open cell door impossible in ch1"}
+{"id": "00d9a399d39b", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": "Misattributes own stone-breaking to agent_1; agent_2 in ch2 anvil prep matches"}
+{"id": "00dd51e7b0a0", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "Claims teammates in ch2; GT shows all three in ch1; tree trunk claim matches self dig"}
+{"id": "00de1a839e8f", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "agent_0 still in ch1 (only about to move to ch2); agent_1 seeking stone, not yet digging"}
+{"id": "00dfd1e62383", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "agent_2 has already offered anvil pair-dig, contradicting not-yet-coordinated claims"}
+{"id": "00e2436fafef", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 1, "notes": "Tree in ch3 impossible (GT messages echo the confabulation); location correct"}
+{"id": "00e25690ce47", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "Anvil and zombies impossible in ch1; sword nonexistent in ep1 pre-ch2"}
+{"id": "00e38147513e", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "Dirt-block cooperative dig scheme in ch4 combat arena; ignores zombie context"}
+{"id": "00e602407fae", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "Anvil in ch4 impossible; gear-from-stone-dig scheme confabulated"}
+{"id": "00e704bc2269", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "agent_1 heading to already-open door past sheep; hole/stone-search claims unsupported"}

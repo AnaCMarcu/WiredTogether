@@ -1,0 +1,25 @@
+{"id": "0074b169807c", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": "agent_2 activity wrong: turning to find exit, not moving through an open door"}
+{"id": "0074b2c1d90e", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 3, "notes": "expects diamond sword drop in ch1 (impossible); agent_1 digging dirt not stone; not the only agent present"}
+{"id": "0074e7ccce61", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "'view open and clear' contradicted; agent_0 stuck at stone wall per GT"}
+{"id": "0075cf9788c4", "hallucination": false, "stale": true, "verifiable_claims": 5, "correct_claims": 1, "notes": "agent_2 placed in ch1 but all agents now in ch2; actual activity is digging a tree"}
+{"id": "007672db8415", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": "anvil engagement and coordination consistent with GT"}
+{"id": "007707264fc3", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "self-reference confusion ('teammate agent_0' in agent_0's own belief); no one is clearing stone, all turning"}
+{"id": "0077197e9e5f", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "anvil and tree trunk cannot exist in ch3; only 'boss not visible' trivially correct"}
+{"id": "0077265f4928", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": "zombie target and sword use match GT"}
+{"id": "0077b2086fde", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 2, "notes": "'communal room in Ch1' impossible; agent_2 holding sword before anvil break; anvil partner misattributed"}
+{"id": "0077bc8dce8d", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 1, "notes": "self-location wrong (says ch3, actually ch5); agent_1 attacking boss, not seeking exit"}
+{"id": "007854e46826", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "teammates not at same anvil; sword claim unverifiable"}
+{"id": "007ad52e632c", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "claims isolated digging but action is TurnLeft; most view claims unverifiable"}
+{"id": "007b23ee3439", "hallucination": false, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "roles reversed: agent_2 is pressing own switch, not waiting for agent_0"}
+{"id": "007b60404429", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 3, "notes": "switch in ch1, zombie in ch2, and anvil in communal room all impossible"}
+{"id": "007b66773893", "hallucination": false, "stale": true, "verifiable_claims": 5, "correct_claims": 2, "notes": "Door 1 (ch1) lock tied to swords is wrong game rule; agent_1 already pressing switch, not searching"}
+{"id": "007b9ba034be", "hallucination": false, "stale": true, "verifiable_claims": 6, "correct_claims": 2, "notes": "agent_1 already broke the anvil; belief lags behind (still aiming stone / intending break)"}
+{"id": "007b9f7a75db", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "red zombies in ch2 impossible (zombies are green, ch4 only); anvil digging already initiated per own GT"}
+{"id": "007bb222ec10", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 2, "notes": "sword-not-equipped and stone presence consistent; most view claims unverifiable"}
+{"id": "007bba9c01d2", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 2, "notes": "agent_2 attacking chicken, not breaking stone or scanning for exit"}
+{"id": "007c64b90887", "hallucination": true, "stale": false, "verifiable_claims": 6, "correct_claims": 4, "notes": "pickaxe does not exist in env; sword-in-hand unsupported; anvil coop digging matches GT"}
+{"id": "007d08f24376", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 1, "notes": "anvil in ch4 impossible (ch2 leftover); ch3 cell door stale; ch5 has one boss, not zombies"}
+{"id": "007d4ab376a3", "hallucination": true, "stale": false, "verifiable_claims": 7, "correct_claims": 2, "notes": "agent_2 given ch2/cell B with sword+chestplate at ep1 t=169 (impossible); anvil coordination in ch1"}
+{"id": "007f46e61b33", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 0, "notes": "nonexistent Agent_3; cells and communal room applied to ch2; all agents NoOp in ch2"}
+{"id": "0080ec594d83", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": "blocked-view and no-zombies claims consistent with GT; wood block unverifiable"}
+{"id": "00813a4a18a0", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "'cell A' in ch4 (cells are ch3); communal-room/anvil mixups; agent_2 turning, not collecting a drop"}

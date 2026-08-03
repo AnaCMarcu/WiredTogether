@@ -1,0 +1,9 @@
+ch3_stall_latency_mean,comply_rate,condition,eps_W_fulfilled_higher,eps_W_fulfilled_lower,eps_W_tie,frac_answered,frac_comm_before_coop,frac_fulfilled,frac_ignored,mean_W_fulfilled,mean_W_ignored,n_W_fulfilled,n_W_ignored,n_ch2_neglect,n_ch3_stalls,n_coop_success,n_deadlocks,n_directives_judged,n_requests,n_runs,pair
+,0.9198,LLM-2B,0,0,0,0.1373,1.0,0.8581,0.0047,,,0,0,18,7,33,94,8358,9031,6,LLM-2B vs LLM-2B+Heb
+,0.918,LLM-2B+Heb,8,9,0,0.1919,1.0,0.799,0.0091,0.2432,0.2478,8115,92,18,9,25,102,8790,10156,6,LLM-2B vs LLM-2B+Heb
+,0.6639,LLM-9B,0,0,0,0.5281,1.0,0.4587,0.0132,,,0,0,16,5,59,151,2276,3717,6,LLM-9B vs LLM-9B+Heb
+,0.7037,LLM-9B+Heb,8,4,0,0.4987,1.0,0.4916,0.0097,0.2482,0.2205,1116,22,17,6,62,156,1404,2270,6,LLM-9B vs LLM-9B+Heb
+,0.646,IPPO,0,0,0,0.3924,1.0,0.5921,0.0155,,,0,0,17,10,16,60,4695,5232,6,IPPO vs IPPO+Heb
+,0.6144,IPPO+Heb,9,0,0,0.4141,1.0,0.5746,0.0113,0.2796,0.1766,2448,48,15,9,10,48,3905,4260,5,IPPO vs IPPO+Heb
+,0.5791,MAPPO,0,0,0,0.4687,1.0,0.5107,0.0206,,,0,0,18,13,10,113,6624,7614,6,MAPPO vs MAPPO+Heb
+,0.678,MAPPO+Heb,14,2,0,0.351,1.0,0.6349,0.0141,0.2649,0.1821,4273,95,18,14,10,88,6269,6730,6,MAPPO vs MAPPO+Heb

@@ -1,0 +1,120 @@
+{
+ "run": "exp04_ippo/seed_1213",
+ "degraded": false,
+ "is_rl": true,
+ "quarantine_step_keyed": false,
+ "align": {
+  "0": {
+   "offset": 0,
+   "match_rate": 0.00038580246913580245,
+   "n_compared": 2592,
+   "n_units": 2603,
+   "n_rows": 2603,
+   "status": "clock",
+   "clock_coverage": 1.0,
+   "coverage": 1.0
+  },
+  "1": {
+   "offset": 0,
+   "match_rate": 0.0015408320493066256,
+   "n_compared": 2596,
+   "n_units": 2603,
+   "n_rows": 2603,
+   "status": "clock",
+   "clock_coverage": 1.0,
+   "coverage": 1.0
+  },
+  "2": {
+   "offset": 0,
+   "match_rate": 0.009345794392523364,
+   "n_compared": 107,
+   "n_units": 2603,
+   "n_rows": 2603,
+   "status": "clock",
+   "clock_coverage": 1.0,
+   "coverage": 1.0
+  }
+ },
+ "attribution": {
+  "attributed": 5204,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 0
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 1.0,
+   "n": 1560
+  },
+  "critic": {
+   "rate": 1.0,
+   "n": 390
+  },
+  "social": {
+   "rate": null,
+   "n": 0
+  }
+ },
+ "clock": {
+  "segments": 1,
+  "chosen": {
+   "den": 1000,
+   "span": [
+    "2026-07-13 08:15:27",
+    "2026-07-14 23:52:08"
+   ],
+   "n_markers": 2605
+  },
+  "coverage": 1.0
+ },
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 9,
+   "comm_metrics_total": 9,
+   "ok": true
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 9
+   },
+   "comm_metrics": {
+    "model": 9
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "auto_curriculum": {
+    "n": 344,
+    "fail": 0
+   },
+   "belief_system": {
+    "n": 4080,
+    "fail": 205
+   },
+   "critic": {
+    "n": 390,
+    "fail": 0
+   },
+   "episodic_memory": {
+    "n": 390,
+    "fail": 0
+   },
+   "rl_thoughts": {
+    "n": 7809,
+    "fail": 33
+   }
+  }
+ },
+ "n_units": 13013,
+ "n_timeline_rows": 7809,
+ "elapsed_s": 2.7
+}

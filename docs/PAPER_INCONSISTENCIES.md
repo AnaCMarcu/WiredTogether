@@ -215,6 +215,7 @@ All other gated-rule CLI defaults (η₊ 0.05, η₋ 0.025, ε 0.05, n 50, θ 5.
 
 ## 16. Stale world-layout coordinates — CODE BUG (flagged, NOT fixed)
 
+
 The five-chamber world was re-laid-out at some point (Lua `config.lua:150,155`: CH4 z∈[47,57],
 CH5 z∈[59,67]), and two consumers still carry the old layout:
 

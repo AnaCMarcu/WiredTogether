@@ -35,6 +35,51 @@ from rl_layer.trajectory_buffer import RolloutBuffer
 logger = logging.getLogger(__name__)
 
 
+def _text_hidden_size(config) -> int:
+    """Hidden width of the text tower.
+
+    Text-only checkpoints expose ``hidden_size`` at the top level; multimodal
+    ones (Gemma 4) nest it under ``text_config`` and may put an unrelated width
+    at the top. The value head reads text hidden states, so the text tower's
+    width is the one that must match.
+    """
+    text_config = getattr(config, "text_config", None)
+    if text_config is not None and hasattr(text_config, "hidden_size"):
+        return text_config.hidden_size
+    return config.hidden_size
+
+
+def _load_multimodal_base(config: RLConfig, device):
+    """Load a multimodal checkpoint as the RL base model.
+
+    The whole wrapper is kept rather than its ``.language_model`` sub-module:
+    the PPO path reads ``out.logits`` (token_opt, ippo), and in current
+    transformers the LM head lives on the wrapper while ``.language_model`` is
+    the bare text backbone. Fed only ``input_ids`` the wrapper never touches
+    its vision/audio encoders, so those weights sit idle — and the LoRA
+    adapters that land on their q_proj/v_proj never receive a gradient.
+    """
+    import transformers
+
+    model_cls = next(
+        (getattr(transformers, name) for name in
+         ("AutoModelForMultimodalLM", "AutoModelForImageTextToText")
+         if getattr(transformers, name, None) is not None),
+        None,
+    )
+    if model_cls is None:
+        raise ImportError(
+            "transformers exposes no multimodal auto-class — it is too old for "
+            f"{config.model_path}. Rebuild the container image."
+        )
+
+    return model_cls.from_pretrained(
+        config.model_path,
+        dtype=getattr(torch, config.dtype),
+        trust_remote_code=True,
+    ).to(device)
+
+
 class RLLayer:
     """Modular RL layer — drop-in alongside MindForge agents.
 
@@ -114,7 +159,7 @@ class RLLayer:
             logger.info("RLLayer: gradient checkpointing enabled on shared base")
 
         # ── Value head — float32 ──
-        hidden_size = self.model.config.hidden_size
+        hidden_size = _text_hidden_size(self.model.config)
         self.value_head = ValueHead(hidden_size, config.value_hidden).to(device=self._device, dtype=torch.float32)
 
         # ── Optimizer: ONLY this agent's LoRA adapter + value head ──
@@ -402,11 +447,19 @@ class RLLayer:
 
         logger.info("RLLayer: loading shared base model from %s", config.model_path)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        base = AutoModelForCausalLM.from_pretrained(
-            config.model_path,
-            dtype=getattr(torch, config.dtype),
-            trust_remote_code=True,
-        ).to(device)
+        try:
+            base = AutoModelForCausalLM.from_pretrained(
+                config.model_path,
+                dtype=getattr(torch, config.dtype),
+                trust_remote_code=True,
+            ).to(device)
+        except (ValueError, KeyError) as exc:
+            # Multimodal checkpoint (Gemma 4 at any size): AutoModelForCausalLM
+            # has no mapping for it, so fall back to the multimodal auto-class.
+            logger.info("RLLayer: AutoModelForCausalLM rejected %s (%s); loading it "
+                        "through the multimodal auto-class instead",
+                        config.model_path, exc)
+            base = _load_multimodal_base(config, device)
 
         boot_lora = LoraConfig(
             r=config.lora_rank,

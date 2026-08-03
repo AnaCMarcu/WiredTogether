@@ -1,0 +1,25 @@
+{"id": "00295fe96307", "categories": ["inform", "noise"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "switch impossible in ch2; second-person echo of receiver's own t=207 message"}
+{"id": "00296b11b337", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "same agent referenced trees (ch1) at t=701-702; anvil is ch2-only"}
+{"id": "0029a802bf1e", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "sheep (animal) impossible in ch2"}
+{"id": "0029e901f21a", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "anvil impossible in ch1; 'anvil on the ceiling' incoherent"}
+{"id": "0029ed19f0b2", "categories": ["commit", "inform"], "coordination_function": "commit", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "002a2b8a0ac8", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "002a48a57e47", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "instruction with object and view direction"}
+{"id": "002aae6163d5", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "clear addressee task; conflicts with surrounding lever fixation"}
+{"id": "002ae0186055", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "anvil pedestal impossible in ch3"}
+{"id": "002bab11ab38", "categories": ["acknowledge", "commit"], "coordination_function": "acknowledge", "is_grounded": true, "specificity": 1, "notes": "praises unverified 'sword breaking'; hallucinated task but not disprovable"}
+{"id": "002c162ed17e", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "clear addressee task"}
+{"id": "002c914e7a31", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "002cbb2fc51f", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "002d1d67595c", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "002dae6cb079", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "matches Slot1 equip action"}
+{"id": "002dcb9b8027", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "useful negative report"}
+{"id": "002eba2ae615", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "002ec1213ab6", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "names which anvil and asks partner to come; good ch2 coordination"}
+{"id": "002ec610da63", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "odd meta 'center it on the screen' phrasing"}
+{"id": "002ed430a4da", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "north door + target chamber"}
+{"id": "002f5bbb8c82", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "00305d0d889e", "categories": ["commit", "inform"], "coordination_function": "commit", "is_grounded": true, "specificity": 1, "notes": "'raise its HP' hallucinated mechanic; repetitive pair-dig loop"}
+{"id": "003147f91f22", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "verbatim echo loop across all agents"}
+{"id": "00316b0892b8", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0031cb2758d6", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": false, "specificity": 2, "notes": "claims punching anvil but at t=271 still looking for anvils; front/back swapped vs t=269"}

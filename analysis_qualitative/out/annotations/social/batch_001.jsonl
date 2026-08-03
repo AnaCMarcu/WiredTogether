@@ -1,0 +1,25 @@
+{"id": "003378870729", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "0034189aa615", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "00374368314f", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "agent_0 delta cited but agent_0 absent from table"}
+{"id": "004255e037dd", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "messages urgently request help despite no-ask decision"}
+{"id": "0045cffd0ba6", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "00470eac7ec7", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "00494cf21e2b", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "004aa690ac52", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "004b9ae11245", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "referenced_bonds empty"}
+{"id": "004d0280be32", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "0050ff95e040", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "0051e2469aed", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "helps despite 0.00 bond, urgency-justified"}
+{"id": "00522e93b792", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "0052e1b14571", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "0053a41298fd", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "0054e12603db", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "005571a37e32", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "cites 0.00 but referenced_bonds empty"}
+{"id": "005685c45fd4", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "referenced_bonds empty"}
+{"id": "00579b9e7ef7", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "targets lowest bond to repair trust; table includes self"}
+{"id": "005c1554757e", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "005cfb8b649f", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "weights cited as deltas"}
+{"id": "006084c2130f", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "00620cdc2e49", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "next messages do not enact the anvil help"}
+{"id": "0064ff268a7e", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}
+{"id": "0067f42e061d", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": ""}

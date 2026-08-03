@@ -1,0 +1,108 @@
+{
+ "run": "exp05_mappo_hebbian/seed_1213",
+ "degraded": false,
+ "is_rl": true,
+ "quarantine_step_keyed": false,
+ "align": {
+  "0": {
+   "offset": -1800,
+   "match_rate": 1.0,
+   "n_compared": 2399,
+   "n_units": 4200,
+   "n_rows": 2400,
+   "status": "repaired",
+   "coverage": 1.0
+  },
+  "1": {
+   "offset": -1800,
+   "match_rate": 1.0,
+   "n_compared": 2395,
+   "n_units": 4200,
+   "n_rows": 2400,
+   "status": "repaired",
+   "coverage": 1.0
+  },
+  "2": {
+   "offset": -1800,
+   "match_rate": 1.0,
+   "n_compared": 2399,
+   "n_units": 4200,
+   "n_rows": 2400,
+   "status": "repaired",
+   "coverage": 1.0
+  }
+ },
+ "attribution": {
+  "attributed": 12529,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 9548
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 0.9825396825396825,
+   "n": 2520
+  },
+  "critic": {
+   "rate": 0.9476190476190476,
+   "n": 630
+  },
+  "social": {
+   "rate": null,
+   "n": 0
+  }
+ },
+ "clock": null,
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 7193,
+   "comm_metrics_total": 7193,
+   "ok": true
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 6809,
+    "hebbian_fallback:self_target": 384
+   },
+   "comm_metrics": {
+    "model": 6809,
+    "hebbian_fallback:self_target": 384
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": false
+  },
+  "parse_fail_by_module": {
+   "auto_curriculum": {
+    "n": 2152,
+    "fail": 0
+   },
+   "belief_system": {
+    "n": 9117,
+    "fail": 409
+   },
+   "critic": {
+    "n": 630,
+    "fail": 0
+   },
+   "episodic_memory": {
+    "n": 630,
+    "fail": 0
+   },
+   "rl_thoughts": {
+    "n": 12600,
+    "fail": 5
+   }
+  }
+ },
+ "n_units": 25129,
+ "n_timeline_rows": 7200,
+ "elapsed_s": 4.8
+}

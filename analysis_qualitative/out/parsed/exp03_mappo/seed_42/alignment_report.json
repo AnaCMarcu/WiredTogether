@@ -1,0 +1,121 @@
+{
+ "run": "exp03_mappo/seed_42",
+ "degraded": false,
+ "is_rl": true,
+ "align": {
+  "0": {
+   "offset": 0,
+   "match_rate": 0.002284408909194746,
+   "n_compared": 1751,
+   "n_units": 5475,
+   "n_rows": 2784,
+   "status": "clock",
+   "clock_coverage": 0.852,
+   "coverage": 0.852
+  },
+  "1": {
+   "offset": 0,
+   "match_rate": 0.0007147962830593281,
+   "n_compared": 1399,
+   "n_units": 5477,
+   "n_rows": 2784,
+   "status": "clock",
+   "clock_coverage": 0.852,
+   "coverage": 0.852
+  },
+  "2": {
+   "offset": 0,
+   "match_rate": 0.0007189072609633358,
+   "n_compared": 2782,
+   "n_units": 5478,
+   "n_rows": 2784,
+   "status": "clock",
+   "clock_coverage": 0.8531,
+   "coverage": 0.8531
+  }
+ },
+ "attribution": {
+  "attributed": 18639,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 16672
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 0.3875264910687254,
+   "n": 3303
+  },
+  "critic": {
+   "rate": 0.36538461538461536,
+   "n": 832
+  },
+  "social": {
+   "rate": null,
+   "n": 0
+  }
+ },
+ "clock": {
+  "segments": 3,
+  "chosen": {
+   "den": 1000,
+   "span": [
+    "2026-07-01 03:11:43",
+    "2026-07-02 01:49:43"
+   ],
+   "n_markers": 2412
+  },
+  "coverage": 0.8524
+ },
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 8344,
+   "comm_metrics_total": 5593,
+   "ok": false
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 7926,
+    "random_fallback:self_target": 418
+   },
+   "comm_metrics": {
+    "model": 5290,
+    "random_fallback:self_target": 303
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "auto_curriculum": {
+    "n": 3760,
+    "fail": 4
+   },
+   "belief_system": {
+    "n": 13226,
+    "fail": 603
+   },
+   "critic": {
+    "n": 832,
+    "fail": 0
+   },
+   "episodic_memory": {
+    "n": 821,
+    "fail": 0
+   },
+   "rl_thoughts": {
+    "n": 16430,
+    "fail": 62
+   }
+  }
+ },
+ "n_units": 35069,
+ "n_timeline_rows": 8352,
+ "elapsed_s": 5.5
+}

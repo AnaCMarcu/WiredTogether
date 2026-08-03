@@ -1,0 +1,58 @@
+{"id": "000560d21f24", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": ""}
+{"id": "000ac484e988", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": "mostly unverifiable visual detail"}
+{"id": "000c27327c94", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 3, "notes": "anvil-drop mapping confused (chestplate anvil -> sword)"}
+{"id": "0016565a5476", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": ""}
+{"id": "00182b8f7797", "hallucination": false, "stale": false, "verifiable_claims": 4, "correct_claims": 4, "notes": "duplicated sub-beliefs"}
+{"id": "0018afd5f4f2", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "tree-breaking in ch3 communal impossible"}
+{"id": "00250e9fd9ff", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 2, "notes": "anvil and visible teammates impossible in ch3 cells"}
+{"id": "002a54c36fb7", "hallucination": false, "stale": true, "verifiable_claims": 3, "correct_claims": 2, "notes": "anvil-breaking plan is ch2 context"}
+{"id": "002bf507c338", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": ""}
+{"id": "00324db857b3", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "anvil and cell door impossible in ch4"}
+{"id": "003e717e6625", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "purely visual, unverifiable"}
+{"id": "0040db11f906", "hallucination": true, "stale": true, "verifiable_claims": 1, "correct_claims": 0, "notes": "claims ch1 while actually in ch4"}
+{"id": "00411cf531bf", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 1, "notes": "tree in ch2 impossible; contradictory locations"}
+{"id": "00439679927f", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "switch on wall in ch2 impossible"}
+{"id": "0044c495d29b", "hallucination": true, "stale": true, "verifiable_claims": 1, "correct_claims": 0, "notes": "anvils in ch4 impossible"}
+{"id": "00497a3de6a5", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": ""}
+{"id": "004b5426d263", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "internally contradictory visibility claims"}
+{"id": "004d49978ebb", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "004e9f9e3a1a", "hallucination": true, "stale": true, "verifiable_claims": 4, "correct_claims": 2, "notes": "anvils in ch3 impossible"}
+{"id": "0050f530e170", "hallucination": true, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "GT: agent facing stone block, not zombie"}
+{"id": "0051be683fff", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "switch-found claims unsupported by GT"}
+{"id": "00534f27a9b8", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 4, "notes": ""}
+{"id": "005412748468", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 0, "notes": "anvil pair-dig in ch4; wrong locations"}
+{"id": "0060376286bd", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "0061e8ef7081", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "turn directions and actions contradict GT"}
+{"id": "0062b8cd2f94", "hallucination": false, "stale": false, "verifiable_claims": 0, "correct_claims": 0, "notes": "purely visual, unverifiable"}
+{"id": "0064498c8670", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": "wall-facing confirmed by GT"}
+{"id": "0066d2f7830b", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "0067eb536c96", "hallucination": false, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": ""}
+{"id": "006ba66f3f99", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "agent_2 attacking sheep, not scanning for tree"}
+{"id": "006f69df5265", "hallucination": false, "stale": false, "verifiable_claims": 5, "correct_claims": 4, "notes": ""}
+{"id": "007274f6ca80", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "00748c13e7d4", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "anvil plan in ch3; locations contradict GT"}
+{"id": "0077bc8dce8d", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 1, "notes": "agent_2 actually in ch5, not ch3"}
+{"id": "009294660289", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "blue chest not in ch1 environment"}
+{"id": "0099ba4e6056", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "zombie in ch3 impossible; contradictory gear claims"}
+{"id": "009b3abeb3bf", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": "iron bar confirmed by GT"}
+{"id": "009cfa49b9e9", "hallucination": false, "stale": false, "verifiable_claims": 1, "correct_claims": 1, "notes": ""}
+{"id": "009d67fa693d", "hallucination": false, "stale": false, "verifiable_claims": 3, "correct_claims": 3, "notes": ""}
+{"id": "00b1be74c614", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "both agents' activities contradict GT"}
+{"id": "00bdfbbe57ec", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "iron ore vs GT tree"}
+{"id": "00cbe9acb3c0", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "contradictory sub-beliefs about agent_2's action"}
+{"id": "00d9a399d39b", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 2, "notes": "misattributes own stone task to agent_1"}
+{"id": "00de4d9b089d", "hallucination": true, "stale": false, "verifiable_claims": 5, "correct_claims": 3, "notes": "anvil in ch1 impossible"}
+{"id": "00e01846f687", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "agent_2 is in ch2, not ch1"}
+{"id": "00e25690ce47", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "anvil and zombies in ch1 impossible"}
+{"id": "00fcb473ed07", "hallucination": true, "stale": true, "verifiable_claims": 5, "correct_claims": 2, "notes": "believes team in ch1; all are in ch2"}
+{"id": "01125a40f8bd", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 2, "notes": "agent_2 in ch4, not ch5; break not done"}
+{"id": "01135cade51e", "hallucination": true, "stale": false, "verifiable_claims": 3, "correct_claims": 0, "notes": "believes ch4 with zombies while in ch1"}
+{"id": "01231b65bc4a", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "chickens alongside anvils impossible"}
+{"id": "01253415844f", "hallucination": true, "stale": true, "verifiable_claims": 2, "correct_claims": 0, "notes": "sealed cell + switch is ch3 context, not ch1"}
+{"id": "013f6c01b384", "hallucination": true, "stale": true, "verifiable_claims": 1, "correct_claims": 0, "notes": "cell with switch in ch1 impossible"}
+{"id": "014d0aeb7f24", "hallucination": true, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "lever/communal room/cells not in ch1"}
+{"id": "014da9762f91", "hallucination": true, "stale": false, "verifiable_claims": 4, "correct_claims": 1, "notes": "anvil, cell door, boss in ch1 impossible"}
+{"id": "0182f0dea5a4", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 0, "notes": "anvil and zombies in ch1 impossible"}
+{"id": "01b7b4f0711e", "hallucination": true, "stale": true, "verifiable_claims": 3, "correct_claims": 2, "notes": "anvil in ch4 impossible"}
+{"id": "01ef8ae23ed4", "hallucination": true, "stale": false, "verifiable_claims": 2, "correct_claims": 1, "notes": "switch in ch1 impossible"}
+{"id": "0339f23a8319", "hallucination": true, "stale": false, "verifiable_claims": 1, "correct_claims": 0, "notes": "GT says tree centered, not stone block"}

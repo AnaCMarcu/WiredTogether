@@ -38,6 +38,7 @@ Markers (registered in `pyproject.toml`; the default `addopts` excludes the heav
 | `test_cooperation_metric.py` | 5-plane pair tensor thresholds, damage routing, joint-kill lookback, Gini, comm efficacy, chamber performance/fairness, cooperation score |
 | `test_coop_comm_eval.py` | post-hoc credit splitting (equal + damage share with id normalisation), credit Gini, cross-episode aggregation, comm entropy/MI |
 | `test_action_space.py` | raw/named action spaces, alias recovery, canonicalize fallbacks, pitch/sustain/idle constants, RL candidate masking (22−8 Slot = 14) |
+| `test_gemma4_compat.py` | Gemma 4 shims: `LLM_VISION_MODE` override, multimodal auto-class order, `dtype`/`torch_dtype` rename, system-role merge for templates that reject it, text-tower hidden size (stubs `autogen_core` module-locally) |
 | `test_lua_spec.py` | regex spec tests over the Lua mod: milestone ids/rewards vs paper Table 2, switch rotation, boss HP, death penalties, anvil constants, Python↔Lua milestone-id drift guard |
 
 ## Conventions

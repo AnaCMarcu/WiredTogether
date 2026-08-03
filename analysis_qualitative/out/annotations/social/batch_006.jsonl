@@ -1,0 +1,25 @@
+{"id": "019a35f65b07", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "01a4bc131c07", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "cited 0.11 matches table; delta claims unverifiable"}
+{"id": "01a98039212c", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "01aec6c2eddc", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "agent_1 discussed but absent from referenced_bonds"}
+{"id": "01b34d7a3d62", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "01b5a5db88a8", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "both asks and responds to agent_0"}
+{"id": "01b70239f569", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "01bc4f2402bd", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "01dbd36879e9", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "01dc01c40790", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "01dcd9e52582", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "referenced_bonds empty"}
+{"id": "01e1c17be09f", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "agent_0 discussed but absent from referenced_bonds"}
+{"id": "0207a914c831", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "referenced_bonds empty"}
+{"id": "022c412782a2", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "023a35c38a90", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "023a6f769d55", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "both bonds 0.00; decay-to-zero claims plausible"}
+{"id": "0247939d84b3", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "agent_2 delta cited but absent from referenced_bonds"}
+{"id": "026dcc307b20", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "bond_change_explanation is string, schema anomaly"}
+{"id": "02830c256f2f", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "cited 0.13 for agent_0 absent from table"}
+{"id": "0283b468c829", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "bond_change_explanation is string, schema anomaly"}
+{"id": "02851ee2f92e", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "0295e1c844ae", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "partial", "explanation_quality": 2, "notes": "says offer help but issues ask for help"}
+{"id": "02bd546acfd3", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "02d2dd56f113", "mentions_bond_values": true, "values_match_table": "no", "decision_follows_bonds": "partial", "explanation_quality": 1, "notes": "calls agent_0 strongest but table 0.09 < 0.19"}
+{"id": "02d780b9531c", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}

@@ -1,0 +1,25 @@
+{"id": "00ee78e4f65b", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "referenced_bonds empty; cites 0.00, consistent with No-bonds condition"}
+{"id": "00f1ba82cfb4", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "00f577b2ba13", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "referenced_bonds empty"}
+{"id": "00f5bb6e24dd", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "referenced_bonds empty; muddled inventory inference"}
+{"id": "00f6d548d1b5", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "t+2 message helps agent_2 despite stated refusal"}
+{"id": "00fc2c8c6448", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "00fe7fc22837", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "referenced_bonds empty"}
+{"id": "00ff650d36be", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "01032f51d7a2", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "messages seek switch for agent_2 despite distrust claim"}
+{"id": "0103591e4ba8", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "cited delta equals table value 0.02"}
+{"id": "01041fbd19c7", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "targets agent_0 though agent_2 slightly higher; deviation explained"}
+{"id": "01048617cd3e", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "010733f91273", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "01077655facd", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "01077909622a", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "referenced_bonds empty"}
+{"id": "010d147dfd3c", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "referenced_bonds empty"}
+{"id": "0117a8cc2c4b", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "011927f9bd17", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "01196ef1fbe4", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "011a65e5b2f2", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "says cannot join anvil but messages announce joining"}
+{"id": "0125d365a7b1", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "claims opposite deltas but table values equal (0.25/0.25)"}
+{"id": "012b1ad18868", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1}
+{"id": "0130da303058", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "013136475453", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2}
+{"id": "0132d75cca75", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2}

@@ -1,0 +1,25 @@
+{"id": "013c77d19750", "categories": ["inform"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "switch not in ch4; switch-to-Ch5 confabulated"}
+{"id": "0142ff0ed9bc", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "switch in ch4; verbatim loop across agents"}
+{"id": "01464bd61661", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "sender plausibly near ch3 communal switch"}
+{"id": "014abc696867", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "014c798db32a", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "015cea7495ea", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0166ddd3d893", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": "left from East gives North, not South"}
+{"id": "01703411f198", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "0170c11e3d78", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "diamond ore likely confabulated"}
+{"id": "017d905e500f", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "01874aba94ee", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "switch in ch2; copies agent_2 verbatim"}
+{"id": "01889eaa083c", "categories": ["request", "noise"], "coordination_function": "none", "is_grounded": false, "specificity": 1, "notes": "parroted, self-referential; press T not an action"}
+{"id": "018900e50762", "categories": ["request", "noise"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "same line repeated by all agents for steps"}
+{"id": "0190c0aa52a9", "categories": ["request", "inform"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "019518cc5d43", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": "hebbian fallback self-target routing"}
+{"id": "01a92715f670", "categories": ["request"], "coordination_function": "request", "is_grounded": false, "specificity": 1, "notes": "switch named in ch5"}
+{"id": "01b29ddf0942", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "01b7e2ebb6dc", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "01d229648513", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "repeated encouragement; receiver is exit-searching"}
+{"id": "01d6f56843e1", "categories": ["request"], "coordination_function": "request", "is_grounded": true, "specificity": 2, "notes": ""}
+{"id": "01e01f4530c6", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": true, "specificity": 1, "notes": "receiver is wall-scanning, not attacking"}
+{"id": "01f66b415fdf", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "01fe36783f06", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}
+{"id": "020f36bd73ad", "categories": ["inform"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": "pressure plate likely confabulated; chamber unknown"}
+{"id": "0217008bcdc8", "categories": ["inform", "request"], "coordination_function": "inform", "is_grounded": true, "specificity": 1, "notes": ""}

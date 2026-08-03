@@ -1,0 +1,154 @@
+Bootstrap: docker
+From: python:3.12-slim-bookworm
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Gemma 4 variant of wiredtogether.def.
+#
+# WHY A SECOND IMAGE: Gemma 4 shipped in April 2026 and its architecture only
+# exists in transformers releases from that point on. wiredtogether.sif was
+# built earlier, so it loads the Qwen3.5 weights fine but raises
+# "Unrecognized model type" on Gemma 4. Building a separate .sif keeps the
+# original image byte-identical, so every Qwen result in runs/final/ and
+# runs/medium/ stays reproducible.
+#
+# The ONLY deliberate differences from wiredtogether.def:
+#   - transformers is installed unpinned-latest instead of '>=4.37.0'
+#   - accelerate + timm are explicit (device_map="auto" and vision towers)
+#   - a build-time guard that fails the build if gemma4 is not registered,
+#     so a stale transformers is caught here rather than 168 h into a run
+#
+# CAVEAT: every other dependency is floor-pinned, so this rebuild also pulls
+# the current release of autogen / chromadb / wandb / craftium deps. If that
+# drifts something, capture pins from the working image and hard-pin here:
+#     apptainer exec $WORKSPACE/images/wiredtogether.sif pip freeze > pins.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+%labels
+    Author Ana Marcu (acmarcu@tudelft.nl)
+    Project WiredTogether
+    Description Multi-agent RL in Craftium/Luanti with LLM agents — Gemma 4 build.
+
+%environment
+    export HF_HOME=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/models
+    export HF_HUB_CACHE=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/models/hub
+    export TRANSFORMERS_CACHE=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/models/transformers
+    export SENTENCE_TRANSFORMERS_HOME=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/models/sentence_transformers
+    export PYTHONUNBUFFERED=1
+    export PYTHONDONTWRITEBYTECODE=1
+
+%post
+    set -eu
+
+    # Build-time env: keep pip quiet about being root and steer caches into /tmp.
+    export HOME=/tmp
+    export PIP_ROOT_USER_ACTION=ignore
+
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl wget git \
+        libgl1-mesa-dri libegl1 libgles2 \
+        libxext6 libxrender1 libxxf86vm1 libxi6 libxcursor1 libxrandr2 libxinerama1 \
+        libsm6 libglib2.0-0 \
+        libfreetype6 libsndfile1 \
+        build-essential \
+        xvfb xauth
+    # xvfb pulls in /usr/bin/Xvfb + /usr/bin/xvfb-run. xauth is a separate
+    # package that the Debian xvfb package does NOT pull in by default —
+    # but xvfb-run invokes it at startup and exits with "xauth command not
+    # found" without it. Both are required for the convenience wrapper.
+    # _common.sh also has a manual-Xvfb fallback path that doesn't need
+    # xauth, as a belt-and-braces safety net.
+    rm -rf /var/lib/apt/lists/*
+
+    pip install --no-cache-dir --upgrade pip wheel setuptools
+
+    # torch with CUDA 12.1 — compatible with all DAIC GPUs (a100, a40, l40, v100, turing).
+    # If the cluster driver is older, switch to cu118.
+    pip install --no-cache-dir \
+        --index-url https://download.pytorch.org/whl/cu121 \
+        'torch>=2.1.0' torchvision torchaudio
+
+    # craftium (cp312 wheel; bundles the luanti binary)
+    pip install --no-cache-dir \
+        https://github.com/mikelma/craftium/releases/download/v0.0.1/craftium-0.0.1-cp312-cp312-manylinux_2_28_x86_64.whl
+
+    # Patch the wheel's Python files with the fork's fixes (binary stays from
+    # the wheel). The wheel's _create_mt_dirs misses the `isfile()` branch and
+    # tries shutil.copytree on minetest.conf — fork has the corrected logic.
+    git clone --depth 1 -b daic-changes \
+        https://github.com/AnaCMarcu/craftium_wired_together.git /tmp/craftium-fork
+    install -m 0644 /tmp/craftium-fork/craftium/minetest.py \
+        /usr/local/lib/python3.12/site-packages/craftium/minetest.py
+    install -m 0644 /tmp/craftium-fork/craftium/multiagent_env.py \
+        /usr/local/lib/python3.12/site-packages/craftium/multiagent_env.py
+    rm -rf /tmp/craftium-fork
+
+    # WiredTogether deps (mirrors pyproject.toml).
+    # Pin floors only, EXCEPT gymnasium — craftium pins it to ==0.29.1.
+    pip install --no-cache-dir \
+        'gymnasium==0.29.1' \
+        'pettingzoo>=1.24.3' \
+        'numpy>=1.24.0' \
+        'pandas>=2.1.0' \
+        'scipy>=1.11.0' \
+        'networkx>=3.2' \
+        'hydra-core>=1.3.2' \
+        'rich>=13.7.0' \
+        'loguru>=0.7.2' \
+        'wandb>=0.16.0' \
+        'tensorboard>=2.15.0' \
+        'tqdm>=4.66.0' \
+        'tyro>=0.7.0' \
+        'python-dotenv>=1.0.0' \
+        'pydantic>=2.5.0' \
+        'imageio[ffmpeg]>=2.33.0' \
+        'opencv-python>=4.9.0' \
+        'matplotlib>=3.8.0' \
+        'sentence-transformers>=2.2.0' \
+        'autogen-agentchat>=0.6.0' \
+        'autogen-core>=0.6.0' \
+        'autogen-ext[openai,chromadb]>=0.6.0' \
+        'openai>=1.0.0' \
+        'chromadb>=1.0.0' \
+        'pillow>=10.0.0' \
+        'flask>=3.0.0' \
+        'peft>=0.10.0' \
+        'safetensors>=0.4.0' \
+        'fastapi>=0.100.0' \
+        'uvicorn>=0.20.0'
+
+    # Gemma 4 stack, installed last so nothing above pins transformers down:
+    #   transformers — must be new enough to know the gemma4 architecture
+    #   accelerate   — required by device_map="auto" (was only transitive before)
+    #   timm         — some multimodal towers import it lazily
+    pip install --no-cache-dir --upgrade transformers accelerate timm
+
+    # Fail the BUILD, not a 168 h run, if transformers has no Gemma 4 support.
+    python - <<'PY'
+import transformers
+from transformers.models.auto.configuration_auto import CONFIG_MAPPING_NAMES
+
+gemma = sorted(k for k in CONFIG_MAPPING_NAMES if "gemma" in k)
+print(f"transformers {transformers.__version__}; gemma configs: {gemma}")
+if not any("gemma4" in k or "gemma_4" in k for k in gemma):
+    raise SystemExit(
+        f"transformers {transformers.__version__} does not register a gemma4 "
+        f"architecture (found: {gemma}). Gemma 4 will not load — aborting build."
+    )
+PY
+
+%runscript
+    exec "$@"
+
+%help
+    Apptainer image for WiredTogether experiments on DAIC, Gemma 4 build.
+
+    Build (from a compute node via sbatch):
+        sbatch hpc/daic/build_image_gemma4.sbatch
+
+    Use it for a run without editing any sbatch file — _common.sh reads WT_IMAGE:
+        WT_IMAGE=$WORKSPACE/images/wiredtogether_gemma4.sif \
+            sbatch hpc/daic/experiments/exp01_llm_2b.sbatch
+
+    Stage the weights first (login node, needs internet):
+        bash hpc/daic/download_gemma4.sh

@@ -1,0 +1,3 @@
+{"id": "19e5808ccd2a", "categories": ["inform", "request"], "coordination_function": "request", "is_grounded": false, "specificity": 2, "notes": "Switches and the communal room belong to Ch3, not Ch5; empty context window."}
+{"id": "1aed6ada67dd", "categories": ["inform", "commit"], "coordination_function": "inform", "is_grounded": false, "specificity": 1, "notes": "No switches exist in Ch5; verbatim echo of agent_1's t=797-798 line; hebbian_fallback self-target routing."}
+{"id": "1cc23cbe7510", "categories": ["commit"], "coordination_function": "commit", "is_grounded": true, "specificity": 2, "notes": "MoveForward matches; stone block plausible in Ch5; includes explicit next-step prediction."}

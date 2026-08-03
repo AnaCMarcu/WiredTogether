@@ -1,0 +1,25 @@
+{"id": "030f344db812", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "directions only in text; deltas cited in explanation unverifiable"}
+{"id": "03259493fb28", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "cites agent_0 delta -0.05 absent from referenced_bonds"}
+{"id": "0331392745a5", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "agent_0 decay claim absent from table"}
+{"id": "037730afff17", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "decides no ask yet still sends directive messages"}
+{"id": "037946e891e2", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "03b2086f635e", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "03cd6e870ac4", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "agent_1 decay claim absent from table"}
+{"id": "04cf3c9191a9", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "claims both deltas positive but explanation says agent_1 unchanged"}
+{"id": "04d6da02792f", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "garbled: says ignoring agent_1 is risky, then ignores them"}
+{"id": "04f39d220597", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "0529209f1be7", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "targets lower-bond agent_0; deviation justified by task relevance"}
+{"id": "05bf8ecfa69e", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "06d73994602a", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "07057b9dbb95", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "07aaca11dec9", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 1, "notes": "equal 0.80 bonds; choice driven by tactics not bonds"}
+{"id": "0d1a433ca6c3", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "0e338d0c2ea0", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "0ff5951489bd", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "10575bc1c04f", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "calls 0.27 'low' though it is the highest bond"}
+{"id": "108c9ef04237", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "12af3c5f5ac2", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "targets slightly lower bond; justified by switch-pressing help"}
+{"id": "139d59bfe6c3", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": "agent_2 claim absent from table; messages drift wood-to-stone"}
+{"id": "14b99067d004", "mentions_bond_values": true, "values_match_table": "yes", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "14bf70dd8ac7", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
+{"id": "152f637093f7", "mentions_bond_values": true, "values_match_table": "approx", "decision_follows_bonds": "yes", "explanation_quality": 2, "notes": ""}
