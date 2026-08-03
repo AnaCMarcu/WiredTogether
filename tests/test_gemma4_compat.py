@@ -110,10 +110,14 @@ def test_vision_mode_vision_forces_vl_path(monkeypatch, tmp_path):
     assert lmc._detect_is_vision(str(tmp_path), _TextOnlyConfig) is True
 
 
-def test_preprocessor_file_alone_selects_vision(monkeypatch, tmp_path):
+@pytest.mark.parametrize("filename", [
+    "preprocessor_config.json",   # Qwen-VL generation
+    "processor_config.json",      # what Gemma 4 actually ships
+])
+def test_processor_file_alone_selects_vision(monkeypatch, tmp_path, filename):
     """A staged checkpoint is sniffed by file too, not just by config attributes."""
     monkeypatch.delenv("LLM_VISION_MODE", raising=False)
-    (tmp_path / "preprocessor_config.json").write_text("{}", encoding="utf-8")
+    (tmp_path / filename).write_text("{}", encoding="utf-8")
     assert lmc._detect_is_vision(str(tmp_path), _TextOnlyConfig) is True
 
 

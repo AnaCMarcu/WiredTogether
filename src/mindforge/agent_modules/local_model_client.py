@@ -72,8 +72,11 @@ def _detect_is_vision(model_path: str, config) -> bool:
 
     model_type = getattr(config, "model_type", "unknown").lower()
     has_keyword = any(kw in model_type for kw in ("vl", "vision", "visual", "multimodal"))
-    has_preprocessor = os.path.isfile(
-        os.path.join(model_path, "preprocessor_config.json")
+    # Both filenames occur: Gemma 4 ships processor_config.json, the Qwen-VL
+    # generation shipped preprocessor_config.json.
+    has_preprocessor = any(
+        os.path.isfile(os.path.join(model_path, name))
+        for name in ("preprocessor_config.json", "processor_config.json")
     )
     has_vision_config = hasattr(config, "vision_config")
     return has_keyword or has_preprocessor or has_vision_config

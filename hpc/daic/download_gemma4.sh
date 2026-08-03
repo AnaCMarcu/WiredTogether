@@ -2,9 +2,14 @@
 # ────────────────────────────────────────────────────────────────────────────
 # Stage Gemma 4 weights into the PRB workspace.
 #
-# RUN THIS ON THE LOGIN NODE — compute nodes run with HF_HUB_OFFLINE=1
-# (see _common.sh), so nothing downloads from inside a job.
+# PREFER hpc/daic/download_gemma4.sbatch FOR A FULL MODEL. Running this on the
+# login node gets SIGKILLed part-way ("Killed" after a few hundred MB): hf_xet
+# reconstructs chunks in parallel and at ~120 MB/s its memory use exceeds what
+# a login shell is allowed. The sbatch does the same download on a compute
+# node, which has internet and a real memory allocation. This script stays
+# useful for small artefacts and for resuming by hand.
 #
+#   sbatch hpc/daic/download_gemma4.sbatch           # recommended
 #   bash hpc/daic/download_gemma4.sh                 # default: gemma-4-E4B-it
 #   MODEL=google/gemma-4-12B-it bash hpc/daic/download_gemma4.sh
 #
@@ -75,10 +80,12 @@ for f in config.json; do
     fi
 done
 
-if [ -f "$DEST/preprocessor_config.json" ]; then
-    echo "OK: preprocessor_config.json present — the vision path will engage."
+# Either filename means the multimodal processor is present; Gemma 4 ships
+# processor_config.json, the Qwen-VL generation used preprocessor_config.json.
+if [ -f "$DEST/preprocessor_config.json" ] || [ -f "$DEST/processor_config.json" ]; then
+    echo "OK: processor config present — the vision path can engage."
 else
-    echo "WARN: no preprocessor_config.json — this checkpoint will load TEXT-ONLY." >&2
+    echo "WARN: no processor config — this checkpoint would load TEXT-ONLY." >&2
 fi
 
 echo
