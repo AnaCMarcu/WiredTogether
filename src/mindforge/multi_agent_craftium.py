@@ -34,6 +34,8 @@ import json as _json
 
 from rl_layer import RLConfig, RLLayer, HebbianConfig, HebbianSocialGraph
 
+from mindforge.chamber_schedule import compute_chamber_schedule
+
 ROLE_NAMES = ["agent", "hunter", "harvester", "scouter"]
 
 # Macro actions removed — agents use only primitives. The macro
@@ -225,6 +227,35 @@ def parse_args():
                         help="Value of a 'weak' hardcoded bond (preset)")
     parser.add_argument("--hebbian-hub", type=int, default=0,
                         help="Hub agent index for the 'star' preset")
+    # ── Pair-bonding transplant experiment (all default None = no-op) ──
+    parser.add_argument("--max-chamber", type=int, default=None,
+                        choices=[1, 2, 3, 4],
+                        help="Highest chamber the Python force-teleport timers "
+                             "will push agents into. E.g. 2 = the Ch1 timer "
+                             "still fires but agents are never force-moved "
+                             "past Ch2 (organic progression stays possible). "
+                             "Default: no cap (current behavior).")
+    parser.add_argument("--start-chamber", type=int, default=None,
+                        choices=[2, 3, 4, 5],
+                        help="Force-teleport all agents into this chamber at "
+                             "the start of every episode (after warmup) and "
+                             "suppress the timers for earlier chambers; the "
+                             "remaining chambers split the episode evenly. "
+                             "3 = start in the Ch3 cells. Default: normal "
+                             "Ch1 start.")
+    parser.add_argument("--hebbian-init-file", type=str, default=None,
+                        help="JSON file holding a full N×N starting W matrix "
+                             "(either {\"W\": [[...]]} or a raw nested list), "
+                             "e.g. merged_W.json from "
+                             "mindforge/tools/merge_pair_runs.py. Requires "
+                             "--hebbian; mutually exclusive with "
+                             "--hebbian-preset and --resume.")
+    parser.add_argument("--agent-state-init", type=str, default=None,
+                        help="Merged agent-state manifest JSON (skills, "
+                             "episodic memory, curriculum per agent slot) "
+                             "produced by merge_pair_runs.py. Imported into "
+                             "the fresh per-agent vector DBs after agent "
+                             "construction. Mutually exclusive with --resume.")
     # ── Phase B+ thesis comparison: interpretability sidecar ──
     # (`--reward-propagation` was removed alongside the deleted rlvr module
     #  that provided per_teammate_contributions / attribute_source_events /
@@ -725,6 +756,15 @@ def save_checkpoint(
             with open(os.path.join(checkpoint_dir, f"agent_{i}_curriculum.json"), "w") as f:
                 _json.dump(curriculum_state, f, indent=2)
 
+        # --- per-agent cognitive state (skills / episodic memory) -----------
+        # The vector DBs live on job-local /tmp under SLURM; this JSON copy in
+        # the checkpoint dir is the durable form (used by merge_pair_runs.py).
+        from agent_modules.agent_state_io import export_agent_state
+        export_agent_state(
+            agents, os.path.join(checkpoint_dir, "agent_state"),
+            episode=episode,
+        )
+
         # --- optional frames ------------------------------------------------
         if save_frames and frames_list:
             for i in range(len(agents)):
@@ -950,15 +990,28 @@ async def run(args):
     _LUA_SAFETY_FACTOR = 50   
     _ch1_lua_ticks = (args.ch1_timeout_steps
                       * _LUA_TICKS_PER_ENV_STEP * _LUA_SAFETY_FACTOR)
+    if args.start_chamber:
+        # Skipping Ch1 entirely: disarm the Lua-side Ch1 fallback timer so it
+        # can never fire a Ch1→Ch2 rescue in a run that starts past Ch1.
+        _ch1_lua_ticks = 10 ** 9
     os.environ["CH1_TIMEOUT_TICKS"] = str(_ch1_lua_ticks)
-    _per_chamber_pct = 0.2
+    # Keep Lua's five_chambers.NUM_AGENTS in lockstep with --num-agents.
+    # Without this, any N != 3 desyncs agent_index()/geometry on the Lua side
+    # (agents with idx >= NUM_AGENTS get no cell, no switch, no milestones).
+    os.environ["FC_NUM_AGENTS"] = str(num_agents)
+    _chamber_schedule = compute_chamber_schedule(
+        args.max_steps, args.start_chamber, args.max_chamber
+    )
+    _sched_str = ", ".join(
+        f"Ch{n}→Ch{n+1}@" + (f"step {s}" if s is not None else "off")
+        for n, s in sorted(_chamber_schedule.items())
+    )
     print(
-        f"[FEATURES] Chamber timer:      each chamber gets "
-        f"{int(_per_chamber_pct * 100)}% of --max-steps = "
-        f"{max(1, int(args.max_steps * _per_chamber_pct))} env steps. "
-        f"Triggers at "
-        f"{', '.join(f'Ch{n}→Ch{n+1}@{int(_per_chamber_pct * n * 100)}%' for n in (1, 2, 3, 4))}. "
-        f"(Python primary, unconditional — fires even if the door opened "
+        f"[FEATURES] Chamber timer:      {_sched_str} of --max-steps="
+        f"{args.max_steps}"
+        + (f" (start_chamber={args.start_chamber})" if args.start_chamber else "")
+        + (f" (max_chamber={args.max_chamber})" if args.max_chamber else "")
+        + ". (Python primary, unconditional — fires even if the door opened "
         f"organically.) Lua fallback at {_ch1_lua_ticks} ticks "
         f"({_LUA_TICKS_PER_ENV_STEP}×{_LUA_SAFETY_FACTOR}/step safety margin)."
     )
@@ -1027,11 +1080,35 @@ async def run(args):
                          social_module_mode=args.social_module,
                          social_interval=args.social_interval)
 
+    if args.agent_state_init:
+        # Transplant memories into the freshly-constructed agents. Must run
+        # after build_agents (construction wipes/recreates the per-agent
+        # vector DBs) and before the episode loop (first on_messages call).
+        # Raises on structural problems — fail at startup, not 24h in.
+        from agent_modules.agent_state_io import import_agent_state
+        print(f"[TRANSPLANT] Importing agent state from {args.agent_state_init}")
+        import_agent_state(agents, args.agent_state_init)
+
     # ── Hebbian social plasticity ──
+    _hebbian_init_matrix = None
+    if args.hebbian_init_file:
+        with open(args.hebbian_init_file) as _f:
+            _init_payload = _json.load(_f)
+        _hebbian_init_matrix = (
+            _init_payload["W"] if isinstance(_init_payload, dict)
+            else _init_payload
+        )
+        print(f"[FEATURES] Hebbian init matrix: loaded "
+              f"{len(_hebbian_init_matrix)}×{len(_hebbian_init_matrix[0])} W "
+              f"from {args.hebbian_init_file}")
+        for _row in _hebbian_init_matrix:
+            print("           " + " ".join(f"{float(_w):.3f}" for _w in _row))
+
     hebbian_config = HebbianConfig(
         enabled=args.hebbian,
         mode=args.hebbian_mode,
         num_agents=num_agents,
+        init_matrix=_hebbian_init_matrix,
         interaction_radius=args.hebbian_radius,
         ltp_lr=args.hebbian_ltp,
         ltd_lr=args.hebbian_ltd,
@@ -1231,6 +1308,26 @@ async def run(args):
             print("  * WARNING: env has no signal_warmup_complete; "
                   "Ch1 timeout may fire prematurely.")
 
+        if args.start_chamber:
+            # Start-chamber teleport: write the force-teleport flag for the
+            # chamber BEFORE the start chamber (S=3 → ch2_force_teleport.txt →
+            # Lua relocates everyone to their Ch3 cells). Runs every episode
+            # because the Lua reset re-teleports all agents back to Ch1.
+            # Placed after the warmup block (≥6s after reset) so the
+            # post-reset retry in init.lua has already fired harmlessly.
+            _start_force_fn = {
+                2: environment.force_ch1_teleport,
+                3: environment.force_ch2_teleport,
+                4: environment.force_ch3_teleport,
+                5: environment.force_ch4_teleport,
+            }[args.start_chamber]
+            if _start_force_fn():
+                print(f"[START_CHAMBER] ep={episode+1}: wrote force-teleport "
+                      f"flag -> agents start in ch{args.start_chamber}")
+            else:
+                print(f"[START_CHAMBER] ep={episode+1}: WARNING — flag write "
+                      f"failed; agents will start in Ch1 this episode")
+
         # All communication is targeted: each agent has its own inbox.
         agent_communications = {i: [] for i in range(num_agents)}
         agents_error_count = [0] * num_agents
@@ -1324,11 +1421,9 @@ async def run(args):
 
         _force_teleport_fired = {1: False, 2: False, 3: False, 4: False}
 
-        _CHAMBER_PCT = 0.2
-        _chamber_trigger_steps = {
-            n: max(1, int(max_steps * _CHAMBER_PCT * n))
-            for n in (1, 2, 3, 4)
-        }
+        _chamber_trigger_steps = compute_chamber_schedule(
+            max_steps, args.start_chamber, args.max_chamber
+        )
         _expected_chamber_after = {1: "ch1", 2: "ch2", 3: "ch3_cell", 4: "ch4"}
         _force_fn = {
             1: environment.force_ch1_teleport,
@@ -1343,7 +1438,8 @@ async def run(args):
 
             for _from_ch in (1, 2, 3, 4):
                 _trigger_step = _chamber_trigger_steps[_from_ch]
-                if (_force_teleport_fired[_from_ch]
+                if (_trigger_step is None
+                        or _force_teleport_fired[_from_ch]
                         or step + 1 < _trigger_step):
                     continue
                 try:
@@ -1370,8 +1466,9 @@ async def run(args):
                         _verb = "REGROUP"
                     print(f"[CH{_from_ch}_TIMEOUT] {_verb} at ep={episode+1} "
                           f"step={step+1} "
-                          f"(threshold={int(_CHAMBER_PCT * _from_ch * 100)}%="
-                          f"{_trigger_step}, n_advanced={_n_advanced}, "
+                          f"(threshold={_trigger_step}"
+                          f"≈{int(100 * _trigger_step / max_steps)}%, "
+                          f"n_advanced={_n_advanced}, "
                           f"chambers={_trigger_chambers})")
 
             if step % log_interval == 0:
@@ -2630,6 +2727,17 @@ async def run(args):
             agent.rl_layer.save()
             print(f"  Saved RL checkpoint for {agent.name}")
 
+    # Save per-agent cognitive state (skills / episodes / curriculum) — the
+    # durable JSON form of the job-local vector DBs. Unconditional: also
+    # useful for non-Hebbian runs.
+    from agent_modules.agent_state_io import export_agent_state as _export_as
+    _export_as(
+        agents, os.path.join(metric.target_folder, "agent_state"),
+        run_id=run_id,
+    )
+    print(f"  Saved agent cognitive state: "
+          f"{os.path.join(metric.target_folder, 'agent_state')}")
+
     # Save Hebbian graph state
     if hebbian_config.enabled:
         graph_path = os.path.join(metric.target_folder, "hebbian_graph_final.json")
@@ -2720,5 +2828,27 @@ if __name__ == "__main__":
         raise SystemExit(
             "--social-module requires --hebbian to be set (the social "
             "module needs bond weights to reason over)"
+        )
+    if args.hebbian_init_file and not args.hebbian:
+        raise SystemExit(
+            "--hebbian-init-file requires --hebbian (there is no graph to "
+            "initialize otherwise)"
+        )
+    if args.hebbian_init_file and args.hebbian_preset != "none":
+        raise SystemExit(
+            "--hebbian-init-file and --hebbian-preset are mutually exclusive "
+            "(init_matrix would silently override the preset)"
+        )
+    if args.resume and (args.hebbian_init_file or args.agent_state_init):
+        raise SystemExit(
+            "--hebbian-init-file/--agent-state-init cannot be combined with "
+            "--resume: the checkpoint restores its own Hebbian graph and "
+            "curriculum state and would clobber/duplicate the transplant. "
+            "(Resuming a transplant run WITHOUT these flags is fine — the "
+            "checkpoint already carries the transplanted state forward.)"
+        )
+    if args.start_chamber and args.max_chamber:
+        raise SystemExit(
+            "--start-chamber and --max-chamber are mutually exclusive"
         )
     asyncio.run(run(args))

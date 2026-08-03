@@ -263,7 +263,7 @@ run_exp() {
             fi
         ' sh \
         python -u "$REPO/src/mindforge/multi_agent_craftium.py" \
-            --num-agents 3 \
+            --num-agents "${NUM_AGENTS:-3}" \
             --episodes "${EPISODES:-3}" \
             --max-steps "${MAX_STEPS:-1000}" \
             --warmup-time 300 \

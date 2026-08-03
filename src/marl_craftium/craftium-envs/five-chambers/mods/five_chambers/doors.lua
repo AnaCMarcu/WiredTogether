@@ -638,10 +638,25 @@ minetest.register_globalstep(function(_dtime)
                         spec.log_tag, spec.dest_label, #connected))
                     io.stderr:flush()
                 end
+                -- Start-chamber support: when Python's --start-chamber writes
+                -- this flag at step 0, the Ch1 timer never ran, so the Ch1
+                -- track was never forfeited — and the teleport's position
+                -- jump would spuriously fire m1_move_5 (the agent did not
+                -- move, it was teleported; same rationale as the Ch1 rescue
+                -- above). Dead code in normal runs: the Python Ch1 timer
+                -- always fires first and sets door1_force_teleported.
+                local skip_ch1 = (spec.from == 2)
+                    and not five_chambers.door_state.door1_force_teleported
+                if skip_ch1 then
+                    five_chambers.door_state.door1_force_teleported = true
+                end
                 for _, player in ipairs(connected) do
                     local name = player:get_player_name()
                     local idx  = five_chambers.agent_index(name)
                     if idx >= 0 then
+                        if skip_ch1 then
+                            five_chambers.forfeit_track_milestones(name, "ch1_solo")
+                        end
                         local dest = spec.spawn_fn(idx)
                         player:set_pos(dest)
                         if io and io.stderr then

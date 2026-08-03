@@ -160,12 +160,56 @@ def test_switch_rotation_formula(lua_root):
 # ── config.lua ───────────────────────────────────────────────────────────────
 
 def test_config_num_agents(lua_root):
-    """config.lua: canonical NUM_AGENTS = 3; the =1 override only inside DEBUG_SINGLE."""
+    """config.lua: NUM_AGENTS = FC_NUM_AGENTS env override, default 3; the =1
+    override only inside DEBUG_SINGLE."""
     text = _lua(lua_root, "config.lua")
-    assert _canonical_assignments(text, "NUM_AGENTS") == [3]
+    # Canonical assignment is the env-var pattern (same shape as
+    # CH1_TIMEOUT_TICKS), not an integer literal.
+    assert _canonical_assignments(text, "NUM_AGENTS") == []
+    assert re.search(
+        r'^local _env_agents = tonumber\(os and os\.getenv and '
+        r'os\.getenv\("FC_NUM_AGENTS"\) or ""\)$',
+        text, re.MULTILINE,
+    )
+    assert re.search(
+        r"^five_chambers\.NUM_AGENTS\s*=\s*_env_agents or 3$",
+        text, re.MULTILINE,
+    )
     assert _debug_guarded_assignments(text, "NUM_AGENTS") == [(1, True)]
     # DEBUG_SINGLE is off, so the override is dead code in training runs.
     assert re.search(r"^five_chambers\.DEBUG_SINGLE\s*=\s*false", text, re.MULTILINE)
+
+
+def test_config_door3_x_clamped(lua_root):
+    """config.lua: DOOR3_X = min(2*N, 10) — the Ch3→Ch4 doorway must stay
+    inside Ch4's fixed x-span (1..11) when NUM_AGENTS >= 6."""
+    text = _lua(lua_root, "config.lua")
+    assert re.search(
+        r"^five_chambers\.DOOR3_X\s*=\s*math\.min\("
+        r"2 \* five_chambers\.NUM_AGENTS, 10\)",
+        text, re.MULTILINE,
+    )
+
+
+def test_ch4_spawn_positions_inside_ch4(lua_root):
+    """mobs.lua: 6 CH4 zombie spawn entries, every one inside CH4's interior
+    (x=1..11, z=47..57). Regression pin: the old third entry {x=8,z=60} sat
+    in the Ch5 band (z0=59) after the 5-block southward chamber shift, so
+    the third zombie spawned in the boss room and the organic all-mobs-dead
+    Ch4 clear could never fire. Spawn count is min(NUM_AGENTS, #positions),
+    so N=3 uses only the first three entries."""
+    text = _lua(lua_root, "mobs.lua")
+    start = text.index("local CH4_SPAWN_POSITIONS = {")
+    block = text[start:text.index("\n}", start)]
+    entries = [
+        (int(x), int(y), int(z))
+        for x, y, z in re.findall(r"\{x=(\d+),\s*y=(\d+),\s*z=(\d+)\}", block)
+    ]
+    assert len(entries) == 6
+    for x, y, z in entries:
+        assert 1 <= x <= 11, (x, y, z)
+        assert 47 <= z <= 57, (x, y, z)
+        assert y == 11, (x, y, z)
 
 
 def test_config_boss_hp(lua_root):

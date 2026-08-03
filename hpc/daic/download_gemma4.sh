@@ -38,11 +38,16 @@ mkdir -p "$DEST"
 # --local-dir gives a plain directory of weights (no blob/symlink cache
 # layout), which is what LLM_MODEL_PATH expects and what survives an
 # HF_HUB_OFFLINE=1 job. Resumable: re-run after an interrupted transfer.
-# The GGUF/QAT sibling files are quantised variants we don't use.
 #
 # `hf` vs `huggingface-cli`: recent huggingface_hub renamed the CLI, and the
 # old name is now a hard error rather than an alias — which is why the first
 # run of this script downloaded nothing. Pick whichever the image has.
+#
+# No --exclude: `hf download` takes optional positional FILENAMES after the
+# repo id, and the exclude patterns landed there instead ("Ignoring --exclude
+# since filenames have been explicitly set" → 0 files fetched). Nothing needs
+# excluding anyway — the quantised GGUF/QAT weights live in separate repos
+# (google/gemma-4-*-it-qat-*), not in this one.
 apptainer exec \
     --bind /tudelft.net:/tudelft.net \
     ${HF_TOKEN:+--env HF_TOKEN="$HF_TOKEN"} \
@@ -55,9 +60,7 @@ apptainer exec \
         fi
         echo "[download] $*"
         exec "$@"
-    ' sh "$MODEL" \
-        --local-dir "$DEST" \
-        --exclude "*.gguf" "*.pth" "original/*"
+    ' sh "$MODEL" --local-dir "$DEST"
 
 echo
 echo "== staged files =="

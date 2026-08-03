@@ -77,11 +77,19 @@ five_chambers.mob_state = {
     boss_damage      = {},
 }
 
--- Ch4 zombie spawn positions (inside 11×11 interior x=2..10, z=53..61).
+-- Ch4 zombie spawn positions (inside the 11×11 interior x=2..10, z=48..56;
+-- CH4 = {x0=1,x1=11,z0=47,z1=57}, Door 4 wall at z=58). Spawn count is
+-- min(NUM_AGENTS, #positions), so entries 4-6 are only used when NUM_AGENTS>3.
+-- The old 3rd entry {x=8,z=60} predated the 5-block southward chamber shift
+-- and landed inside the Ch5 band (z0=59) — that zombie spawned in the boss
+-- room, so the organic "all Ch4 mobs dead" clear could never fire.
 local CH4_SPAWN_POSITIONS = {
     {x=4, y=11, z=54},
     {x=6, y=11, z=57},
-    {x=8, y=11, z=60},
+    {x=8, y=11, z=54},
+    {x=3, y=11, z=50},
+    {x=6, y=11, z=51},
+    {x=9, y=11, z=50},
 }
 
 -- active_ch1_mobs: list of {obj=ObjectRef, last_puncher=name|nil}

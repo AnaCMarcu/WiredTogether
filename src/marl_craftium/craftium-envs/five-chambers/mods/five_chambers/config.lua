@@ -2,7 +2,13 @@
 -- Change NUM_AGENTS to run with more or fewer agents; all geometry
 -- and wiring is derived from it at load time.
 
-five_chambers.NUM_AGENTS = 3
+-- Overridable from Python via the FC_NUM_AGENTS env var (set unconditionally
+-- by multi_agent_craftium.py from --num-agents; reaches this process because
+-- _patched_env merges os.environ into the server/client proc_env, same as
+-- CH1_TIMEOUT_TICKS below). Defaults to 3 when unset so standalone launches
+-- keep today's behavior.
+local _env_agents = tonumber(os and os.getenv and os.getenv("FC_NUM_AGENTS") or "")
+five_chambers.NUM_AGENTS = _env_agents or 3
 
 -- DEBUG_SINGLE: solo human walkthrough mode. When true:
 --   * NUM_AGENTS is forced to 1 — one cell, one switch, one Ch4 spawn group.
@@ -141,9 +147,11 @@ five_chambers.CH3_COMMUNAL_Z0  = 32
 five_chambers.CH3_COMMUNAL_Z1  = 44
 five_chambers.CH3_NORTH_WALL_Z = 45
 -- Door 3 sits at the middle of Ch3's north wall. Ch3 width = 4*N+1 (x: 0..4N),
--- so the centre is at x = 2*N. This keeps the door inside Ch3 for any
--- NUM_AGENTS up to 5 (Ch4 spans x=1..11, so 2*N must stay <= 11).
-five_chambers.DOOR3_X          = 2 * five_chambers.NUM_AGENTS
+-- so the centre is at x = 2*N — but the door must also open into Ch4, which
+-- spans a fixed x=1..11. Clamp to 10 (one block inside Ch4's east wall) so
+-- NUM_AGENTS >= 6 still gets a walkable Ch3→Ch4 doorway. N=3 → min(6,10)=6,
+-- unchanged.
+five_chambers.DOOR3_X          = math.min(2 * five_chambers.NUM_AGENTS, 10)
 
 -- Chamber 4 (combat, 11×11). Shifted south by 5 to align with the
 -- shrunk Ch3 (CH3_NORTH_WALL_Z=45 → Ch4 starts at z=47, +1 for the wall).
