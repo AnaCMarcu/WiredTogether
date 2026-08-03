@@ -15,6 +15,8 @@
 #                     the architecture); wiredtogether.sif stays untouched
 #   RUN_GROUP         gemma4 → runs/gemma4/<exp>/seed_<N>/, so nothing mixes
 #                     with runs/final/ or runs/medium2k/
+#   3 ep × 1000 steps the medium-suite step budget, not the sbatch files'
+#                     final-suite 5 × 2500
 #
 # These runs are NOT poolable with the Qwen aggregation: different base model
 # AND a modality the earlier runs never had. Treat runs/gemma4/ as its own
@@ -45,8 +47,12 @@ REPO="$WORKSPACE/WiredTogether"
 : "${WT_IMAGE:=$WORKSPACE/images/wiredtogether_gemma4.sif}"
 : "${LLM_VISION_MODE:=vision}"
 : "${RUN_GROUP:=gemma4}"
+# 3 episodes × 1000 steps — the same step budget as the medium suite
+# (runs/medium/), so a Gemma 4 run costs what a Qwen medium run cost. Bump with
+# MAX_STEPS=2000 for a medium2k-sized budget; the sbatch files' own defaults
+# (5 ep × 2500) are the final-suite numbers and are overridden here.
 : "${EPISODES:=3}"
-: "${MAX_STEPS:=2000}"
+: "${MAX_STEPS:=1000}"
 : "${WANDB_PROJECT:=gemma4_wired_together}"
 export MODEL_LLM WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT
 

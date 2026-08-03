@@ -39,11 +39,23 @@ mkdir -p "$DEST"
 # layout), which is what LLM_MODEL_PATH expects and what survives an
 # HF_HUB_OFFLINE=1 job. Resumable: re-run after an interrupted transfer.
 # The GGUF/QAT sibling files are quantised variants we don't use.
+#
+# `hf` vs `huggingface-cli`: recent huggingface_hub renamed the CLI, and the
+# old name is now a hard error rather than an alias — which is why the first
+# run of this script downloaded nothing. Pick whichever the image has.
 apptainer exec \
     --bind /tudelft.net:/tudelft.net \
     ${HF_TOKEN:+--env HF_TOKEN="$HF_TOKEN"} \
     "$IMG" \
-    huggingface-cli download "$MODEL" \
+    sh -c '
+        if command -v hf >/dev/null 2>&1; then
+            set -- hf download "$@"
+        else
+            set -- huggingface-cli download "$@"
+        fi
+        echo "[download] $*"
+        exec "$@"
+    ' sh "$MODEL" \
         --local-dir "$DEST" \
         --exclude "*.gguf" "*.pth" "original/*"
 
