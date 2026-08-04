@@ -16,6 +16,13 @@ All artifacts for one training run live under `runs/<run_id>/`:
   ├── final_metrics.json       consolidated run-level summary
   └── final_summary.txt        human-readable digest
 
+Tagged runs (the HPC layout, `create_tagged`) insert a suite level first:
+
+  runs/<group>/<tag>/seed_<N>/     e.g. runs/gemma4/exp04_ippo/seed_42/
+
+`<group>` comes from `--run-group` / `WIREDTOGETHER_RUN_GROUP` and defaults
+to `legacy`, which is where every run predating the group plumbing landed.
+
 This module's only job is to compute paths consistently. Every other file
 should construct a RunPaths once at startup and consume its attributes;
 nothing else should call `os.path.join` for run output paths.

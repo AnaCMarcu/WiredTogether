@@ -11,7 +11,7 @@ from marl_craftium import OpenWorldMultiAgentEnv
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Load environment prompt
-with open(os.path.join(_this_dir, "prompts", "environment_prompt.txt"), "r") as f:
+with open(os.path.join(_this_dir, "prompts", "environment_prompt.txt"), "r", encoding="utf-8") as f:
     environment_prompt = f.read()
 
 ACTION_MAP = {

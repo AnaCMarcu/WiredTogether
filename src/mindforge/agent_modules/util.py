@@ -63,6 +63,26 @@ class AgentResponse(BaseModel):
     communication_target: str
 
 
+class SocialAgentResponse(AgentResponse):
+    """Choice-mode (Experiment 2) response: adds the per-step social act.
+
+    A SUBCLASS, not new fields on AgentResponse: the local model client
+    injects the pydantic schema into the system prompt
+    (``_inject_json_instruction``), so extending AgentResponse itself would
+    silently change every legacy run's prompt. Legacy keeps AgentResponse
+    byte-identical; only ``--social-act-mode choice`` builds its client with
+    this schema.
+
+    When ``social_act == "communicate"`` the message rides the existing
+    communication/communication_target fields so the whole comm pipeline
+    (tracker, messages.jsonl, comm_eval) is untouched. All new fields are
+    defaulted so a response lacking them still validates.
+    """
+    social_act: str = "none"          # "communicate" | "observe" | "imitate" | "none"
+    social_target: str = ""           # agent_N, resolved via the comm fallback
+    imitate_horizon: int = 0          # requested replay length; clamped to [1, 5]
+
+
 class TargetedCommunicationResponse(BaseModel):
     """All comm is targeted: communication_target is a required string (not Optional)
     so the schema enforcer guarantees the model always picks a recipient.
@@ -132,6 +152,19 @@ class SocialThought(BaseModel):
     # Responder side: subset of incoming senders to help this step.
     respond_to: List[str] = []
     confidence: float = 0.5
+
+
+class SocialThoughtChoice(SocialThought):
+    """Choice-mode (Experiment 2) deliberation: may suggest an enabled act.
+
+    A SUBCLASS for the same reason as SocialAgentResponse: the injected
+    JSON-schema block in the system prompt derives from the pydantic model,
+    so adding fields to SocialThought itself would alter legacy
+    social-module prompts. The "bias" coupling routes ``suggest_target``
+    exactly like ``ask_target``. Both fields defaulted.
+    """
+    suggest_act: Optional[str] = None     # "communicate" | "observe" | "imitate"
+    suggest_target: Optional[str] = None  # agent_N
 
 
 # ─── Prompt formatting ─────────────────────────────────────────────────

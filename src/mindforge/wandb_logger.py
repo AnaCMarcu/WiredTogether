@@ -26,7 +26,14 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
-from run_layout import DEFAULT_RUN_GROUP
+# The repo mixes both import styles for this package: multi_agent_craftium.py
+# does `from mindforge.run_layout import RunPaths` (src/ on PYTHONPATH) but
+# `import wandb_logger` (its own dir on sys.path[0]). Accept either so this
+# module imports cleanly whichever way it was reached.
+try:
+    from mindforge.run_layout import DEFAULT_RUN_GROUP
+except ImportError:  # pragma: no cover - flat sys.path (src/mindforge) only
+    from run_layout import DEFAULT_RUN_GROUP
 
 _log = logging.getLogger(__name__)
 _WB = None  # active wandb run handle; None when disabled / init failed

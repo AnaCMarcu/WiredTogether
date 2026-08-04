@@ -48,6 +48,16 @@ SOCIAL_PROMPT_DIRS = {
     "exp09_llm_9b_allied_all",
     "exp10_llm_9b_allied_pair",
     "exp11_llm_9b_allied_none",
+    # Experiment 2 (cofire) — every arm runs --social-module prompt.
+    "exp20_cofire_prc",
+    "exp21_cofire_pro",
+    "exp22_cofire_pri",
+    "exp23_cofire_prcoi",
+    "exp24_cofire_prc_credit",
+    "exp25_cofire_pro_credit",
+    "exp26_cofire_pri_credit",
+    "exp27_cofire_anchor",
+    "exp28_cofire_null",
 }
 
 PARSER_VERSION = "2"  # bump to invalidate parse caches

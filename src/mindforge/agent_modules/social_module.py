@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
-with open(os.path.join(_PROMPT_DIR, "social_module.txt"), "r") as f:
+with open(os.path.join(_PROMPT_DIR, "social_module.txt"), "r", encoding="utf-8") as f:
     _social_prompt = f.read()
 
 
@@ -205,9 +205,21 @@ class SocialModule:
             else "(no significant bond changes)"
         )
 
+        # Choice-mode act suggestion (absent in legacy thoughts → no line).
+        suggest_act = t.get("suggest_act")
+        suggest_target = t.get("suggest_target")
+        suggest_line = (
+            f"  Suggested social act: {suggest_act} toward {suggest_target} — "
+            f"set social_act/social_target accordingly unless you have a "
+            f"strong reason not to.\n"
+            if suggest_act and suggest_target
+            else ""
+        )
+
         return (
             "Social directive (from your social-reasoning step):\n"
             f"  Reasoning: {reasoning}\n"
+            f"{suggest_line}"
             f"  Outgoing: {outgoing}\n"
             f"  Incoming: {incoming}\n"
             f"  Bond changes noted:\n  {bond_notes}"

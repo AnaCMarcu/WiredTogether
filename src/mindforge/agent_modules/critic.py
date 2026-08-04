@@ -7,9 +7,9 @@ from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
-with open(os.path.join(_PROMPT_DIR, "critic_prompt.txt"), "r") as f:
+with open(os.path.join(_PROMPT_DIR, "critic_prompt.txt"), "r", encoding="utf-8") as f:
     critic_prompt = f.read()
-with open(os.path.join(_PROMPT_DIR, "critic_info.txt"), "r") as f:
+with open(os.path.join(_PROMPT_DIR, "critic_info.txt"), "r", encoding="utf-8") as f:
     critic_info = f.read()
 
 

@@ -10,14 +10,15 @@ from agent_modules.util import (
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
-# load in prompts
-with open(os.path.join(_PROMPT_DIR, "system_prompt.txt"), "r") as f:
+# load in prompts (explicit UTF-8: the templates carry box-drawing chars,
+# which the Windows default cp1252 codec cannot decode)
+with open(os.path.join(_PROMPT_DIR, "system_prompt.txt"), "r", encoding="utf-8") as f:
     system_prompt_txt = f.read()
-with open(os.path.join(_PROMPT_DIR, "environment_prompt.txt"), "r") as f:
+with open(os.path.join(_PROMPT_DIR, "environment_prompt.txt"), "r", encoding="utf-8") as f:
     environment_prompt = f.read()
-with open(os.path.join(_PROMPT_DIR, "instruction_prompt_p2.txt"), "r") as f:
+with open(os.path.join(_PROMPT_DIR, "instruction_prompt_p2.txt"), "r", encoding="utf-8") as f:
     instruction_prompt_p2 = f.read()
-with open(os.path.join(_PROMPT_DIR, "instruction_prompt_p2_thoughts.txt"), "r") as f:
+with open(os.path.join(_PROMPT_DIR, "instruction_prompt_p2_thoughts.txt"), "r", encoding="utf-8") as f:
     instruction_prompt_p2_thoughts = f.read()
 
 
@@ -26,9 +27,16 @@ class ActionSelection:
         self,
         system_prompt=None,
         action_model_client=None,
+        user_prompt_template=None,
     ):
         self.system_prompt = (
             system_prompt if system_prompt else safe_format(system_prompt_txt, environment_prompt=environment_prompt)
+        )
+        # Choice mode (Experiment 2) passes the parallel
+        # instruction_prompt_p2_choice template here; legacy leaves it None
+        # and keeps the original file byte-for-byte.
+        self.user_prompt_template = (
+            user_prompt_template if user_prompt_template else instruction_prompt_p2
         )
         self.action_model_client = (
             action_model_client
@@ -55,7 +63,7 @@ class ActionSelection:
         content = await llm_call(
             self.action_model_client,
             system_prompt=self.system_prompt,
-            user_prompt=instruction_prompt_p2 + messages[0].content[0],
+            user_prompt=self.user_prompt_template + messages[0].content[0],
             frame=last_frame,
             cancellation_token=cancellation_token,
             log_prefix=f"Agent {agent_name} on_messages: ",
@@ -73,6 +81,10 @@ class ActionSelection:
         if isinstance(content, dict) and "communication_target" in content:
             content["communication_target"] = normalize_agent_target(
                 content["communication_target"]
+            )
+        if isinstance(content, dict) and "social_target" in content:
+            content["social_target"] = normalize_agent_target(
+                content["social_target"]
             )
         return content
 

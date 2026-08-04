@@ -42,6 +42,20 @@ def _parse_step_reward(reward_text):
         return None, is_dead
 
 
+def _parse_hp(player_status_text):
+    """Parse current HP from a get_player_status_text() string.
+
+    Returns int HP or None when missing/unparseable. Used by the imitation
+    replay abort check (a damage tick means blindly replaying someone
+    else's actions is no longer safe).
+    """
+    if not player_status_text or not isinstance(player_status_text, str):
+        return None
+    import re as _re
+    m = _re.search(r"Health:\s*(\d+)", player_status_text)
+    return int(m.group(1)) if m else None
+
+
 def _render_step_log(step_log):
     """Render the rolling (action, reward) buffer for the critic prompt.
 
@@ -94,6 +108,15 @@ class CustomAgent(BaseChatAgent):
         self._call_count = 0  # incremented each on_messages call
         self._step_log = deque(maxlen=CRITIC_HISTORY_WINDOW)
         self._initialized = False
+        # ── Imitation replay (Experiment 2, choice mode only) ──────────
+        # While non-empty, the motor action is popped from here instead of
+        # calling the action LLM; filled by begin_imitation() from the
+        # orchestrator's social-act router.
+        self._replay_queue = deque()
+        self._replay_target = None
+        self._replay_total = 0
+        self._replay_abort_reason = None
+        self._last_hp = None
 
         self.action_selection = (
             action_selection if action_selection else ActionSelection()
@@ -125,6 +148,37 @@ class CustomAgent(BaseChatAgent):
         self.social_module = social_module
 
 
+    # ── Imitation replay API (Experiment 2, choice mode) ───────────────
+
+    @property
+    def replay_active(self) -> bool:
+        return bool(self._replay_queue)
+
+    def begin_imitation(self, actions, target: str) -> None:
+        """Commit to replaying ``actions`` (oldest→newest) copied from ``target``.
+
+        Called by the orchestrator's social-act router after the imitation
+        gate (proximity + same chamber) passed. Replaces any replay already
+        in progress — a newly chosen social act aborts the old one.
+        """
+        self._replay_queue.clear()
+        self._replay_queue.extend(a for a in actions if a)
+        self._replay_target = target
+        self._replay_total = len(self._replay_queue)
+        self._replay_abort_reason = None
+
+    def _abort_replay(self, reason: str) -> None:
+        self._replay_queue.clear()
+        self._replay_target = None
+        self._replay_total = 0
+        self._replay_abort_reason = reason
+
+    def pop_replay_abort(self):
+        """Return-and-clear the last replay abort reason (router logging)."""
+        reason = self._replay_abort_reason
+        self._replay_abort_reason = None
+        return reason
+
     # Message types that this agent can produce
     @property
     def produced_message_types(self) -> Sequence[type[BaseChatMessage]]:
@@ -150,6 +204,7 @@ class CustomAgent(BaseChatAgent):
         chamber_state=None,
         bond_weights=None,
         bond_deltas=None,
+        social_returns=None,
     ):
 
         self._call_count += 1
@@ -255,6 +310,20 @@ class CustomAgent(BaseChatAgent):
             and current_chamber != self._last_chamber
         )
         self._last_chamber = current_chamber
+
+        # ── Imitation replay abort checks (choice mode) ────────────────
+        # A chamber change or a damage tick means blindly replaying someone
+        # else's actions is no longer state-correspondent — hand control
+        # back to the agent this step.
+        _hp = _parse_hp(player_status_text)
+        if self._replay_queue:
+            if _chamber_changed:
+                self._abort_replay("chamber_change")
+            elif (_hp is not None and self._last_hp is not None
+                  and _hp < self._last_hp):
+                self._abort_replay("hp_drop")
+        if _hp is not None:
+            self._last_hp = _hp
         if (success or self.auto_curriculum.current_task is None
                 or error_count > 10 or _chamber_changed):
             if success:
@@ -392,6 +461,10 @@ class CustomAgent(BaseChatAgent):
             "milestone_progress": milestone_progress
                 or "(no milestone data yet)",
             "milestone_event": milestone_event,
+            # Choice-mode observe/imitate payloads delivered last step; the
+            # legacy template has no {social_returns} placeholder, so this
+            # key is inert in legacy runs.
+            "social_returns": social_returns or "",
         }
         self.belief_system.task_beliefs = belief_parts["task_beliefs"]
         self.metric.log(f"Agent {self.name} beliefs: {beliefs}")
@@ -469,6 +542,29 @@ class CustomAgent(BaseChatAgent):
             rl_content["communication"] = _pre_comm
             rl_content["communication_target"] = _pre_comm_target
             content = rl_content
+        elif self._replay_queue:
+            # ── Committed imitation replay: the motor action comes from the
+            # copied sequence, no action-LLM call this step. The replay IS
+            # the social act (credit fires per replayed step in the router).
+            _k = self._replay_total - len(self._replay_queue) + 1
+            _replayed = self._replay_queue.popleft()
+            content = {
+                "thoughts": (
+                    f"(imitating {self._replay_target}: replaying their "
+                    f"action {_k}/{self._replay_total}: {_replayed})"
+                ),
+                "action": _replayed,
+                "communication": "",
+                "communication_target": "",
+                "social_act": "imitate",
+                "social_target": self._replay_target,
+                "imitate_horizon": 0,
+                "replay_active": True,
+                "replay_step": _k,
+            }
+            if not self._replay_queue:
+                self._replay_target = None
+                self._replay_total = 0
         else:
             content = await self.action_selection.select_action(
                 messages,
@@ -524,3 +620,7 @@ class CustomAgent(BaseChatAgent):
         self._cached_success = None
         self._cached_critique = None
         self._step_log.clear()
+        # Episode reset aborts any in-flight imitation replay.
+        self._abort_replay("episode_reset")
+        self._replay_abort_reason = None
+        self._last_hp = None

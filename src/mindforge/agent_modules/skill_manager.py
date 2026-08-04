@@ -40,7 +40,7 @@ def _chromadb_base_dir() -> str:
 
 
 def _load_prompt(name: str) -> str:
-    with open(os.path.join(_PROMPT_DIR, name), "r") as f:
+    with open(os.path.join(_PROMPT_DIR, name), "r", encoding="utf-8") as f:
         return f.read()
 
 

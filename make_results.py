@@ -68,6 +68,20 @@ CONDITIONS = [
     ("No-bonds",     "exp11_llm_9b_allied_none",   "topo", False),
     ("Allied-pair",  "exp10_llm_9b_allied_pair",   "topo", False),
     ("Allied-all",   "exp09_llm_9b_allied_all",    "topo", False),
+    # Experiment 2 (co-firing without enforced communication). Group
+    # "cofire" feeds ONLY the cofire_* emitters — the main/topo/graph
+    # tables and summary.csv are untouched, so regenerating the
+    # Experiment-1 assets from old runs roots stays byte-identical
+    # (these dirs simply don't exist there).
+    ("prc",          "exp20_cofire_prc",           "cofire", True),
+    ("pro",          "exp21_cofire_pro",           "cofire", True),
+    ("pri",          "exp22_cofire_pri",           "cofire", True),
+    ("prcoi",        "exp23_cofire_prcoi",         "cofire", True),
+    ("prc*",         "exp24_cofire_prc_credit",    "cofire", True),
+    ("pro*",         "exp25_cofire_pro_credit",    "cofire", True),
+    ("pri*",         "exp26_cofire_pri_credit",    "cofire", True),
+    ("anchor",       "exp27_cofire_anchor",        "cofire", True),
+    ("null (pr)",    "exp28_cofire_null",          "cofire", True),
 ]
 TOPO_REFERENCE = "LLM-9B"   # reference row repeated in the topology table
 EXCLUDED_AGENT = "agent_2"  # the excluded agent in Allied-pair
@@ -97,6 +111,11 @@ MILESTONE_ORDER = [m for t in TRACK_ORDER
                    for m in [k for k, v in MILESTONE_TRACK.items() if v == t]]
 COOP_TRACKS = {"ch2_anvils", "ch3_switches", "ch4_combat", "ch5_boss"}
 COOP_MAX = sum(1 for v in MILESTONE_TRACK.values() if v in COOP_TRACKS)
+# Comm-independent cooperative tracks (Experiment 2): chambers whose
+# milestones do not structurally require communication. The mute cofire
+# arms (pro / pri / null) cannot solve Ch3's comm-gated door by
+# construction, so their task metric leans on this subset.
+COOP_CI_TRACKS = {"ch2_anvils", "ch4_combat"}
 
 # Internal repo id -> (paper label, display name) for tab:steps_to_milestone.
 # Internal ids keep the legacy numbering (m14..m28); the paper schedule
@@ -366,6 +385,7 @@ def mean_std(vals):
 def aggregate(runs) -> dict:
     """Pool all episodes of all seeds; return every paper number."""
     coop, allms, task, furthest, boss = [], [], [], [], 0
+    coop_ci = []
     n_eps_total = 0
     used_decomp = True
     steps = {m: [] for m in STEPS_MILESTONES}
@@ -379,6 +399,8 @@ def aggregate(runs) -> dict:
         for s in sets_:
             c = coop_count(s)
             coop.append(c); seed_coop.append(c)
+            coop_ci.append(sum(1 for m in s
+                               if MILESTONE_TRACK.get(m) in COOP_CI_TRACKS))
             allms.append(len(s))
             furthest.append(furthest_chamber(s))
             if BOSS_MILESTONE in s:
@@ -422,6 +444,7 @@ def aggregate(runs) -> dict:
     return {
         "n_runs": len(runs), "n_eps": n_eps_total,
         "coop": mean_std(coop), "coop_per_seed": mean_std(per_seed_coop),
+        "coop_ci": mean_std(coop_ci),
         "allms": mean_std(allms), "task": mean_std(task),
         "task_is_decomposed": used_decomp,
         "furthest_mode": (statistics.mode(furthest) if furthest else None),
@@ -525,6 +548,102 @@ def emit_csv(stats: dict, out: Path):
                     a["graph"].get("sparsity", (math.nan,))[0],
                     a["graph"].get("asym", (math.nan,))[0]]
             w.writerow(row)
+
+
+# ─── Experiment 2 (cofire) emitters ─────────────────────────────────────
+# Separate files (cofire_summary.csv + cofire_table_rows.tex) so the
+# Experiment-1 artifacts above never change shape.
+
+_COFIRE_CHANNELS = ("spat", "comm", "obs", "imit")
+_COFIRE_ACTS = ("communicate", "observe", "imitate", "none", "imitate_replay")
+
+
+def _run_cofire_stats(run: dict) -> dict | None:
+    """Per-run act-mix / attribution / imitation shares from
+    final_metrics['social_act_metrics'] (None for legacy runs, e.g. anchor)."""
+    sam = run.get("social_act_metrics") or {}
+    if not sam:
+        return None
+    acts = sam.get("act_counts") or {}
+    total_acts = sum(acts.values())
+    attr = sam.get("cofire_attribution") or {}
+    attr_total = float(attr.get("total") or 0.0)
+
+    def _chan_sum(ch):
+        m = attr.get(ch)
+        return float(sum(sum(row) for row in m)) if m else 0.0
+
+    out = {}
+    for a in _COFIRE_ACTS:
+        out[f"act_{a}"] = (acts.get(a, 0) / total_acts) if total_acts else math.nan
+    for ch in _COFIRE_CHANNELS:
+        out[f"dW_{ch}"] = (_chan_sum(ch) / attr_total) if attr_total > 0 else math.nan
+    reqs = sam.get("imitation_requests", 0)
+    out["imit_gate_fail"] = (sam.get("imitation_gate_failed", 0) / reqs
+                             if reqs else math.nan)
+    rs, nrs = sam.get("replay_steps", 0), sam.get("nonreplay_steps", 0)
+    out["replay_reward_mean"] = (sam.get("replay_reward_sum", 0.0) / rs
+                                 if rs else math.nan)
+    out["nonreplay_reward_mean"] = (sam.get("nonreplay_reward_sum", 0.0) / nrs
+                                    if nrs else math.nan)
+    out["cofire_pair_events"] = sam.get("cofire_pair_events", 0)
+    return out
+
+
+def emit_cofire(stats: dict, all_runs: dict, out: Path):
+    """cofire_summary.csv + cofire_table_rows.tex for the cofire group."""
+    labels = [lab for lab, _, g, _ in CONDITIONS
+              if g == "cofire" and lab in stats]
+    if not labels:
+        return False
+
+    per_run_keys = ([f"act_{a}" for a in _COFIRE_ACTS]
+                    + [f"dW_{ch}" for ch in _COFIRE_CHANNELS]
+                    + ["imit_gate_fail", "replay_reward_mean",
+                       "nonreplay_reward_mean", "cofire_pair_events"])
+    pooled = {}
+    for lab in labels:
+        rows = [r for r in (_run_cofire_stats(run) for run in all_runs[lab])
+                if r is not None]
+        pooled[lab] = {k: mean_std([r[k] for r in rows]) for k in per_run_keys} \
+            if rows else {k: (math.nan, math.nan) for k in per_run_keys}
+
+    with open(out / "cofire_summary.csv", "w", newline="",
+              encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["condition", "n_runs", "n_eps",
+                    "coop_mean", "coop_std", "coop_ci_mean", "coop_ci_std",
+                    "allms_mean", "allms_std", "task_mean", "task_std",
+                    "bond_mean", "bond_max", "sparsity", "asymmetry",
+                    *(f"{k}_mean" for k in per_run_keys)])
+        for lab in labels:
+            a, p = stats[lab], pooled[lab]
+            w.writerow([lab, a["n_runs"], a["n_eps"],
+                        *a["coop"], *a["coop_ci"], *a["allms"], *a["task"],
+                        a["graph"].get("mean", (math.nan,))[0],
+                        a["graph"].get("max", (math.nan,))[0],
+                        a["graph"].get("sparsity", (math.nan,))[0],
+                        a["graph"].get("asym", (math.nan,))[0],
+                        *(p[k][0] for k in per_run_keys)])
+
+    L = ["% ── tab:cofire rows (Experiment 2) ────────────────────────",
+         "% label & coop & coop_ci(Ch2+Ch4) & task & bond mean & sparsity"
+         " & asym & dW share comm/obs/imit \\\\"]
+    for lab in labels:
+        a, p = stats[lab], pooled[lab]
+        g = a["graph"]
+        share = "/".join(
+            ("--" if math.isnan(p[f"dW_{ch}"][0])
+             else f"{p[f'dW_{ch}'][0]:.2f}")
+            for ch in ("comm", "obs", "imit"))
+        L.append(f"{lab:<10} & {fmt(a['coop'])} & {fmt(a['coop_ci'])} & "
+                 f"{fmt(a['task'], 0)} & "
+                 f"{fmt(g.get('mean', (math.nan, 0)), 2)} & "
+                 f"{fmt(g.get('sparsity', (math.nan, 0)), 2)} & "
+                 f"{fmt(g.get('asym', (math.nan, 0)), 3)} & {share} \\\\")
+    (out / "cofire_table_rows.tex").write_text("\n".join(L) + "\n",
+                                               encoding="utf-8")
+    return True
 
 
 # ─── Figures ────────────────────────────────────────────────────────────
@@ -780,6 +899,7 @@ def main():
 
     emit_tables(stats, args.out)
     emit_csv(stats, args.out)
+    wrote_cofire = emit_cofire(stats, all_runs, args.out)
     fig_progression(all_runs, args.out, args.max_steps)
     fig_timeline(all_runs, args.out, args.max_steps)
 
@@ -810,7 +930,9 @@ def main():
 
     print(f"\nWrote: {args.out}/table_rows.tex, summary.csv, "
           f"milestone_progression.pdf, milestone_timeline.pdf"
-          + (", bond_evolution.pdf" if bond_run else ""))
+          + (", bond_evolution.pdf" if bond_run else "")
+          + (", cofire_summary.csv, cofire_table_rows.tex"
+             if wrote_cofire else ""))
 
 
 if __name__ == "__main__":

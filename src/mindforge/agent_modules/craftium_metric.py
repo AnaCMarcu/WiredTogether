@@ -742,6 +742,8 @@ class CraftiumMetric(_PlotsMixin, _SummaryMixin):
             # Post-hoc-computed metrics (filled in by _run_posthoc_evaluators).
             "comm_metrics":         getattr(self, "comm_metrics", {}),
             "coop_metrics":         getattr(self, "coop_metrics", {}),
+            # Choice-mode social-act metrics (Experiment 2); {} in legacy runs.
+            "social_act_metrics":   getattr(self, "social_act_metrics", {}),
         }
 
     # ─── Checkpoint restore ────────────────────────────────────────────

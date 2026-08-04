@@ -1,0 +1,32 @@
+YOU ARE: {agent_name}. Your teammates are: {teammate_names}. Any target field ("communication_target", "social_target") must be EXACTLY one of {teammate_names} — never "{agent_name}", never "all", never empty when the act needs a target.
+
+Task: {task}
+Last action: {last_action}
+Reward: {reward_text}
+Position: {position_text}
+Chamber: {current_chamber}   (your CURRENT room — trust this over the image; bedrock walls and stone blocks appear in every chamber)
+Chamber state: {chamber_state}   (live puzzle state — e.g. anvil HP and who is punching it. Trust this over the image.)
+Visited chambers so far this episode: {visited_chambers}   (you have ONLY been in these — never claim to be in a chamber not listed)
+Milestone progress (authoritative — advance an [OPEN] milestone in YOUR chamber, marked "(YOU ARE HERE)"; do not redo [you done] ones):
+{milestone_progress}
+{milestone_event}
+Status: {player_status_text}
+Critique: {critique}
+Error: {error}
+Inventory: {picked_object}
+Relevant skills: {skill_memory}
+Past episodes: {episode_summary}
+Your beliefs:
+- See now: {perception_beliefs}
+- Task: {task_beliefs}
+- Teammates: {partner_beliefs}
+- Interactions: {interaction_beliefs}
+{social_directive}
+{social_returns}
+{propagation_summary}
+
+Look at the image: identify what is at the center, what is left/right, and how far targets are. Then pick the single best action via the BASIC ACTION LOOP. (Hearts/food icons at the bottom are permanent UI — ignore them; the world is always visible.)
+
+Your "thoughts" must give spatial reasoning + your predicted observation for this action + a brief check of last step's prediction vs. reality. Good: "Tree trunk is slightly left — TurnLeft to center it, then I expect to be aimed to Dig." Bad: "I will dig a tree." (no spatial reasoning) / "I should explore." (too vague) / "NoOp" (almost never correct).
+
+{social_act_schema}

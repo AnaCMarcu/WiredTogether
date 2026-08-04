@@ -32,6 +32,15 @@ class HebbianConfig:
     # ── Communication co-activity bonus (refined cij) ──
     communication_coactivity_bonus: float = 0.5  # δ_comm
 
+    # ── Social-act channels credited by co-firing (Experiment 2) ──
+    # Which channel-tagged social events count toward c_ij. The default
+    # ("comm",) reproduces the historical rule exactly: only messages are
+    # credited, obs/imit events (if any) are invisible to the wiring rule.
+    social_act_channels: tuple = ("comm",)
+    # δ for the directed obs/imit terms; None → use communication_coactivity_bonus
+    # (one shared δ across channels, for parity between arms).
+    social_coactivity_bonus: float | None = None
+
     # ── LTP — potentiation on positive advantage ──
     ltp_lr: float = 0.01  # η_+
 

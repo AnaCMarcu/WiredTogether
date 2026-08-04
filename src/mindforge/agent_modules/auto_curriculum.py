@@ -82,7 +82,7 @@ _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
 
 def _load_prompt(name: str) -> str:
-    with open(os.path.join(_PROMPT_DIR, name), "r") as f:
+    with open(os.path.join(_PROMPT_DIR, name), "r", encoding="utf-8") as f:
         return f.read()
 
 

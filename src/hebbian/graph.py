@@ -66,6 +66,13 @@ class HebbianSocialGraph:
 
         # Always initialise — avoids AttributeError when disabled
         self._last_coactivity: Optional[np.ndarray] = None
+        # Per-channel co-activity terms from the last gated step (attribution).
+        self._last_c_spat: Optional[np.ndarray] = None
+        self._last_c_comm: Optional[np.ndarray] = None
+        self._last_c_obs: Optional[np.ndarray] = None
+        self._last_c_imit: Optional[np.ndarray] = None
+        self._last_engagement: Optional[np.ndarray] = None
+        self._growth_by_channel: Optional[Dict[str, np.ndarray]] = None
 
         if not config.enabled:
             return
@@ -107,6 +114,15 @@ class HebbianSocialGraph:
         # Realized per-branch deltas from the last gated step (analysis/tests).
         self._last_growth: Optional[np.ndarray] = None
         self._last_decay: Optional[np.ndarray] = None
+
+        # Cumulative per-channel growth attribution (Experiment 2). Keys are
+        # the co-activity terms; values accumulate realized growth split by
+        # each term's share of the raw c_ij. Gated modes only (legacy leaves
+        # it at zeros).
+        self._growth_by_channel = {
+            ch: np.zeros((N, N), dtype=np.float32)
+            for ch in ("spat", "comm", "obs", "imit")
+        }
 
         self._bond_delta_window: int = 50
         self._W_history: deque = deque(maxlen=self._bond_delta_window)
@@ -368,11 +384,16 @@ class HebbianSocialGraph:
     def _engagement(
         self,
         bond_rewards_gated: np.ndarray,
-        comm_agents: set,
+        social_agents: set,
     ) -> np.ndarray:
         """Engagement score g_i(t) ∈ [0,1] (shared gate, both variants).
 
-        g_i = clip( α·|r_bond_i|/r_max·1[ch≥2] + (1−α)·1[i communicates], 0, 1)
+        g_i = clip( α·|r_bond_i|/r_max·1[ch≥2] + (1−α)·1[i socially acted], 0, 1)
+
+        ``social_agents`` is the set of agents CREDITED with a social act this
+        step: historically the message sender+receiver ("comm"); in choice
+        mode also the initiator of an enabled obs/imit act (directed — the
+        watched party did nothing and gets no credit).
 
         ``bond_rewards_gated`` is already Ch2–5-gated and DEATH-excluded, so
         engagement reflects cooperative salience only — a death spike can
@@ -388,7 +409,7 @@ class HebbianSocialGraph:
         norm = self._max_bond_reward_seen + _EPS
         reward_component = cfg.engagement_reward_weight * (abs_r / norm)
         comm_component = np.array(
-            [(1.0 - cfg.engagement_reward_weight) if i in comm_agents else 0.0
+            [(1.0 - cfg.engagement_reward_weight) if i in social_agents else 0.0
              for i in range(N)],
             dtype=np.float32,
         )
@@ -398,13 +419,24 @@ class HebbianSocialGraph:
         self,
         positions: List[Optional[Tuple[float, float, float]]],
         engagement: np.ndarray,
-        comm_events: Optional[List[Tuple[int, int]]],
+        credited_events: Optional[List[Tuple[int, int, str]]],
     ) -> np.ndarray:
-        """Shared co-activity gate c_ij(t) ∈ [0,1].
+        """Shared co-activity gate c_ij(t) ∈ [0,1], per-channel terms.
 
         c_spat = 1[‖p_i−p_j‖≤d]·g_i·g_j               (close AND both engaged)
         c_comm = δ_comm·1[i↔j message]·(1−1[‖p_i−p_j‖≤d])  (talk across distance)
-        c_ij   = clip(c_spat + c_comm, 0, 1)
+        c_obs  = δ_soc·1[i observed j]                 (directed, distance-free)
+        c_imit = δ_soc·1[i replayed j's action]        (directed; proximity is
+                                                        enforced upstream by the
+                                                        imitation act gate)
+        c_ij   = clip(c_spat + c_comm + c_obs + c_imit, 0, 1)
+
+        ``credited_events`` are channel-tagged (initiator, target, channel)
+        triples that already passed the ``social_act_channels`` credit mask.
+        obs/imit deliberately do NOT reuse the comm formula: its
+        (1 − spatial_gate) factor would zero every legal imitation step, since
+        the act gate requires proximity. Each term is stored pre-clip for
+        growth attribution — summing first destroys it.
 
         Vectorised over the N×N grid. Co-activity below ε is floored to 0 (ε is
         the "no co-activity" threshold), which makes the growth and decay
@@ -426,20 +458,36 @@ class HebbianSocialGraph:
 
         c_spat = spatial_gate * np.outer(engagement, engagement)
 
-        # Communication co-activity (only when NOT spatially co-located).
-        c_comm = np.zeros((N, N), dtype=np.float32)
-        if comm_events and cfg.communication_coactivity_bonus > 0.0:
-            for s, r in comm_events:
-                if 0 <= s < N and 0 <= r < N and s != r:
-                    for a, b in ((s, r), (r, s)):  # symmetric exchange
-                        c_comm[a, b] = cfg.communication_coactivity_bonus * (
-                            1.0 - spatial_gate[a, b]
-                        )
+        delta_comm = cfg.communication_coactivity_bonus
+        delta_soc = (cfg.social_coactivity_bonus
+                     if cfg.social_coactivity_bonus is not None else delta_comm)
 
-        cij = np.clip(c_spat + c_comm, 0.0, 1.0)
+        c_comm = np.zeros((N, N), dtype=np.float32)
+        c_obs = np.zeros((N, N), dtype=np.float32)
+        c_imit = np.zeros((N, N), dtype=np.float32)
+        if credited_events:
+            for s, r, ch in credited_events:
+                if not (0 <= s < N and 0 <= r < N and s != r):
+                    continue
+                if ch == "comm" and delta_comm > 0.0:
+                    # Communication co-activity (only when NOT co-located).
+                    for a, b in ((s, r), (r, s)):  # symmetric exchange
+                        c_comm[a, b] = delta_comm * (1.0 - spatial_gate[a, b])
+                elif ch == "obs" and delta_soc > 0.0:
+                    c_obs[s, r] = delta_soc
+                elif ch == "imit" and delta_soc > 0.0:
+                    c_imit[s, r] = delta_soc
+
+        cij = np.clip(c_spat + c_comm + c_obs + c_imit, 0.0, 1.0)
         np.fill_diagonal(cij, 0.0)
         # Floor sub-ε co-activity to exactly 0 (ε = "no co-activity").
         cij[cij < cfg.coop_eps] = 0.0
+
+        # Kept pre-clip/floor for per-channel growth attribution.
+        self._last_c_spat = c_spat
+        self._last_c_comm = c_comm
+        self._last_c_obs = c_obs
+        self._last_c_imit = c_imit
         return cij
 
     def _growth_coeff(self, bond_rewards_gated: np.ndarray) -> np.ndarray:
@@ -496,6 +544,7 @@ class HebbianSocialGraph:
         chambers: Optional[List[int]],
         total_rewards: Optional[List[float]],
         bond_rewards: Optional[List[float]],
+        social_events: Optional[List[Tuple[int, int, str]]] = None,
     ) -> np.ndarray:
         """One gated-Hebbian step (Variant A or B). Vectorised over N×N.
 
@@ -536,14 +585,27 @@ class HebbianSocialGraph:
         else:
             total_g = np.zeros(N, dtype=np.float32)
 
-        comm_agents = set()
+        # Channel-tagged social acts: legacy ``comm_events`` folds in as
+        # channel "comm"; only channels in the credit mask are visible to the
+        # wiring rule (Experiment 2 credit ablations).
+        events: List[Tuple[int, int, str]] = []
         if comm_events:
-            for s, r in comm_events:
-                comm_agents.add(s)
-                comm_agents.add(r)
+            events.extend((s, r, "comm") for s, r in comm_events)
+        if social_events:
+            events.extend(social_events)
+        mask = set(cfg.social_act_channels)
+        credited = [(s, r, ch) for s, r, ch in events if ch in mask]
 
-        engagement = self._engagement(bond_g, comm_agents)
-        cij = self._coactivity_gated(positions, engagement, comm_events)
+        social_agents = set()
+        for s, r, ch in credited:
+            social_agents.add(s)      # initiator is always engaged
+            if ch == "comm":
+                social_agents.add(r)  # messages engage both parties; obs/imit
+                                      # are directed — the target did nothing.
+
+        engagement = self._engagement(bond_g, social_agents)
+        self._last_engagement = engagement
+        cij = self._coactivity_gated(positions, engagement, credited)
         self._last_coactivity = cij
 
         coop, neg = self._windowed_stats(cij, total_g)
@@ -569,6 +631,19 @@ class HebbianSocialGraph:
         np.fill_diagonal(self._last_growth, 0.0)
         self._last_decay = np.where(decay_mask, decay, 0.0) + homeostatic
         np.fill_diagonal(self._last_decay, 0.0)
+
+        # Per-channel growth attribution: split realized growth by each
+        # term's share of the raw (pre-clip) co-activity, so the channel
+        # sums reproduce total growth exactly. Where raw c is 0, growth is
+        # 0 too, so the ε-guarded denominator attributes nothing.
+        if self._growth_by_channel is not None:
+            raw_total = (self._last_c_spat + self._last_c_comm
+                         + self._last_c_obs + self._last_c_imit) + _EPS
+            for name, term in (
+                ("spat", self._last_c_spat), ("comm", self._last_c_comm),
+                ("obs", self._last_c_obs), ("imit", self._last_c_imit),
+            ):
+                self._growth_by_channel[name] += self._last_growth * (term / raw_total)
 
         if not self.config.freeze_weights:
             self.W = self.W + delta
@@ -600,6 +675,7 @@ class HebbianSocialGraph:
         chambers: Optional[List[int]] = None,
         bond_rewards: Optional[List[float]] = None,
         total_rewards: Optional[List[float]] = None,
+        social_events: Optional[List[Tuple[int, int, str]]] = None,
     ) -> Optional[np.ndarray]:
         """Execute one full social-graph plasticity step.
 
@@ -626,6 +702,10 @@ class HebbianSocialGraph:
             the engagement normaliser. Ignored by Variant A.
         total_rewards : per-agent TOTAL reward this step (death INCLUDED). Used
             only for the neg_i decay gate. Falls back to ``step_rewards``.
+        social_events : channel-tagged (initiator, target, channel) triples
+            for the choice-mode social acts ("comm" | "obs" | "imit"). Gated
+            modes only; merged with ``comm_events`` (which maps to "comm")
+            and filtered by ``config.social_act_channels``. Ignored by legacy.
 
         Returns
         -------
@@ -642,6 +722,7 @@ class HebbianSocialGraph:
                 total_rewards=(total_rewards if total_rewards is not None
                                else step_rewards),
                 bond_rewards=bond_rewards,
+                social_events=social_events,
             )
 
         if step_rewards is None:
@@ -997,6 +1078,24 @@ class HebbianSocialGraph:
             self._failure_coactivation / float(self.config.failure_memory_window)
         )
 
+    def get_channel_attribution(self) -> Dict:
+        """Cumulative growth attributed to each co-activity channel.
+
+        Deliberately a separate accessor — ``get_graph_metrics()`` /
+        ``snapshot()`` key sets are pinned by tests and downstream consumers.
+
+        Returns
+        -------
+        dict: {"spat"|"comm"|"obs"|"imit": N×N nested lists of cumulative
+        realized growth, "total": scalar sum} — empty dict when disabled or
+        legacy mode (which never populates the accumulator).
+        """
+        if not self.config.enabled or self._growth_by_channel is None:
+            return {}
+        out = {ch: m.tolist() for ch, m in self._growth_by_channel.items()}
+        out["total"] = float(sum(m.sum() for m in self._growth_by_channel.values()))
+        return out
+
 
     def to_dict(self) -> Dict:
         """Serialise graph state to a JSON-compatible dict.
@@ -1074,6 +1173,14 @@ class HebbianSocialGraph:
         self._coact_window.clear()
         self._reward_window.clear()
         self._max_bond_reward_seen = 0.0
+        # Per-channel attribution state
+        self._last_c_spat = None
+        self._last_c_comm = None
+        self._last_c_obs = None
+        self._last_c_imit = None
+        if self._growth_by_channel is not None:
+            for m in self._growth_by_channel.values():
+                m.fill(0.0)
         # Bond-delta snapshot window: without this, bond_delta_row() right
         # after reset() compares fresh W against a stale pre-reset snapshot.
         # Re-seed with the fresh W, mirroring __init__.

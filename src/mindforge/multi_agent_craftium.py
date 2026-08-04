@@ -282,6 +282,26 @@ def parse_args():
                              "Default 8: bonds/directives change slowly, so "
                              "deliberating every step burned ~200 LLM calls/"
                              "room/agent for no behavioral gain.")
+    # ── Choice-mode social acts (Experiment 2) ──
+    parser.add_argument("--social-act-mode", type=str, default="legacy",
+                        choices=["legacy", "choice"],
+                        help="'legacy' (default): communication is a mandatory "
+                             "per-step field, exactly the historical behavior. "
+                             "'choice': each step the agent picks AT MOST ONE "
+                             "social act from --social-acts (communicate / "
+                             "observe / imitate / none); co-firing credits the "
+                             "channels in --cofiring-channels. LLM-only "
+                             "(incompatible with --rl).")
+    parser.add_argument("--social-acts", type=str, default="comm,obs,imit",
+                        help="Choice mode's affordance MENU: comma-separated "
+                             "subset of comm,obs,imit — or 'none' for a mute "
+                             "arm (proximity+reward floor). Ignored in legacy "
+                             "mode.")
+    parser.add_argument("--cofiring-channels", type=str, default=None,
+                        help="Choice mode's co-firing CREDIT mask: subset of "
+                             "comm,obs,imit or 'none'. Defaults to the value "
+                             "of --social-acts (credit what is afforded). "
+                             "Ignored in legacy mode (legacy credits comm).")
     # ── Experiment tracking ──
     parser.add_argument("--experiment-id", type=str, default=None,
                         help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
@@ -454,7 +474,9 @@ def build_role_configs(
 def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
                  rl_config=None, belief_interval=5, critic_interval=20,
                  centralized_critic=None, is_resume: bool = False,
-                 social_module_mode: str = "none", social_interval: int = 8):
+                 social_module_mode: str = "none", social_interval: int = 8,
+                 social_act_mode: str = "legacy",
+                 social_act_channels: tuple = ()):
     """Initialize all Mindforge agents.
 
     ``centralized_critic`` (when not None) is shared by all agents' RLLayers
@@ -463,7 +485,35 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
     ``is_resume`` controls whether per-agent persistent stores (skill DB) are
     wiped at construction. Fresh runs reset; chained-checkpoint resumes
     preserve previously-learned skills.
+
+    ``social_act_mode`` / ``social_act_channels`` (Experiment 2): in
+    "choice" mode agents are built with the PARALLEL choice-mode prompt
+    templates + the SocialAgentResponse schema; "legacy" (default) keeps the
+    original templates and AgentResponse byte-for-byte.
     """
+    # Choice-mode template/client setup — built once, shared by all agents.
+    _choice_action_kwargs = {}
+    _choice_sm_prompt = None
+    if social_act_mode == "choice":
+        from agent_modules import social_acts as _sacts
+        from agent_modules.util import (
+            SocialAgentResponse, SocialThoughtChoice, create_model_client,
+            safe_format as _safe_format,
+        )
+        _choice_system_txt, _choice_instruction = _sacts.load_choice_templates(
+            social_act_channels
+        )
+        _choice_action_kwargs = {
+            "system_prompt": _safe_format(
+                _choice_system_txt, environment_prompt=prompts["environment"]
+            ),
+            "user_prompt_template": _choice_instruction,
+        }
+        if social_module_mode != "none":
+            _choice_sm_prompt = _sacts.load_social_module_choice_prompt(
+                social_act_channels
+            )
+
     agents = []
     for i, role_cfg in enumerate(role_configs):
         # Build per-agent RL layer (no-op when rl_config.enabled is False)
@@ -484,16 +534,41 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
         # raw bond text in the action prompt.
         agent_social_module = None
         if social_module_mode != "none":
-            agent_social_module = SocialModule(
-                agent_name=role_cfg["agent_name"],
-                num_agents=num_agents,
-                social_interval=social_interval,
+            if social_act_mode == "choice":
+                from agent_modules.util import (
+                    SocialThoughtChoice as _STC,
+                    create_model_client as _cmc,
+                )
+                agent_social_module = SocialModule(
+                    agent_name=role_cfg["agent_name"],
+                    num_agents=num_agents,
+                    social_interval=social_interval,
+                    social_model_client=_cmc(response_format=_STC),
+                    override_prompt=_choice_sm_prompt,
+                )
+            else:
+                agent_social_module = SocialModule(
+                    agent_name=role_cfg["agent_name"],
+                    num_agents=num_agents,
+                    social_interval=social_interval,
+                )
+
+        if social_act_mode == "choice":
+            from agent_modules.util import (
+                SocialAgentResponse as _SAR,
+                create_model_client as _cmc2,
             )
+            _action_selection = ActionSelection(
+                action_model_client=_cmc2(response_format=_SAR),
+                **_choice_action_kwargs,
+            )
+        else:
+            _action_selection = ActionSelection(system_prompt=agent_system_prompt)
 
         agent = CustomAgent(
             name=role_cfg["agent_name"],
             description=f"{role_cfg['name']} agent in Craftium open world",
-            action_selection=ActionSelection(system_prompt=agent_system_prompt),
+            action_selection=_action_selection,
             auto_curriculum=AutoCurriculum(
                 override_curriculum_prompt=role_cfg["curriculum_prompt"],
                 override_questions_prompt=prompts["curriculum_questions"],
@@ -534,18 +609,22 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
     return agents
 
 
-def _resume_run_paths(run_id: str) -> RunPaths:
+def _resume_run_paths(run_id: str, group: str | None = None) -> RunPaths:
     """Reconstruct a ``RunPaths`` from a saved ``run_id`` regardless of layout.
 
     Two cases:
       * ``"<tag>/seed_<N>"`` (Phase B++ tagged layout) → lives under
-        ``runs/legacy/<tag>/seed_<N>/``.
+        ``runs/<group>/<tag>/seed_<N>/``.
       * Anything else (legacy timestamp-based id) → lives under
         ``runs/<run_id>/``.
 
     Detected by the presence of ``/seed_`` in the run_id, which can only
     come from ``RunPaths.create_tagged``. The dataclass stores both
     forms identically — only the on-disk root differs.
+
+    ``group`` must match the run being resumed (the run_id does not carry
+    it); passing ``None`` resolves it from the environment exactly as the
+    original run did.
     """
     if "/seed_" in run_id and run_id.count("/") == 1:
         tag, seed_part = run_id.split("/", 1)
@@ -554,7 +633,7 @@ def _resume_run_paths(run_id: str) -> RunPaths:
         except ValueError:
             # Malformed id — fall back to the untagged factory.
             return RunPaths.create(run_id=run_id, root="runs")
-        return RunPaths.create_tagged(tag=tag, seed=seed)
+        return RunPaths.create_tagged(tag=tag, seed=seed, group=group)
     return RunPaths.create(run_id=run_id, root="runs")
 
 
@@ -581,6 +660,7 @@ async def agent_do_action(
     chamber_state=None,
     bond_weights=None,
     bond_deltas=None,
+    social_returns=None,
 ):
     """Have one agent observe and choose an action.
 
@@ -622,6 +702,7 @@ async def agent_do_action(
         chamber_state=chamber_state,
         bond_weights=bond_weights,
         bond_deltas=bond_deltas,
+        social_returns=social_returns,
     )
 
     last_action = "NoOp"
@@ -646,6 +727,7 @@ async def agent_do_action(
                 chamber_state=chamber_state,
                 bond_weights=bond_weights,
                 bond_deltas=bond_deltas,
+                social_returns=social_returns,
             )
         else:
             logging.error(f"Agent {agent_id} exceeded retry limit, using NoOp")
@@ -884,6 +966,26 @@ async def run(args):
     obs_width = args.obs_width
     obs_height = args.obs_height
     communication = not args.no_communication
+
+    # ── Choice-mode social acts (Experiment 2) ─────────────────────────
+    # legacy (default): everything below stays inert and the run is
+    # bit-for-bit the historical behavior. choice: the agent picks at most
+    # one social act per step from the MENU; co-firing credits the CREDIT
+    # mask channels.
+    social_act_mode = getattr(args, "social_act_mode", "legacy")
+    _social_menu_channels: tuple = ()
+    _cofire_channels: tuple = ("comm",)   # legacy credit = messages only
+    if social_act_mode == "choice":
+        from agent_modules import social_acts as _sacts
+        _social_menu_channels = _sacts.parse_channels_csv(args.social_acts)
+        _cofire_channels = (
+            _sacts.parse_channels_csv(args.cofiring_channels)
+            if args.cofiring_channels is not None
+            else _social_menu_channels
+        )
+        print(f"[FEATURES] Social acts:      CHOICE mode  "
+              f"menu={list(_social_menu_channels) or 'none'}  "
+              f"credit={list(_cofire_channels) or 'none'}")
     sleep_time = args.sleep_time
     save_gif = not args.no_gif
     gif_dir: str | None = None
@@ -1087,7 +1189,9 @@ async def run(args):
                          centralized_critic=centralized_critic,
                          is_resume=bool(args.resume),
                          social_module_mode=args.social_module,
-                         social_interval=args.social_interval)
+                         social_interval=args.social_interval,
+                         social_act_mode=social_act_mode,
+                         social_act_channels=_social_menu_channels)
 
     if args.agent_state_init:
         # Transplant memories into the freshly-constructed agents. Must run
@@ -1126,6 +1230,8 @@ async def run(args):
         social_replay_rho=args.hebbian_rho,
         reward_diffusion_gamma=args.hebbian_gamma,
         communication_coactivity_bonus=0.0 if args.hebbian_no_comm_bond else 0.5,
+        # Experiment 2 credit mask; ("comm",) in legacy mode = historical rule.
+        social_act_channels=_cofire_channels,
         init_weight=args.hebbian_init_weight,
         # Gated-variant (coactivity / reward_modulated) knobs
         engagement_reward_weight=args.hebbian_alpha,
@@ -1241,13 +1347,34 @@ async def run(args):
         run_id = restored["run_id"]
         metric = restored["metric"]
         rl_config.lora_save_dir = str(
-            _resume_run_paths(run_id).root / "rl_live"
+            _resume_run_paths(run_id, group=args.run_group).root / "rl_live"
         )
         print(f"[CKPT] Resuming from episode {resume_episode} step {resume_step}")
 
     global_step = 0
     if args.resume:
         global_step = getattr(metric, "_global_step_ckpt", 0)
+
+    # ── Choice-mode social-act counters (whole run; → final_metrics) ──
+    _sa_metrics = {
+        "act_counts": {},             # act -> n (incl. "none" and replay steps)
+        "act_counts_by_agent": {},    # agent_N -> {act: n}
+        "imitation_horizon_hist": {}, # str(h) -> n
+        "imitation_requests": 0,
+        "imitation_gate_failed": 0,
+        "imitation_aborts": 0,
+        "replay_steps": 0,
+        "replay_reward_sum": 0.0,
+        "nonreplay_steps": 0,
+        "nonreplay_reward_sum": 0.0,
+        "cofire_pair_events": 0,
+        "cofire_events_by_channel": {"spat": 0, "comm": 0, "obs": 0, "imit": 0},
+    }
+
+    def _sa_count(agent_name: str, act: str) -> None:
+        _sa_metrics["act_counts"][act] = _sa_metrics["act_counts"].get(act, 0) + 1
+        _by = _sa_metrics["act_counts_by_agent"].setdefault(agent_name, {})
+        _by[act] = _by.get(act, 0) + 1
 
     for episode in range(resume_episode, num_episodes):
         print(f"\n{'='*60}")
@@ -1339,6 +1466,9 @@ async def run(args):
 
         # All communication is targeted: each agent has its own inbox.
         agent_communications = {i: [] for i in range(num_agents)}
+        # Choice-mode observe/imitate payloads, delivered to the INITIATOR's
+        # prompt next step (the observed/imitated party is never notified).
+        agent_social_returns = {i: [] for i in range(num_agents)}
         agents_error_count = [0] * num_agents
         comm_tracker = CommunicationTracker(agent_ids=list(range(num_agents)))
         coop_metric = CooperationMetric(agent_ids=list(range(num_agents)))
@@ -1354,6 +1484,25 @@ async def run(args):
             Path(metric.target_folder) / "interpretability.jsonl"
             if _interpretability_enabled else None
         )
+        # Experiment 2 sidecars (choice mode only, so legacy run dirs are
+        # byte-identical): per-act log + per-pair co-firing event log.
+        _social_acts_path = (
+            Path(metric.target_folder) / "social_acts.jsonl"
+            if social_act_mode == "choice" else None
+        )
+        _cofiring_path = (
+            Path(metric.target_folder) / "cofiring_events.jsonl"
+            if (social_act_mode == "choice" and hebbian_config.enabled
+                and hebbian_config.mode != "legacy")
+            else None
+        )
+
+        def _append_jsonl(path, obj):
+            try:
+                with open(path, "a", encoding="utf-8") as _jf:
+                    _jf.write(_json.dumps(obj) + "\n")
+            except OSError as _jexc:
+                logging.warning("sidecar write failed (%s): %s", path, _jexc)
         _visited_chambers = [set() for _ in range(num_agents)]
         _prev_step_actions = {i: "NoOp" for i in range(num_agents)}
         _prev_step_comms   = {i: "" for i in range(num_agents)}
@@ -1543,6 +1692,10 @@ async def run(args):
             _step_death_drain    = [0.0] * num_agents   # negative; poll_death_events drain
             step_contents = [None] * num_agents
             comm_events = []
+            # Choice-mode channel-tagged social events (initiator, target,
+            # channel) — obs/imit only; comm rides comm_events as before.
+            social_events = []
+            _replay_agents_this_step: set = set()
             _messages_this_step = []
             _milestone_events_this_step: list = []
             _bond_strings = {}
@@ -1701,6 +1854,10 @@ async def run(args):
                             ),
                             bond_weights=_bond_weights.get(_i),
                             bond_deltas=_bond_deltas.get(_i),
+                            social_returns=(
+                                "\n".join(agent_social_returns[_i])
+                                if agent_social_returns.get(_i) else ""
+                            ),
                         )
                         return _i, _content
                     except Exception as _exc:
@@ -1792,6 +1949,10 @@ async def run(args):
                         ),
                         bond_weights=_bond_weights.get(agent_id),
                         bond_deltas=_bond_deltas.get(agent_id),
+                        social_returns=(
+                            "\n".join(agent_social_returns[agent_id])
+                            if agent_social_returns.get(agent_id) else ""
+                        ),
                     )
                     agents_error_count[agent_id] = error_count
                     for _i in range(num_agents):
@@ -1813,6 +1974,21 @@ async def run(args):
                     and agent.rl_layer.enabled
                 ):
                     agent.rl_layer.set_pending_value_global(v_global_t, joint_state_t)
+
+                # ── Choice-mode act normalization + mutual exclusivity ──
+                # Normalize the LLM's act against the MENU (the affordance
+                # ablation is enforced in code, not trusted to the prompt)
+                # and blank the comm fields unless the act IS communicate —
+                # at most one social act per step.
+                if (social_act_mode == "choice" and content
+                        and not content.get("replay_active")):
+                    _act_norm = _sacts.normalize_social_act(
+                        content.get("social_act"), _social_menu_channels
+                    )
+                    content["social_act"] = _act_norm
+                    if _act_norm != "communicate":
+                        content["communication"] = ""
+                        content["communication_target"] = ""
 
                 # Handle communication (collect comm_events for Hebbian)
                 if (
@@ -1936,6 +2112,174 @@ async def run(args):
                         "model_target": comm_target,
                         "model_target_canonical": canonical_target,
                     })
+
+                # ── Choice-mode social-act router (Experiment 2) ──────────
+                # observe → deliver the target's state+beliefs to the
+                # INITIATOR next step (silent, directed). imitate → gate on
+                # proximity+chamber; pass = commit replay (credit fires per
+                # replayed step), fail = informational report, no credit.
+                if social_act_mode == "choice":
+                    import re as _re2
+                    # This agent's select consumed its inbox this step.
+                    agent_social_returns[agent_id].clear()
+
+                    try:
+                        _init_idx = int(agent.name.split("_")[1])
+                    except (IndexError, ValueError):
+                        _init_idx = -1
+
+                    _abort_reason = (
+                        agent.pop_replay_abort()
+                        if hasattr(agent, "pop_replay_abort") else None
+                    )
+                    if _abort_reason and _abort_reason != "episode_reset":
+                        _sa_metrics["imitation_aborts"] += 1
+                        if _social_acts_path:
+                            _append_jsonl(_social_acts_path, {
+                                "ep": episode + 1, "step": step,
+                                "agent": agent.name, "act": "imitate",
+                                "aborted": _abort_reason,
+                            })
+
+                    if content and _init_idx >= 0:
+                        if content.get("replay_active"):
+                            # Committed replay step: the replay IS the act.
+                            _rt = str(content.get("social_target") or "")
+                            _m3 = _re2.match(r"^\s*agent_?(\d+)\s*$", _rt.lower())
+                            _t_idx = int(_m3.group(1)) if _m3 else -1
+                            if 0 <= _t_idx < num_agents and _t_idx != _init_idx:
+                                social_events.append((_init_idx, _t_idx, "imit"))
+                            _replay_agents_this_step.add(_init_idx)
+                            _sa_count(agent.name, "imitate_replay")
+                            if _social_acts_path:
+                                _append_jsonl(_social_acts_path, {
+                                    "ep": episode + 1, "step": step,
+                                    "agent": agent.name, "act": "imitate",
+                                    "target": (f"agent_{_t_idx}" if _t_idx >= 0
+                                               else None),
+                                    "gate": "replay",
+                                    "replay_step": content.get("replay_step"),
+                                })
+                        else:
+                            _act = content.get("social_act") or "none"
+                            _sa_count(agent.name, _act)
+                            _raw_target = content.get("social_target") or ""
+                            _t_idx = -1
+                            _sa_routing = "model"
+                            if _act in ("observe", "imitate"):
+                                _m4 = _re2.match(r"^\s*agent_?(\d+)\s*$",
+                                                 str(_raw_target).lower())
+                                if _m4:
+                                    _cand = int(_m4.group(1))
+                                    if (_cand != _init_idx
+                                            and 0 <= _cand < num_agents):
+                                        _t_idx = _cand
+                                if _t_idx < 0:
+                                    # Same rescue as comm routing: highest
+                                    # Hebbian bond, else random.
+                                    if hebbian_graph.config.enabled:
+                                        _cands = [
+                                            (j, float(hebbian_graph.W[_init_idx, j]))
+                                            for j in range(num_agents)
+                                            if j != _init_idx
+                                        ]
+                                        _t_idx = max(_cands, key=lambda x: x[1])[0]
+                                        _sa_routing = "hebbian_fallback"
+                                    else:
+                                        _t_idx = random.choice([
+                                            j for j in range(num_agents)
+                                            if j != _init_idx
+                                        ])
+                                        _sa_routing = "random_fallback"
+
+                            if _act == "observe":
+                                # Target's ground state + its OWN beliefs.
+                                # partner_beliefs is deliberately never read
+                                # (conversation-index keyed — wrong teammate).
+                                _tb = agents[_t_idx].belief_system
+                                agent_social_returns[_init_idx].append(
+                                    f"[observation of agent_{_t_idx}] "
+                                    f"Position: {environment.get_position_text(_t_idx) or 'Unknown'} | "
+                                    f"Chamber: {environment.get_chamber(_t_idx) or '?'} | "
+                                    f"Status: {environment.get_player_status_text(_t_idx) or '?'} | "
+                                    f"Inventory: {environment.pickedup_object(agentId=_t_idx) or '(none)'}\n"
+                                    f"  Their beliefs — See now: {_tb.perception_beliefs or '(none)'} | "
+                                    f"Task: {_tb.task_beliefs or '(none)'} | "
+                                    f"Interactions: {_tb.interaction_beliefs or '(none)'}"
+                                )
+                                social_events.append((_init_idx, _t_idx, "obs"))
+                                if _social_acts_path:
+                                    _append_jsonl(_social_acts_path, {
+                                        "ep": episode + 1, "step": step,
+                                        "agent": agent.name, "act": "observe",
+                                        "target": f"agent_{_t_idx}",
+                                        "routing_source": _sa_routing,
+                                    })
+                            elif _act == "imitate":
+                                _h = _sacts.clamp_horizon(
+                                    content.get("imitate_horizon")
+                                )
+                                _sa_metrics["imitation_requests"] += 1
+                                _hh = str(_h)
+                                _sa_metrics["imitation_horizon_hist"][_hh] = (
+                                    _sa_metrics["imitation_horizon_hist"].get(_hh, 0) + 1
+                                )
+                                _gate_ok = _sacts.imitation_gate(
+                                    environment.get_agent_position(_init_idx),
+                                    environment.get_agent_position(_t_idx),
+                                    environment.get_chamber(_init_idx),
+                                    environment.get_chamber(_t_idx),
+                                    radius=hebbian_config.interaction_radius,
+                                )
+                                _t_log = list(
+                                    getattr(agents[_t_idx], "_step_log", []) or []
+                                )[-_h:]
+                                _t_actions = [a for a, _r in _t_log if a]
+                                if _gate_ok and _t_actions:
+                                    agent.begin_imitation(
+                                        _t_actions, f"agent_{_t_idx}",
+                                    )
+                                    agent_social_returns[_init_idx].append(
+                                        f"[imitation committed] You will replay "
+                                        f"agent_{_t_idx}'s last {len(_t_actions)} "
+                                        f"actions over the next steps."
+                                    )
+                                    # No credit at request time — credit fires
+                                    # per replayed step (replay branch above).
+                                    _gate_tag = "passed"
+                                else:
+                                    from custom_agent import (
+                                        _render_step_log as _rsl,
+                                    )
+                                    _sa_metrics["imitation_gate_failed"] += 1
+                                    agent_social_returns[_init_idx].append(
+                                        f"[imitation report on agent_{_t_idx} — "
+                                        f"too far away to copy them] Their last "
+                                        f"{_h} actions: {_rsl(_t_log)} | Position: "
+                                        f"{environment.get_position_text(_t_idx) or 'Unknown'} | "
+                                        f"Chamber: {environment.get_chamber(_t_idx) or '?'}"
+                                    )
+                                    _gate_tag = "failed"
+                                if _social_acts_path:
+                                    _append_jsonl(_social_acts_path, {
+                                        "ep": episode + 1, "step": step,
+                                        "agent": agent.name, "act": "imitate",
+                                        "target": f"agent_{_t_idx}",
+                                        "horizon": _h, "gate": _gate_tag,
+                                        "routing_source": _sa_routing,
+                                    })
+                            else:
+                                # "communicate" (message handled by the comm
+                                # block above) or "none" — log for act-mix.
+                                if _social_acts_path:
+                                    _append_jsonl(_social_acts_path, {
+                                        "ep": episode + 1, "step": step,
+                                        "agent": agent.name, "act": _act,
+                                        "target": (
+                                            content.get("communication_target")
+                                            or None
+                                        ),
+                                    })
 
                 time.sleep(sleep_time)
 
@@ -2200,8 +2544,68 @@ async def run(args):
                 chambers=_chambers,
                 bond_rewards=_bond_rewards,
                 total_rewards=step_rewards_raw,
+                social_events=(social_events
+                               if social_act_mode == "choice" else None),
             )
             diffused_rewards = hebbian_graph.diffuse_rewards(step_rewards_raw)
+
+            # ── Choice-mode co-firing event log + replay reward accounting ──
+            if social_act_mode == "choice":
+                if _cofiring_path is not None:
+                    _cij_m = getattr(hebbian_graph, "_last_coactivity", None)
+                    _c_terms = {
+                        "spat": getattr(hebbian_graph, "_last_c_spat", None),
+                        "comm": getattr(hebbian_graph, "_last_c_comm", None),
+                        "obs": getattr(hebbian_graph, "_last_c_obs", None),
+                        "imit": getattr(hebbian_graph, "_last_c_imit", None),
+                    }
+                    _eng = getattr(hebbian_graph, "_last_engagement", None)
+                    _lg = getattr(hebbian_graph, "_last_growth", None)
+                    _ld = getattr(hebbian_graph, "_last_decay", None)
+                    if _cij_m is not None:
+                        for _pi in range(num_agents):
+                            for _pj in range(num_agents):
+                                if _pi == _pj or float(_cij_m[_pi][_pj]) <= 0.0:
+                                    continue
+                                _dist = None
+                                if (positions[_pi] is not None
+                                        and positions[_pj] is not None):
+                                    _dist = float(np.linalg.norm(
+                                        np.asarray(positions[_pi][:3], dtype=float)
+                                        - np.asarray(positions[_pj][:3], dtype=float)
+                                    ))
+                                _row = {
+                                    "ep": episode + 1, "step": step,
+                                    "i": _pi, "j": _pj,
+                                    "c": float(_cij_m[_pi][_pj]),
+                                    "dist": _dist,
+                                    "g_i": (float(_eng[_pi])
+                                            if _eng is not None else None),
+                                    "g_j": (float(_eng[_pj])
+                                            if _eng is not None else None),
+                                    "growth": (float(_lg[_pi][_pj])
+                                               if _lg is not None else None),
+                                    "decay": (float(_ld[_pi][_pj])
+                                              if _ld is not None else None),
+                                    "W_after": float(hebbian_graph.W[_pi][_pj]),
+                                }
+                                _sa_metrics["cofire_pair_events"] += 1
+                                for _cn, _cm in _c_terms.items():
+                                    _v = (float(_cm[_pi][_pj])
+                                          if _cm is not None else 0.0)
+                                    _row[f"c_{_cn}"] = _v
+                                    if _v > 0.0:
+                                        _sa_metrics["cofire_events_by_channel"][_cn] += 1
+                                _append_jsonl(_cofiring_path, _row)
+                for _aid in range(num_agents):
+                    if step_contents[_aid] is None:
+                        continue
+                    if _aid in _replay_agents_this_step:
+                        _sa_metrics["replay_steps"] += 1
+                        _sa_metrics["replay_reward_sum"] += float(step_rewards_raw[_aid])
+                    else:
+                        _sa_metrics["nonreplay_steps"] += 1
+                        _sa_metrics["nonreplay_reward_sum"] += float(step_rewards_raw[_aid])
 
             # ── Phase B+ §1: per-teammate reward-propagation cache ──
             # Disabled — rlvr.reward_propagation was removed (it provided
@@ -2728,6 +3132,14 @@ async def run(args):
     # valid primitive (e.g. 'Attack' -> 'Dig') instead of clamped.
     metric.idle_force_counts = environment.idle_force_summary()
     metric.action_recovered_counts = environment.action_recovered_summary()
+    # Choice-mode social-act metrics (Experiment 2); {} in legacy runs.
+    if social_act_mode == "choice":
+        metric.social_act_metrics = {
+            **_sa_metrics,
+            "menu_channels": list(_social_menu_channels),
+            "credit_channels": list(_cofire_channels),
+            "cofire_attribution": hebbian_graph.get_channel_attribution(),
+        }
     metric.save_run_metrics()
 
     # Save RL checkpoints
@@ -2837,6 +3249,20 @@ if __name__ == "__main__":
         raise SystemExit(
             "--social-module requires --hebbian to be set (the social "
             "module needs bond weights to reason over)"
+        )
+    if args.social_act_mode == "choice" and args.rl:
+        # Choice mode's imitation replay bypasses action selection for up to
+        # 5 steps, which would corrupt the PPO transition/log-prob
+        # bookkeeping (the policy never scored the replayed actions). Fail
+        # loudly rather than training on fabricated transitions for 24h.
+        raise SystemExit(
+            "--social-act-mode choice is LLM-only and incompatible with "
+            "--rl (imitation replay bypasses the RL action selection)"
+        )
+    if args.social_act_mode == "choice" and not args.hebbian:
+        raise SystemExit(
+            "--social-act-mode choice requires --hebbian (the co-firing "
+            "credit mask has no graph to act on otherwise)"
         )
     if args.hebbian_init_file and not args.hebbian:
         raise SystemExit(
