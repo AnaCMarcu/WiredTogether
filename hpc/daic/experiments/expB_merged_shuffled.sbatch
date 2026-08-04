@@ -9,7 +9,9 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/expB_merged_shuffled_%j.out
 #SBATCH --error=slurm_logs/expB_merged_shuffled_%j.err
-#SBATCH --exclude=cor1
+# influ3 excluded: 11GB GPU cannot hold gemma-4-E4B -> CPU offload starves
+# Luanti's software renderer. Even more critical here (6 clients).
+#SBATCH --exclude=cor1,influ3
 
 # ── Phase B of the pair-bonding transplant experiment (S arm: control) ──
 # Identical to expB_merged_transplant except MERGED_DIR must point at the

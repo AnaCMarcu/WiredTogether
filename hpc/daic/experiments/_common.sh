@@ -253,10 +253,38 @@ run_exp() {
             if command -v xvfb-run >/dev/null 2>&1 && command -v xauth >/dev/null 2>&1; then
                 exec xvfb-run -a -s "-screen 0 1024x768x24 -nolisten tcp" "$@"
             elif command -v Xvfb >/dev/null 2>&1; then
-                Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &
-                _xvfb_pid=$!
-                trap "kill $_xvfb_pid 2>/dev/null || true" EXIT
-                export DISPLAY=:99
+                # Display number was hardcoded to :99, which COLLIDES whenever
+                # two jobs of the same user share a node — routine for SLURM
+                # array tasks (expA_pair_bonding), and possible for any two
+                # jobs. The second Xvfb dies with "Fatal server error: Server
+                # is already active for display 99" and its Luanti clients
+                # silently fall back to the X server of the other job. /tmp is
+                # bind-mounted from the host, so the .X<n>-lock files are
+                # visible across jobs: probe upward from :99 for a free one and
+                # verify Xvfb actually stayed up before adopting it. A job
+                # running alone still gets :99 — unchanged from before.
+                _disp=99
+                _xvfb_pid=""
+                while [ "$_disp" -lt 160 ]; do
+                    if [ ! -e "/tmp/.X${_disp}-lock" ]; then
+                        Xvfb ":$_disp" -screen 0 1024x768x24 -nolisten tcp &
+                        _cand=$!
+                        sleep 2
+                        if kill -0 "$_cand" 2>/dev/null; then
+                            _xvfb_pid=$_cand
+                            break
+                        fi
+                    fi
+                    _disp=$((_disp + 1))
+                done
+                if [ -n "$_xvfb_pid" ]; then
+                    trap "kill $_xvfb_pid 2>/dev/null || true" EXIT
+                    export DISPLAY=":$_disp"
+                    echo "[XVFB] using display :$_disp (pid $_xvfb_pid)"
+                else
+                    echo "[XVFB][WARN] no free display in :99-:159 — continuing without DISPLAY (EGL surfaceless only)" >&2
+                    unset DISPLAY
+                fi
                 # Belt-and-braces for Luanti builds compiled EGL-only that
                 # ignore DISPLAY and try to grab /dev/dri/renderD* directly:
                 # force EGL to use the surfaceless platform (CPU-side via
@@ -264,7 +292,6 @@ run_exp() {
                 # permissions even when it bypasses Xvfb.
                 export EGL_PLATFORM=surfaceless
                 export __EGL_VENDOR_LIBRARY_FILENAMES="${__EGL_VENDOR_LIBRARY_FILENAMES:-/usr/share/glvnd/egl_vendor.d/50_mesa.json}"
-                sleep 1
                 exec "$@"
             else
                 echo "[WARN] Neither xvfb-run+xauth nor Xvfb found in image — Luanti will need real GPU access (/dev/dri permissions) on this node." >&2

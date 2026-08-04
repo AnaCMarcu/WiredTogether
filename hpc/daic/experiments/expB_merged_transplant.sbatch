@@ -9,7 +9,9 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/expB_merged_transplant_%j.out
 #SBATCH --error=slurm_logs/expB_merged_transplant_%j.err
-#SBATCH --exclude=cor1
+# influ3 excluded: 11GB GPU cannot hold gemma-4-E4B -> CPU offload starves
+# Luanti's software renderer. Even more critical here (6 clients).
+#SBATCH --exclude=cor1,influ3
 
 # ── Phase B of the pair-bonding transplant experiment (T arm) ──
 # One 6-agent run starting directly in the Chamber 3 cells (--start-chamber 3;

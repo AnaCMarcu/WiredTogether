@@ -9,7 +9,11 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/expA_pair_bonding_%A_%a.out
 #SBATCH --error=slurm_logs/expA_pair_bonding_%A_%a.err
-#SBATCH --exclude=cor1
+# influ3 excluded: its RTX 2080 Ti (11GB) cannot hold gemma-4-E4B, so
+# device_map="auto" spills the model onto the CPU, where it then starves
+# Luanti's llvmpipe software renderer of cores — measured 9h45m per env step
+# there (2026-08-04 smoke), vs ~3 min of actual LLM time per call.
+#SBATCH --exclude=cor1,influ3
 #SBATCH --array=0-8
 
 # ── Phase A of the pair-bonding transplant experiment ──
