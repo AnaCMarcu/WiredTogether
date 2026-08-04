@@ -1,0 +1,27 @@
+# DAIC nodes whose GPU is too small for the WiredTogether action-selection
+# model. One short node name per line (e.g. "grs1"); blank lines and #comments
+# are ignored. gpu_filter.sh turns this into `sbatch --exclude=...`.
+#
+# The list grows itself: _common.sh's GPU preflight appends the node it was
+# refused on, so a bad node is excluded from every subsequent submit.
+#
+# To pre-populate it properly, run this on the DAIC login node and add every
+# node whose GPU memory is under 15000 MiB:
+#
+#   sinfo -N -h -o "%N %G %f" | sort -u
+#   # then, for a specific node's real capacity:
+#   scontrol show node <nodename> | grep -i gres
+#
+# Requirement: ~8.5 GiB resident + a 3.34 GiB transient allocation ≈ 12 GiB
+# peak, so 11 GB and 12 GB cards fail and 16 GB+ cards pass. Threshold lives
+# in _common.sh as MIN_GPU_MEM_MIB (default 15000).
+#
+# Known-bad from the 2026-07/08 medium runs: an 11 GB card (10.75 GiB usable)
+# produced 99.8%-NoOp data in six RL runs. Node name unknown — the slurm .out
+# files with the Host: line were not synced. Fill in from sinfo.
+
+# influ3 — RTX 2080 Ti, 11264 MiB. Confirmed from the slurm .out Host: line of
+# job 12765952 (expA_pair_bonding smoke, 2026-08-04). Below the 15000 MiB
+# threshold. Observed there: ~3 min per LLM call and 9h45m of wall time per
+# env step, i.e. 2 of 300 steps in 12.7 h.
+influ3

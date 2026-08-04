@@ -9,8 +9,9 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/expB_merged_transplant_%j.out
 #SBATCH --error=slurm_logs/expB_merged_transplant_%j.err
-# influ3 excluded: 11GB GPU cannot hold gemma-4-E4B -> CPU offload starves
-# Luanti's software renderer. Even more critical here (6 clients).
+# Small-GPU nodes: see gpu_filter.sh / bad_gpu_nodes.txt (submit via
+# submit_transplant.sh). Header stays cor1-only — a command-line --exclude
+# replaces it, and gpu_filter.sh re-adds cor1 as BASE_EXCLUDE.
 #SBATCH --exclude=cor1,influ3
 
 # ── Phase B of the pair-bonding transplant experiment (T arm) ──
