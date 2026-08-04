@@ -157,6 +157,61 @@ run_exp() {
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || true
     echo "============================"
 
+    # ── GPU capacity preflight ────────────────────────────────────────────
+    # WHY THIS EXISTS: six RL runs (exp04/1011+1213, exp05/1011,
+    # exp06/789+1011+1213) landed on an 11 GB card (10.75 GiB usable). Action
+    # selection needs ~8.5 GiB resident plus a 3.34 GiB transient allocation,
+    # so EVERY step raised `CUDA out of memory` — which the driver's blanket
+    # `except Exception` (multi_agent_craftium.py:1863) swallowed, substituting
+    # NoOp. The jobs ran their full 20+ hours, wrote complete-looking
+    # final_metrics.json files, and the 99.8%-NoOp result was read as an RL
+    # finding for weeks. The OOM was only ever visible in log.txt, never in
+    # run.log or the slurm .out.
+    #
+    # So: refuse to start on a GPU that cannot hold the model. A dead job is a
+    # far better outcome than a plausible one. Set MIN_GPU_MEM_MIB=0 to bypass
+    # (e.g. a CPU-only smoke test).
+    local MIN_GPU_MEM_MIB="${MIN_GPU_MEM_MIB:-15000}"
+    local NODE_NAME="${SLURMD_NODENAME:-$(hostname -s)}"
+    local BAD_NODE_FILE="${BAD_NODE_FILE:-$REPO/hpc/daic/experiments/bad_gpu_nodes.txt}"
+    if [ "$MIN_GPU_MEM_MIB" -gt 0 ]; then
+        # Smallest visible GPU — with --gres=gpu:1 there is one, but take the
+        # min so a mixed allocation can never sneak a small card through.
+        local GPU_MIB
+        GPU_MIB=$(nvidia-smi --query-gpu=memory.total \
+                      --format=csv,noheader,nounits 2>/dev/null \
+                  | tr -dc '0-9\n' | grep -v '^$' | sort -n | head -1)
+        if [ -z "$GPU_MIB" ]; then
+            echo "!! GPU PREFLIGHT: nvidia-smi returned nothing on $NODE_NAME." >&2
+            echo "   Refusing to run blind — a CPU fallback silently produces" >&2
+            echo "   all-NoOp data. Set MIN_GPU_MEM_MIB=0 to override." >&2
+            exit 1
+        fi
+        if [ "$GPU_MIB" -lt "$MIN_GPU_MEM_MIB" ]; then
+            echo "!! GPU PREFLIGHT FAILED on $NODE_NAME:" >&2
+            echo "   ${GPU_MIB} MiB available < ${MIN_GPU_MEM_MIB} MiB required." >&2
+            echo "   This node cannot hold the model; every action-selection" >&2
+            echo "   step would OOM and be silently replaced by NoOp." >&2
+            echo "   Aborting instead of producing 99.8%-NoOp data." >&2
+            # Record the node so submit_*.sh excludes it from here on.
+            if ! grep -qxF "$NODE_NAME" "$BAD_NODE_FILE" 2>/dev/null; then
+                echo "$NODE_NAME" >> "$BAD_NODE_FILE" 2>/dev/null \
+                    && echo "   recorded $NODE_NAME in $(basename "$BAD_NODE_FILE")" >&2
+            fi
+            # Opt-in requeue (GPU_REQUEUE=1). Off by default: the header's
+            # --exclude is fixed at submit time, so a requeued job can land on
+            # the same node again — bounded by SLURM_RESTART_COUNT either way.
+            if [ "${GPU_REQUEUE:-0}" = "1" ] && [ -n "${SLURM_JOB_ID:-}" ] \
+               && [ "${SLURM_RESTART_COUNT:-0}" -lt "${MAX_GPU_REQUEUE:-3}" ]; then
+                echo "   requeueing (restart $((${SLURM_RESTART_COUNT:-0} + 1))/${MAX_GPU_REQUEUE:-3})" >&2
+                scontrol requeue "$SLURM_JOB_ID" || true
+                sleep 20
+            fi
+            exit 1
+        fi
+        echo "GPU check: ${GPU_MIB} MiB on $NODE_NAME (>= ${MIN_GPU_MEM_MIB} MiB) — OK"
+    fi
+
     # Headless-display strategy:
     # Luanti renders frames through Irrlicht → EGL, independently of SDL.
     # SDL_VIDEODRIVER=offscreen silences the SDL side but Irrlicht still

@@ -2,6 +2,12 @@
 # model. One short node name per line (e.g. "grs1"); blank lines and #comments
 # are ignored. gpu_filter.sh turns this into `sbatch --exclude=...`.
 #
+# SLURM range syntax works as a single entry and passes through unchanged, so
+# a whole family of small-GPU nodes needs one line, not one per node:
+#     influ[1-3]
+# Only list nodes that actually exist — sbatch rejects the whole submission on
+# an unknown node name in --exclude.
+#
 # The list grows itself: _common.sh's GPU preflight appends the node it was
 # refused on, so a bad node is excluded from every subsequent submit.
 #
@@ -20,8 +26,14 @@
 # produced 99.8%-NoOp data in six RL runs. Node name unknown — the slurm .out
 # files with the Host: line were not synced. Fill in from sinfo.
 
-# influ3 — RTX 2080 Ti, 11264 MiB. Confirmed from the slurm .out Host: line of
-# job 12765952 (expA_pair_bonding smoke, 2026-08-04). Below the 15000 MiB
-# threshold. Observed there: ~3 min per LLM call and 9h45m of wall time per
-# env step, i.e. 2 of 300 steps in 12.7 h.
-influ3
+# influ2 + influ3 — the cluster's only two influ GPU nodes, both
+# `gpu:turing:4` (RTX 2080 Ti, 11264 MiB each) per
+#     sinfo -N -h -o "%N %G" | grep -i influ
+# influ4/5/6 carry no GPU gres at all, so the range stops at 3.
+#
+# influ3 measured directly: 11264 MiB, below the 15000 MiB threshold. It is
+# also pathologically slow — ~3 min per LLM call and 9h45m of wall clock per
+# env step (2 of 300 steps in 12.7 h), from the slurm .out of job 12765952
+# (expA_pair_bonding smoke, 2026-08-04). Both nodes advertise
+# jobspernode:four, so four jobs share the four cards and contend further.
+influ[2-3]

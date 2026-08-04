@@ -29,6 +29,12 @@ set -u
 cd "$(dirname "$0")"
 mkdir -p slurm_logs
 
+# Keep jobs off GPUs too small to hold the model — the failure mode that
+# produced six 99.8%-NoOp RL runs (see bad_gpu_nodes.txt). Adds --exclude for
+# every known-bad node, plus --constraint when GPU_CONSTRAINT is set.
+source "$(dirname "$0")/gpu_filter.sh"
+echo "GPU filter: --exclude=$GPU_EXCLUDE${GPU_CONSTRAINT:+ --constraint=$GPU_CONSTRAINT}"
+
 REPO=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether
 
 export RUN_GROUP=legacy
@@ -60,9 +66,11 @@ for exp in "${EXPS[@]}"; do
             continue
         fi
         if [ "${DRY_RUN:-0}" = "1" ]; then
-            echo "would queue  $exp  seed_$seed"
+            echo "would queue  $exp  seed_$seed  (${GPU_FILTER_FLAGS[*]})"
         else
-            SEED=$seed sbatch "$exp.sbatch"
+            SEED=$seed sbatch \
+                ${GPU_FILTER_FLAGS[@]:+"${GPU_FILTER_FLAGS[@]}"} \
+                "$exp.sbatch"
             echo "queued  $exp  seed_$seed"
         fi
         n_queued=$((n_queued + 1))
