@@ -2,18 +2,21 @@
 # ────────────────────────────────────────────────────────────────────────────
 # submit_cofiring.sh — Experiment 2: co-firing without enforced communication.
 #
-# 9 arms × 3 seeds, 3 ep × 1000 steps (the medium protocol), RUN_GROUP=cofiring
+# 6 arms × 3 seeds, 3 ep × 1000 steps (the medium protocol), RUN_GROUP=cofiring
 # so nothing pools with final/medium2k/gemma4/legacy.
 #
 #   exp20_cofire_prc          menu comm            credit comm
 #   exp21_cofire_pro          menu obs   (MUTE)    credit obs
 #   exp22_cofire_pri          menu imit  (MUTE)    credit imit
-#   exp23_cofire_prcoi        menu all             credit all      (attribution)
-#   exp24_cofire_prc_credit   menu all             credit comm  ┐
-#   exp25_cofire_pro_credit   menu all             credit obs   ├ Goal-1 primary
-#   exp26_cofire_pri_credit   menu all             credit imit  ┘
+#   exp23_cofire_prcoi        menu all             credit all  (Goal-1 primary:
+#                             per-channel growth attribution within the run)
 #   exp27_cofire_anchor       legacy (enforced comm) — reference + non-regression
 #   exp28_cofire_null         menu none  (MUTE)    credit none     (pr floor)
+#
+# The credit-family arms (full menu, single credited channel) were REMOVED
+# 2026-08-05 at the user's request — prcoi keeps ALL co-firing signals, and
+# channel ranking comes from its within-run attribution (cofiring_events.jsonl
+# + cofire_attribution), cross-checked against the affordance arms exp20-22.
 #
 # MODEL PIN (deliberate): the LLM backbone decision is DEFERRED, and
 # _common.sh silently defaults MODEL_LLM to gemma-4-E4B-it — which is NOT the
@@ -75,9 +78,6 @@ EXPS=(
     exp21_cofire_pro
     exp22_cofire_pri
     exp23_cofire_prcoi
-    exp24_cofire_prc_credit
-    exp25_cofire_pro_credit
-    exp26_cofire_pri_credit
     exp27_cofire_anchor
     exp28_cofire_null
 )

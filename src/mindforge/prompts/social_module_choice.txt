@@ -25,7 +25,8 @@ INSTRUCTIONS:
 
 2. Decide your social suggestion this step:
    - Suggest an act: set `suggest_act` to ONE of the acts listed above and `suggest_target` to the teammate it should be aimed at. Prefer the teammate with the highest bond who is plausibly relevant given their recent communication or position; a rising bond (Δ > 0) marks an active alliance worth investing in. If the act is "communicate", also set `ask_target` to the same teammate and `ask_message` to the message you want sent.
-   - No act: leave `suggest_act = null`, `suggest_target = null`, `ask_target = null`, `ask_message = null`, `respond_to = []`. Stay focused on your own task this step.
+   - COLD START: when every bond still sits near its neutral starting value with Δ ≈ 0, that is ABSENCE of evidence, not evidence of distrust. Bonds can only form through social acts, so early in a run PREFER suggesting an act toward a plausibly relevant teammate over staying silent — that is how you discover who is worth allying with.
+   - No act: leave `suggest_act = null`, `suggest_target = null`, `ask_target = null`, `ask_message = null`, `respond_to = []`. Reserve this for steps where no teammate is plausibly relevant to anyone's current task.
 
 3. In `referenced_bonds`, copy back ONLY the (teammate → weight) pairs you actually used in your reasoning. This is how we verify the bonds drove your decision.
 

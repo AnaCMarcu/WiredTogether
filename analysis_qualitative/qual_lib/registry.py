@@ -53,9 +53,6 @@ SOCIAL_PROMPT_DIRS = {
     "exp21_cofire_pro",
     "exp22_cofire_pri",
     "exp23_cofire_prcoi",
-    "exp24_cofire_prc_credit",
-    "exp25_cofire_pro_credit",
-    "exp26_cofire_pri_credit",
     "exp27_cofire_anchor",
     "exp28_cofire_null",
 }

@@ -13,18 +13,18 @@
 
 # Experiment 2 (co-firing without enforced communication), arm "prcoi".
 #
-# PURPOSE: the full menu {communicate, observe, imitate, none} with all
+# PURPOSE: the full menu {communicate, observe, imitate, none} with ALL
 # three channels credited: cofiring = prox & reward & (comm|obs|imit).
-# This is the within-run channel-attribution arm — cofiring_events.jsonl +
-# the graph's per-channel growth accumulator rank the channels with zero
-# cross-arm confound.
+# This is the GOAL-1 PRIMARY arm (the credit-family arms were removed
+# 2026-08-05; prcoi keeps every co-firing signal): cofiring_events.jsonl +
+# the graph's per-channel growth accumulator rank the channels within the
+# run, with zero cross-arm confound.
 #
-# CAVEAT (pre-registered): within-run attribution confounds channel
-# efficacy with the LLM's act PREFERENCE (if it picks comm 70% of the time,
-# comm trivially dominates raw growth share) — so this arm is DESCRIPTIVE
-# support; the controlled Goal-1 primary is the credit family exp24-exp26.
-# Attribution is reported raw AND per-act-normalised, next to the
-# act-choice distribution.
+# CAVEAT (pre-registered): within-run attribution mixes channel efficacy
+# with the LLM's act PREFERENCE (if it picks comm 70% of the time, comm
+# dominates raw growth share). Mitigation: attribution is reported raw AND
+# per-act-normalised, next to the act-choice distribution, and cross-checked
+# against the single-channel affordance arms exp20-22.
 #
 # SMOKE GATES run on this arm before the sweep: act mix non-degenerate
 # (no act >85%), all three channels fire in cofiring_events.jsonl, W in

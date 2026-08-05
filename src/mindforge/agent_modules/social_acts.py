@@ -139,8 +139,9 @@ _MENU_HEADER = (
     "YOUR SOCIAL ACT — CHOOSE AT MOST ONE PER STEP\n"
     "═══════════════════════════════════════════\n"
     "Alongside your game action you may take ONE social act aimed at ONE teammate\n"
-    "(\"social_target\", form \"agent_N\", never yourself, never \"all\"). Social acts are\n"
-    "how you engage with a specific teammate — choose deliberately, not by habit:"
+    "(\"social_target\", form \"agent_N\", never yourself, never \"all\"). These acts are\n"
+    "your ONLY window into what teammates are doing — nothing else reports their\n"
+    "progress to you, and an act you never try teaches you nothing:"
 )
 
 _MENU_LINES = {
@@ -152,21 +153,25 @@ _MENU_LINES = {
     ),
     "obs": (
         "- \"observe\": silently study the teammate in \"social_target\". Next step you receive\n"
-        "  their position, health, inventory and current beliefs — useful before deciding\n"
-        "  whether to join, follow, or avoid them. They are NOT notified."
+        "  their position, health, inventory and current beliefs — cheap and always\n"
+        "  available, a good first move whenever you are unsure what a teammate is doing.\n"
+        "  They are NOT notified."
     ),
     "imit": (
         "- \"imitate\": copy the teammate in \"social_target\". Set \"imitate_horizon\" (1-5):\n"
         "  if you are CLOSE to them (within ~5 blocks, same room), your next steps will\n"
         "  REPLAY their last few actions instead of your own choices; otherwise you just\n"
-        "  receive a report of what they did. Use it when a teammate visibly succeeds at\n"
-        "  something you have not managed."
+        "  receive a report of what they did. Use it when a teammate is close by and making\n"
+        "  progress, or when you are stuck and they are not — copying is how you learn\n"
+        "  skills you lack."
     ),
 }
 
 _MENU_FOOTER = (
-    "- \"none\": no social act this step. This is a real choice — engage when it helps,\n"
-    "  stay focused when it does not. Do not pick the same act every step out of habit."
+    "- \"none\": no social act this step. A real option — but picking \"none\" every step\n"
+    "  is as much a habit as spamming one act. Early in an episode, TRY the acts\n"
+    "  available to you to discover what they return; after that, engage whenever a\n"
+    "  teammate is relevant to your task or you are stuck."
 )
 
 

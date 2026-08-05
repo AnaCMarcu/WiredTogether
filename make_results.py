@@ -77,9 +77,6 @@ CONDITIONS = [
     ("pro",          "exp21_cofire_pro",           "cofire", True),
     ("pri",          "exp22_cofire_pri",           "cofire", True),
     ("prcoi",        "exp23_cofire_prcoi",         "cofire", True),
-    ("prc*",         "exp24_cofire_prc_credit",    "cofire", True),
-    ("pro*",         "exp25_cofire_pro_credit",    "cofire", True),
-    ("pri*",         "exp26_cofire_pri_credit",    "cofire", True),
     ("anchor",       "exp27_cofire_anchor",        "cofire", True),
     ("null (pr)",    "exp28_cofire_null",          "cofire", True),
 ]
