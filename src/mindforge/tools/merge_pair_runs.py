@@ -86,23 +86,43 @@ def _load_agent_state(run_dir: Path, agent_idx: int) -> dict:
 
 def cmd_rank(args):
     rows = rank_pair_runs(args.run_dirs)
+
+    def _n(v):
+        return "?" if v is None else str(v)
+
     print(f"{'rank':<5} {'bond':>7} {'W01':>7} {'W10':>7} "
-          f"{'anvil_coop':>11}  run_dir")
+          f"{'jointdig':>9} {'coaction':>9} {'proximity':>10}  run_dir")
     for i, row in enumerate(rows):
         if row["error"]:
-            print(f"{i:<5} {'--':>7} {'--':>7} {'--':>7} {'--':>11}  "
+            print(f"{i:<5} {'--':>7} {'--':>7} {'--':>7} "
+                  f"{'--':>9} {'--':>9} {'--':>10}  "
                   f"{row['run_dir']}  [{row['error']}]")
         else:
-            coop = row["anvil_coop_attempts"]
             print(f"{i:<5} {row['bond']:>7.4f} {row['w01']:>7.4f} "
                   f"{row['w10']:>7.4f} "
-                  f"{str(coop if coop is not None else '?'):>11}  "
-                  f"{row['run_dir']}")
-    ranked = [r["run_dir"] for r in rows if r["error"] is None]
-    if len(ranked) >= 3:
-        print("\nTop 3 (pass to `merge` in this order):")
-        for d in ranked[:3]:
-            print(f"  --pair-run {d}")
+                  f"{_n(row['joint_dig']):>9} {_n(row['co_action']):>9} "
+                  f"{_n(row['proximity']):>10}  {row['run_dir']}")
+
+    ok = [r for r in rows if r["error"] is None]
+    # Ranking is on bond, but bond is a confounded proxy for co-firing (see
+    # rank_pair_runs docstring). Say so loudly when the two disagree, rather
+    # than letting the top-3 line imply the behavioural evidence agrees.
+    if len(ok) >= 2 and all(r["joint_dig"] is not None for r in ok):
+        by_dig = sorted(ok, key=lambda r: -r["joint_dig"])
+        if by_dig[0]["run_dir"] != ok[0]["run_dir"]:
+            print(f"\n  !! bond and behaviour DISAGREE: top bond is "
+                  f"{Path(ok[0]['run_dir']).name} "
+                  f"(joint_dig={ok[0]['joint_dig']}), but most joint digs is "
+                  f"{Path(by_dig[0]['run_dir']).name} "
+                  f"(joint_dig={by_dig[0]['joint_dig']}).")
+            print("     W includes an always-on communication term, so it "
+                  "tracks proximity+chatter as well as real co-firing.")
+            print("     Decide the selection rule explicitly before merging.")
+
+    if len(ok) >= 3:
+        print("\nTop 3 by bond (pass to `merge` in this order):")
+        for r in ok[:3]:
+            print(f"  --pair-run {r['run_dir']}")
 
 
 def cmd_merge(args):

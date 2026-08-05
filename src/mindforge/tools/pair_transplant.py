@@ -219,11 +219,50 @@ def build_merged_manifest(pair_states, assignment, condition="transplant"):
     }
 
 
+def read_behavioral_cofiring(run_dir):
+    """Sum the behavioural co-firing counters across a run's episodes.
+
+    Read from ``episodes/*/summary.json -> cooperation_metrics``, NOT from
+    ``final_metrics.json``: the coop_eval nesting bug zeroes the
+    ``coop_metrics.pair_interaction_total`` tensors there (they come back as
+    all-zero matrices even when the episodes recorded real events).
+
+    Returns {joint_dig, co_action, proximity, episodes} with None values if
+    nothing could be read.
+    """
+    run_dir = Path(run_dir)
+    totals = {"joint_dig": 0, "co_action": 0, "proximity": 0, "episodes": 0}
+    found = False
+    for summary in sorted(run_dir.glob("episodes/*/summary.json")):
+        try:
+            with open(summary) as f:
+                cm = json.load(f).get("cooperation_metrics", {}) or {}
+        except Exception:
+            continue
+        found = True
+        totals["joint_dig"] += cm.get("joint_dig_events") or 0
+        totals["co_action"] += cm.get("co_action_events") or 0
+        totals["proximity"] += cm.get("proximity_events") or 0
+        totals["episodes"] += 1
+    if not found:
+        return {k: None for k in totals}
+    return totals
+
+
 def rank_pair_runs(run_dirs):
     """Rank candidate pair runs by final within-pair bond strength.
 
     Returns a list of dicts (strongest bond first):
-      {run_dir, bond, w01, w10, anvil_coop_attempts, error}
+      {run_dir, bond, w01, w10, joint_dig, co_action, proximity, error}
+
+    NOTE on the ranking key: ``bond`` is the transplanted quantity, so it is
+    the sort key — but it is a CONFOUNDED proxy for co-firing. Engagement
+    g_i includes an always-on "did i communicate" term, and agents message
+    on virtually every step, so W tracks proximity-plus-chatter. Observed in
+    the 2026-08-05 smoke: seed_42 ranked first on bond (0.2646) with ZERO
+    joint digs, while seed_123 (0.2484) had 4. The behavioural columns are
+    reported alongside so that mismatch is visible before picking the top 3.
+
     Runs whose hebbian_graph_final.json is missing/unreadable sort last with
     an ``error`` note instead of being dropped silently.
     """
@@ -235,7 +274,6 @@ def rank_pair_runs(run_dirs):
             "bond": None,
             "w01": None,
             "w10": None,
-            "anvil_coop_attempts": None,
             "error": None,
         }
         try:
@@ -246,12 +284,7 @@ def rank_pair_runs(run_dirs):
             row["bond"] = (row["w01"] + row["w10"]) / 2.0
         except Exception as exc:
             row["error"] = f"hebbian_graph_final.json: {exc}"
-        try:
-            with open(run_dir / "final_metrics.json") as f:
-                metrics = json.load(f)
-            row["anvil_coop_attempts"] = metrics.get("anvil_coop_attempts")
-        except Exception:
-            pass  # metrics are informational; the bond is the ranking key
+        row.update(read_behavioral_cofiring(run_dir))
         rows.append(row)
 
     rows.sort(key=lambda r: (r["bond"] is None, -(r["bond"] or 0.0)))

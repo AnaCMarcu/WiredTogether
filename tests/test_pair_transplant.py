@@ -211,21 +211,28 @@ def test_manifest_shuffled_partner_points_at_stranger_seatmate():
 
 # ── rank_pair_runs ───────────────────────────────────────────────────────────
 
-def _write_run(tmp_path, name, w01, w10, coop=None):
+def _write_run(tmp_path, name, w01, w10, episodes=None):
+    """episodes: list of (joint_dig, co_action, proximity) per episode."""
     d = tmp_path / name
     d.mkdir()
     with open(d / "hebbian_graph_final.json", "w") as f:
         json.dump({"num_agents": 2,
                    "W": [[0.0, w01], [w10, 0.0]]}, f)
-    if coop is not None:
-        with open(d / "final_metrics.json", "w") as f:
-            json.dump({"anvil_coop_attempts": coop}, f)
+    for k, (jd, ca, px) in enumerate(episodes or [], start=1):
+        ep = d / "episodes" / f"ep_{k:04d}"
+        ep.mkdir(parents=True)
+        with open(ep / "summary.json", "w") as f:
+            json.dump({"episode": k, "cooperation_metrics": {
+                "joint_dig_events": jd,
+                "co_action_events": ca,
+                "proximity_events": px,
+            }}, f)
     return d
 
 
 def test_rank_orders_by_mean_bond(tmp_path):
-    weak = _write_run(tmp_path, "weak", 0.2, 0.2, coop=1)
-    strong = _write_run(tmp_path, "strong", 0.9, 0.8, coop=5)
+    weak = _write_run(tmp_path, "weak", 0.2, 0.2, episodes=[(1, 10, 20)])
+    strong = _write_run(tmp_path, "strong", 0.9, 0.8, episodes=[(5, 30, 40)])
     mid = _write_run(tmp_path, "mid", 0.5, 0.5)
     broken = tmp_path / "broken"
     broken.mkdir()
@@ -235,8 +242,30 @@ def test_rank_orders_by_mean_bond(tmp_path):
         str(strong), str(mid), str(weak)
     ]
     assert rows[0]["bond"] == pytest.approx(0.85)
-    assert rows[0]["anvil_coop_attempts"] == 5
-    assert rows[1]["anvil_coop_attempts"] is None
+    assert rows[0]["joint_dig"] == 5
+    # No episodes/ at all -> None, not a misleading 0.
+    assert rows[1]["joint_dig"] is None
     # Unreadable runs sort last with an error note, not dropped.
     assert rows[3]["run_dir"] == str(broken)
     assert rows[3]["error"] is not None and rows[3]["bond"] is None
+
+
+def test_rank_sums_behavioural_counters_across_episodes(tmp_path):
+    run = _write_run(tmp_path, "r", 0.3, 0.3, episodes=[(1, 48, 58), (3, 74, 59)])
+    row = rank_pair_runs([run])[0]
+    assert row["joint_dig"] == 4
+    assert row["co_action"] == 122
+    assert row["proximity"] == 117
+    assert row["episodes"] == 2
+
+
+def test_rank_surfaces_bond_vs_behaviour_mismatch(tmp_path):
+    # The real 2026-08-05 smoke shape: higher bond, zero joint digs.
+    hi_bond = _write_run(tmp_path, "seed_42", 0.2647, 0.2645,
+                         episodes=[(0, 46, 39), (0, 57, 43)])
+    lo_bond = _write_run(tmp_path, "seed_123", 0.2483, 0.2484,
+                         episodes=[(1, 48, 58), (3, 74, 59)])
+    rows = rank_pair_runs([lo_bond, hi_bond])
+    assert rows[0]["run_dir"] == str(hi_bond)   # bond ranks it first
+    assert rows[0]["joint_dig"] == 0            # despite never co-digging
+    assert rows[1]["joint_dig"] == 4
