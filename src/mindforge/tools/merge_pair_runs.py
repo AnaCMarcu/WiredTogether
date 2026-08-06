@@ -39,14 +39,18 @@ if __package__ in (None, ""):
         build_merged_manifest,
         build_slot_assignment,
         merge_hebbian_W,
+        pair_cofired,
         rank_pair_runs,
+        read_cofiring_milestones,
     )
 else:
     from .pair_transplant import (
         build_merged_manifest,
         build_slot_assignment,
         merge_hebbian_W,
+        pair_cofired,
         rank_pair_runs,
+        read_cofiring_milestones,
     )
 
 
@@ -91,17 +95,20 @@ def cmd_rank(args):
         return "?" if v is None else str(v)
 
     print(f"{'rank':<5} {'bond':>7} {'W01':>7} {'W10':>7} "
-          f"{'jointdig':>9} {'coaction':>9} {'proximity':>10}  run_dir")
+          f"{'jointdig':>9} {'coaction':>9} {'COFIRED':>8}  run_dir")
     for i, row in enumerate(rows):
         if row["error"]:
             print(f"{i:<5} {'--':>7} {'--':>7} {'--':>7} "
-                  f"{'--':>9} {'--':>9} {'--':>10}  "
+                  f"{'--':>9} {'--':>9} {'--':>8}  "
                   f"{row['run_dir']}  [{row['error']}]")
         else:
+            mark = "YES" if row.get("cofired") else "no"
             print(f"{i:<5} {row['bond']:>7.4f} {row['w01']:>7.4f} "
                   f"{row['w10']:>7.4f} "
                   f"{_n(row['joint_dig']):>9} {_n(row['co_action']):>9} "
-                  f"{_n(row['proximity']):>10}  {row['run_dir']}")
+                  f"{mark:>8}  {row['run_dir']}"
+                  + (f"  {row['cofiring_milestones']}"
+                     if row.get("cofiring_milestones") else ""))
 
     ok = [r for r in rows if r["error"] is None]
     # Ranking is on bond, but bond is a confounded proxy for co-firing (see
@@ -144,7 +151,19 @@ def cmd_merge(args):
     W, provenance = merge_hebbian_W(
         pair_Ws, cross_weight=args.cross_weight, normalize=args.normalize
     )
-    manifest = build_merged_manifest(pair_states, assignment, condition)
+    # Ground-truth co-firing per source pair, so Phase B analysis can tell a
+    # genuine dyad from a control dyad. Derived from the run's own
+    # milestones, never hand-entered.
+    pair_meta = {
+        k: {
+            "run_dir": str(d),
+            "cofired": pair_cofired(d),
+            "cofiring_milestones": read_cofiring_milestones(d),
+        }
+        for k, d in enumerate(run_dirs)
+    }
+    manifest = build_merged_manifest(pair_states, assignment, condition,
+                                     pair_meta=pair_meta)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -156,6 +175,8 @@ def cmd_merge(args):
         "seed": args.seed if args.shuffled else None,
         "assignment": [list(a) for a in assignment],
         "sources": [str(d) for d in run_dirs],
+        "source_cofired": {str(k): v["cofired"] for k, v in pair_meta.items()},
+        "seat_pairs": manifest["seat_pairs"],
         **provenance,
     }
     with open(out_dir / "merged_W.json", "w") as f:
@@ -168,6 +189,14 @@ def cmd_merge(args):
     print(f"  seats: " + ", ".join(
         f"seat{s}<-run{r}/agent_{a}" for s, (r, a) in enumerate(assignment)
     ))
+    print("  seat pairs:")
+    for sp in manifest["seat_pairs"]:
+        if sp["same_source_run"]:
+            tag = "GENUINE (co-fired)" if sp["cofired"] else "CONTROL (never co-fired)"
+            src = Path(sp["source_run"]).name if sp["source_run"] else "?"
+            print(f"    seats {sp['seats']}: {tag} <- {src}")
+        else:
+            print(f"    seats {sp['seats']}: strangers (shuffled)")
     print(f"  block means {provenance['block_means']} -> rescale "
           f"{provenance['rescale_factors']} (normalize={args.normalize})")
     for row in W:

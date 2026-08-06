@@ -152,7 +152,8 @@ def build_slot_assignment(n_pairs=3, shuffled=False, seed=0):
     return assignment
 
 
-def build_merged_manifest(pair_states, assignment, condition="transplant"):
+def build_merged_manifest(pair_states, assignment, condition="transplant",
+                          pair_meta=None):
     """Build the ``--agent-state-init`` manifest for the merged run.
 
     pair_states: per source run, ``{0: state, 1: state}`` — the parsed
@@ -203,18 +204,41 @@ def build_merged_manifest(pair_states, assignment, condition="transplant"):
             ],
         }
 
+        meta = (pair_meta or {}).get(run_idx, {}) if pair_meta else {}
         agents_out[str(seat)] = {
             "agent_name": f"agent_{seat}",
             "source": f"pair_run_{run_idx}/agent_{agent_idx}",
+            "source_run": meta.get("run_dir"),
+            # Did the SOURCE pair actually co-fire in Phase A? Seat pairs
+            # built from a non-co-firing source are the built-in control:
+            # same machinery, same bond magnitude, no shared achievement.
+            "source_cofired": meta.get("cofired"),
+            "source_cofiring_milestones": meta.get("cofiring_milestones"),
             "skills": skills_out,
             "episodes": episodes_out,
             "curriculum": curriculum_out,
         }
 
+    # Seat-pair level summary: which of the three dyads are genuine. In the
+    # shuffled condition a seat pair spans two different source runs, so
+    # "genuine" is meaningless there and cofired is recorded as None.
+    seat_pairs = []
+    for k in range(len(assignment) // 2):
+        a, b = assignment[2 * k], assignment[2 * k + 1]
+        same = a[0] == b[0]
+        m = (pair_meta or {}).get(a[0], {}) if pair_meta else {}
+        seat_pairs.append({
+            "seats": [2 * k, 2 * k + 1],
+            "same_source_run": same,
+            "cofired": m.get("cofired") if same else None,
+            "source_run": m.get("run_dir") if same else None,
+        })
+
     return {
         "condition": condition,
         "num_agents": len(assignment),
         "assignment": [list(a) for a in assignment],
+        "seat_pairs": seat_pairs,
         "agents": agents_out,
     }
 
@@ -247,6 +271,43 @@ def read_behavioral_cofiring(run_dir):
     if not found:
         return {k: None for k in totals}
     return totals
+
+
+# Milestones that CANNOT be earned alone. Solo digging on an anvil is
+# net-zero by construction (SOLO_DIG_RATE 1 - DECAY_RATE 1), so an anvil
+# break is proof two agents dug the same anvil inside ACTIVE_WINDOW. The
+# gear equips follow from a break, so they are corroborating evidence.
+COFIRING_MILESTONES = frozenset({
+    "m8_anvil_A1", "m9_anvil_B1",
+    "m14_sword_equipped", "m15_chestplate_equipped",
+})
+
+
+def read_cofiring_milestones(run_dir):
+    """Return the sorted co-firing milestones a pair run actually earned.
+
+    This is the ground-truth co-firing signal, and it is NOT interchangeable
+    with the bond: across the 2026-08-06 Phase A batch the two runs that
+    broke an anvil ranked 5th and 8th of 8 by bond, and the top three by
+    bond earned none. Nor with joint_dig_events, which counts same-step digs
+    while the anvil credits any two digs inside ACTIVE_WINDOW (~30 ticks).
+    """
+    run_dir = Path(run_dir)
+    try:
+        with open(run_dir / "final_metrics.json") as f:
+            per_agent = json.load(f).get("milestones_per_agent") or {}
+    except Exception:
+        return []
+    earned = set()
+    for v in per_agent.values():
+        if isinstance(v, list):
+            earned.update(m for m in v if m in COFIRING_MILESTONES)
+    return sorted(earned)
+
+
+def pair_cofired(run_dir):
+    """True if this pair earned a milestone that is impossible to earn alone."""
+    return bool(read_cofiring_milestones(run_dir))
 
 
 def rank_pair_runs(run_dirs):
@@ -285,6 +346,8 @@ def rank_pair_runs(run_dirs):
         except Exception as exc:
             row["error"] = f"hebbian_graph_final.json: {exc}"
         row.update(read_behavioral_cofiring(run_dir))
+        row["cofiring_milestones"] = read_cofiring_milestones(run_dir)
+        row["cofired"] = bool(row["cofiring_milestones"])
         rows.append(row)
 
     rows.sort(key=lambda r: (r["bond"] is None, -(r["bond"] or 0.0)))

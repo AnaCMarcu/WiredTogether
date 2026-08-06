@@ -259,6 +259,59 @@ def test_rank_sums_behavioural_counters_across_episodes(tmp_path):
     assert row["episodes"] == 2
 
 
+def test_cofired_flag_from_anvil_milestones(tmp_path):
+    from mindforge.tools.pair_transplant import (
+        pair_cofired, read_cofiring_milestones,
+    )
+    genuine = _write_run(tmp_path, "genuine", 0.25, 0.25, episodes=[(1, 5, 5)])
+    with open(genuine / "final_metrics.json", "w") as f:
+        json.dump({"milestones_per_agent": {
+            "agent_0": ["m1_move_5", "m9_anvil_B1"],
+            "agent_1": ["m9_anvil_B1", "m15_chestplate_equipped"],
+        }}, f)
+    control = _write_run(tmp_path, "control", 0.29, 0.29, episodes=[(6, 9, 9)])
+    with open(control / "final_metrics.json", "w") as f:
+        json.dump({"milestones_per_agent": {
+            "agent_0": ["m1_move_5", "m2_dig_3_any"], "agent_1": ["m1_move_5"],
+        }}, f)
+
+    assert pair_cofired(genuine) is True
+    assert read_cofiring_milestones(genuine) == [
+        "m15_chestplate_equipped", "m9_anvil_B1"
+    ]
+    # Solo-earnable milestones and a high joint_dig do NOT make it co-firing.
+    assert pair_cofired(control) is False
+    assert read_cofiring_milestones(control) == []
+    # Missing final_metrics.json must not raise.
+    assert pair_cofired(tmp_path / "nonexistent") is False
+
+
+def test_manifest_records_seat_pair_provenance(tmp_path):
+    states = _pair_states()
+    meta = {
+        0: {"run_dir": "/runs/seed_123", "cofired": True,
+            "cofiring_milestones": ["m9_anvil_B1"]},
+        1: {"run_dir": "/runs/seed_1415", "cofired": True,
+            "cofiring_milestones": ["m9_anvil_B1"]},
+        2: {"run_dir": "/runs/seed_42", "cofired": False,
+            "cofiring_milestones": []},
+    }
+    m = build_merged_manifest(states, build_slot_assignment(3), pair_meta=meta)
+    sp = m["seat_pairs"]
+    assert [p["cofired"] for p in sp] == [True, True, False]
+    assert all(p["same_source_run"] for p in sp)
+    # Seat 4/5 are the built-in control dyad.
+    assert m["agents"]["4"]["source_cofired"] is False
+    assert m["agents"]["0"]["source_cofired"] is True
+
+    # Shuffled: no seat pair shares a source run, so "genuine" is undefined.
+    ms = build_merged_manifest(
+        states, build_slot_assignment(3, shuffled=True, seed=0),
+        condition="shuffled", pair_meta=meta)
+    assert all(p["cofired"] is None for p in ms["seat_pairs"])
+    assert not any(p["same_source_run"] for p in ms["seat_pairs"])
+
+
 def test_rank_surfaces_bond_vs_behaviour_mismatch(tmp_path):
     # The real 2026-08-05 smoke shape: higher bond, zero joint digs.
     hi_bond = _write_run(tmp_path, "seed_42", 0.2647, 0.2645,
