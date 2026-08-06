@@ -148,10 +148,17 @@ def check_prcoi(run_dir: Path) -> None:
     missing = [ch for ch, n in chans.items() if n == 0]
     if n_rows == 0:
         _report("FAIL", arm, "cofiring_events.jsonl empty -- no co-firing at all")
-    elif missing:
+    elif [ch for ch in missing if ch != "imit"]:
         _report("FAIL", arm, f"channel(s) never fired in {n_rows} co-firing "
                              f"rows: {', '.join(missing)} "
                              f"(counts: {chans})")
+    elif missing == ["imit"]:
+        # In prcoi the model may legitimately dodge imitate (that preference
+        # is itself a finding); the BINDING imitation-machinery test is the
+        # pri arm, whose gates below stay hard FAILs.
+        _report("WARN", arm, f"imit channel silent in prcoi ({chans} over "
+                             f"{n_rows} rows) -- acceptable IF pri's "
+                             f"imitation gates pass")
     else:
         _report("PASS", arm, f"all channels fire: {chans} over {n_rows} rows")
 
