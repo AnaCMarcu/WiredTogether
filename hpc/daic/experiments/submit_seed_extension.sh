@@ -36,11 +36,22 @@ source "$(dirname "$0")/gpu_filter.sh"
 echo "GPU filter: --exclude=$GPU_EXCLUDE${GPU_CONSTRAINT:+ --constraint=$GPU_CONSTRAINT}"
 
 REPO=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether
+WORKSPACE_MODELS=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/models
 
 export RUN_GROUP=legacy
 export EPISODES=3
 export MAX_STEPS=1000
 export WANDB_PROJECT=medium_wired_together
+
+# The reasoning core is part of the medium config too. _common.sh now defaults
+# MODEL_LLM (and with it MODEL_2B/MODEL_9B) to Gemma 4, which (a) is not what
+# the existing 60 medium runs used and (b) hard-crashes every RL arm — PEFT
+# cannot inject LoRA into Gemma4ClippableLinear:
+#     ValueError: Target module Gemma4ClippableLinear(...) is not supported.
+# That killed the 2026-08-04 and 2026-08-06 re-run batches at model load.
+# Pin both sizes to the Qwen models the medium suite was actually run with.
+export MODEL_2B="${MODEL_2B:-$WORKSPACE_MODELS/Qwen3.5-2B}"
+export MODEL_9B="${MODEL_9B:-$WORKSPACE_MODELS/Qwen3.5-9B}"
 
 EXPS=(
     exp01_llm_2b
