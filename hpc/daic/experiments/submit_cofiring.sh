@@ -107,6 +107,10 @@ SBATCH_OVERRIDES=()
 [ -n "${TIME:-}" ] && SBATCH_OVERRIDES+=(--time="$TIME")
 [ -n "${GPU:-}" ]  && SBATCH_OVERRIDES+=(--gres="$GPU")
 [ -n "${MEM:-}" ]  && SBATCH_OVERRIDES+=(--mem="$MEM")
+# Node exclusion. NOTE: a command-line --exclude REPLACES the sbatch files'
+# baked-in "--exclude=cor1", so always include cor1 in the list, e.g.
+#   EXCLUDE=cor1,influ2,influ3 bash submit_cofiring.sh
+[ -n "${EXCLUDE:-}" ] && SBATCH_OVERRIDES+=(--exclude="$EXCLUDE")
 
 echo "== submit_cofiring.sh =="
 echo "  model     : $MODEL_LLM"
