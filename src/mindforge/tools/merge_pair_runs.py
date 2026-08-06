@@ -208,7 +208,9 @@ def cmd_merge(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    sub = parser.add_subparsers(dest="command", required=True)
+    # No required=True: the DAIC login node runs Python 3.6, where
+    # add_subparsers() does not accept it. Enforced manually below.
+    sub = parser.add_subparsers(dest="command")
 
     p_rank = sub.add_parser(
         "rank", help="rank pair runs by final within-pair bond strength"
@@ -238,6 +240,9 @@ def main(argv=None):
     p_merge.set_defaults(func=cmd_merge)
 
     args = parser.parse_args(argv)
+    if not getattr(args, "command", None):
+        parser.print_help()
+        raise SystemExit(2)
     args.func(args)
 
 
