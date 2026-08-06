@@ -9,7 +9,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/new_exp_0_gemma_%j.out
 #SBATCH --error=slurm_logs/new_exp_0_gemma_%j.err
-#SBATCH --exclude=cor1
+#SBATCH --exclude=cor1,influ[2-3]
 
 # ───────────────────────────────────────────────────────────────────────────
 # new_exp_0_gemma — Gemma 4 LLM agents, with and without the Hebbian social
@@ -31,6 +31,16 @@
 #
 # One arm, one seed:
 #   SEED=42 HEBBIAN=1 sbatch new_exp_0_gemma.sbatch
+#
+# The --exclude header lists influ[2-3] directly (not just cor1) so a plain
+# `sbatch new_exp_0_gemma.sbatch` is safe. Both influ GPU nodes are 11264 MiB
+# RTX 2080 Tis — under _common.sh's 15000 MiB preflight threshold — so jobs
+# landing there abort at startup with "GPU PREFLIGHT FAILED". Submitting
+# through gpu_filter.sh (which reads bad_gpu_nodes.txt) achieves the same and
+# stays current as the preflight appends new offenders; this header is the
+# belt for direct submissions:
+#     source gpu_filter.sh
+#     sbatch ${GPU_FILTER_FLAGS[@]:+"${GPU_FILTER_FLAGS[@]}"} new_exp_0_gemma.sbatch
 #
 # Scheduled on medium qos / 36 h rather than the long-qos 168 h the other exp
 # files ask for: 3 × 1000 steps is a fraction of the final suite's 5 × 2500 and
