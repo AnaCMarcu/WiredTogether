@@ -15,21 +15,22 @@
 #
 # PURPOSE: imitation as the ONLY social channel. Menu {imitate, none} —
 # MUTE arm (Ch3 unsolvable by construction; comm-independent subset is the
-# fallback metric). Imitation is COMMITTED REPLAY: imitate(j, h<=5) within
-# interaction_radius AND the same chamber replays j's last h actions instead
-# of the agent's own choices (abort on chamber change / damage / reset);
-# outside the gate it degrades to an informational report with NO credit.
-# Credit is directed (imitator only) and fires per replayed step.
-# cofiring = prox & reward & imit.
+# fallback metric). Imitation is GUIDED (2026-08-07 redesign): imitate(j,
+# h<=5) delivers j's last h actions PLUS j's state (task, position) with
+# instructions to judge whether the agent's own situation matches before
+# re-enacting — the agent stays in control of every action, nothing is
+# auto-replayed. The imit channel is credited on ADOPTION: each step the
+# agent's own chosen action matches the next element of the delivered
+# sequence (directed, imitator only). cofiring = prox & reward & imit.
 #
-# HYPOTHESIS (pre-registered): imitation-driven wiring REQUIRES co-location,
-# so if agents drift apart the graph stays near-empty — that is a finding,
-# not a failure. Where the gate does open, bonds should track behavioral
-# copying tightly (high rho_joint_dig / rho_proximity).
+# HYPOTHESIS (pre-registered): imitation-driven wiring requires a teammate
+# whose situation transfers, so bonds should form toward agents whose
+# behavior is WORTH copying — check rho_joint_dig / rho_proximity and the
+# imit_adoption_rate + adopted-vs-baseline reward payoff.
 #
-# PRE-STATED expected risk: imitation_abort_rate ~1.0 or gate never passing
-# means the arm is measuring proximity, not imitation — the smoke gate
-# checks this before the full sweep.
+# PRE-STATED expected risk: zero adoption (sequences delivered but never
+# re-enacted) means the arm measures nothing — the smoke gate checks this
+# before the full sweep.
 
 # Model must be pinned EXPLICITLY (decision deferred) — see exp20 header.
 if [ -z "${MODEL_LLM:-}" ]; then

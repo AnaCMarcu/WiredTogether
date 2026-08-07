@@ -1,0 +1,33 @@
+label,n_texts,cluster,size,share,representative
+Gemma-E4B,18630,8,922,0.2305,i am moving forward now to get closer to the anvils.
+Gemma-E4B,18630,5,471,0.1177,still locked?
+Gemma-E4B,18630,3,379,0.0948,door still locked?
+Gemma-E4B,18630,0,373,0.0932,"i am moving forward now, looking for the anvils."
+Gemma-E4B,18630,14,276,0.069,still turning right to face north. let me know when you see the switch.
+Gemma-E4B,18630,4,243,0.0607,"still moving forward, looking for the anvils now."
+Gemma-E4B,18630,6,197,0.0493,ready to move north when door opens.
+Gemma-E4B,18630,13,194,0.0485,"door is open, moving north now."
+Gemma-E4B,18630,9,192,0.048,"turning left 90 deg now, looking for zombies or the door to ch5."
+Gemma-E4B,18630,15,148,0.037,"switch is centered, ready to press."
+Gemma-E4B,18630,10,147,0.0367,i'm turning left to survey the area as requested.
+Gemma-E4B,18630,1,136,0.034,attacking zombie now.
+Gemma-E4B,18630,11,116,0.029,"boss is centered, attacking now."
+Gemma-E4B,18630,7,88,0.022,need confirmation on door status.
+Gemma-E4B,18630,2,81,0.0203,approaching center anvils now.
+Gemma-E4B,18630,12,37,0.0092,boss is visible; i am attacking now to start damage.
+Gemma-E4B+Heb,14713,8,1003,0.2507,digging switch now
+Gemma-E4B+Heb,14713,3,400,0.1,door still locked?
+Gemma-E4B+Heb,14713,4,356,0.089,still turning right to face east as planned.
+Gemma-E4B+Heb,14713,5,355,0.0887,still locked?
+Gemma-E4B+Heb,14713,0,340,0.085,i am moving forward now to reach the anvils.
+Gemma-E4B+Heb,14713,10,252,0.063,i'm moving forward to help locate the anvils.
+Gemma-E4B+Heb,14713,14,234,0.0585,"still sweeping walls, looking for the blue cube on the south wall."
+Gemma-E4B+Heb,14713,13,231,0.0578,"door is open, moving north now."
+Gemma-E4B+Heb,14713,6,181,0.0452,waiting for switch signal.
+Gemma-E4B+Heb,14713,9,145,0.0362,digging stone now to help open door 1
+Gemma-E4B+Heb,14713,11,129,0.0323,turning right to find anvils.
+Gemma-E4B+Heb,14713,1,100,0.025,"zombies visible now, i'm turning to center one for attack."
+Gemma-E4B+Heb,14713,15,97,0.0243,"switch is centered, attempting to press it now."
+Gemma-E4B+Heb,14713,7,70,0.0175,"door 1 is open, i am moving into ch2 now."
+Gemma-E4B+Heb,14713,2,70,0.0175,"zombie is centered, attacking now."
+Gemma-E4B+Heb,14713,12,37,0.0092,wall is solid red here. trying to backtrack to find an opening.

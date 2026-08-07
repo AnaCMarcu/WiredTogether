@@ -1,0 +1,10 @@
+action_stuck_loop,critic_false_positive,degenerate_comm,door_confusion,hallucinated_object_belief,hallucinated_object_message,hallucinated_object_thought,idle_pattern,label,quarantined,run,seed,task_repeat_loop
+2.06,1.65,0.83,9.49,92.03,55.3,163.43,,Gemma-E4B,False,new_exp_0_gemma_base/seed_1011,1011,
+3.61,2.01,0.4,4.01,83.83,52.55,252.31,,Gemma-E4B,False,new_exp_0_gemma_base/seed_1213,1213,2.01
+4.04,2.02,0.4,8.09,82.49,25.07,162.56,,Gemma-E4B,False,new_exp_0_gemma_base/seed_42,42,1.21
+1.52,0.76,,8.37,83.75,113.44,466.31,,Gemma-E4B,False,new_exp_0_gemma_base/seed_456,456,
+3.26,1.22,0.82,4.49,77.93,51.82,198.29,0.82,Gemma-E4B,False,new_exp_0_gemma_base/seed_789,789,1.63
+1.24,2.06,0.83,5.78,89.15,97.81,287.25,,Gemma-E4B+Heb,False,new_exp_0_gemma_hebbian/seed_1011,1011,1.24
+3.26,1.22,,4.9,67.73,35.5,92.62,,Gemma-E4B+Heb,False,new_exp_0_gemma_hebbian/seed_42,42,3.26
+4.93,2.05,0.82,10.68,92.44,44.37,182.83,,Gemma-E4B+Heb,False,new_exp_0_gemma_hebbian/seed_456,456,2.05
+6.71,1.58,0.39,7.11,54.48,53.3,181.6,,Gemma-E4B+Heb,False,new_exp_0_gemma_hebbian/seed_789,789,2.76

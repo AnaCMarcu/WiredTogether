@@ -1,0 +1,110 @@
+{
+ "run": "new_exp_0_gemma_hebbian/seed_456",
+ "degraded": false,
+ "is_rl": false,
+ "quarantine_step_keyed": false,
+ "align": {
+  "0": {
+   "offset": 0,
+   "match_rate": 1.0,
+   "n_compared": 2431,
+   "n_units": 2431,
+   "n_rows": 2431,
+   "status": "exact",
+   "coverage": 1.0
+  },
+  "1": {
+   "offset": 0,
+   "match_rate": 1.0,
+   "n_compared": 2431,
+   "n_units": 2431,
+   "n_rows": 2431,
+   "status": "exact",
+   "coverage": 1.0
+  },
+  "2": {
+   "offset": 0,
+   "match_rate": 1.0,
+   "n_compared": 2431,
+   "n_units": 2431,
+   "n_rows": 2431,
+   "status": "exact",
+   "coverage": 1.0
+  }
+ },
+ "attribution": {
+  "attributed": 7863,
+  "unattributed": 0,
+  "low_conf": 0,
+  "stale_units": 0
+ },
+ "cadence": {
+  "belief_perception": {
+   "rate": 0.9615912208504801,
+   "n": 1458
+  },
+  "critic": {
+   "rate": 0.8705234159779615,
+   "n": 363
+  },
+  "social": {
+   "rate": 1.0,
+   "n": 912
+  }
+ },
+ "clock": null,
+ "intervals": {
+  "belief_interval": 5,
+  "critic_interval": 20,
+  "social_interval": 8,
+  "num_agents": 3
+ },
+ "checks": {
+  "messages_vs_comm_metrics": {
+   "messages_jsonl": 7293,
+   "comm_metrics_total": 7293,
+   "ok": true
+  },
+  "routing_vs_breakdown": {
+   "messages_jsonl": {
+    "model": 7293
+   },
+   "comm_metrics": {
+    "model": 7293
+   }
+  },
+  "hebbian_W_snapshot_vs_summary": {
+   "episodes_compared": 3,
+   "all_equal": true
+  },
+  "parse_fail_by_module": {
+   "action_selection": {
+    "n": 7293,
+    "fail": 0
+   },
+   "auto_curriculum": {
+    "n": 404,
+    "fail": 0
+   },
+   "belief_system": {
+    "n": 5821,
+    "fail": 0
+   },
+   "critic": {
+    "n": 363,
+    "fail": 0
+   },
+   "episodic_memory": {
+    "n": 363,
+    "fail": 0
+   },
+   "social_module": {
+    "n": 912,
+    "fail": 0
+   }
+  }
+ },
+ "n_units": 15156,
+ "n_timeline_rows": 7293,
+ "elapsed_s": 2.6
+}

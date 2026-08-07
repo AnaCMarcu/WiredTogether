@@ -84,28 +84,9 @@ def test_clamp_horizon_bounds():
     assert sa.clamp_horizon(None) == 1
 
 
-# ── imitation_gate ──────────────────────────────────────────────────────────
-
-def test_gate_near_same_chamber_passes():
-    assert sa.imitation_gate((0, 0, 0), (3, 0, 0), "ch2", "ch2", radius=5.0)
-
-
-def test_gate_radius_boundary_inclusive():
-    assert sa.imitation_gate((0, 0, 0), (5, 0, 0), "ch2", "ch2", radius=5.0)
-    assert not sa.imitation_gate((0, 0, 0), (5.01, 0, 0), "ch2", "ch2",
-                                 radius=5.0)
-
-
-def test_gate_different_chamber_fails():
-    assert not sa.imitation_gate((0, 0, 0), (1, 0, 0), "ch2", "ch3",
-                                 radius=5.0)
-
-
-def test_gate_missing_state_fails():
-    assert not sa.imitation_gate(None, (0, 0, 0), "ch2", "ch2", radius=5.0)
-    assert not sa.imitation_gate((0, 0, 0), (1, 0, 0), None, "ch2", radius=5.0)
-    assert not sa.imitation_gate((0, 0, 0), (1, 0, 0), "ch2", None, radius=5.0)
-
+# (The proximity/chamber imitation gate was removed 2026-08-07 with the
+# guided-imitation redesign — applicability judgment moved into the agent,
+# and adoption crediting is pinned in tests/test_imitation_adoption.py.)
 
 # ── menu / schema rendering ─────────────────────────────────────────────────
 

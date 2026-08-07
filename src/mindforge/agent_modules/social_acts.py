@@ -2,7 +2,8 @@
 
 One place for everything the per-step social-act choice needs: act/channel
 names, CLI parsing, menu + schema rendering for the parallel choice-mode
-prompt templates, the imitation act gate, and horizon clamping.
+prompt templates, guided-imitation delivery + adoption tracking, and
+horizon clamping.
 
 Legacy mode never imports the rendered templates: ``--social-act-mode legacy``
 keeps loading the original prompt files byte-for-byte (see
@@ -11,10 +12,9 @@ keeps loading the original prompt files byte-for-byte (see
 
 from __future__ import annotations
 
-import math
 import os
 import re
-from typing import Optional, Sequence, Tuple
+from typing import Sequence, Tuple
 
 # ── Canonical names ────────────────────────────────────────────────────
 # LLM-facing act verbs ↔ Hebbian channel tags.
@@ -32,9 +32,9 @@ CHANNEL_TO_ACT = {v: k for k, v in ACT_TO_CHANNEL.items()}
 
 ALL_CHANNELS = ("comm", "obs", "imit")
 
-# One imitate() act may commit the motor channel for at most this many steps:
-# a single act must not skip 20 action calls and mint 20 co-firing events
-# against a message's one.
+# Max actions one imitate() act may fetch (and thus the max adoption credit
+# a single act can mint) — bounds imit's per-act credit against a message's
+# one event.
 IMITATE_MAX_HORIZON = 5
 
 _ACT_ALIASES = {
@@ -107,29 +107,74 @@ def clamp_horizon(h) -> int:
     return max(1, min(IMITATE_MAX_HORIZON, v))
 
 
-def imitation_gate(
-    pos_i: Optional[Sequence[float]],
-    pos_j: Optional[Sequence[float]],
-    chamber_i,
-    chamber_j,
-    radius: float = 5.0,
-) -> bool:
-    """The imitation act gate: within ``radius`` AND same chamber.
+# ── Guided imitation (2026-08-07 redesign) ─────────────────────────────
+# imitate(j, h) no longer force-replays: the agent RECEIVES j's last h
+# actions + j's state (task, position) with instructions to judge whether
+# its own situation matches, and stays in control of every action. The
+# imit co-firing channel is credited on ADOPTION: each step the imitator's
+# chosen action matches the next unconsumed element of the delivered
+# sequence (in order, non-matching steps tolerated) within the window.
 
-    This is what makes committed replay state-correspondent — replaying
-    ``Dig`` from 8 blocks away facing the wrong wall is noise — and what
-    couples imitation to proximity by construction. Missing positions or
-    chambers fail the gate (degrade to the informational fallback).
+# A delivered sequence of h actions stays adoptable for h*FACTOR steps —
+# slack for aiming/turning between copied actions.
+ADOPTION_WINDOW_FACTOR = 3
+
+
+class PendingImitation:
+    """Tracks one delivered imitation sequence for adoption crediting."""
+
+    def __init__(self, target: int, sequence: Sequence[str], start_step: int):
+        self.target = int(target)
+        self.sequence = [a for a in sequence if a]
+        self.start_step = int(start_step)
+        self.ptr = 0
+
+    def done(self) -> bool:
+        return self.ptr >= len(self.sequence)
+
+    def expired(self, step: int) -> bool:
+        window = ADOPTION_WINDOW_FACTOR * max(1, len(self.sequence))
+        return step > self.start_step + window
+
+    def note_action(self, action) -> bool:
+        """True iff ``action`` matches the next expected element.
+
+        Advances the pointer on a match (that step earns imit co-firing
+        credit); a non-matching step neither advances nor resets — the
+        agent may interleave aiming/turning between copied actions.
+        """
+        if self.done() or not action:
+            return False
+        if action == self.sequence[self.ptr]:
+            self.ptr += 1
+            return True
+        return False
+
+
+def render_imitation_payload(
+    target_name: str,
+    actions: Sequence[str],
+    task,
+    position_text,
+    chamber,
+) -> str:
+    """The guided-imitation payload delivered to the initiator next step.
+
+    Carries the target's action sequence + state AND the instructions for
+    judging applicability — the agent decides whether re-enacting makes
+    sense; nothing is auto-executed.
     """
-    if pos_i is None or pos_j is None:
-        return False
-    if chamber_i is None or chamber_j is None or chamber_i != chamber_j:
-        return False
-    try:
-        d = math.dist(tuple(pos_i)[:3], tuple(pos_j)[:3])
-    except (TypeError, ValueError):
-        return False
-    return d <= radius
+    seq = " -> ".join(a for a in actions if a) or "(no recorded actions yet)"
+    return (
+        f"[imitation of {target_name}] Their task: {task or '(unknown)'} | "
+        f"Position: {position_text or 'Unknown'} | Chamber: {chamber or '?'}\n"
+        f"  Their last actions (oldest to newest): {seq}\n"
+        f"  HOW TO USE THIS: compare their situation to yours. If your position and task\n"
+        f"  are similar to theirs, RE-ENACT the sequence step by step through your own\n"
+        f"  \"action\" choices, starting with the first action. If their situation does not\n"
+        f"  match yours yet, keep it as a learned recipe — re-enact it when you find\n"
+        f"  yourself in a similar situation."
+    )
 
 
 # ── Prompt rendering (choice mode only) ────────────────────────────────
@@ -146,24 +191,31 @@ _MENU_HEADER = (
 
 _MENU_LINES = {
     "comm": (
-        "- \"communicate\": send a short targeted message. Put the text in \"communication\"\n"
-        "  and the SAME teammate in \"communication_target\" — make it ACTIONABLE for them\n"
-        "  (what you observed, what you need from THEM, or what you commit to do). Sub-5-char\n"
-        "  or repeated identical messages to the same teammate are filtered as spam."
+        "- \"communicate\": send a short targeted message. PURPOSE: coordinate with a\n"
+        "  specific teammate — requests, warnings, commitments, discoveries. Put the text\n"
+        "  in \"communication\" and the SAME teammate in \"communication_target\"; make it\n"
+        "  ACTIONABLE for them. BENEFIT: a team that talks aligns who does what, gets\n"
+        "  help when stuck, and spreads what one agent learned to the whole team.\n"
+        "  Sub-5-char or repeated identical messages to the same teammate are filtered\n"
+        "  as spam."
     ),
     "obs": (
-        "- \"observe\": silently study the teammate in \"social_target\". Next step you receive\n"
-        "  their position, health, inventory and current beliefs — cheap and always\n"
-        "  available, a good first move whenever you are unsure what a teammate is doing.\n"
-        "  They are NOT notified."
+        "- \"observe\": look at what the teammate in \"social_target\" is currently doing.\n"
+        "  PURPOSE: an observation gives you, next step, their position, health,\n"
+        "  inventory and current beliefs; they are not notified. BENEFIT: knowing your\n"
+        "  teammates is the basis of working with them — it tells you who is where, who\n"
+        "  needs help, and who is worth joining, so you act on what they are actually\n"
+        "  doing rather than on guesses."
     ),
     "imit": (
-        "- \"imitate\": copy the teammate in \"social_target\". Set \"imitate_horizon\" (1-5):\n"
-        "  if you are CLOSE to them (within ~5 blocks, same room), your next steps will\n"
-        "  REPLAY their last few actions instead of your own choices; otherwise you just\n"
-        "  receive a report of what they did. Use it when a teammate is close by and making\n"
-        "  progress, or when you are stuck and they are not — copying is how you learn\n"
-        "  skills you lack."
+        "- \"imitate\": learn from a teammate's behavior. PURPOSE: set \"imitate_horizon\"\n"
+        "  (1-5) and next step you receive the last 1-5 actions the teammate in\n"
+        "  \"social_target\" took (oldest to newest), plus their task and position. HOW TO\n"
+        "  USE IT: compare their situation to yours — if it matches, RE-ENACT their\n"
+        "  sequence through your own \"action\" choices, step by step; if not, keep it as\n"
+        "  a learned recipe and use it when you encounter a similar situation. BENEFIT:\n"
+        "  skills that already work for someone else become yours without having to\n"
+        "  discover them alone."
     ),
 }
 
@@ -223,9 +275,23 @@ def render_enabled_acts_menu(enabled_channels: Sequence[str]) -> str:
     if not enabled_channels:
         return '(none — no social acts are available this run; always suggest null)'
     descs = {
-        "comm": '- "communicate": send the teammate a message (also fill ask_target/ask_message)',
-        "obs": '- "observe": silently look up the teammate\'s state and beliefs',
-        "imit": '- "imitate": copy the teammate\'s recent actions (requires being near them)',
+        "comm": ('- "communicate": send the teammate a message (also fill '
+                 'ask_target/ask_message). Benefit: coordination — requests, '
+                 'warnings, sharing discoveries. Suggest it when the agent '
+                 'needs something FROM a teammate or has something actionable '
+                 'to give.'),
+        "obs": ('- "observe": silently look up the teammate\'s state and '
+                'beliefs. Benefit: ground truth about what they are doing, '
+                'without depending on what they say. Suggest it when you are '
+                'unsure what a teammate is up to or whether joining them is '
+                'worthwhile.'),
+        "imit": ('- "imitate": fetch the teammate\'s recent action sequence + '
+                 'their task/position so the agent can re-enact it if its own '
+                 'situation matches. Benefit: transfers a working behavior. '
+                 'Suggest it when the agent seems stuck while a teammate in a '
+                 'SIMILAR situation (same room, similar task) is making '
+                 'progress — the copied sequence only helps if the state it '
+                 'worked in matches the agent\'s own.'),
     }
     return "\n".join(descs[ch] for ch in ALL_CHANNELS if ch in enabled_channels)
 

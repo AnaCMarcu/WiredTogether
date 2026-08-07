@@ -79,6 +79,12 @@ CONDITIONS = [
     ("prcoi",        "exp23_cofire_prcoi",         "cofire", True),
     ("anchor",       "exp27_cofire_anchor",        "cofire", True),
     ("null (pr)",    "exp28_cofire_null",          "cofire", True),
+    # Gemma 4 E4B arms (runs/new_exp_0_gemma). Group "gemma" for the same
+    # reason as "cofire" above: no emitter selects it, so the Experiment-1
+    # assets stay byte-identical. Present so the qualitative pipeline's
+    # registry (which reads CONDITIONS) can discover these runs.
+    ("Gemma-E4B",     "new_exp_0_gemma_base",      "gemma", False),
+    ("Gemma-E4B+Heb", "new_exp_0_gemma_hebbian",   "gemma", True),
 ]
 TOPO_REFERENCE = "LLM-9B"   # reference row repeated in the topology table
 EXCLUDED_AGENT = "agent_2"  # the excluded agent in Allied-pair
@@ -552,7 +558,9 @@ def emit_csv(stats: dict, out: Path):
 # Experiment-1 artifacts above never change shape.
 
 _COFIRE_CHANNELS = ("spat", "comm", "obs", "imit")
-_COFIRE_ACTS = ("communicate", "observe", "imitate", "none", "imitate_replay")
+# Guided imitation (2026-08-07): adoption steps are not separate acts, so
+# the act mix is exactly the four fresh choices.
+_COFIRE_ACTS = ("communicate", "observe", "imitate", "none")
 
 
 def _run_cofire_stats(run: dict) -> dict | None:
@@ -575,14 +583,16 @@ def _run_cofire_stats(run: dict) -> dict | None:
         out[f"act_{a}"] = (acts.get(a, 0) / total_acts) if total_acts else math.nan
     for ch in _COFIRE_CHANNELS:
         out[f"dW_{ch}"] = (_chan_sum(ch) / attr_total) if attr_total > 0 else math.nan
-    reqs = sam.get("imitation_requests", 0)
-    out["imit_gate_fail"] = (sam.get("imitation_gate_failed", 0) / reqs
-                             if reqs else math.nan)
-    rs, nrs = sam.get("replay_steps", 0), sam.get("nonreplay_steps", 0)
-    out["replay_reward_mean"] = (sam.get("replay_reward_sum", 0.0) / rs
-                                 if rs else math.nan)
-    out["nonreplay_reward_mean"] = (sam.get("nonreplay_reward_sum", 0.0) / nrs
-                                    if nrs else math.nan)
+    # Guided imitation (2026-08-07): adoption rate = re-enacted steps over
+    # delivered sequence elements; payoff = reward/step while adopting vs not.
+    delivered = sam.get("imitation_delivered_actions", 0)
+    adopted = sam.get("imitation_adopted_steps", 0)
+    out["imit_adoption_rate"] = (adopted / delivered) if delivered else math.nan
+    nrs = sam.get("nonadopted_steps", 0)
+    out["adopted_reward_mean"] = (sam.get("adopted_reward_sum", 0.0) / adopted
+                                  if adopted else math.nan)
+    out["nonadopted_reward_mean"] = (sam.get("nonadopted_reward_sum", 0.0) / nrs
+                                     if nrs else math.nan)
     out["cofire_pair_events"] = sam.get("cofire_pair_events", 0)
     return out
 
@@ -596,8 +606,8 @@ def emit_cofire(stats: dict, all_runs: dict, out: Path):
 
     per_run_keys = ([f"act_{a}" for a in _COFIRE_ACTS]
                     + [f"dW_{ch}" for ch in _COFIRE_CHANNELS]
-                    + ["imit_gate_fail", "replay_reward_mean",
-                       "nonreplay_reward_mean", "cofire_pair_events"])
+                    + ["imit_adoption_rate", "adopted_reward_mean",
+                       "nonadopted_reward_mean", "cofire_pair_events"])
     pooled = {}
     for lab in labels:
         rows = [r for r in (_run_cofire_stats(run) for run in all_runs[lab])

@@ -1361,12 +1361,12 @@ async def run(args):
         "act_counts_by_agent": {},    # agent_N -> {act: n}
         "imitation_horizon_hist": {}, # str(h) -> n
         "imitation_requests": 0,
-        "imitation_gate_failed": 0,
-        "imitation_aborts": 0,
-        "replay_steps": 0,
-        "replay_reward_sum": 0.0,
-        "nonreplay_steps": 0,
-        "nonreplay_reward_sum": 0.0,
+        "imitation_delivered_actions": 0,   # sum of delivered sequence lengths
+        "imitation_adopted_steps": 0,       # steps where the next element was re-enacted
+        "imitation_completed": 0,           # sequences adopted to the end
+        "adopted_reward_sum": 0.0,
+        "nonadopted_steps": 0,
+        "nonadopted_reward_sum": 0.0,
         "cofire_pair_events": 0,
         "cofire_events_by_channel": {"spat": 0, "comm": 0, "obs": 0, "imit": 0},
     }
@@ -1469,6 +1469,10 @@ async def run(args):
         # Choice-mode observe/imitate payloads, delivered to the INITIATOR's
         # prompt next step (the observed/imitated party is never notified).
         agent_social_returns = {i: [] for i in range(num_agents)}
+        # Guided imitation: one PendingImitation per agent, tracking the
+        # delivered sequence for ADOPTION crediting (imit co-firing fires
+        # when the agent re-enacts the next element, never automatically).
+        _pending_imitations: dict = {}
         agents_error_count = [0] * num_agents
         comm_tracker = CommunicationTracker(agent_ids=list(range(num_agents)))
         coop_metric = CooperationMetric(agent_ids=list(range(num_agents)))
@@ -1695,7 +1699,7 @@ async def run(args):
             # Choice-mode channel-tagged social events (initiator, target,
             # channel) — obs/imit only; comm rides comm_events as before.
             social_events = []
-            _replay_agents_this_step: set = set()
+            _adopted_agents_this_step: set = set()
             _messages_this_step = []
             _milestone_events_this_step: list = []
             _bond_strings = {}
@@ -1980,8 +1984,7 @@ async def run(args):
                 # ablation is enforced in code, not trusted to the prompt)
                 # and blank the comm fields unless the act IS communicate —
                 # at most one social act per step.
-                if (social_act_mode == "choice" and content
-                        and not content.get("replay_active")):
+                if social_act_mode == "choice" and content:
                     _act_norm = _sacts.normalize_social_act(
                         content.get("social_act"), _social_menu_channels
                     )
@@ -2115,9 +2118,11 @@ async def run(args):
 
                 # ── Choice-mode social-act router (Experiment 2) ──────────
                 # observe → deliver the target's state+beliefs to the
-                # INITIATOR next step (silent, directed). imitate → gate on
-                # proximity+chamber; pass = commit replay (credit fires per
-                # replayed step), fail = informational report, no credit.
+                # INITIATOR next step (silent, directed). imitate (GUIDED,
+                # 2026-08-07) → deliver the target's last-h actions + state
+                # with judge-then-re-enact instructions; imit co-firing is
+                # credited on ADOPTION — each step the agent's own chosen
+                # action matches the next element of the delivered sequence.
                 if social_act_mode == "choice":
                     import re as _re2
                     # This agent's select consumed its inbox this step.
@@ -2128,39 +2133,41 @@ async def run(args):
                     except (IndexError, ValueError):
                         _init_idx = -1
 
-                    _abort_reason = (
-                        agent.pop_replay_abort()
-                        if hasattr(agent, "pop_replay_abort") else None
-                    )
-                    if _abort_reason and _abort_reason != "episode_reset":
-                        _sa_metrics["imitation_aborts"] += 1
-                        if _social_acts_path:
-                            _append_jsonl(_social_acts_path, {
-                                "ep": episode + 1, "step": step,
-                                "agent": agent.name, "act": "imitate",
-                                "aborted": _abort_reason,
-                            })
-
-                    if content and _init_idx >= 0:
-                        if content.get("replay_active"):
-                            # Committed replay step: the replay IS the act.
-                            _rt = str(content.get("social_target") or "")
-                            _m3 = _re2.match(r"^\s*agent_?(\d+)\s*$", _rt.lower())
-                            _t_idx = int(_m3.group(1)) if _m3 else -1
-                            if 0 <= _t_idx < num_agents and _t_idx != _init_idx:
-                                social_events.append((_init_idx, _t_idx, "imit"))
-                            _replay_agents_this_step.add(_init_idx)
-                            _sa_count(agent.name, "imitate_replay")
+                    # Adoption check runs EVERY step, on the sequence
+                    # delivered earlier, before any fresh act (a fresh
+                    # imitate below replaces the pending one afterwards).
+                    _pend = _pending_imitations.get(agent_id)
+                    if _pend is not None and content is not None:
+                        if _pend.expired(step):
                             if _social_acts_path:
                                 _append_jsonl(_social_acts_path, {
                                     "ep": episode + 1, "step": step,
                                     "agent": agent.name, "act": "imitate",
-                                    "target": (f"agent_{_t_idx}" if _t_idx >= 0
-                                               else None),
-                                    "gate": "replay",
-                                    "replay_step": content.get("replay_step"),
+                                    "gate": "expired",
+                                    "adopted": _pend.ptr,
+                                    "of": len(_pend.sequence),
                                 })
-                        else:
+                            _pending_imitations.pop(agent_id, None)
+                        elif _pend.note_action(content.get("action")):
+                            social_events.append(
+                                (_init_idx, _pend.target, "imit")
+                            )
+                            _adopted_agents_this_step.add(_init_idx)
+                            _sa_metrics["imitation_adopted_steps"] += 1
+                            if _social_acts_path:
+                                _append_jsonl(_social_acts_path, {
+                                    "ep": episode + 1, "step": step,
+                                    "agent": agent.name, "act": "imitate",
+                                    "gate": "adopted",
+                                    "target": f"agent_{_pend.target}",
+                                    "adopted_step": _pend.ptr,
+                                    "of": len(_pend.sequence),
+                                })
+                            if _pend.done():
+                                _sa_metrics["imitation_completed"] += 1
+                                _pending_imitations.pop(agent_id, None)
+
+                    if content and _init_idx >= 0:
                             _act = content.get("social_act") or "none"
                             _sa_count(agent.name, _act)
                             _raw_target = content.get("social_target") or ""
@@ -2224,48 +2231,39 @@ async def run(args):
                                 _sa_metrics["imitation_horizon_hist"][_hh] = (
                                     _sa_metrics["imitation_horizon_hist"].get(_hh, 0) + 1
                                 )
-                                _gate_ok = _sacts.imitation_gate(
-                                    environment.get_agent_position(_init_idx),
-                                    environment.get_agent_position(_t_idx),
-                                    environment.get_chamber(_init_idx),
-                                    environment.get_chamber(_t_idx),
-                                    radius=hebbian_config.interaction_radius,
-                                )
+                                # GUIDED imitation: deliver the target's
+                                # last-h actions + state with the judge-
+                                # then-re-enact instructions. Nothing is
+                                # auto-executed; credit comes from the
+                                # adoption check above on later steps.
                                 _t_log = list(
                                     getattr(agents[_t_idx], "_step_log", []) or []
                                 )[-_h:]
                                 _t_actions = [a for a, _r in _t_log if a]
-                                if _gate_ok and _t_actions:
-                                    agent.begin_imitation(
-                                        _t_actions, f"agent_{_t_idx}",
+                                agent_social_returns[_init_idx].append(
+                                    _sacts.render_imitation_payload(
+                                        f"agent_{_t_idx}", _t_actions,
+                                        agents[_t_idx].auto_curriculum.current_task,
+                                        environment.get_position_text(_t_idx),
+                                        environment.get_chamber(_t_idx),
                                     )
-                                    agent_social_returns[_init_idx].append(
-                                        f"[imitation committed] You will replay "
-                                        f"agent_{_t_idx}'s last {len(_t_actions)} "
-                                        f"actions over the next steps."
+                                )
+                                _sa_metrics["imitation_delivered_actions"] += (
+                                    len(_t_actions)
+                                )
+                                if _t_actions:
+                                    _pending_imitations[agent_id] = (
+                                        _sacts.PendingImitation(
+                                            _t_idx, _t_actions, step,
+                                        )
                                     )
-                                    # No credit at request time — credit fires
-                                    # per replayed step (replay branch above).
-                                    _gate_tag = "passed"
-                                else:
-                                    from custom_agent import (
-                                        _render_step_log as _rsl,
-                                    )
-                                    _sa_metrics["imitation_gate_failed"] += 1
-                                    agent_social_returns[_init_idx].append(
-                                        f"[imitation report on agent_{_t_idx} — "
-                                        f"too far away to copy them] Their last "
-                                        f"{_h} actions: {_rsl(_t_log)} | Position: "
-                                        f"{environment.get_position_text(_t_idx) or 'Unknown'} | "
-                                        f"Chamber: {environment.get_chamber(_t_idx) or '?'}"
-                                    )
-                                    _gate_tag = "failed"
                                 if _social_acts_path:
                                     _append_jsonl(_social_acts_path, {
                                         "ep": episode + 1, "step": step,
                                         "agent": agent.name, "act": "imitate",
                                         "target": f"agent_{_t_idx}",
-                                        "horizon": _h, "gate": _gate_tag,
+                                        "horizon": _h, "gate": "delivered",
+                                        "n_actions": len(_t_actions),
                                         "routing_source": _sa_routing,
                                     })
                             else:
@@ -2600,12 +2598,11 @@ async def run(args):
                 for _aid in range(num_agents):
                     if step_contents[_aid] is None:
                         continue
-                    if _aid in _replay_agents_this_step:
-                        _sa_metrics["replay_steps"] += 1
-                        _sa_metrics["replay_reward_sum"] += float(step_rewards_raw[_aid])
+                    if _aid in _adopted_agents_this_step:
+                        _sa_metrics["adopted_reward_sum"] += float(step_rewards_raw[_aid])
                     else:
-                        _sa_metrics["nonreplay_steps"] += 1
-                        _sa_metrics["nonreplay_reward_sum"] += float(step_rewards_raw[_aid])
+                        _sa_metrics["nonadopted_steps"] += 1
+                        _sa_metrics["nonadopted_reward_sum"] += float(step_rewards_raw[_aid])
 
             # ── Phase B+ §1: per-teammate reward-propagation cache ──
             # Disabled — rlvr.reward_propagation was removed (it provided
@@ -3251,13 +3248,15 @@ if __name__ == "__main__":
             "module needs bond weights to reason over)"
         )
     if args.social_act_mode == "choice" and args.rl:
-        # Choice mode's imitation replay bypasses action selection for up to
-        # 5 steps, which would corrupt the PPO transition/log-prob
-        # bookkeeping (the policy never scored the replayed actions). Fail
-        # loudly rather than training on fabricated transitions for 24h.
+        # Choice mode is LLM-only by design: the social-act choice, the
+        # observe/imitate payloads and the guided-imitation instructions
+        # all live in the LLM prompt/schema layer, which the RL policy's
+        # constrained decoding never sees. Fail loudly rather than running
+        # an arm whose manipulation the policy cannot perceive.
         raise SystemExit(
             "--social-act-mode choice is LLM-only and incompatible with "
-            "--rl (imitation replay bypasses the RL action selection)"
+            "--rl (the social-act choice lives in the LLM prompt/schema "
+            "layer, which the RL policy never sees)"
         )
     if args.social_act_mode == "choice" and not args.hebbian:
         raise SystemExit(

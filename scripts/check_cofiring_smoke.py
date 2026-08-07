@@ -16,9 +16,10 @@ Gates (from the plan / launcher header):
   prcoi : run finished; act mix non-degenerate (no fresh act > 85%);
           all three channels appear in cofiring_events.jsonl; attribution
           total > 0; W finite/in-range.
-  pri   : run finished; imitation requested; the proximity gate PASSED at
-          least once and replay steps happened (never-passing gate = the arm
-          is dead on arrival); abort rate < 1; W finite/in-range.
+  pri   : run finished; imitation requested; delivered sequences were
+          ADOPTED at least once (guided imitation: the agent re-enacts the
+          copied actions itself -- zero adoption = the arm measures
+          nothing); W finite/in-range.
   anchor: run finished in LEGACY mode -- no choice sidecars on disk, empty
           social_act_metrics, and messages still flowed (comm counts > 0).
 
@@ -184,9 +185,9 @@ def check_pri(run_dir: Path) -> None:
         return
 
     reqs = int(sam.get("imitation_requests") or 0)
-    gate_failed = int(sam.get("imitation_gate_failed") or 0)
-    replay_steps = int(sam.get("replay_steps") or 0)
-    aborts = int(sam.get("imitation_aborts") or 0)
+    delivered = int(sam.get("imitation_delivered_actions") or 0)
+    adopted = int(sam.get("imitation_adopted_steps") or 0)
+    completed = int(sam.get("imitation_completed") or 0)
 
     if reqs == 0:
         _report("FAIL", arm, "the model never chose imitate -- menu prompt "
@@ -195,27 +196,27 @@ def check_pri(run_dir: Path) -> None:
         _report("PASS", arm, f"imitate requested {reqs}x "
                              f"(horizons: {sam.get('imitation_horizon_hist')})")
 
-    if replay_steps > 0 and gate_failed < reqs:
-        _report("PASS", arm, f"gate passed {reqs - gate_failed}/{reqs}, "
-                             f"{replay_steps} replay steps executed, "
-                             f"{aborts} aborts")
+    # Guided imitation: the hard gate is ADOPTION -- the agent must actually
+    # re-enact delivered actions, else the imit channel stays silent for a
+    # trivial reason and the arm measures nothing.
+    if adopted > 0:
+        rate = adopted / delivered if delivered else 0.0
+        _report("PASS", arm, f"adoption works: {adopted} re-enacted steps of "
+                             f"{delivered} delivered actions "
+                             f"({rate:.0%}), {completed} sequences completed")
     elif reqs > 0:
-        _report("FAIL", arm, f"the proximity gate NEVER passed "
-                             f"({gate_failed}/{reqs} failed, {replay_steps} "
-                             f"replay steps) -- pri is dead on arrival; "
-                             f"consider a navigate-to-target macro before "
-                             f"burning the sweep")
+        _report("FAIL", arm, f"sequences delivered ({delivered} actions) but "
+                             f"NEVER adopted -- agents judge imitation "
+                             f"never-applicable or ignore the instructions; "
+                             f"strengthen the HOW-TO-USE payload before the "
+                             f"sweep")
 
-    if replay_steps > 0 and aborts >= replay_steps:
-        _report("WARN", arm, f"high abort pressure: {aborts} aborts vs "
-                             f"{replay_steps} replay steps")
-
-    rs, nrs = replay_steps, int(sam.get("nonreplay_steps") or 0)
-    if rs and nrs:
-        rmean = sam.get("replay_reward_sum", 0.0) / rs
-        nmean = sam.get("nonreplay_reward_sum", 0.0) / nrs
+    nrs = int(sam.get("nonadopted_steps") or 0)
+    if adopted and nrs:
+        rmean = sam.get("adopted_reward_sum", 0.0) / adopted
+        nmean = sam.get("nonadopted_reward_sum", 0.0) / nrs
         _report("PASS", arm, f"imitation payoff readable: reward/step "
-                             f"{rmean:+.3f} during replay vs {nmean:+.3f} "
+                             f"{rmean:+.3f} while adopting vs {nmean:+.3f} "
                              f"baseline (informational)")
 
     _w_sanity(arm, run_dir)

@@ -1,0 +1,5 @@
+agent2_msg_share,agent2_prox_share,label,n_ch5_damage_overlap,n_joint_dig,n_joint_kill,n_messages,n_pair_episodes,n_proximity,quarantined,rho_ch5_damage_overlap,rho_joint_dig,rho_joint_kill,rho_messages,rho_proximity,run,seed
+0.5928,0.701,Gemma-E4B+Heb,18,18,18,18,18,18,False,,0.2061,,0.7647,-0.365,new_exp_0_gemma_hebbian/seed_1011,1011
+0.4879,0.6159,Gemma-E4B+Heb,18,18,18,18,18,18,False,,-0.4533,,0.7366,-0.2779,new_exp_0_gemma_hebbian/seed_42,42
+0.5472,0.6482,Gemma-E4B+Heb,18,18,18,18,18,18,False,,0.3067,,0.4308,-0.3069,new_exp_0_gemma_hebbian/seed_456,456
+0.5408,0.6327,Gemma-E4B+Heb,18,18,18,18,18,18,False,,0.0049,,0.7792,0.0415,new_exp_0_gemma_hebbian/seed_789,789
