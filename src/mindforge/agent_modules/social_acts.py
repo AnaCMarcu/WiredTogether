@@ -179,43 +179,61 @@ def render_imitation_payload(
 
 # ── Prompt rendering (choice mode only) ────────────────────────────────
 
-_MENU_HEADER = (
+_MENU_HEADER_BASE = (
     "═══════════════════════════════════════════\n"
     "YOUR SOCIAL ACT — CHOOSE AT MOST ONE PER STEP\n"
     "═══════════════════════════════════════════\n"
     "Alongside your game action you may take ONE social act aimed at ONE teammate\n"
     "(\"social_target\", form \"agent_N\", never yourself, never \"all\"). These acts are\n"
     "your ONLY window into what teammates are doing — nothing else reports their\n"
-    "progress to you, and an act you never try teaches you nothing:"
+    "progress to you, and an act you never try teaches you nothing."
 )
 
+# Levels order the menu by engagement depth (obs=1, comm=2, imit=3) —
+# independent of ALL_CHANNELS, which stays the canonical channel order.
+_LEVEL_ORDER = ("obs", "comm", "imit")
+
+# One gloss per level, mentioned ONLY when that act is in the arm's menu —
+# an agent is never told about engagement levels it cannot trigger.
+_LEVEL_GLOSS = {
+    "obs": ("Level 1 gathers information ABOUT a teammate "
+            "(they are unaffected)"),
+    "comm": ("Level 2 exchanges information WITH a teammate "
+             "(both of you are involved)"),
+    "imit": ("Level 3 lets a teammate's behavior SHAPE YOUR OWN "
+             "(their experience becomes your skill)"),
+}
+# The ladder summary presumes all three rungs — only shown for a full menu.
+_LEVEL_LADDER_TAIL = ("Lower levels inform higher ones: know who matters, "
+                      "align with them, learn from them.")
+
 _MENU_LINES = {
+    "obs": (
+        "- LEVEL 1 — \"observe\": observe the behavior of the teammate in \"social_target\"\n"
+        "  and what they have learnt. PURPOSE: an observation gives you, next step, their\n"
+        "  position, health, inventory and current beliefs; they are not notified.\n"
+        "  BENEFIT: knowing your teammates is the basis of working with them — it tells\n"
+        "  you who is where, who needs help, and who is worth joining, so you act on what\n"
+        "  they are actually doing rather than on guesses."
+    ),
     "comm": (
-        "- \"communicate\": send a short targeted message. PURPOSE: coordinate with a\n"
-        "  specific teammate — requests, warnings, commitments, discoveries. Put the text\n"
-        "  in \"communication\" and the SAME teammate in \"communication_target\"; make it\n"
-        "  ACTIONABLE for them. BENEFIT: a team that talks aligns who does what, gets\n"
-        "  help when stuck, and spreads what one agent learned to the whole team.\n"
+        "- LEVEL 2 — \"communicate\": send a short targeted message. PURPOSE: coordinate\n"
+        "  with a specific teammate — requests, warnings, commitments, discoveries. Put\n"
+        "  the text in \"communication\" and the SAME teammate in \"communication_target\";\n"
+        "  make it ACTIONABLE for them. BENEFIT: a team that talks aligns who does what,\n"
+        "  gets help when stuck, and spreads what one agent learned to the whole team.\n"
         "  Sub-5-char or repeated identical messages to the same teammate are filtered\n"
         "  as spam."
     ),
-    "obs": (
-        "- \"observe\": look at what the teammate in \"social_target\" is currently doing.\n"
-        "  PURPOSE: an observation gives you, next step, their position, health,\n"
-        "  inventory and current beliefs; they are not notified. BENEFIT: knowing your\n"
-        "  teammates is the basis of working with them — it tells you who is where, who\n"
-        "  needs help, and who is worth joining, so you act on what they are actually\n"
-        "  doing rather than on guesses."
-    ),
     "imit": (
-        "- \"imitate\": learn from a teammate's behavior. PURPOSE: set \"imitate_horizon\"\n"
-        "  (1-5) and next step you receive the last 1-5 actions the teammate in\n"
-        "  \"social_target\" took (oldest to newest), plus their task and position. HOW TO\n"
-        "  USE IT: compare their situation to yours — if it matches, RE-ENACT their\n"
-        "  sequence through your own \"action\" choices, step by step; if not, keep it as\n"
-        "  a learned recipe and use it when you encounter a similar situation. BENEFIT:\n"
-        "  skills that already work for someone else become yours without having to\n"
-        "  discover them alone."
+        "- LEVEL 3 — \"imitate\": learn from a teammate's behavior. PURPOSE: set\n"
+        "  \"imitate_horizon\" (1-5) and next step you receive the last 1-5 actions the\n"
+        "  teammate in \"social_target\" took (oldest to newest), plus their task and\n"
+        "  position. HOW TO USE IT: compare their situation to yours — if it matches,\n"
+        "  RE-ENACT their sequence through your own \"action\" choices, step by step; if\n"
+        "  not, keep it as a learned recipe and use it when you encounter a similar\n"
+        "  situation. BENEFIT: skills that already work for someone else become yours\n"
+        "  without having to discover them alone."
     ),
 }
 
@@ -233,10 +251,20 @@ def render_social_act_menu(enabled_channels: Sequence[str]) -> str:
     Kept the same shape across arms (header/footer constant, one block per
     enabled act) so prompt length differs as little as the ablation allows.
     """
-    lines = [_MENU_HEADER]
-    for ch in ALL_CHANNELS:
-        if ch in enabled_channels:
-            lines.append(_MENU_LINES[ch])
+    enabled = [ch for ch in _LEVEL_ORDER if ch in enabled_channels]
+    header = _MENU_HEADER_BASE
+    if enabled:
+        glosses = "; ".join(_LEVEL_GLOSS[ch] for ch in enabled)
+        header += (
+            "\nSocial acts are LEVELS of engagement — the higher the level, the"
+            "\ndeeper the involvement with your teammate: " + glosses + "."
+        )
+        if len(enabled) == len(_LEVEL_ORDER):
+            header += "\n" + _LEVEL_LADDER_TAIL
+    header += "\nYour available act(s):"
+    lines = [header]
+    for ch in enabled:
+        lines.append(_MENU_LINES[ch])
     lines.append(_MENU_FOOTER)
     return "\n".join(lines)
 
@@ -275,25 +303,26 @@ def render_enabled_acts_menu(enabled_channels: Sequence[str]) -> str:
     if not enabled_channels:
         return '(none — no social acts are available this run; always suggest null)'
     descs = {
-        "comm": ('- "communicate": send the teammate a message (also fill '
-                 'ask_target/ask_message). Benefit: coordination — requests, '
-                 'warnings, sharing discoveries. Suggest it when the agent '
-                 'needs something FROM a teammate or has something actionable '
-                 'to give.'),
-        "obs": ('- "observe": silently look up the teammate\'s state and '
-                'beliefs. Benefit: ground truth about what they are doing, '
-                'without depending on what they say. Suggest it when you are '
-                'unsure what a teammate is up to or whether joining them is '
-                'worthwhile.'),
-        "imit": ('- "imitate": fetch the teammate\'s recent action sequence + '
-                 'their task/position so the agent can re-enact it if its own '
-                 'situation matches. Benefit: transfers a working behavior. '
-                 'Suggest it when the agent seems stuck while a teammate in a '
-                 'SIMILAR situation (same room, similar task) is making '
+        "obs": ('- Level 1, "observe": look up the teammate\'s state and '
+                'beliefs (information ABOUT them). Benefit: ground truth '
+                'about what they are doing, without depending on what they '
+                'say. Suggest it when you are unsure what a teammate is up '
+                'to or whether joining them is worthwhile.'),
+        "comm": ('- Level 2, "communicate": send the teammate a message (also '
+                 'fill ask_target/ask_message) — information exchanged WITH '
+                 'them. Benefit: coordination — requests, warnings, sharing '
+                 'discoveries. Suggest it when the agent needs something FROM '
+                 'a teammate or has something actionable to give.'),
+        "imit": ('- Level 3, "imitate": fetch the teammate\'s recent action '
+                 'sequence + their task/position so the agent can re-enact '
+                 'it if its own situation matches — their behavior shaping '
+                 'the agent\'s own. Benefit: transfers a working behavior. '
+                 'Suggest it when the agent seems stuck while a teammate in '
+                 'a SIMILAR situation (same room, similar task) is making '
                  'progress — the copied sequence only helps if the state it '
                  'worked in matches the agent\'s own.'),
     }
-    return "\n".join(descs[ch] for ch in ALL_CHANNELS if ch in enabled_channels)
+    return "\n".join(descs[ch] for ch in _LEVEL_ORDER if ch in enabled_channels)
 
 
 # ── Template loading ───────────────────────────────────────────────────
