@@ -91,13 +91,19 @@ case "$PHASE" in
                 exit 1
             fi
         done
-        echo "── Phase B: merged 6-agent runs (Ch3-5), T + S arms ──"
+        # Seeds for the full suite (3 per arm, medium-suite convention).
+        # Override to add/backfill without duplicating queued jobs, e.g.:
+        #     PHASEB_SEEDS="123 456" MERGED_DIR=... bash submit_transplant.sh phaseB
+        PHASEB_SEEDS="${PHASEB_SEEDS:-42 123 456}"
+        echo "── Phase B: merged 6-agent runs (Ch3-5), T + S arms, seeds: $PHASEB_SEEDS ──"
         # Subshells: a var-assignment prefix on a shell FUNCTION can persist in
         # bash, which would send the shuffled arm the transplant path.
-        ( export MERGED_DIR="$MERGED_DIR/transplant"
-          _submit expB_merged_transplant.sbatch )
-        ( export MERGED_DIR="$MERGED_DIR/shuffled"
-          _submit expB_merged_shuffled.sbatch )
+        for _seed in $PHASEB_SEEDS; do
+            ( export SEED="$_seed" MERGED_DIR="$MERGED_DIR/transplant"
+              _submit expB_merged_transplant.sbatch )
+            ( export SEED="$_seed" MERGED_DIR="$MERGED_DIR/shuffled"
+              _submit expB_merged_shuffled.sbatch )
+        done
         ;;
     *)
         echo "usage: bash submit_transplant.sh {phaseA|phaseB}" >&2
