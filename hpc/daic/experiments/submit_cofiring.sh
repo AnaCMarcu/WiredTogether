@@ -8,6 +8,8 @@
 #   exp20_cofire_prc          menu comm            credit comm
 #   exp21_cofire_pro          menu obs   (MUTE)    credit obs
 #   exp22_cofire_pri          menu imit  (MUTE)    credit imit
+#   exp29_cofire_prco         menu comm,obs        credit comm,obs (ladder rung:
+#                             prc -> prco isolates obs; prco -> prcoi isolates imit)
 #   exp23_cofire_prcoi        menu all             credit all  (Goal-1 primary:
 #                             per-channel growth attribution within the run)
 #   exp27_cofire_anchor       legacy (enforced comm) — reference + non-regression
@@ -36,13 +38,13 @@
 # Usage (from the DAIC login node):
 #   cd $REPO/hpc/daic/experiments
 #   MODEL_LLM=... WT_IMAGE=... SMOKE=1 bash submit_cofiring.sh
-#       # smoke = prcoi AND pri × seed 42, 1 ep × 150 steps, no wandb.
-#       # GATES before the full sweep (check runs/cofiring_smoke/):
+#       # smoke = prcoi + pri + anchor × seed 42, 1 ep × 250 steps, no wandb.
+#       # GATES before the full sweep (check runs/cofiring_final_smoke/):
 #       #   - act mix non-degenerate in prcoi social_acts.jsonl (no act >85%)
-#       #   - c_comm/c_obs/c_imit all fire in prcoi cofiring_events.jsonl
-#       #   - pri: imitation gate passes sometimes (gate="passed" rows exist,
-#       #     imitation_abort_rate < 1.0) — else pri is dead on arrival
-#       #   - tail -1 hebbian_snapshots.jsonl: off-diag W in 0.2-0.8
+#       #   - comm+obs channels fire in prcoi (imit silence there = WARN)
+#       #   - pri: delivered sequences get ADOPTED (gate="adopted" rows) —
+#       #     zero adoption means the arm measures nothing
+#       #   - anchor: legacy purity (no sidecars, empty social_act_metrics)
 #   MODEL_LLM=... WT_IMAGE=... DRY_RUN=1 bash submit_cofiring.sh
 #   MODEL_LLM=... WT_IMAGE=... bash submit_cofiring.sh
 #
@@ -67,16 +69,21 @@ if [ -z "${MODEL_LLM:-}" ] || [ -z "${WT_IMAGE:-}" ]; then
 fi
 export MODEL_LLM WT_IMAGE
 
-: "${RUN_GROUP:=cofiring}"
+# FINAL-version namespace (2026-08-07): the guided-imitation redesign lands
+# in runs/cofiring_final + wandb cofiring_final_wired_together. The earlier
+# sweep under runs/cofiring (committed-replay mechanism, pre-refinement
+# prompts) is a SEPARATE dataset — leave it to finish, never pool the two.
+: "${RUN_GROUP:=cofiring_final}"
 : "${EPISODES:=3}"
 : "${MAX_STEPS:=1000}"
-: "${WANDB_PROJECT:=cofiring_wired_together}"
+: "${WANDB_PROJECT:=cofiring_final_wired_together}"
 export RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT
 
 EXPS=(
     exp20_cofire_prc
     exp21_cofire_pro
     exp22_cofire_pri
+    exp29_cofire_prco
     exp23_cofire_prcoi
     exp27_cofire_anchor
     exp28_cofire_null
@@ -84,18 +91,18 @@ EXPS=(
 SEEDS=(42 123 456)
 
 # Smoke: THREE short jobs —
-#   prcoi  : act mix + all-channel coverage (the model must actually choose)
-#   pri    : the fragile replay-gate machinery (in prcoi it can dodge imitate)
+#   prcoi  : act mix + channel coverage (the model must actually choose)
+#   pri    : guided-imitation adoption (in prcoi the model can dodge imitate)
 #   anchor : legacy mode on the NEW code (live non-regression: no choice
 #            sidecars, empty social_act_metrics, messages still flow)
 # After they finish, validate ALL gates in one shot:
-#   python scripts/check_cofiring_smoke.py --runs-root runs/cofiring_smoke
+#   python scripts/check_cofiring_smoke.py --runs-root runs/cofiring_final_smoke
 if [ "${SMOKE:-0}" = "1" ]; then
     EXPS=(exp23_cofire_prcoi exp22_cofire_pri exp27_cofire_anchor)
     SEEDS=(42)
-    RUN_GROUP=cofiring_smoke
+    RUN_GROUP=cofiring_final_smoke
     EPISODES=1
-    MAX_STEPS=${SMOKE_STEPS:-150}
+    MAX_STEPS=${SMOKE_STEPS:-250}
     export RUN_GROUP EPISODES MAX_STEPS
     export WANDB=0
     : "${QOS:=short}"

@@ -53,10 +53,11 @@ SUCCESS_EXCLUDE = {"m16_enter_cell", "m20_enter_ch4", "m24_enter_ch5"}
 
 MATCHED_PAIRS = [("LLM-2B", "LLM-2B+Heb"), ("LLM-9B", "LLM-9B+Heb"),
                  ("IPPO", "IPPO+Heb"), ("MAPPO", "MAPPO+Heb"),
-                 # Experiment 2 (cofire): enforced vs chosen communication.
-                 # Pairs are skipped when a side has no runs under the
-                 # aggregated root.
-                 ("anchor", "prc")]
+                 # Experiment 2 (cofire): enforced vs chosen communication,
+                 # plus the channel ladder (prc -> prco isolates obs;
+                 # prco -> prcoi isolates imit). Pairs are skipped when a
+                 # side has no runs under the aggregated root.
+                 ("anchor", "prc"), ("prc", "prco"), ("prco", "prcoi")]
 
 COOP_TALK = re.compile(
     r"\b(switch(es)?|press|cell|unlock|locked|free (me|you)|anvils?|"

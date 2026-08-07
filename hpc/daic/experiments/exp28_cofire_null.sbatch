@@ -35,10 +35,10 @@ fi
 
 source /tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/WiredTogether/hpc/daic/experiments/_common.sh
 
-RUN_GROUP="${RUN_GROUP:-cofiring}"
+RUN_GROUP="${RUN_GROUP:-cofiring_final}"
 EPISODES="${EPISODES:-3}"
 MAX_STEPS="${MAX_STEPS:-1000}"
-WANDB_PROJECT="${WANDB_PROJECT:-cofiring_wired_together}"
+WANDB_PROJECT="${WANDB_PROJECT:-cofiring_final_wired_together}"
 
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,hebbian,cofiring,choice,null,mute}"
 

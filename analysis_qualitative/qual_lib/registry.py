@@ -55,6 +55,7 @@ SOCIAL_PROMPT_DIRS = {
     "exp23_cofire_prcoi",
     "exp27_cofire_anchor",
     "exp28_cofire_null",
+    "exp29_cofire_prco",
 }
 
 PARSER_VERSION = "2"  # bump to invalidate parse caches

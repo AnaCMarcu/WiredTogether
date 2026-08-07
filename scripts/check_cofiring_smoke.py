@@ -257,7 +257,7 @@ def check_anchor(run_dir: Path) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--runs-root", type=Path,
-                    default=Path("runs/cofiring_smoke"))
+                    default=Path("runs/cofiring_final_smoke"))
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
