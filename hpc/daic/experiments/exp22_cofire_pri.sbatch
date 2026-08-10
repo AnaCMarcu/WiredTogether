@@ -58,4 +58,4 @@ run_exp "exp22_cofire_pri" "$MODEL_LLM" \
     --social-act-mode choice \
     --social-acts imit \
     --cofiring-channels imit \
-    --simultaneous
+    --simultaneous ${EXTRA_ARGS:-}

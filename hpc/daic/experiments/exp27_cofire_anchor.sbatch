@@ -53,4 +53,4 @@ run_exp "exp27_cofire_anchor" "$MODEL_LLM" \
     --hebbian-decay 0.005 \
     --hebbian-gamma 0.2 \
     --social-module prompt \
-    --simultaneous
+    --simultaneous ${EXTRA_ARGS:-}

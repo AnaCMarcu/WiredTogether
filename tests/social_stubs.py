@@ -213,5 +213,17 @@ def _install() -> None:
         wandb_mod.init = lambda *a, **k: None
         sys.modules["wandb"] = wandb_mod
 
+    # Stamp a ModuleSpec on every bare stub: importlib.util.find_spec raises
+    # ValueError on modules with __spec__ None (test_gemma4_compat probes
+    # autogen_core that way), and a well-formed stub should look importable.
+    import importlib.machinery
+    _stub_roots = ("autogen_core", "autogen_ext", "autogen_agentchat",
+                   "chromadb", "wandb")
+    for _name, _mod in list(sys.modules.items()):
+        if (_name.split(".")[0] in _stub_roots
+                and isinstance(_mod, types.ModuleType)
+                and getattr(_mod, "__spec__", None) is None):
+            _mod.__spec__ = importlib.machinery.ModuleSpec(_name, None)
+
 
 _install()

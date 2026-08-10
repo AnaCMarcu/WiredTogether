@@ -53,4 +53,4 @@ run_exp "exp21_cofire_pro" "$MODEL_LLM" \
     --social-act-mode choice \
     --social-acts obs \
     --cofiring-channels obs \
-    --simultaneous
+    --simultaneous ${EXTRA_ARGS:-}

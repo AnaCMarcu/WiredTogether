@@ -73,6 +73,18 @@ export MODEL_LLM WT_IMAGE
 # in runs/cofiring_final + wandb cofiring_final_wired_together. The earlier
 # sweep under runs/cofiring (committed-replay mechanism, pre-refinement
 # prompts) is a SEPARATE dataset — leave it to finish, never pool the two.
+#
+# NOREWARD=1 (opt-in, 2026-08-07): the comm-reward-free suite. Talking pays
+# nothing (--comm-reward-scale 0: no base msg reward, no comm-milestone
+# payouts — events still recorded) and one social act counts as FULL
+# co-firing (--hebbian-delta 1.0) so act-driven bonds equilibrate against
+# the homeostatic decay without comm-reward salience. Lands in its own
+# namespace runs/cofiring_noreward; without NOREWARD=1 nothing changes.
+if [ "${NOREWARD:-0}" = "1" ]; then
+    : "${RUN_GROUP:=cofiring_noreward}"
+    : "${WANDB_PROJECT:=cofiring_noreward_wired_together}"
+    export EXTRA_ARGS="--comm-reward-scale 0.0 --hebbian-delta 1.0"
+fi
 : "${RUN_GROUP:=cofiring_final}"
 : "${EPISODES:=3}"
 : "${MAX_STEPS:=1000}"
@@ -100,7 +112,11 @@ SEEDS=(42 123 456)
 if [ "${SMOKE:-0}" = "1" ]; then
     EXPS=(exp23_cofire_prcoi exp22_cofire_pri exp27_cofire_anchor)
     SEEDS=(42)
-    RUN_GROUP=cofiring_final_smoke
+    if [ "${NOREWARD:-0}" = "1" ]; then
+        RUN_GROUP=cofiring_noreward_smoke
+    else
+        RUN_GROUP=cofiring_final_smoke
+    fi
     EPISODES=1
     MAX_STEPS=${SMOKE_STEPS:-250}
     export RUN_GROUP EPISODES MAX_STEPS
@@ -128,6 +144,7 @@ echo "  max_steps : $MAX_STEPS"
 echo "  wandb     : ${WANDB:-1} (project=$WANDB_PROJECT)"
 echo "  exps      : ${#EXPS[@]} (${EXPS[*]})"
 echo "  seeds     : ${SEEDS[*]}"
+[ -n "${EXTRA_ARGS:-}" ] && echo "  extra     : $EXTRA_ARGS"
 [ ${#SBATCH_OVERRIDES[@]} -gt 0 ] && echo "  overrides : ${SBATCH_OVERRIDES[*]}"
 [ "${SMOKE:-0}" = "1" ]   && echo "  mode      : SMOKE (gates in header comment)"
 [ "${DRY_RUN:-0}" = "1" ] && echo "  mode      : DRY_RUN (no submission)"

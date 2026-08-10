@@ -54,4 +54,4 @@ run_exp "exp29_cofire_prco" "$MODEL_LLM" \
     --social-act-mode choice \
     --social-acts comm,obs \
     --cofiring-channels comm,obs \
-    --simultaneous
+    --simultaneous ${EXTRA_ARGS:-}

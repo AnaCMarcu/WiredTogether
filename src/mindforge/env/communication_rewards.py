@@ -29,8 +29,14 @@ CHAMBER_COMM_THRESHOLDS = {
 
 
 class CommunicationTracker:
-    def __init__(self, agent_ids):
+    def __init__(self, agent_ids, reward_scale: float = 1.0):
+        """``reward_scale`` multiplies every comm PAYOUT (base + chamber
+        milestones). At 0.0 (Experiment 2 noreward suite) messages still
+        route, validity/spam rules still apply, and comm milestones still
+        FIRE as recorded events — they just pay nothing, so talking cannot
+        manufacture bondable reward or trip the milestone-success banner."""
         self.agent_ids = agent_ids
+        self.reward_scale = float(reward_scale)
         self.total_valid_msgs = defaultdict(int)
         self.chamber_msg_counts = defaultdict(lambda: defaultdict(int))
         self.last_msg = defaultdict(str)
@@ -81,7 +87,7 @@ class CommunicationTracker:
 
             if (agent_id not in bad_target_speakers
                     and self.total_valid_msgs[agent_id] < BASE_MSG_CAP):
-                rewards[agent_id] += BASE_MSG_REWARD
+                rewards[agent_id] += BASE_MSG_REWARD * self.reward_scale
                 self.total_valid_msgs[agent_id] += 1
 
             chamber = self._chamber_for(agent_positions.get(agent_id))
@@ -90,9 +96,12 @@ class CommunicationTracker:
                 threshold, reward, mid = CHAMBER_COMM_THRESHOLDS[chamber]
                 if (self.chamber_msg_counts[agent_id][chamber] >= threshold
                         and mid not in self.fired_milestones[agent_id]):
-                    rewards[agent_id] += reward
+                    # Milestone EVENT always fires (metrics stay comparable);
+                    # only the payout is scaled.
+                    scaled = reward * self.reward_scale
+                    rewards[agent_id] += scaled
                     self.fired_milestones[agent_id].add(mid)
-                    milestones_fired.append((agent_id, mid, reward))
+                    milestones_fired.append((agent_id, mid, scaled))
 
             self.last_msg[agent_id] = message
             self.last_msg_step[agent_id] = step

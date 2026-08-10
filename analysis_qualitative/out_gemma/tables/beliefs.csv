@@ -1,10 +1,13 @@
 belief_responsiveness,contagion_rate,hallucination_rows,label,n_perception_updates,partner_loc_accuracy,partner_loc_claims,perception_grounding_rate,quarantined,responsiveness_n,run,seed
 0.86,0.0448,223,Gemma-E4B,1259,0.7764,5228,0.8229,False,1800,new_exp_0_gemma_base/seed_1011,1011
 0.8309,0.0574,209,Gemma-E4B,1324,0.8481,4636,0.8421,False,1798,new_exp_0_gemma_base/seed_1213,1213
+0.8094,0.1315,213,Gemma-E4B,1452,0.7624,5603,0.8533,False,1800,new_exp_0_gemma_base/seed_123,123
 0.8922,0.1324,204,Gemma-E4B,1304,0.7713,5238,0.8436,False,1800,new_exp_0_gemma_base/seed_42,42
 0.8533,0.0955,220,Gemma-E4B,1397,0.7856,5378,0.8425,False,1800,new_exp_0_gemma_base/seed_456,456
 0.8428,0.0524,191,Gemma-E4B,1294,0.804,5265,0.8524,False,1800,new_exp_0_gemma_base/seed_789,789
 0.7843,0.0556,216,Gemma-E4B+Heb,1280,0.7611,5952,0.8313,False,1799,new_exp_0_gemma_hebbian/seed_1011,1011
+0.8467,0.0575,226,Gemma-E4B+Heb,1280,0.764,5390,0.8234,False,1800,new_exp_0_gemma_hebbian/seed_1213,1213
+0.8499,0.1273,220,Gemma-E4B+Heb,1513,0.8255,5874,0.8546,False,1799,new_exp_0_gemma_hebbian/seed_123,123
 0.8409,0.0964,166,Gemma-E4B+Heb,1274,0.7706,5101,0.8697,False,1798,new_exp_0_gemma_hebbian/seed_42,42
 0.8028,0.1022,225,Gemma-E4B+Heb,1237,0.7826,5442,0.8181,False,1800,new_exp_0_gemma_hebbian/seed_456,456
 0.7882,0.1087,138,Gemma-E4B+Heb,979,0.8371,3793,0.859,False,1199,new_exp_0_gemma_hebbian/seed_789,789

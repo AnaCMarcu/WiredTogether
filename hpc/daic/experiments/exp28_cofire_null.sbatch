@@ -52,4 +52,4 @@ run_exp "exp28_cofire_null" "$MODEL_LLM" \
     --social-act-mode choice \
     --social-acts none \
     --cofiring-channels none \
-    --simultaneous
+    --simultaneous ${EXTRA_ARGS:-}

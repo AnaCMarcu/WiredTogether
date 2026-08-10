@@ -252,6 +252,133 @@
    "contagion_rate": 0.0574
   }
  },
+ "new_exp_0_gemma_base/seed_123": {
+  "run": "new_exp_0_gemma_base/seed_123",
+  "exp": "new_exp_0_gemma_base",
+  "seed": 123,
+  "label": "Gemma-E4B",
+  "is_rl": false,
+  "quarantined": false,
+  "comm": {
+   "n_messages": 8268,
+   "n_valid": 4130,
+   "msgs_per_100_steps": 149.85,
+   "dup_rate": 0.0375,
+   "teammate_naming_rate": 0.1276,
+   "object_naming_rate": 0.6409,
+   "numeral_rate": 0.2797,
+   "categories_by_chamber": {
+    "ch1": {
+     "status_report": 195,
+     "commitment": 32,
+     "directive": 21,
+     "request": 2,
+     "question": 2,
+     "acknowledgment": 2
+    },
+    "?": {
+     "status_report": 159,
+     "commitment": 17,
+     "question": 7,
+     "request": 4,
+     "directive": 13,
+     "acknowledgment": 4
+    },
+    "ch2": {
+     "status_report": 377,
+     "request": 18,
+     "question": 26,
+     "commitment": 17,
+     "acknowledgment": 1,
+     "directive": 7
+    },
+    "ch3": {
+     "commitment": 52,
+     "status_report": 276,
+     "request": 52,
+     "directive": 26,
+     "question": 58,
+     "acknowledgment": 2
+    },
+    "ch4": {
+     "status_report": 340,
+     "request": 24,
+     "question": 19,
+     "commitment": 36,
+     "directive": 15,
+     "acknowledgment": 6
+    },
+    "ch5": {
+     "status_report": 118,
+     "commitment": 22,
+     "directive": 4,
+     "request": 8,
+     "question": 9
+    }
+   },
+   "valid_by_chamber": {
+    "ch1": 628,
+    "?": 527,
+    "ch2": 811,
+    "ch3": 896,
+    "ch4": 770,
+    "ch5": 498
+   },
+   "routing_by_chamber": {
+    "ch1": {
+     "model": 1254
+    },
+    "?": {
+     "model": 1062
+    },
+    "ch2": {
+     "model": 1624
+    },
+    "ch3": {
+     "model": 1796
+    },
+    "ch4": {
+     "model": 1535
+    },
+    "ch5": {
+     "model": 997
+    }
+   },
+   "ch3_switch_talk": 624,
+   "ch3_msgs": 896,
+   "ch3_chains": 0,
+   "ch3_chain_latency_median": null,
+   "ch3_silent_presses": 0
+  },
+  "failures": {
+   "task_repeat_loop": 3,
+   "action_stuck_loop": 7,
+   "critic_false_positive": 6,
+   "hallucinated_object_belief": 213,
+   "hallucinated_object_thought": 1231,
+   "hallucinated_object_message": 260,
+   "door_confusion": 13
+  },
+  "failures_per_1k": {
+   "task_repeat_loop": 1.09,
+   "action_stuck_loop": 2.54,
+   "critic_false_positive": 2.18,
+   "hallucinated_object_belief": 77.29,
+   "hallucinated_object_thought": 446.66,
+   "hallucinated_object_message": 94.34,
+   "door_confusion": 4.72
+  },
+  "beliefs": {
+   "n_perception_updates": 1452,
+   "perception_grounding_rate": 0.8533,
+   "partner_loc_claims": 5603,
+   "partner_loc_accuracy": 0.7624,
+   "belief_responsiveness": 0.8094,
+   "responsiveness_n": 1800,
+   "hallucination_rows": 213,
+   "contagion_rate": 0.1315
+  }
+ },
  "new_exp_0_gemma_base/seed_42": {
   "run": "new_exp_0_gemma_base/seed_42",
   "exp": "new_exp_0_gemma_base",
@@ -790,6 +917,314 @@
    "n_ch5_damage_overlap": 18,
    "agent2_msg_share": 0.5928,
    "agent2_prox_share": 0.701
+  }
+ },
+ "new_exp_0_gemma_hebbian/seed_1213": {
+  "run": "new_exp_0_gemma_hebbian/seed_1213",
+  "exp": "new_exp_0_gemma_hebbian",
+  "seed": 1213,
+  "label": "Gemma-E4B+Heb",
+  "is_rl": false,
+  "quarantined": false,
+  "comm": {
+   "n_messages": 7305,
+   "n_valid": 3644,
+   "msgs_per_100_steps": 149.47,
+   "dup_rate": 0.0609,
+   "teammate_naming_rate": 0.0593,
+   "object_naming_rate": 0.4007,
+   "numeral_rate": 0.2171,
+   "categories_by_chamber": {
+    "ch1": {
+     "status_report": 191,
+     "commitment": 21,
+     "request": 4,
+     "question": 3,
+     "directive": 7
+    },
+    "ch2": {
+     "status_report": 408,
+     "acknowledgment": 4,
+     "commitment": 38,
+     "request": 30,
+     "question": 27,
+     "directive": 8
+    },
+    "?": {
+     "directive": 15,
+     "status_report": 116,
+     "question": 5,
+     "request": 6,
+     "commitment": 15,
+     "acknowledgment": 1
+    },
+    "ch3": {
+     "status_report": 287,
+     "question": 48,
+     "commitment": 33,
+     "directive": 13,
+     "request": 12,
+     "acknowledgment": 1
+    },
+    "ch4": {
+     "status_report": 191,
+     "question": 8,
+     "directive": 13,
+     "commitment": 38,
+     "request": 13,
+     "acknowledgment": 2
+    },
+    "ch5": {
+     "commitment": 3,
+     "request": 1,
+     "status_report": 8
+    }
+   },
+   "valid_by_chamber": {
+    "ch1": 509,
+    "ch2": 1035,
+    "?": 446,
+    "ch3": 894,
+    "ch4": 703,
+    "ch5": 57
+   },
+   "routing_by_chamber": {
+    "ch1": {
+     "model": 1017
+    },
+    "?": {
+     "model": 897
+    },
+    "ch2": {
+     "model": 2073
+    },
+    "ch3": {
+     "model": 1800
+    },
+    "ch4": {
+     "model": 1404
+    },
+    "ch5": {
+     "model": 114
+    }
+   },
+   "ch3_switch_talk": 403,
+   "ch3_msgs": 894,
+   "ch3_chains": 38,
+   "ch3_chain_latency_median": 10,
+   "ch3_silent_presses": 4
+  },
+  "failures": {
+   "action_stuck_loop": 9,
+   "critic_false_positive": 4,
+   "hallucinated_object_belief": 226,
+   "hallucinated_object_thought": 766,
+   "hallucinated_object_message": 344,
+   "door_confusion": 102
+  },
+  "failures_per_1k": {
+   "action_stuck_loop": 3.69,
+   "critic_false_positive": 1.64,
+   "hallucinated_object_belief": 92.7,
+   "hallucinated_object_thought": 314.19,
+   "hallucinated_object_message": 141.1,
+   "door_confusion": 41.84
+  },
+  "social": {
+   "n_deliberations": 915,
+   "bond_ref_coverage": 0.9978,
+   "ask_rate": 0.0011,
+   "faith_mae": 0.0129,
+   "faith_within_005": 0.9389,
+   "faith_resolvable": 1.0,
+   "follow_same_step": 1.0,
+   "follow_window": 1.0,
+   "follow_baseline": 0.5749,
+   "ask_msg_adoption": 0.8485,
+   "argmax_consistency": 0.0,
+   "anti_bond_ask_rate": 1.0,
+   "respond_follow": 0.9968
+  },
+  "beliefs": {
+   "n_perception_updates": 1280,
+   "perception_grounding_rate": 0.8234,
+   "partner_loc_claims": 5390,
+   "partner_loc_accuracy": 0.764,
+   "belief_responsiveness": 0.8467,
+   "responsiveness_n": 1800,
+   "hallucination_rows": 226,
+   "contagion_rate": 0.0575
+  },
+  "bonds": {
+   "n_pair_episodes": 18,
+   "rho_messages": 0.1538,
+   "n_messages": 18,
+   "rho_joint_dig": 0.0909,
+   "n_joint_dig": 18,
+   "rho_proximity": 0.1991,
+   "n_proximity": 18,
+   "rho_joint_kill": null,
+   "n_joint_kill": 18,
+   "rho_ch5_damage_overlap": null,
+   "n_ch5_damage_overlap": 18,
+   "agent2_msg_share": 0.5837,
+   "agent2_prox_share": 0.6834
+  }
+ },
+ "new_exp_0_gemma_hebbian/seed_123": {
+  "run": "new_exp_0_gemma_hebbian/seed_123",
+  "exp": "new_exp_0_gemma_hebbian",
+  "seed": 123,
+  "label": "Gemma-E4B+Heb",
+  "is_rl": false,
+  "quarantined": false,
+  "comm": {
+   "n_messages": 8700,
+   "n_valid": 4341,
+   "msgs_per_100_steps": 149.64,
+   "dup_rate": 0.0504,
+   "teammate_naming_rate": 0.0723,
+   "object_naming_rate": 0.542,
+   "numeral_rate": 0.1877,
+   "categories_by_chamber": {
+    "ch1": {
+     "status_report": 194,
+     "commitment": 32,
+     "question": 1,
+     "request": 2,
+     "directive": 5,
+     "acknowledgment": 1
+    },
+    "?": {
+     "status_report": 150,
+     "question": 3,
+     "directive": 12,
+     "commitment": 18,
+     "request": 8,
+     "acknowledgment": 3
+    },
+    "ch2": {
+     "status_report": 362,
+     "question": 19,
+     "request": 44,
+     "commitment": 36,
+     "acknowledgment": 3,
+     "directive": 8
+    },
+    "ch3": {
+     "status_report": 259,
+     "request": 13,
+     "question": 92,
+     "commitment": 34,
+     "directive": 15
+    },
+    "ch4": {
+     "status_report": 309,
+     "commitment": 42,
+     "acknowledgment": 4,
+     "request": 36,
+     "question": 21,
+     "directive": 6
+    },
+    "ch5": {
+     "status_report": 187,
+     "request": 20,
+     "commitment": 33,
+     "question": 10,
+     "directive": 8
+    }
+   },
+   "valid_by_chamber": {
+    "ch1": 570,
+    "?": 526,
+    "ch2": 906,
+    "ch3": 889,
+    "ch4": 741,
+    "ch5": 709
+   },
+   "routing_by_chamber": {
+    "ch1": {
+     "model": 1132
+    },
+    "?": {
+     "model": 1055
+    },
+    "ch2": {
+     "model": 1811
+    },
+    "ch3": {
+     "model": 1800
+    },
+    "ch4": {
+     "model": 1485
+    },
+    "ch5": {
+     "model": 1417
+    }
+   },
+   "ch3_switch_talk": 530,
+   "ch3_msgs": 889,
+   "ch3_chains": 48,
+   "ch3_chain_latency_median": 10,
+   "ch3_silent_presses": 2
+  },
+  "failures": {
+   "task_repeat_loop": 7,
+   "action_stuck_loop": 11,
+   "critic_false_positive": 8,
+   "hallucinated_object_belief": 220,
+   "hallucinated_object_thought": 404,
+   "hallucinated_object_message": 59,
+   "door_confusion": 40
+  },
+  "failures_per_1k": {
+   "task_repeat_loop": 2.41,
+   "action_stuck_loop": 3.79,
+   "critic_false_positive": 2.76,
+   "hallucinated_object_belief": 75.84,
+   "hallucinated_object_thought": 139.26,
+   "hallucinated_object_message": 20.34,
+   "door_confusion": 13.79
+  },
+  "social": {
+   "n_deliberations": 1089,
+   "bond_ref_coverage": 1.0,
+   "ask_rate": 0.0018,
+   "faith_mae": 0.0089,
+   "faith_within_005": 0.963,
+   "faith_resolvable": 1.0,
+   "follow_same_step": 1.0,
+   "follow_window": 1.0,
+   "follow_baseline": 0.6834,
+   "ask_msg_adoption": 0.4903,
+   "argmax_consistency": 1.0,
+   "anti_bond_ask_rate": 0.0,
+   "respond_follow": 0.9976
+  },
+  "beliefs": {
+   "n_perception_updates": 1513,
+   "perception_grounding_rate": 0.8546,
+   "partner_loc_claims": 5874,
+   "partner_loc_accuracy": 0.8255,
+   "belief_responsiveness": 0.8499,
+   "responsiveness_n": 1799,
+   "hallucination_rows": 220,
+   "contagion_rate": 0.1273
+  },
+  "bonds": {
+   "n_pair_episodes": 18,
+   "rho_messages": 0.6161,
+   "n_messages": 18,
+   "rho_joint_dig": 0.1037,
+   "n_joint_dig": 18,
+   "rho_proximity": -0.4811,
+   "n_proximity": 18,
+   "rho_joint_kill": null,
+   "n_joint_kill": 18,
+   "rho_ch5_damage_overlap": null,
+   "n_ch5_damage_overlap": 18,
+   "agent2_msg_share": 0.5444,
+   "agent2_prox_share": 0.6597
   }
  },
  "new_exp_0_gemma_hebbian/seed_42": {

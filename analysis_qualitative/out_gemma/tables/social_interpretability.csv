@@ -1,5 +1,7 @@
 anti_bond_ask_rate,argmax_consistency,ask_msg_adoption,ask_rate,bond_ref_coverage,faith_mae,faith_resolvable,faith_within_005,follow_baseline,follow_same_step,follow_window,label,n_deliberations,quarantined,respond_follow,run,seed
 ,,,0.0,1.0,0.0154,1.0,0.9094,,,,Gemma-E4B+Heb,909,False,0.9869,new_exp_0_gemma_hebbian/seed_1011,1011
+1.0,0.0,0.8485,0.0011,0.9978,0.0129,1.0,0.9389,0.5749,1.0,1.0,Gemma-E4B+Heb,915,False,0.9968,new_exp_0_gemma_hebbian/seed_1213,1213
+0.0,1.0,0.4903,0.0018,1.0,0.0089,1.0,0.963,0.6834,1.0,1.0,Gemma-E4B+Heb,1089,False,0.9976,new_exp_0_gemma_hebbian/seed_123,123
 1.0,0.0,0.2051,0.0011,0.9989,0.011,1.0,0.9427,0.6176,1.0,1.0,Gemma-E4B+Heb,921,False,1.0,new_exp_0_gemma_hebbian/seed_42,42
 ,,,0.0,0.9956,0.0144,1.0,0.9306,,,,Gemma-E4B+Heb,912,False,0.9964,new_exp_0_gemma_hebbian/seed_456,456
 ,,,0.0,0.9984,0.0077,1.0,0.9955,,,,Gemma-E4B+Heb,634,False,0.9901,new_exp_0_gemma_hebbian/seed_789,789

@@ -1,5 +1,5 @@
 {
- "run": "new_exp_0_gemma_hebbian/seed_456",
+ "run": "new_exp_0_gemma_hebbian/seed_1213",
  "degraded": false,
  "is_rl": false,
  "quarantine_step_keyed": false,
@@ -7,49 +7,49 @@
   "0": {
    "offset": 0,
    "match_rate": 1.0,
-   "n_compared": 2431,
-   "n_units": 2431,
-   "n_rows": 2431,
+   "n_compared": 2435,
+   "n_units": 2435,
+   "n_rows": 2435,
    "status": "exact",
    "coverage": 1.0
   },
   "1": {
    "offset": 0,
    "match_rate": 1.0,
-   "n_compared": 2431,
-   "n_units": 2431,
-   "n_rows": 2431,
+   "n_compared": 2435,
+   "n_units": 2435,
+   "n_rows": 2435,
    "status": "exact",
    "coverage": 1.0
   },
   "2": {
    "offset": 0,
    "match_rate": 1.0,
-   "n_compared": 2431,
-   "n_units": 2431,
-   "n_rows": 2431,
+   "n_compared": 2435,
+   "n_units": 2435,
+   "n_rows": 2435,
    "status": "exact",
    "coverage": 1.0
   }
  },
  "attribution": {
-  "attributed": 7863,
+  "attributed": 7760,
   "unattributed": 0,
   "low_conf": 0,
   "stale_units": 0
  },
  "cadence": {
   "belief_perception": {
-   "rate": 0.9615912208504801,
-   "n": 1458
+   "rate": 0.8685831622176592,
+   "n": 1461
   },
   "critic": {
-   "rate": 0.8705234159779615,
+   "rate": 0.7988980716253443,
    "n": 363
   },
   "social": {
    "rate": 1.0,
-   "n": 912
+   "n": 915
   }
  },
  "clock": null,
@@ -61,16 +61,16 @@
  },
  "checks": {
   "messages_vs_comm_metrics": {
-   "messages_jsonl": 7293,
-   "comm_metrics_total": 7293,
+   "messages_jsonl": 7305,
+   "comm_metrics_total": 7305,
    "ok": true
   },
   "routing_vs_breakdown": {
    "messages_jsonl": {
-    "model": 7293
+    "model": 7305
    },
    "comm_metrics": {
-    "model": 7293
+    "model": 7305
    }
   },
   "hebbian_W_snapshot_vs_summary": {
@@ -79,16 +79,16 @@
   },
   "parse_fail_by_module": {
    "action_selection": {
-    "n": 7293,
+    "n": 7305,
     "fail": 0
    },
    "auto_curriculum": {
-    "n": 404,
+    "n": 288,
     "fail": 0
    },
    "belief_system": {
-    "n": 5821,
-    "fail": 0
+    "n": 5831,
+    "fail": 3
    },
    "critic": {
     "n": 363,
@@ -99,12 +99,12 @@
     "fail": 0
    },
    "social_module": {
-    "n": 912,
+    "n": 915,
     "fail": 0
    }
   }
  },
- "n_units": 15156,
- "n_timeline_rows": 7293,
+ "n_units": 15065,
+ "n_timeline_rows": 7305,
  "elapsed_s": 2.0
 }

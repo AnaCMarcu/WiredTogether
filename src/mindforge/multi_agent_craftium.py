@@ -302,6 +302,23 @@ def parse_args():
                              "comm,obs,imit or 'none'. Defaults to the value "
                              "of --social-acts (credit what is afforded). "
                              "Ignored in legacy mode (legacy credits comm).")
+    parser.add_argument("--comm-reward-scale", type=float, default=1.0,
+                        help="Scale on every communication PAYOUT (base msg "
+                             "reward + chamber comm milestones). 0.0 = the "
+                             "Experiment-2 noreward suite: messages still "
+                             "route and comm milestones still fire as "
+                             "events, but talking pays nothing — so it can "
+                             "neither manufacture bondable reward nor trip "
+                             "the milestone-success banner. Default 1.0 = "
+                             "historical behavior.")
+    parser.add_argument("--hebbian-delta", type=float, default=None,
+                        help="δ: the co-activity value of ONE social act "
+                             "(comm/obs/imit channel terms alike). Default "
+                             "None keeps the historical 0.5. Set 1.0 with "
+                             "--comm-reward-scale 0 so act-driven bonds "
+                             "(growing at the η0 floor, without comm-reward "
+                             "salience) still equilibrate in the analyzable "
+                             "band against the homeostatic decay.")
     # ── Experiment tracking ──
     parser.add_argument("--experiment-id", type=str, default=None,
                         help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
@@ -1229,7 +1246,13 @@ async def run(args):
         modulation_beta=args.hebbian_beta,
         social_replay_rho=args.hebbian_rho,
         reward_diffusion_gamma=args.hebbian_gamma,
-        communication_coactivity_bonus=0.0 if args.hebbian_no_comm_bond else 0.5,
+        communication_coactivity_bonus=(
+            0.0 if args.hebbian_no_comm_bond
+            else (args.hebbian_delta if args.hebbian_delta is not None else 0.5)
+        ),
+        # One δ for ALL channel terms (obs/imit follow comm via the None
+        # alias unless --hebbian-delta sets them explicitly).
+        social_coactivity_bonus=args.hebbian_delta,
         # Experiment 2 credit mask; ("comm",) in legacy mode = historical rule.
         social_act_channels=_cofire_channels,
         init_weight=args.hebbian_init_weight,
@@ -1474,7 +1497,10 @@ async def run(args):
         # when the agent re-enacts the next element, never automatically).
         _pending_imitations: dict = {}
         agents_error_count = [0] * num_agents
-        comm_tracker = CommunicationTracker(agent_ids=list(range(num_agents)))
+        comm_tracker = CommunicationTracker(
+            agent_ids=list(range(num_agents)),
+            reward_scale=args.comm_reward_scale,
+        )
         coop_metric = CooperationMetric(agent_ids=list(range(num_agents)))
         ep_logger = EpisodeLogger(run_dir=metric.target_folder, episode=episode + 1)
         _last_propagation_contribs: dict[int, dict[int, float]] = {
