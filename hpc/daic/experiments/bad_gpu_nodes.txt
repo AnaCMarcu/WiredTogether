@@ -36,4 +36,20 @@
 # env step (2 of 300 steps in 12.7 h), from the slurm .out of job 12765952
 # (expA_pair_bonding smoke, 2026-08-04). Both nodes advertise
 # jobspernode:four, so four jobs share the four cards and contend further.
-influ[2-3]
+# DISABLED 2026-08-10 — influ2/influ3 are NOT schedulable from the `general`
+# partition these jobs use. Proof:
+#     sbatch --test-only --exclude=influ2 exp04_ippo.sbatch
+#     -> allocation failure: Invalid node name specified
+# while --exclude=cor1 and --mem=64G both validate fine. SLURM accepts the
+# bracket form `influ[2-3]` WITHOUT validating it, which is why
+# submit_seed_extension.sh kept submitting successfully while an explicit
+# --exclude=cor1,influ2,influ3 was rejected outright.
+#
+# Consequence: jobs were never landing on influ, so excluding it was never
+# what mattered. The 11 GB card behind the OOM->NoOp collapse was some other
+# node in `general`, still unidentified. The MIN_GPU_MEM_MIB preflight in
+# _common.sh is the mechanism that actually protects — it reported
+# "46068 MiB ... OK" on gpu02/gpu04/gpu11 and those runs came back clean.
+#
+# Re-enable ONLY with a name that passes `sbatch --test-only --exclude=<node>`.
+# influ[2-3]
