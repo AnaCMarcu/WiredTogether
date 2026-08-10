@@ -164,6 +164,7 @@ fi
 
 n_queued=0
 n_skipped=0
+n_failed=0
 for exp in "${EXPS[@]}"; do
     for seed in "${SEEDS[@]}"; do
         if [ -f "$REPO/runs/$RUN_GROUP/$exp/seed_$seed/final_metrics.json" ]; then
@@ -172,16 +173,30 @@ for exp in "${EXPS[@]}"; do
         fi
         if [ "${DRY_RUN:-0}" = "1" ]; then
             echo "would queue  $exp  seed_$seed"
+            n_queued=$((n_queued + 1))
         else
             jobid=$(SEED=$seed sbatch --parsable \
                 ${SBATCH_OVERRIDES[@]:+"${SBATCH_OVERRIDES[@]}"} \
                 "$exp.sbatch")
-            echo "queued  $exp  seed_$seed  →  job $jobid"
+            if [ -n "$jobid" ]; then
+                echo "queued  $exp  seed_$seed  →  job $jobid"
+                n_queued=$((n_queued + 1))
+            else
+                # sbatch printed its error to stderr already (e.g. invalid
+                # --exclude node name). Abort instead of spamming 20 more
+                # failures with a bad override.
+                echo "FAILED  $exp  seed_$seed  — sbatch rejected the job" >&2
+                n_failed=$((n_failed + 1))
+                echo "── aborting after first failure: fix the sbatch error above" \
+                     "(often a bad EXCLUDE= node name — check sinfo) and rerun;" \
+                     "already-queued jobs are fine and the rerun skips finished runs ──" >&2
+                break 2
+            fi
         fi
-        n_queued=$((n_queued + 1))
     done
 done
-echo "── done: $n_queued submitted, $n_skipped already complete ──"
+echo "── done: $n_queued submitted, $n_skipped already complete, $n_failed failed ──"
+[ "$n_failed" -gt 0 ] && exit 1
 echo "Track with:   squeue -u \$USER"
 echo "Watch load:   tail -f slurm_logs/${EXPS[0]}_*.out"
 echo "Cancel all:   scancel -u \$USER"
