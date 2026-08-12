@@ -37,6 +37,16 @@ def _f(x, nd=2):
     return "—" if x is None else f"{x:.{nd}f}"
 
 
+def _ms(values, nd=2):
+    """mean ± sample std (n-1); just the mean when n < 2."""
+    vals = [v for v in values if v is not None]
+    if not vals:
+        return "—"
+    if len(vals) < 2:
+        return f"{vals[0]:.{nd}f}"
+    return f"{st.mean(vals):.{nd}f} ± {st.stdev(vals):.{nd}f}"
+
+
 # ── Phase A ──────────────────────────────────────────────────────────────────
 
 def phase_a_section(title, run_glob):
@@ -366,26 +376,31 @@ memory volume?
         d = (t - sh) if (t is not None and sh is not None) else None
         L.append(f"| {s} | {_f(t)} | {_f(sh)} | {_f(d, 2)} |")
     tp, sp_ = st.mean(t_means), st.mean(s_means)
+    diffs = [t - s for t, s in zip(t_means, s_means)]
     n_pos = sum(1 for s in seeds
                 if (wiring['transplant']['runs'].get(f'seed_{s}', {}).get('pref_mean') or 0)
                 > (wiring['shuffled']['runs'].get(f'seed_{s}', {}).get('pref_mean') or 1))
-    L.append(f"| **pooled** | **{tp:.3f}** | **{sp_:.3f}** | "
-             f"**+{tp - sp_:.3f}** |")
+    L.append(f"| **mean ± sd** | **{_ms(t_means)}** | **{_ms(s_means)}** | "
+             f"**+{_ms(diffs, 3)}** |")
     L.append("")
     L.append(f"Transplant beats shuffled in **{n_pos}/{len(seeds)} paired "
              f"seeds** (sign-consistent), and both arms sit above the 0.20 "
-             f"chance level.")
+             f"chance level. Note the paired difference is far more stable "
+             f"({_ms(diffs, 3)}) than either arm's seed-to-seed variation "
+             f"(± {st.stdev(t_means):.2f}) — seeds shift both arms together, "
+             f"the treatment effect stays put. (mean ± sample sd over "
+             f"n={len(seeds)} seeds throughout.)")
     L.append("")
 
     L.append("### Seat-pair breakdown (pooled over seeds)")
     L.append("")
-    L.append("| arm | seats | label | mean pref | msgs within (per seed) | co-milestones (per seed) |")
+    L.append("| arm | seats | label | pref (mean ± sd) | msgs within (mean ± sd) | co-milestones (mean ± sd) |")
     L.append("|---|---|---|---|---|---|")
     for arm in arms:
         for k, d in sorted(wiring[arm]["seat_pairs"].items()):
-            mp = st.mean(d["prefs"]) if d["prefs"] else None
-            L.append(f"| {arm} | {list(k)} | {d['label']} | {_f(mp, 3)} | "
-                     f"{d['msgs']} | {d['co']} |")
+            L.append(f"| {arm} | {list(k)} | {d['label']} | "
+                     f"{_ms(d['prefs'])} | {_ms(d['msgs'], 0)} | "
+                     f"{_ms(d['co'], 1)} |")
     L.append("")
     gen = [st.mean(d["prefs"]) for k, d in
            wiring["transplant"]["seat_pairs"].items()
@@ -412,6 +427,10 @@ memory volume?
             eps = [d["ep_trend"].get(f"ep_000{k}") for k in (1, 2, 3)]
             L.append(f"| {arm} | {rn} | {_f(eps[0])} | {_f(eps[1])} | "
                      f"{_f(eps[2])} |")
+        by_ep = [[d["ep_trend"].get(f"ep_000{k}")
+                  for d in wiring[arm]["runs"].values()] for k in (1, 2, 3)]
+        L.append(f"| {arm} | **mean ± sd** | **{_ms(by_ep[0])}** | "
+                 f"**{_ms(by_ep[1])}** | **{_ms(by_ep[2])}** |")
     L.append("")
     dom = wiring["transplant"]["runs"]["seed_42"]["ep_dominant"]
     dom_str = {ep: " ".join(f"{i}→{t}" for i, t in m.items() if t is not None)
@@ -438,6 +457,15 @@ memory volume?
                 wc = d["w_by_ep"].get(k)
                 cells.append(f"{wc[0]:.3f} / {wc[1]:.3f}" if wc else "—")
             L.append(f"| {arm} | {rn} | {cells[0]} | {cells[1]} | {cells[2]} |")
+        cells = []
+        for k in (1, 2, 3):
+            wi = [d["w_by_ep"][k][0] for d in wiring[arm]["runs"].values()
+                  if k in d["w_by_ep"]]
+            cr = [d["w_by_ep"][k][1] for d in wiring[arm]["runs"].values()
+                  if k in d["w_by_ep"]]
+            cells.append(f"{_ms(wi, 3)} / {_ms(cr, 3)}")
+        L.append(f"| {arm} | **mean ± sd** | **{cells[0]}** | **{cells[1]}** | "
+                 f"**{cells[2]}** |")
     L.append("")
     ep1_t = [d["w_by_ep"][1][0] for d in wiring["transplant"]["runs"].values()
              if 1 in d["w_by_ep"]]
@@ -479,15 +507,17 @@ memory volume?
                      f"{'yes' if d['reached_ch5'] else 'no'} | "
                      f"{'yes' if d['switch_done'] else 'NO'} | "
                      f"{_f(d['wall_h'], 1)} |")
-    for arm in arms:
         pcts = [d["pct"] for d in perf[arm].values()]
+        evs = [d["milestone_events"] for d in perf[arm].values()]
         rt = [d["mean_return"] for d in perf[arm].values()
               if d["mean_return"] is not None]
-        L.append("")
-        L.append(f"- **{arm}**: mean completion "
-                 f"{st.mean(pcts):.0f}%, mean return {st.mean(rt):.0f}.")
+        wh = [d["wall_h"] for d in perf[arm].values()]
+        L.append(f"| {arm} | **mean ± sd** | **{_ms(pcts, 0)}%** | "
+                 f"**{_ms(evs, 1)}** | **{_ms(rt, 0)}** |  |  | "
+                 f"**{_ms(wh, 1)}** |")
     t_pct = st.mean([d["pct"] for d in perf["transplant"].values()])
     s_pct = st.mean([d["pct"] for d in perf["shuffled"].values()])
+    L.append("")
     all_completed = sorted(set().union(
         *(d["completed"] for a in arms for d in perf[a].values())))
     never = sorted(CH3_5_MILESTONES - set(all_completed))

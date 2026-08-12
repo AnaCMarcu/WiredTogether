@@ -1,6 +1,6 @@
 # Pair-Bonding Transplant Experiment — Results Report
 
-*Generated 2026-08-12 23:06 by `src/mindforge/tools/transplant_report.py` — every number is computed from the run artifacts; regenerate rather than hand-edit.*
+*Generated 2026-08-12 23:19 by `src/mindforge/tools/transplant_report.py` — every number is computed from the run artifacts; regenerate rather than hand-edit.*
 
 ## Design
 
@@ -86,20 +86,20 @@ The bond↔co-firing inversion **replicates across models**: Qwen's 3 genuine co
 | 42 | 0.44 | 0.28 | 0.16 |
 | 123 | 0.68 | 0.52 | 0.16 |
 | 456 | 0.57 | 0.42 | 0.15 |
-| **pooled** | **0.561** | **0.404** | **+0.157** |
+| **mean ± sd** | **0.56 ± 0.12** | **0.40 ± 0.12** | **+0.157 ± 0.004** |
 
-Transplant beats shuffled in **3/3 paired seeds** (sign-consistent), and both arms sit above the 0.20 chance level.
+Transplant beats shuffled in **3/3 paired seeds** (sign-consistent), and both arms sit above the 0.20 chance level. Note the paired difference is far more stable (0.157 ± 0.004) than either arm's seed-to-seed variation (± 0.12) — seeds shift both arms together, the treatment effect stays put. (mean ± sample sd over n=3 seeds throughout.)
 
 ### Seat-pair breakdown (pooled over seeds)
 
-| arm | seats | label | mean pref | msgs within (per seed) | co-milestones (per seed) |
+| arm | seats | label | pref (mean ± sd) | msgs within (mean ± sd) | co-milestones (mean ± sd) |
 |---|---|---|---|---|---|
-| transplant | [0, 1] | GENUINE | 0.612 | [1914, 3806, 3685] | [2, 2, 2] |
-| transplant | [2, 3] | GENUINE | 0.565 | [2057, 3338, 3218] | [2, 3, 0] |
-| transplant | [4, 5] | CONTROL | 0.505 | [1759, 3695, 2260] | [0, 3, 2] |
-| shuffled | [0, 1] | strangers | 0.398 | [572, 2136, 2114] | [1, 2, 4] |
-| shuffled | [2, 3] | strangers | 0.356 | [477, 2719, 1381] | [1, 1, 1] |
-| shuffled | [4, 5] | strangers | 0.457 | [2646, 2878, 666] | [2, 0, 0] |
+| transplant | [0, 1] | GENUINE | 0.61 ± 0.16 | 3135 ± 1059 | 2.0 ± 0.0 |
+| transplant | [2, 3] | GENUINE | 0.56 ± 0.08 | 2871 ± 707 | 1.7 ± 1.5 |
+| transplant | [4, 5] | CONTROL | 0.50 ± 0.15 | 2571 ± 1005 | 1.7 ± 1.5 |
+| shuffled | [0, 1] | strangers | 0.40 ± 0.25 | 1607 ± 897 | 2.3 ± 1.5 |
+| shuffled | [2, 3] | strangers | 0.36 ± 0.21 | 1526 ± 1128 | 1.0 ± 0.0 |
+| shuffled | [4, 5] | strangers | 0.46 ± 0.20 | 2063 ± 1216 | 0.7 ± 1.2 |
 
 Ordering as predicted: GENUINE (0.612, 0.565) > CONTROL (0.505) > strangers (0.356–0.457). The control dyad (shared history, no anvil) sits closer to genuine than to strangers — most of the effect is carried by *real shared history*, with genuine co-firing adding a further increment.
 
@@ -110,9 +110,11 @@ Ordering as predicted: GENUINE (0.612, 0.565) > CONTROL (0.505) > strangers (0.3
 | transplant | seed_123 | 0.62 | 0.86 | 0.61 |
 | transplant | seed_42 | 0.77 | 0.02 | 0.58 |
 | transplant | seed_456 | 0.92 | 0.60 | 0.29 |
+| transplant | **mean ± sd** | **0.77 ± 0.15** | **0.49 ± 0.43** | **0.49 ± 0.18** |
 | shuffled | seed_123 | 0.54 | 0.72 | 0.37 |
 | shuffled | seed_42 | 0.41 | 0.39 | 0.05 |
 | shuffled | seed_456 | 0.54 | 0.23 | 0.26 |
+| shuffled | **mean ± sd** | **0.50 ± 0.08** | **0.45 ± 0.25** | **0.23 ± 0.16** |
 
 Preference is strongest early and noisy across episodes. The transplant/seed_42 ep2 collapse is NOT messaging breakdown — the team *re-paired* into different reciprocal dyads for one episode and returned to the transplanted pairs in ep3 (dominant message target per agent: ep1 `0→1 1→0 2→3 3→2 4→5 5→4`, ep2 `0→4 1→2 2→1 3→5 4→0 5→3`, ep3 `0→1 1→0 2→3 3→2 4→5 5→4`). Dyadic organization itself is robust; the transplanted pairing acts as the attractor teams return to.
 
@@ -123,9 +125,11 @@ Preference is strongest early and noisy across episodes. The transplant/seed_42 
 | transplant | seed_123 | 0.123 / 0.137 | 0.288 / 0.086 | 0.136 / 0.136 |
 | transplant | seed_42 | 0.299 / 0.083 | 0.092 / 0.123 | 0.283 / 0.096 |
 | transplant | seed_456 | 0.290 / 0.090 | 0.175 / 0.121 | 0.138 / 0.120 |
+| transplant | **mean ± sd** | **0.237 ± 0.099 / 0.103 ± 0.029** | **0.185 ± 0.098 / 0.110 ± 0.021** | **0.186 ± 0.084 / 0.118 ± 0.020** |
 | shuffled | seed_123 | 0.275 / 0.102 | 0.148 / 0.121 | 0.214 / 0.129 |
 | shuffled | seed_42 | 0.156 / 0.132 | 0.158 / 0.122 | 0.089 / 0.130 |
 | shuffled | seed_456 | 0.162 / 0.136 | 0.171 / 0.155 | 0.147 / 0.128 |
+| shuffled | **mean ± sd** | **0.197 ± 0.067 / 0.123 ± 0.018** | **0.159 ± 0.012 / 0.133 ± 0.019** | **0.150 ± 0.063 / 0.129 ± 0.001** |
 
 Both arms start at the same 0.265. Episode-1 within-seat means: transplant 0.299, 0.123, 0.290 vs shuffled 0.156, 0.275, 0.162 — leaning toward survival for true pairs, but with one crossover each way at n=3: **W is a fast readout of the current episode's pairing behavior, not a persistent store** (the seed_42 dip to 0.092 lands exactly in its re-pairing episode and recovers to 0.283 when the pairs re-form). The persistent carrier of the relationship is the episodic memory.
 
@@ -138,13 +142,12 @@ Milestone completion counts a milestone type as done if any agent earned it in a
 | transplant | seed_123 | 4/13 (**31%**) | 92 | 357 | yes | yes | 89.0 |
 | transplant | seed_42 | 4/13 (**31%**) | 77 | 320 | yes | yes | 73.0 |
 | transplant | seed_456 | 4/13 (**31%**) | 90 | 472 | yes | yes | 89.2 |
+| transplant | **mean ± sd** | **31 ± 0%** | **86.3 ± 8.1** | **383 ± 79** |  |  | **83.7 ± 9.3** |
 | shuffled | seed_123 | 3/13 (**23%**) | 76 | 347 | yes | NO | 81.8 |
 | shuffled | seed_42 | 4/13 (**31%**) | 80 | 377 | yes | yes | 76.0 |
 | shuffled | seed_456 | 4/13 (**31%**) | 81 | 314 | yes | yes | 55.6 |
+| shuffled | **mean ± sd** | **28 ± 4%** | **79.0 ± 2.6** | **346 ± 32** |  |  | **71.2 ± 13.8** |
 
-- **transplant**: mean completion 31%, mean return 383.
-
-- **shuffled**: mean completion 28%, mean return 346.
 
 Transplant shows a small edge (31% vs 28% mean completion) — a trend, not a claim. Every run reached Ch5; wiring together is a social-structural effect, not a task-competence one, which also rules out 'transplant helps because it boosts performance' as a confound for the preference results.
 
