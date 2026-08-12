@@ -208,6 +208,19 @@ def phase_b_wiring(base, arms, seeds, n=6):
     return out
 
 
+# Task milestones achievable in a --start-chamber 3 run (Chambers 3-5).
+# Ch1/Ch2 milestones are unreachable by design; m_comm_* are per-chamber
+# communication rewards, not task milestones.
+CH3_5_MILESTONES = frozenset({
+    "m16_enter_cell", "m17_switch_pressed", "m18_door_opened",
+    "m19_all_in_communal",
+    "m20_enter_ch4", "m21_first_mob_kill", "m22_all_mobs_killed",
+    "m23_all_alive_ch4",
+    "m24_enter_ch5", "m25_first_boss_dmg", "m26_boss_half_hp",
+    "m27_boss_defeated", "m28_all_alive_bonus",
+})
+
+
 def phase_b_performance(base, arms, seeds):
     out = {}
     for arm in arms:
@@ -219,10 +232,14 @@ def phase_b_performance(base, arms, seeds):
                 continue
             ev = fm.get("milestone_events") or []
             ids = sorted({e["milestone_id"] for e in ev})
+            completed = sorted(set(ids) & CH3_5_MILESTONES)
             rets = fm.get("cumulative_returns") or []
             rows[run.name] = {
                 "milestone_events": len(ev),
-                "unique_milestones": len(ids),
+                "completed": completed,
+                "pct": 100.0 * len(completed) / len(CH3_5_MILESTONES),
+                "ch1_leak": sum(1 for e in ev
+                                if e["milestone_id"].startswith("m1_")),
                 "ids": ids,
                 "mean_return": st.mean(rets) if rets else None,
                 "reached_ch5": "m24_enter_ch5" in ids,
@@ -442,33 +459,60 @@ memory volume?
 
     # Performance
     perf = phase_b_performance(base, arms, seeds)
+    n_total = len(CH3_5_MILESTONES)
     L.append("## Phase B task performance")
     L.append("")
-    L.append("| arm | seed | milestone events | unique | mean cum. return | reached Ch5 | switch puzzle done | wall time (h) |")
+    L.append(f"Milestone completion counts a milestone type as done if any "
+             f"agent earned it in any episode, out of the {n_total} task "
+             f"milestones achievable in Chambers 3–5 (Ch1/Ch2 milestones are "
+             f"unreachable in a `--start-chamber 3` run; per-chamber "
+             f"communication rewards `m_comm_*` are excluded).")
+    L.append("")
+    L.append(f"| arm | seed | milestones completed (of {n_total}) | reward events | mean cum. return | reached Ch5 | switch puzzle done | wall time (h) |")
     L.append("|---|---|---|---|---|---|---|---|")
     for arm in arms:
         for rn, d in sorted(perf[arm].items()):
-            L.append(f"| {arm} | {rn} | {d['milestone_events']} | "
-                     f"{d['unique_milestones']} | {_f(d['mean_return'], 0)} | "
+            L.append(f"| {arm} | {rn} | "
+                     f"{len(d['completed'])}/{n_total} "
+                     f"(**{d['pct']:.0f}%**) | {d['milestone_events']} | "
+                     f"{_f(d['mean_return'], 0)} | "
                      f"{'yes' if d['reached_ch5'] else 'no'} | "
                      f"{'yes' if d['switch_done'] else 'NO'} | "
                      f"{_f(d['wall_h'], 1)} |")
     for arm in arms:
-        ms = [d["milestone_events"] for d in perf[arm].values()]
+        pcts = [d["pct"] for d in perf[arm].values()]
         rt = [d["mean_return"] for d in perf[arm].values()
               if d["mean_return"] is not None]
         L.append("")
-        L.append(f"- **{arm}**: mean milestone events "
-                 f"{st.mean(ms):.1f}, mean return {st.mean(rt):.0f}.")
-    t_ms = st.mean([d["milestone_events"] for d in perf["transplant"].values()])
-    s_ms = st.mean([d["milestone_events"] for d in perf["shuffled"].values()])
+        L.append(f"- **{arm}**: mean completion "
+                 f"{st.mean(pcts):.0f}%, mean return {st.mean(rt):.0f}.")
+    t_pct = st.mean([d["pct"] for d in perf["transplant"].values()])
+    s_pct = st.mean([d["pct"] for d in perf["shuffled"].values()])
+    all_completed = sorted(set().union(
+        *(d["completed"] for a in arms for d in perf[a].values())))
+    never = sorted(CH3_5_MILESTONES - set(all_completed))
+    leak = sum(d["ch1_leak"] for a in arms for d in perf[a].values())
     L.append("")
-    L.append(f"Transplant shows a small edge ({t_ms:.1f} vs {s_ms:.1f} "
-             f"milestone events) — a trend, not a claim. Every run reached "
+    L.append(f"Transplant shows a small edge ({t_pct:.0f}% vs {s_pct:.0f}% "
+             f"mean completion) — a trend, not a claim. Every run reached "
              f"Ch5; wiring together is a social-structural effect, not a "
              f"task-competence one, which also rules out 'transplant helps "
              f"because it boosts performance' as a confound for the "
              f"preference results.")
+    L.append("")
+    L.append(f"Milestones completed somewhere in the suite: "
+             f"{', '.join(f'`{m}`' for m in all_completed)}. Never completed "
+             f"by any run: {', '.join(f'`{m}`' for m in never)} — the "
+             f"communal-regroup gate (m19) and the full combat/boss clears "
+             f"remain beyond 6-agent teams at these horizons.")
+    if leak:
+        L.append("")
+        L.append(f"*Known artifact: `m1_move_5` (a Ch1 milestone) leaked "
+                 f"{leak} reward events across the six runs despite Ch1 "
+                 f"never being visited — the Ch1 movement tracker fires "
+                 f"mid-episode under rare conditions. Excluded from the "
+                 f"completion metric; worth a Lua fix before reusing the "
+                 f"ch1_solo track in analyses.*")
     L.append("")
 
     # Findings

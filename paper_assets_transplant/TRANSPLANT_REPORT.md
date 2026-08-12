@@ -1,6 +1,6 @@
 # Pair-Bonding Transplant Experiment — Results Report
 
-*Generated 2026-08-12 22:27 by `src/mindforge/tools/transplant_report.py` — every number is computed from the run artifacts; regenerate rather than hand-edit.*
+*Generated 2026-08-12 23:06 by `src/mindforge/tools/transplant_report.py` — every number is computed from the run artifacts; regenerate rather than hand-edit.*
 
 ## Design
 
@@ -131,20 +131,26 @@ Both arms start at the same 0.265. Episode-1 within-seat means: transplant 0.299
 
 ## Phase B task performance
 
-| arm | seed | milestone events | unique | mean cum. return | reached Ch5 | switch puzzle done | wall time (h) |
+Milestone completion counts a milestone type as done if any agent earned it in any episode, out of the 13 task milestones achievable in Chambers 3–5 (Ch1/Ch2 milestones are unreachable in a `--start-chamber 3` run; per-chamber communication rewards `m_comm_*` are excluded).
+
+| arm | seed | milestones completed (of 13) | reward events | mean cum. return | reached Ch5 | switch puzzle done | wall time (h) |
 |---|---|---|---|---|---|---|---|
-| transplant | seed_123 | 92 | 10 | 357 | yes | yes | 89.0 |
-| transplant | seed_42 | 77 | 9 | 320 | yes | yes | 73.0 |
-| transplant | seed_456 | 90 | 9 | 472 | yes | yes | 89.2 |
-| shuffled | seed_123 | 76 | 8 | 347 | yes | NO | 81.8 |
-| shuffled | seed_42 | 80 | 8 | 377 | yes | yes | 76.0 |
-| shuffled | seed_456 | 81 | 10 | 314 | yes | yes | 55.6 |
+| transplant | seed_123 | 4/13 (**31%**) | 92 | 357 | yes | yes | 89.0 |
+| transplant | seed_42 | 4/13 (**31%**) | 77 | 320 | yes | yes | 73.0 |
+| transplant | seed_456 | 4/13 (**31%**) | 90 | 472 | yes | yes | 89.2 |
+| shuffled | seed_123 | 3/13 (**23%**) | 76 | 347 | yes | NO | 81.8 |
+| shuffled | seed_42 | 4/13 (**31%**) | 80 | 377 | yes | yes | 76.0 |
+| shuffled | seed_456 | 4/13 (**31%**) | 81 | 314 | yes | yes | 55.6 |
 
-- **transplant**: mean milestone events 86.3, mean return 383.
+- **transplant**: mean completion 31%, mean return 383.
 
-- **shuffled**: mean milestone events 79.0, mean return 346.
+- **shuffled**: mean completion 28%, mean return 346.
 
-Transplant shows a small edge (86.3 vs 79.0 milestone events) — a trend, not a claim. Every run reached Ch5; wiring together is a social-structural effect, not a task-competence one, which also rules out 'transplant helps because it boosts performance' as a confound for the preference results.
+Transplant shows a small edge (31% vs 28% mean completion) — a trend, not a claim. Every run reached Ch5; wiring together is a social-structural effect, not a task-competence one, which also rules out 'transplant helps because it boosts performance' as a confound for the preference results.
+
+Milestones completed somewhere in the suite: `m17_switch_pressed`, `m18_door_opened`, `m20_enter_ch4`, `m21_first_mob_kill`, `m24_enter_ch5`. Never completed by any run: `m16_enter_cell`, `m19_all_in_communal`, `m22_all_mobs_killed`, `m23_all_alive_ch4`, `m25_first_boss_dmg`, `m26_boss_half_hp`, `m27_boss_defeated`, `m28_all_alive_bonus` — the communal-regroup gate (m19) and the full combat/boss clears remain beyond 6-agent teams at these horizons.
+
+*Known artifact: `m1_move_5` (a Ch1 milestone) leaked 18 reward events across the six runs despite Ch1 never being visited — the Ch1 movement tracker fires mid-episode under rare conditions. Excluded from the completion metric; worth a Lua fix before reusing the ch1_solo track in analyses.*
 
 ## Findings (summary)
 
