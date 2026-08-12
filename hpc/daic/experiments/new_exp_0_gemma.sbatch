@@ -9,7 +9,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/new_exp_0_gemma_%j.out
 #SBATCH --error=slurm_logs/new_exp_0_gemma_%j.err
-#SBATCH --exclude=cor1,influ[2-3]
+#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # new_exp_0_gemma — Gemma 4 LLM agents, with and without the Hebbian social
@@ -32,13 +32,13 @@
 # One arm, one seed:
 #   SEED=42 HEBBIAN=1 sbatch new_exp_0_gemma.sbatch
 #
-# The --exclude header lists influ[2-3] directly (not just cor1) so a plain
-# `sbatch new_exp_0_gemma.sbatch` is safe. Both influ GPU nodes are 11264 MiB
-# RTX 2080 Tis — under _common.sh's 15000 MiB preflight threshold — so jobs
-# landing there abort at startup with "GPU PREFLIGHT FAILED". Submitting
-# through gpu_filter.sh (which reads bad_gpu_nodes.txt) achieves the same and
-# stays current as the preflight appends new offenders; this header is the
-# belt for direct submissions:
+# --exclude names cor1 ONLY. It briefly also listed influ[2-3] (11264 MiB RTX
+# 2080 Tis, under _common.sh's 15000 MiB preflight threshold, which aborted
+# jobs that landed there). Those nodes have since left the cluster — `sinfo -N`
+# no longer lists them — and sbatch rejects an ENTIRE submission whose
+# --exclude names an unknown node ("Invalid node name specified"), so keeping
+# them here blocked every submit. If they ever return, put them back in
+# bad_gpu_nodes.txt and submit through gpu_filter.sh rather than hardcoding:
 #     source gpu_filter.sh
 #     sbatch ${GPU_FILTER_FLAGS[@]:+"${GPU_FILTER_FLAGS[@]}"} new_exp_0_gemma.sbatch
 #

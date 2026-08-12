@@ -45,11 +45,20 @@
 # submit_seed_extension.sh kept submitting successfully while an explicit
 # --exclude=cor1,influ2,influ3 was rejected outright.
 #
-# Consequence: jobs were never landing on influ, so excluding it was never
-# what mattered. The 11 GB card behind the OOM->NoOp collapse was some other
-# node in `general`, still unidentified. The MIN_GPU_MEM_MIB preflight in
-# _common.sh is the mechanism that actually protects — it reported
-# "46068 MiB ... OK" on gpu02/gpu04/gpu11 and those runs came back clean.
+# Consequence: excluding influ by name is not available from `general`. The
+# MIN_GPU_MEM_MIB preflight in _common.sh is the mechanism that actually
+# protects — it reported "46068 MiB ... OK" on gpu02/gpu04/gpu11 and those
+# runs came back clean.
+#
+# CORRECTION 2026-08-12: the earlier claim that "jobs were never landing on
+# influ" is FALSE. new_exp_0_gemma job 12771297 landed on influ2 and its .err
+# reads "GPU PREFLIGHT FAILED on influ2: 11264 MiB available < 15000 MiB
+# required". So influ IS schedulable from `general` — it just cannot be named
+# in --exclude from there. That makes the preflight the ONLY working defence,
+# and it worked: the job aborted instead of producing 99.8%-NoOp data.
+# Corollary: putting influ in an --exclude (even the bracket form, which used
+# to pass unvalidated) now fails the whole submission with "Invalid node name
+# specified" — it cost new_exp_0_gemma/seed_123 a submit on 2026-08-12.
 #
 # Re-enable ONLY with a name that passes `sbatch --test-only --exclude=<node>`.
 # influ[2-3]
