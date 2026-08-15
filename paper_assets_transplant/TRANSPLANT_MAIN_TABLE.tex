@@ -7,7 +7,7 @@
 % Requires booktabs + makecell + multirow (+ \pmm from floats.tex).
 \begin{table*}[t]
 \centering
-\caption{\textbf{Pair transplant: do former partners still wire together?} Six Phase~A agents per run, arranged as three pairs; \emph{Transplant} pairs each agent with its real Phase~A partner (pairs 1--2 co-fired in Phase~A; pair 3 shares an equally long history without a co-fired achievement — the familiarity control), \emph{Shuffled} pairs agents from different Phase~A runs, so every agent holds renamed memories of a shared history that never happened. Bonds and memory volume are identical between arms; 3 seeds $\times$ 3 episodes per condition; all values mean~$\pm$~population SD over pooled episodes. Team metrics: \emph{Task return} (team-summed physical reward, message pay excluded), \emph{Milest.} (\% of the 25 non-communication milestones), \emph{Coop.} (\% of the 17 cooperative Ch2--Ch5 milestones, both after the entry-honesty filter). Per-pair metrics: \emph{Partner pref.} $=P(\text{message target}=\text{partner})$, mean over the pair's members (chance $0.20$); \emph{Msgs within} (messages exchanged inside the pair per episode); \emph{Co-milest.} (honesty-filtered milestones both members contributed to; all-hands milestones excluded); \emph{Bond $W$} (end-of-episode within-pair weight, both directions averaged; initialized at $0.265$ for every pair). Cross-pair bond baseline (initialized $0.10$), pooled per model: Gemma 4 E4B: $0.119$ \pmm{0.070}.}
+\caption{\textbf{Pair transplant: do former partners still wire together?} Six Phase~A agents per run, arranged as three pairs; \emph{Transplant} pairs each agent with its real Phase~A partner (pairs 1--2 co-fired in Phase~A; pair 3 shares an equally long history without a co-fired achievement — the familiarity control), \emph{Shuffled} pairs agents from different Phase~A runs, so every agent holds renamed memories of a shared history that never happened. Bonds and memory volume are identical between arms; 3 seeds $\times$ 3 episodes per condition; all values mean~$\pm$~population SD over pooled episodes. Team metrics: \emph{Task return} (team-summed physical reward, message pay excluded), \emph{Milest.} (\% of the 25 non-communication milestones), \emph{Coop.} (\% of the 17 cooperative Ch2--Ch5 milestones, both after the entry-honesty filter). Per-pair metrics: \emph{Partner pref.} $=P(\text{message target}=\text{partner})$, mean over the pair's members (chance $0.20$); \emph{Msgs within} (messages exchanged inside the pair per episode); \emph{Prox.\ share} (the pair's share of all pairwise co-presence events, agents within $4$ blocks; chance $1/15\approx6.7\%$); \emph{Bond $W$} (end-of-episode within-pair weight, both directions averaged; initialized at $0.265$ for every pair). Cross-pair bond baseline (initialized $0.10$), pooled per model: Gemma 4 E4B: $0.119$ \pmm{0.070}.}
 \label{tab:transplant_main}
 \small
 \setlength{\tabcolsep}{4.0pt}
@@ -21,17 +21,17 @@
 & \textbf{Pair}
 & \makecell{\textbf{Partner}\\\textbf{pref.}}
 & \makecell{\textbf{Msgs}\\\textbf{within}}
-& \makecell{\textbf{Co-}\\\textbf{milest.}}
+& \makecell{\textbf{Prox.}\\\textbf{share (\%)}}
 & \makecell{\textbf{Bond}\\\textbf{$W$}} \\
 \midrule
 \multicolumn{9}{l}{\emph{Gemma 4 E4B}}\\
-\multirow{3}{*}{Transplant} & \multirow{3}{*}{$402$ \pmm{224}} & \multirow{3}{*}{$13.8$ \pmm{2.0}} & \multirow{3}{*}{$17.0$ \pmm{1.8}} & Pair 1 (co-fired) & $0.63$ \pmm{0.25} & $1045$ \pmm{423} & $0.4$ \pmm{0.5} & $0.216$ \pmm{0.082} \\
- & & & & Pair 2 (co-fired) & $0.59$ \pmm{0.32} & $957$ \pmm{510} & $0.6$ \pmm{0.7} & $0.207$ \pmm{0.099} \\
- & & & & Pair 3 (control) & $0.53$ \pmm{0.31} & $857$ \pmm{481} & $0.6$ \pmm{0.8} & $0.186$ \pmm{0.100} \\
+\multirow{3}{*}{Transplant} & \multirow{3}{*}{$402$ \pmm{224}} & \multirow{3}{*}{$13.8$ \pmm{2.0}} & \multirow{3}{*}{$17.0$ \pmm{1.8}} & Pair 1 (co-fired) & $0.63$ \pmm{0.25} & $1045$ \pmm{423} & $9.7$ \pmm{1.5} & $0.216$ \pmm{0.082} \\
+ & & & & Pair 2 (co-fired) & $0.59$ \pmm{0.32} & $957$ \pmm{510} & $8.6$ \pmm{2.5} & $0.207$ \pmm{0.099} \\
+ & & & & Pair 3 (control) & $0.53$ \pmm{0.31} & $857$ \pmm{481} & $10.4$ \pmm{3.0} & $0.186$ \pmm{0.100} \\
 \addlinespace
-\multirow{3}{*}{Shuffled} & \multirow{3}{*}{$306$ \pmm{250}} & \multirow{3}{*}{$8.4$ \pmm{3.5}} & \multirow{3}{*}{$9.2$ \pmm{6.9}} & Pair 1 (strangers) & $0.41$ \pmm{0.28} & $536$ \pmm{484} & $0.7$ \pmm{0.7} & $0.182$ \pmm{0.097} \\
- & & & & Pair 2 (strangers) & $0.33$ \pmm{0.28} & $509$ \pmm{424} & $0.3$ \pmm{0.5} & $0.156$ \pmm{0.073} \\
- & & & & Pair 3 (strangers) & $0.44$ \pmm{0.33} & $688$ \pmm{506} & $0.1$ \pmm{0.3} & $0.169$ \pmm{0.076} \\
+\multirow{3}{*}{Shuffled} & \multirow{3}{*}{$306$ \pmm{250}} & \multirow{3}{*}{$8.4$ \pmm{3.5}} & \multirow{3}{*}{$9.2$ \pmm{6.9}} & Pair 1 (strangers) & $0.41$ \pmm{0.28} & $536$ \pmm{484} & $7.7$ \pmm{2.7} & $0.182$ \pmm{0.097} \\
+ & & & & Pair 2 (strangers) & $0.33$ \pmm{0.28} & $509$ \pmm{424} & $9.7$ \pmm{2.6} & $0.156$ \pmm{0.073} \\
+ & & & & Pair 3 (strangers) & $0.44$ \pmm{0.33} & $688$ \pmm{506} & $10.5$ \pmm{2.1} & $0.169$ \pmm{0.076} \\
 \midrule
 \multicolumn{9}{l}{\emph{Qwen3.5-9B}}\\
 \multirow{3}{*}{Transplant} & \multirow{3}{*}{--} & \multirow{3}{*}{--} & \multirow{3}{*}{--} & Pair 1 (co-fired) & -- & -- & -- & -- \\  % pending

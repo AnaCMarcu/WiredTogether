@@ -79,7 +79,8 @@ def pair_stats(runs_root, dir_name):
     runs = mr.load_runs(runs_root, dir_name)
     if not runs:
         return None
-    out = {p: {"pref": [], "msgs": [], "co": [], "w": []} for p in PAIRS}
+    out = {p: {"pref": [], "msgs": [], "co": [], "w": [], "prox": []}
+           for p in PAIRS}
     cross_w = []
     for run in runs:
         run_dir = Path(run["_path"]).parent
@@ -117,17 +118,27 @@ def pair_stats(runs_root, dir_name):
         for e in range(n_eps):
             for p in PAIRS:
                 out[p]["co"].append(co.get((e, p), 0))
-        # End-of-episode within-pair W + cross-pair baseline.
+        # End-of-episode within-pair W, cross-pair baseline, and the pair's
+        # proximity share (its slice of the pair_interaction proximity plane;
+        # chance = 1/15 per pair at N=6). Read from episode summaries — the
+        # coop_eval nesting bug zeroes these tensors in final_metrics.json.
         for f in sorted(run_dir.glob("episodes/*/summary.json")):
-            hw = (json.load(open(f)).get("cooperation_metrics") or {}
-                  ).get("hebbian_W")
-            if not hw:
-                continue
-            for a, b in PAIRS:
-                out[(a, b)]["w"].append((hw[a][b] + hw[b][a]) / 2.0)
-            cross_w.extend(hw[i][j] for i in range(N_AGENTS)
-                           for j in range(N_AGENTS)
-                           if i != j and i // 2 != j // 2)
+            cm = json.load(open(f)).get("cooperation_metrics") or {}
+            hw = cm.get("hebbian_W")
+            if hw:
+                for a, b in PAIRS:
+                    out[(a, b)]["w"].append((hw[a][b] + hw[b][a]) / 2.0)
+                cross_w.extend(hw[i][j] for i in range(N_AGENTS)
+                               for j in range(N_AGENTS)
+                               if i != j and i // 2 != j // 2)
+            prox = (cm.get("pair_interaction") or {}).get("proximity")
+            if prox:
+                total = sum(prox[i][j] for i in range(N_AGENTS)
+                            for j in range(N_AGENTS) if i != j)
+                if total:
+                    for a, b in PAIRS:
+                        out[(a, b)]["prox"].append(
+                            100.0 * (prox[a][b] + prox[b][a]) / total)
     return {"pairs": out, "cross_w": cross_w, "n_runs": len(runs)}
 
 
@@ -209,12 +220,13 @@ def build():
                  "pref.} $=P(\\text{message target}=\\text{partner})$, mean "
                  "over the pair's members (chance $0.20$); \\emph{Msgs "
                  "within} (messages exchanged inside the pair per episode); "
-                 "\\emph{Co-milest.} (honesty-filtered milestones both "
-                 "members contributed to; all-hands milestones excluded); "
-                 "\\emph{Bond $W$} (end-of-episode within-pair weight, both "
-                 "directions averaged; initialized at $0.265$ for every "
-                 "pair). Cross-pair bond baseline (initialized $0.10$), "
-                 "pooled per model: " + "; ".join(cross_notes) + ".}")
+                 "\\emph{Prox.\\ share} (the pair's share of all pairwise "
+                 "co-presence events, agents within $4$ blocks; chance "
+                 "$1/15\\approx6.7\\%$); \\emph{Bond $W$} (end-of-episode "
+                 "within-pair weight, both directions averaged; initialized "
+                 "at $0.265$ for every pair). Cross-pair bond baseline "
+                 "(initialized $0.10$), pooled per model: "
+                 + "; ".join(cross_notes) + ".}")
     lines.append("\\label{tab:transplant_main}")
     lines.append("\\small")
     lines.append("\\setlength{\\tabcolsep}{4.0pt}")
@@ -228,7 +240,7 @@ def build():
     lines.append("& \\textbf{Pair}")
     lines.append("& \\makecell{\\textbf{Partner}\\\\\\textbf{pref.}}")
     lines.append("& \\makecell{\\textbf{Msgs}\\\\\\textbf{within}}")
-    lines.append("& \\makecell{\\textbf{Co-}\\\\\\textbf{milest.}}")
+    lines.append("& \\makecell{\\textbf{Prox.}\\\\\\textbf{share (\\%)}}")
     lines.append("& \\makecell{\\textbf{Bond}\\\\\\textbf{$W$}} \\\\")
     for model_name, root in MODELS:
         lines.append("\\midrule")
@@ -261,7 +273,7 @@ def build():
                 lines.append(
                     f"{head} & {PAIR_LABELS[arm_label][k]} & "
                     f"{pooled(d['pref'], 2)} & {pooled(d['msgs'], 0)} & "
-                    f"{pooled(d['co'], 1)} & {pooled(d['w'], 3)} \\\\"
+                    f"{pooled(d['prox'], 1)} & {pooled(d['w'], 3)} \\\\"
                     + (note if k == 0 else ""))
             print(f"  {model_name:<12} {arm_label:<11} "
                   f"runs={cond['n_runs']} eps={cond['n_eps']}",
@@ -280,76 +292,6 @@ PAIR_LABELS = {
     "Shuffled": ["Pair 1 (strangers)", "Pair 2 (strangers)",
                  "Pair 3 (strangers)"],
 }
-
-
-def build_pair_table():
-    stats = {}   # (model, arm) -> pair_stats
-    for model_name, root in MODELS:
-        for arm_label, dir_name in ARMS:
-            if (root / dir_name).exists():
-                stats[(model_name, arm_label)] = pair_stats(root, dir_name)
-
-    cross_notes = []
-    for model_name, _root in MODELS:
-        xs = [v for (m, _a), s in stats.items() if m == model_name and s
-              for v in s["cross_w"]]
-        if xs:
-            cross_notes.append(
-                f"{model_name}: ${st.fmean(xs):.3f}$ \\pmm{{{st.pstdev(xs):.3f}}}")
-
-    lines = []
-    lines.append("% ─── Transplant per-pair breakdown table ──")
-    lines.append("% Generated by src/mindforge/tools/make_transplant_table.py")
-    lines.append("% — regenerate, do not hand-edit. Same conventions as the")
-    lines.append("% main table (per-episode values pooled over seeds,")
-    lines.append("% mean ± population SD; honesty-filtered milestone events).")
-    lines.append("\\begin{table*}[t]")
-    lines.append("\\centering")
-    lines.append("\\caption{\\textbf{Per-pair breakdown of the transplant "
-                 "experiment.} Per episode and pair: \\emph{Partner pref.} "
-                 "$=P(\\text{message target}=\\text{partner})$, mean over the "
-                 "pair's two members (chance $0.20$); \\emph{Msgs within} "
-                 "(messages exchanged inside the pair); \\emph{Co-milest.} "
-                 "(honesty-filtered milestones both members contributed to; "
-                 "all-hands milestones excluded); \\emph{Bond $W$} "
-                 "(end-of-episode within-pair weight, both directions "
-                 "averaged; initialized at $0.265$ for every pair). All "
-                 "values mean~$\\pm$~population SD over the condition's "
-                 "pooled episodes (3 seeds $\\times$ 3 episodes). Cross-pair "
-                 "bond baseline (initialized $0.10$), pooled per model: "
-                 + "; ".join(cross_notes) + ".}")
-    lines.append("\\label{tab:transplant_pairs}")
-    lines.append("\\small")
-    lines.append("\\setlength{\\tabcolsep}{4.5pt}")
-    lines.append("\\renewcommand{\\arraystretch}{1.2}")
-    lines.append("\\begin{tabular}{ll cccc}")
-    lines.append("\\toprule")
-    lines.append("\\textbf{Condition} & \\textbf{Pair}")
-    lines.append("& \\makecell{\\textbf{Partner}\\\\\\textbf{pref.}}")
-    lines.append("& \\makecell{\\textbf{Msgs}\\\\\\textbf{within}}")
-    lines.append("& \\makecell{\\textbf{Co-}\\\\\\textbf{milest.}}")
-    lines.append("& \\makecell{\\textbf{Bond}\\\\\\textbf{$W$}} \\\\")
-    for model_name, _root in MODELS:
-        lines.append("\\midrule")
-        lines.append(f"\\multicolumn{{6}}{{l}}{{\\emph{{{model_name}}}}}\\\\")
-        for arm_label, _dir in ARMS:
-            s = stats.get((model_name, arm_label))
-            for k, p in enumerate(PAIRS):
-                label = PAIR_LABELS[arm_label][k]
-                cond = arm_label if k == 0 else ""
-                if s is None:
-                    lines.append(f"{cond} & {label} & -- & -- & -- & -- \\\\"
-                                 f"  % pending")
-                    continue
-                d = s["pairs"][p]
-                lines.append(
-                    f"{cond} & {label} & {pooled(d['pref'], 2)} & "
-                    f"{pooled(d['msgs'], 0)} & {pooled(d['co'], 1)} & "
-                    f"{pooled(d['w'], 3)} \\\\")
-    lines.append("\\bottomrule")
-    lines.append("\\end{tabular}")
-    lines.append("\\end{table*}")
-    return "\n".join(lines) + "\n"
 
 
 if __name__ == "__main__":
