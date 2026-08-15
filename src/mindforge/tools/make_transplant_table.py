@@ -70,11 +70,11 @@ def pair_stats(runs_root, dir_name):
     """Per-pair per-episode metrics pooled over seeds of one condition.
 
     For every pair (a,b) and episode: partner preference (mean of the two
-    members), within-pair message count, co-earned milestones (both members
-    contributed to the same honesty-filtered milestone event group; all-hands
-    groups dropped), and end-of-episode within-pair bond W (mean of W[a][b],
-    W[b][a]). Also pools the cross-pair W baseline over all non-partner
-    ordered pairs.
+    members), within-pair message count, proximity share, co-earned
+    cooperative milestones (both members credited in the same
+    honesty-filtered event group, other contributors allowed; COOP_TRACKS
+    only), and end-of-episode within-pair bond W (mean of W[a][b], W[b][a]).
+    Also pools the cross-pair W baseline over all non-partner ordered pairs.
     """
     runs = mr.load_runs(runs_root, dir_name)
     if not runs:
@@ -92,23 +92,30 @@ def pair_stats(runs_root, dir_name):
                 if pv:
                     out[(a, b)]["pref"].append(st.fmean(pv))
                 out[(a, b)]["msgs"].append(mat[a][b] + mat[b][a])
-        # Co-milestones per episode: contributors sharing an honesty-filtered
-        # (milestone_id, step) event group; all-hands groups say nothing
-        # about pairing and are dropped.
+        # Co-milestones per episode: a pair scores when BOTH members are in
+        # the contributor set of the same honesty-filtered (milestone_id,
+        # step) event group — regardless of how many other agents also
+        # contributed. Restricted to the cooperative Ch2-5 tracks (the same
+        # COOP_TRACKS set as the Coop% column): comm-track milestones credit
+        # every messaging agent (an identical constant for every pair), and
+        # ch1-track events in a --start-chamber 3 run are the known
+        # m1_move_5 tracker leak, not cooperation.
         groups = defaultdict(set)
         for ev in run.get("milestone_events", []):
+            mid = ev.get("milestone_id")
+            if mr.MILESTONE_TRACK.get(mid) not in mr.COOP_TRACKS:
+                continue
             idx = agent_index(ev.get("contributor"))
             if idx is not None:
                 e, _ = mr.ep_of_step(run["_ep_bounds"],
                                      int(ev.get("step", -1)))
                 if e is not None:
-                    groups[(ev.get("milestone_id"), ev.get("step"))] |= {
-                        (e, idx)}
+                    groups[(mid, ev.get("step"))] |= {(e, idx)}
         co = defaultdict(int)   # (episode, pair) -> count
         for (_mid, _step), members in groups.items():
             eps = {e for e, _ in members}
             idxs = {i for _, i in members}
-            if len(idxs) < 2 or len(idxs) >= N_AGENTS:
+            if len(idxs) < 2:
                 continue
             for e in eps:
                 for a, b in PAIRS:
@@ -222,7 +229,10 @@ def build():
                  "within} (messages exchanged inside the pair per episode); "
                  "\\emph{Prox.\\ share} (the pair's share of all pairwise "
                  "co-presence events, agents within $4$ blocks; chance "
-                 "$1/15\\approx6.7\\%$); \\emph{Bond $W$} (end-of-episode "
+                 "$1/15\\approx6.7\\%$); \\emph{Co-milest.} (honesty-filtered "
+                 "cooperative Ch2--5 milestones both members were credited "
+                 "for in the same episode, other contributors allowed); "
+                 "\\emph{Bond $W$} (end-of-episode "
                  "within-pair weight, both directions averaged; initialized "
                  "at $0.265$ for every pair). Cross-pair bond baseline "
                  "(initialized $0.10$), pooled per model: "
@@ -231,7 +241,7 @@ def build():
     lines.append("\\small")
     lines.append("\\setlength{\\tabcolsep}{4.0pt}")
     lines.append("\\renewcommand{\\arraystretch}{1.2}")
-    lines.append("\\begin{tabular}{l ccc l cccc}")
+    lines.append("\\begin{tabular}{l ccc l ccccc}")
     lines.append("\\toprule")
     lines.append("\\textbf{Condition}")
     lines.append("& \\makecell{\\textbf{Task}\\\\\\textbf{return} $\\uparrow$}")
@@ -241,10 +251,11 @@ def build():
     lines.append("& \\makecell{\\textbf{Partner}\\\\\\textbf{pref.}}")
     lines.append("& \\makecell{\\textbf{Msgs}\\\\\\textbf{within}}")
     lines.append("& \\makecell{\\textbf{Prox.}\\\\\\textbf{share (\\%)}}")
+    lines.append("& \\makecell{\\textbf{Co-}\\\\\\textbf{milest.}}")
     lines.append("& \\makecell{\\textbf{Bond}\\\\\\textbf{$W$}} \\\\")
     for model_name, root in MODELS:
         lines.append("\\midrule")
-        lines.append(f"\\multicolumn{{9}}{{l}}{{\\emph{{{model_name}}}}}\\\\")
+        lines.append(f"\\multicolumn{{10}}{{l}}{{\\emph{{{model_name}}}}}\\\\")
         for a_i, (arm_label, dir_name) in enumerate(ARMS):
             if a_i:
                 lines.append("\\addlinespace")
@@ -273,7 +284,8 @@ def build():
                 lines.append(
                     f"{head} & {PAIR_LABELS[arm_label][k]} & "
                     f"{pooled(d['pref'], 2)} & {pooled(d['msgs'], 0)} & "
-                    f"{pooled(d['prox'], 1)} & {pooled(d['w'], 3)} \\\\"
+                    f"{pooled(d['prox'], 1)} & {pooled(d['co'], 1)} & "
+                    f"{pooled(d['w'], 3)} \\\\"
                     + (note if k == 0 else ""))
             print(f"  {model_name:<12} {arm_label:<11} "
                   f"runs={cond['n_runs']} eps={cond['n_eps']}",
