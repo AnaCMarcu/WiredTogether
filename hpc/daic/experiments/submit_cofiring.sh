@@ -193,8 +193,20 @@ if [ ! -f "$MODEL_LLM/config.json" ]; then
 fi
 [ "$missing" = "1" ] && exit 1
 
+# In-queue dedup (2026-08-18): the final_metrics skip only sees FINISHED
+# runs, so a rerun while jobs are pending would double-submit them. New
+# submissions therefore carry --job-name=<exp>_s<seed> and any exp/seed
+# whose job is still in squeue is skipped. Jobs from older launcher
+# versions bear the sbatch files' dash-style names (seed unknown), so a
+# legacy-name match conservatively blocks that whole arm until it drains.
+# Net effect: rerunning the SAME command is always safe — it submits only
+# what is neither finished nor in the queue (e.g. after hitting the
+# per-user QOS submission cap).
+QUEUED_NAMES=$(squeue -u "${USER:-$(whoami)}" -h -o %j 2>/dev/null || true)
+
 n_queued=0
 n_skipped=0
+n_inqueue=0
 n_failed=0
 for exp in "${EXPS[@]}"; do
     for seed in "${SEEDS[@]}"; do
@@ -202,31 +214,45 @@ for exp in "${EXPS[@]}"; do
             n_skipped=$((n_skipped + 1))
             continue
         fi
+        jobname="${exp}_s${seed}"
+        if printf '%s\n' "$QUEUED_NAMES" | grep -Fqx "$jobname"; then
+            echo "in queue     $exp  seed_$seed"
+            n_inqueue=$((n_inqueue + 1))
+            continue
+        fi
+        if printf '%s\n' "$QUEUED_NAMES" | grep -Fqx "${exp//_/-}"; then
+            echo "in queue*    $exp  seed_$seed  (legacy-named job, seed unknown — arm blocked until it drains)"
+            n_inqueue=$((n_inqueue + 1))
+            continue
+        fi
         if [ "${DRY_RUN:-0}" = "1" ]; then
             echo "would queue  $exp  seed_$seed"
             n_queued=$((n_queued + 1))
         else
-            jobid=$(SEED=$seed sbatch --parsable \
+            jobid=$(SEED=$seed sbatch --parsable --job-name="$jobname" \
                 ${SBATCH_OVERRIDES[@]:+"${SBATCH_OVERRIDES[@]}"} \
                 "$exp.sbatch")
             if [ -n "$jobid" ]; then
                 echo "queued  $exp  seed_$seed  →  job $jobid"
                 n_queued=$((n_queued + 1))
             else
-                # sbatch printed its error to stderr already (e.g. invalid
-                # --exclude node name). Abort instead of spamming 20 more
-                # failures with a bad override.
+                # sbatch printed its error to stderr already. Abort instead
+                # of spamming 20 more failures. Two common causes:
+                #   - QOSMaxSubmitJobPerUserLimit: the per-user queue cap —
+                #     nothing is wrong; rerun this SAME command as the queue
+                #     drains (finished + in-queue runs are skipped).
+                #   - invalid --exclude node name: fix EXCLUDE (check sinfo).
                 echo "FAILED  $exp  seed_$seed  — sbatch rejected the job" >&2
                 n_failed=$((n_failed + 1))
-                echo "── aborting after first failure: fix the sbatch error above" \
-                     "(often a bad EXCLUDE= node name — check sinfo) and rerun;" \
-                     "already-queued jobs are fine and the rerun skips finished runs ──" >&2
+                echo "── aborting after first failure: if the error above is the QOS" \
+                     "submission cap, just rerun this same command later — dedup makes" \
+                     "it safe; otherwise fix the sbatch error first ──" >&2
                 break 2
             fi
         fi
     done
 done
-echo "── done: $n_queued submitted, $n_skipped already complete, $n_failed failed ──"
+echo "── done: $n_queued submitted, $n_skipped already complete, $n_inqueue in queue, $n_failed failed ──"
 [ "$n_failed" -gt 0 ] && exit 1
 echo "Track with:   squeue -u \$USER"
 echo "Watch load:   tail -f slurm_logs/${EXPS[0]}_*.out"
