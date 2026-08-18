@@ -302,6 +302,14 @@ def parse_args():
                              "comm,obs,imit or 'none'. Defaults to the value "
                              "of --social-acts (credit what is afforded). "
                              "Ignored in legacy mode (legacy credits comm).")
+    parser.add_argument("--social-act-rewards", action="store_true",
+                        help="Pay observation and imitation acts EXACTLY "
+                             "like communication (same 0.5 base reward, cap, "
+                             "rate limit, and per-chamber act milestones "
+                             "m_obs_chN/m_imit_chN at the comm-track "
+                             "values) — the act-reward symmetry suite. "
+                             "Choice mode only. Default off: reward streams "
+                             "byte-identical to the historical behavior.")
     parser.add_argument("--comm-reward-scale", type=float, default=1.0,
                         help="Scale on every communication PAYOUT (base msg "
                              "reward + chamber comm milestones). 0.0 = the "
@@ -1501,6 +1509,13 @@ async def run(args):
             agent_ids=list(range(num_agents)),
             reward_scale=args.comm_reward_scale,
         )
+        # Act-reward symmetry suite: obs/imit acts paid like messages.
+        act_reward_tracker = None
+        if social_act_mode == "choice" and args.social_act_rewards:
+            from env.social_act_rewards import SocialActRewardTracker
+            act_reward_tracker = SocialActRewardTracker(
+                agent_ids=list(range(num_agents)),
+            )
         coop_metric = CooperationMetric(agent_ids=list(range(num_agents)))
         ep_logger = EpisodeLogger(run_dir=metric.target_folder, episode=episode + 1)
         _last_propagation_contribs: dict[int, dict[int, float]] = {
@@ -1726,6 +1741,8 @@ async def run(args):
             # channel) — obs/imit only; comm rides comm_events as before.
             social_events = []
             _adopted_agents_this_step: set = set()
+            # (agent_id, "obs"|"imit", rescued) — for SocialActRewardTracker.
+            _act_events_this_step: list = []
             _messages_this_step = []
             _milestone_events_this_step: list = []
             _bond_strings = {}
@@ -2241,6 +2258,10 @@ async def run(args):
                                     f"Interactions: {_tb.interaction_beliefs or '(none)'}"
                                 )
                                 social_events.append((_init_idx, _t_idx, "obs"))
+                                if act_reward_tracker is not None:
+                                    _act_events_this_step.append(
+                                        (_init_idx, "obs", _sa_routing != "model")
+                                    )
                                 if _social_acts_path:
                                     _append_jsonl(_social_acts_path, {
                                         "ep": episode + 1, "step": step,
@@ -2283,6 +2304,13 @@ async def run(args):
                                             _t_idx, _t_actions, step,
                                         )
                                     )
+                                    # Paid at delivery — symmetric to a
+                                    # message being paid when sent.
+                                    if act_reward_tracker is not None:
+                                        _act_events_this_step.append(
+                                            (_init_idx, "imit",
+                                             _sa_routing != "model")
+                                        )
                                 if _social_acts_path:
                                     _append_jsonl(_social_acts_path, {
                                         "ep": episode + 1, "step": step,
@@ -2387,6 +2415,28 @@ async def run(args):
                     coop_metric.observe_milestone(step, _mid, [f"agent_{_aid}"])
                     ep_logger.log_event({"step": step, "type": "comm_milestone",
                                          "milestone": _mid, "agent": f"agent_{_aid}",
+                                         "reward": _rw})
+
+            # ── Act-reward symmetry: pay obs/imit acts like messages ──────
+            _act_rewards_this_step: dict = {}
+            _act_milestones: list = []
+            if act_reward_tracker is not None and _act_events_this_step:
+                _act_rewards_this_step, _act_milestones = (
+                    act_reward_tracker.process_step(
+                        step, _act_events_this_step, _agent_pos_map,
+                    )
+                )
+                for _aid, _bonus in _act_rewards_this_step.items():
+                    step_rewards_raw[_aid] += _bonus
+                for _aid, _mid, _rw in _act_milestones:
+                    metric.record_milestone_event({
+                        "step": step, "milestone": _mid,
+                        "contributors": [f"agent_{_aid}"], "reward": _rw,
+                    })
+                    coop_metric.observe_milestone(step, _mid, [f"agent_{_aid}"])
+                    ep_logger.log_event({"step": step, "type": "act_milestone",
+                                         "milestone": _mid,
+                                         "agent": f"agent_{_aid}",
                                          "reward": _rw})
 
             # ── Flush per-message records to messages.jsonl ──
@@ -2557,6 +2607,9 @@ async def run(args):
             _bond_rewards = [
                 _step_milestone_drain[_i]
                 + (float(_comm_rewards_this_step.get(_i, 0.0)) if communication else 0.0)
+                # Act-reward symmetry: obs/imit pay enters the bondable
+                # stream exactly like comm pay does (0.0 when the flag is off).
+                + float(_act_rewards_this_step.get(_i, 0.0))
                 + _step_pitch_penalty[_i]
                 for _i in range(num_agents)
             ]
@@ -2673,6 +2726,16 @@ async def run(args):
                     "proximity":       _prox,
                     "hebbian_diffuse": _hebb,
                 }
+                # Act-reward symmetry streams (keys only exist when the flag
+                # is on, so legacy decomposition records stay byte-identical).
+                if act_reward_tracker is not None:
+                    _act_total = float(_act_rewards_this_step.get(_aid, 0.0))
+                    _act_ms = sum(_rw for _a, _m, _rw in _act_milestones
+                                  if _a == _aid)
+                    _reward_decomp_this_step[_aid]["social_base"] = (
+                        _act_total - _act_ms
+                    )
+                    _reward_decomp_this_step[_aid]["social_milestone"] = _act_ms
 
             # ── Per-step reward log line ──────────────────────────────────
             # Surface every non-zero reward (task, comm, milestone, Hebbian
@@ -3288,6 +3351,11 @@ if __name__ == "__main__":
         raise SystemExit(
             "--social-act-mode choice requires --hebbian (the co-firing "
             "credit mask has no graph to act on otherwise)"
+        )
+    if args.social_act_rewards and args.social_act_mode != "choice":
+        raise SystemExit(
+            "--social-act-rewards requires --social-act-mode choice (there "
+            "are no observation/imitation acts to pay in legacy mode)"
         )
     if args.hebbian_init_file and not args.hebbian:
         raise SystemExit(

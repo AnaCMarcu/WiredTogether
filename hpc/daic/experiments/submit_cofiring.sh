@@ -85,6 +85,17 @@ if [ "${NOREWARD:-0}" = "1" ]; then
     : "${WANDB_PROJECT:=cofiring_noreward_wired_together}"
     export EXTRA_ARGS="--comm-reward-scale 0.0 --hebbian-delta 1.0"
 fi
+# ACTREW=1 (opt-in, 2026-08-15): the act-reward SYMMETRY suite — observation
+# and imitation acts are paid exactly like messages (same base reward, cap,
+# rate limit, per-chamber milestones m_obs_chN/m_imit_chN), comm rewards stay
+# on, so no cue is financially privileged. Only the arms where obs/imit are
+# choosable are rerun. Lands in runs/cofiring_actrew.
+if [ "${ACTREW:-0}" = "1" ]; then
+    : "${RUN_GROUP:=cofiring_actrew}"
+    : "${WANDB_PROJECT:=cofiring_actrew_wired_together}"
+    export EXTRA_ARGS="--social-act-rewards"
+    ACTREW_EXPS=1
+fi
 : "${RUN_GROUP:=cofiring_final}"
 : "${EPISODES:=3}"
 : "${MAX_STEPS:=1000}"
@@ -100,6 +111,16 @@ EXPS=(
     exp27_cofire_anchor
     exp28_cofire_null
 )
+# ACTREW reruns only the arms where obs/imit are choosable (Comm, None and
+# the anchor are unaffected by paying obs/imit acts).
+if [ "${ACTREW_EXPS:-0}" = "1" ]; then
+    EXPS=(
+        exp21_cofire_pro
+        exp22_cofire_pri
+        exp29_cofire_prco
+        exp23_cofire_prcoi
+    )
+fi
 SEEDS=(42 123 456)
 
 # Smoke: THREE short jobs —

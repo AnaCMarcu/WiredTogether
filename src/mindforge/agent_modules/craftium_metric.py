@@ -53,6 +53,18 @@ MILESTONE_TRACK = {
     "m_comm_ch3":              "communication",
     "m_comm_ch4":              "communication",
     "m_comm_ch5":              "communication",
+    # Act-reward symmetry suite (--social-act-rewards): per-chamber
+    # observation/imitation milestones, mirroring the communication track.
+    "m_obs_ch1":               "observation",
+    "m_obs_ch2":               "observation",
+    "m_obs_ch3":               "observation",
+    "m_obs_ch4":               "observation",
+    "m_obs_ch5":               "observation",
+    "m_imit_ch1":              "imitation",
+    "m_imit_ch2":              "imitation",
+    "m_imit_ch3":              "imitation",
+    "m_imit_ch4":              "imitation",
+    "m_imit_ch5":              "imitation",
 }
 
 # Ordered (milestone_id, reward) per track — drives steps-to-milestone table + reward total
@@ -430,6 +442,12 @@ class CraftiumMetric(_PlotsMixin, _SummaryMixin):
         agent_id = _agent_id_from_name(agent_name)
         track = MILESTONE_TRACK.get(mid)
         if track and 0 <= agent_id < self.num_agents:
+            # setdefault: the observation/imitation tracks (act-reward
+            # symmetry suite) are in MILESTONE_TRACK but deliberately NOT in
+            # TRACKS (which drives prompt blocks and steps tables), so their
+            # keys appear here only when such a milestone actually fires.
+            self.track_rewards[agent_id].setdefault(track, 0.0)
+            self.track_rewards_episode[agent_id].setdefault(track, 0.0)
             self.track_rewards[agent_id][track] += reward
             self.track_rewards_episode[agent_id][track] += reward
         if 0 <= agent_id < self.num_agents:

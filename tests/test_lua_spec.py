@@ -332,9 +332,11 @@ def test_craftium_metric_milestones_match_lua(lua_root):
     lua_ids = set(defs)
 
     # Every Lua-shaped id referenced anywhere in the file exists in Lua
-    # (m_comm_* are Python-side communication milestones, never emitted by Lua).
+    # (m_comm_* / m_obs_* / m_imit_* are Python-side social-act milestones
+    # — comm tracker + act-reward symmetry suite — never emitted by Lua).
     py_ids = set(_PY_ID_RE.findall(text))
-    lua_facing = {i for i in py_ids if not i.startswith("m_comm_")}
+    lua_facing = {i for i in py_ids
+                  if not i.startswith(("m_comm_", "m_obs_", "m_imit_"))}
     assert lua_facing <= lua_ids
     assert lua_ids - lua_facing == set()  # complete coverage of Lua milestones
 
@@ -363,7 +365,8 @@ def test_make_results_milestones_match_lua(lua_root):
     assert _py_milestone_track_table(mr) == _py_milestone_track_table(cm)
 
     lua_ids = set(_milestone_defs(lua_root))
-    py_ids = {i for i in _PY_ID_RE.findall(mr) if not i.startswith("m_comm_")}
+    py_ids = {i for i in _PY_ID_RE.findall(mr)
+              if not i.startswith(("m_comm_", "m_obs_", "m_imit_"))}
     assert py_ids <= lua_ids
     assert lua_ids - py_ids == set()  # complete coverage, same as craftium_metric
 

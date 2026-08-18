@@ -108,7 +108,19 @@ MILESTONE_TRACK = {
     "m_comm_ch1": "communication", "m_comm_ch2": "communication",
     "m_comm_ch3": "communication", "m_comm_ch4": "communication",
     "m_comm_ch5": "communication",
+    # Act-reward symmetry suite: per-chamber observation/imitation
+    # milestones (paid like the comm track; --social-act-rewards runs only).
+    "m_obs_ch1": "observation", "m_obs_ch2": "observation",
+    "m_obs_ch3": "observation", "m_obs_ch4": "observation",
+    "m_obs_ch5": "observation",
+    "m_imit_ch1": "imitation", "m_imit_ch2": "imitation",
+    "m_imit_ch3": "imitation", "m_imit_ch4": "imitation",
+    "m_imit_ch5": "imitation",
 }
+# Tracks that reward SOCIAL ACTS rather than physical task progress —
+# excluded from the comparable milestone counts (mute/unflagged arms cannot
+# earn them).
+SOCIAL_ACT_TRACKS = {"communication", "observation", "imitation"}
 TRACK_ORDER = ["ch1_solo", "ch2_anvils", "ch3_switches",
                "ch4_combat", "ch5_boss", "communication"]
 MILESTONE_ORDER = [m for t in TRACK_ORDER
@@ -120,6 +132,11 @@ COOP_MAX = sum(1 for v in MILESTONE_TRACK.values() if v in COOP_TRACKS)
 # arms (pro / pri / null) cannot solve Ch3's comm-gated door by
 # construction, so their task metric leans on this subset.
 COOP_CI_TRACKS = {"ch2_anvils", "ch4_combat"}
+# Denominator for the cofire table's milestone-completion percentage:
+# every milestone except the communication track (= 25).
+NONCOMM_MAX = sum(1 for v in MILESTONE_TRACK.values()
+                  if v not in SOCIAL_ACT_TRACKS)
+COOP_CI_MAX = sum(1 for v in MILESTONE_TRACK.values() if v in COOP_CI_TRACKS)
 
 # Internal repo id -> (paper label, display name) for tab:steps_to_milestone.
 # Internal ids keep the legacy numbering (m14..m28); the paper schedule
@@ -301,9 +318,14 @@ def coop_count(ms_set) -> int:
     return sum(1 for m in ms_set if MILESTONE_TRACK.get(m) in COOP_TRACKS)
 
 
-def episode_task_returns(run) -> tuple[list[float], bool]:
+def episode_task_returns(run, include_comm: bool = True) -> tuple[list[float], bool]:
     """Team task return per episode (excl. hebbian_diffuse).
-    Returns (values, used_decomposition)."""
+    Returns (values, used_decomposition).
+
+    ``include_comm=False`` (Experiment 2 cofire table) drops the comm_base +
+    comm_milestone streams — message PAY, which mute arms structurally cannot
+    earn — leaving only physical task progress. Default True = historical.
+    """
     adjust = run.get("_task_adjust", {})  # honesty filter: fake entry rewards
     dec = run.get("reward_history_decomposed") or []
     bounds = run["_ep_bounds"]
@@ -313,9 +335,10 @@ def episode_task_returns(run) -> tuple[list[float], bool]:
             for rec in agent_recs:
                 e, _ = ep_of_step(bounds, int(rec.get("t", -1)))
                 if e is not None:
-                    sums[e] += (float(rec.get("task", 0.0))
-                                + float(rec.get("comm_base", 0.0))
-                                + float(rec.get("comm_milestone", 0.0)))
+                    sums[e] += float(rec.get("task", 0.0))
+                    if include_comm:
+                        sums[e] += (float(rec.get("comm_base", 0.0))
+                                    + float(rec.get("comm_milestone", 0.0)))
         return [s - adjust.get(e, 0.0) for e, s in enumerate(sums)], True
     # Fallback: logged returns (include diffuse in Hebbian runs!)
     per_ep = run.get("per_episode_returns", [])
@@ -390,6 +413,8 @@ def aggregate(runs) -> dict:
     """Pool all episodes of all seeds; return every paper number."""
     coop, allms, task, furthest, boss = [], [], [], [], 0
     coop_ci = []
+    allms_nc = []
+    task_nc = []
     n_eps_total = 0
     used_decomp = True
     steps = {m: [] for m in STEPS_MILESTONES}
@@ -405,6 +430,11 @@ def aggregate(runs) -> dict:
             coop.append(c); seed_coop.append(c)
             coop_ci.append(sum(1 for m in s
                                if MILESTONE_TRACK.get(m) in COOP_CI_TRACKS))
+            # Comm-track-free milestone count (Experiment 2): mute arms
+            # structurally cannot fire m_comm_* (4 messages/chamber), so the
+            # cofire table compares arms on this instead of raw allms.
+            allms_nc.append(sum(1 for m in s
+                                if MILESTONE_TRACK.get(m) not in SOCIAL_ACT_TRACKS))
             allms.append(len(s))
             furthest.append(furthest_chamber(s))
             if BOSS_MILESTONE in s:
@@ -414,6 +444,8 @@ def aggregate(runs) -> dict:
 
         t, used = episode_task_returns(run)
         task.extend(t); used_decomp &= used
+        t_nc, _ = episode_task_returns(run, include_comm=False)
+        task_nc.extend(t_nc)
 
         ff = episode_first_fire(run)
         for e in range(len(sets_)):
@@ -449,6 +481,8 @@ def aggregate(runs) -> dict:
         "n_runs": len(runs), "n_eps": n_eps_total,
         "coop": mean_std(coop), "coop_per_seed": mean_std(per_seed_coop),
         "coop_ci": mean_std(coop_ci),
+        "allms_nc": mean_std(allms_nc),
+        "task_nc": mean_std(task_nc),
         "allms": mean_std(allms), "task": mean_std(task),
         "task_is_decomposed": used_decomp,
         "furthest_mode": (statistics.mode(furthest) if furthest else None),
@@ -620,14 +654,19 @@ def emit_cofire(stats: dict, all_runs: dict, out: Path):
               encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["condition", "n_runs", "n_eps",
-                    "coop_mean", "coop_std", "coop_ci_mean", "coop_ci_std",
-                    "allms_mean", "allms_std", "task_mean", "task_std",
+                    "coop_pct_mean", "coop_pct_std",
+                    "coop_ci_pct_mean", "coop_ci_pct_std",
+                    "allms_nocomm_pct_mean", "allms_nocomm_pct_std",
+                    "task_nocomm_mean", "task_nocomm_std",
                     "bond_mean", "bond_max", "sparsity", "asymmetry",
                     *(f"{k}_mean" for k in per_run_keys)])
         for lab in labels:
             a, p = stats[lab], pooled[lab]
             w.writerow([lab, a["n_runs"], a["n_eps"],
-                        *a["coop"], *a["coop_ci"], *a["allms"], *a["task"],
+                        *(v * 100.0 / COOP_MAX for v in a["coop"]),
+                        *(v * 100.0 / COOP_CI_MAX for v in a["coop_ci"]),
+                        *(v * 100.0 / NONCOMM_MAX for v in a["allms_nc"]),
+                        *a["task_nc"],
                         a["graph"].get("mean", (math.nan,))[0],
                         a["graph"].get("max", (math.nan,))[0],
                         a["graph"].get("sparsity", (math.nan,))[0],
@@ -635,7 +674,7 @@ def emit_cofire(stats: dict, all_runs: dict, out: Path):
                         *(p[k][0] for k in per_run_keys)])
 
     L = ["% ── tab:cofire rows (Experiment 2) ────────────────────────",
-         "% label & coop & coop_ci(Ch2+Ch4) & task & bond mean & sparsity"
+         "% label & coop%(of 17) & coop_ci%(of 8) & task_nocomm & bond mean & sparsity"
          " & asym & dW share comm/obs/imit \\\\"]
     for lab in labels:
         a, p = stats[lab], pooled[lab]
@@ -644,8 +683,10 @@ def emit_cofire(stats: dict, all_runs: dict, out: Path):
             ("--" if math.isnan(p[f"dW_{ch}"][0])
              else f"{p[f'dW_{ch}'][0]:.2f}")
             for ch in ("comm", "obs", "imit"))
-        L.append(f"{lab:<10} & {fmt(a['coop'])} & {fmt(a['coop_ci'])} & "
-                 f"{fmt(a['task'], 0)} & "
+        _coop_pct = tuple(v * 100.0 / COOP_MAX for v in a["coop"])
+        _ci_pct = tuple(v * 100.0 / COOP_CI_MAX for v in a["coop_ci"])
+        L.append(f"{lab:<10} & {fmt(_coop_pct, 0)} & {fmt(_ci_pct, 0)} & "
+                 f"{fmt(a['task_nc'], 0)} & "
                  f"{fmt(g.get('mean', (math.nan, 0)), 2)} & "
                  f"{fmt(g.get('sparsity', (math.nan, 0)), 2)} & "
                  f"{fmt(g.get('asym', (math.nan, 0)), 3)} & {share} \\\\")
