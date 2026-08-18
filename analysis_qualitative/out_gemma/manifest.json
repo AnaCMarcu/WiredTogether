@@ -174,79 +174,87 @@
  "new_exp_0_gemma_base/seed_123": {
   "fingerprint": {
    "config.json": [
-    2424,
-    1786364302
+    2481,
+    1786961278
    ],
    "episodes\\ep_0001\\episode_summary.json": [
-    10590,
-    1786364262
+    9723,
+    1786961232
    ],
    "episodes\\ep_0001\\event_log.jsonl": [
-    2334,
-    1786364262
+    2024,
+    1786961231
    ],
    "episodes\\ep_0001\\messages.jsonl": [
-    1003190,
-    1786364262
+    960999,
+    1786961232
    ],
    "episodes\\ep_0001\\step_log.csv": [
-    378484,
-    1786364262
+    372110,
+    1786961231
    ],
    "episodes\\ep_0002\\episode_summary.json": [
-    10314,
-    1786364263
+    10711,
+    1786961232
    ],
    "episodes\\ep_0002\\event_log.jsonl": [
-    2223,
-    1786364263
+    2324,
+    1786961232
    ],
    "episodes\\ep_0002\\messages.jsonl": [
-    883930,
-    1786364263
+    1001812,
+    1786961232
    ],
    "episodes\\ep_0002\\step_log.csv": [
-    339323,
-    1786364263
+    379374,
+    1786961232
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    11333,
+    1786961233
    ],
    "episodes\\ep_0003\\event_log.jsonl": [
-    2228,
-    1786364263
+    2639,
+    1786961233
    ],
    "episodes\\ep_0003\\messages.jsonl": [
-    882784,
-    1786364263
+    1004984,
+    1786961233
    ],
    "episodes\\ep_0003\\step_log.csv": [
-    337028,
-    1786364263
+    384098,
+    1786961232
+   ],
+   "final_metrics.json": [
+    2039512,
+    1786961278
    ],
    "hebbian_snapshots.jsonl": [
-    213,
-    1786364302
+    353,
+    1786961278
    ],
    "llm_logs\\action_selection.log": [
-    10778451,
-    1786364301
+    11411624,
+    1786961277
    ],
    "llm_logs\\auto_curriculum.log": [
-    312628,
-    1786364299
+    261550,
+    1786961275
    ],
    "llm_logs\\belief_system.log": [
-    3387141,
-    1786364302
+    3640211,
+    1786961278
    ],
    "llm_logs\\critic.log": [
-    316191,
-    1786364302
+    341945,
+    1786961278
    ],
    "llm_logs\\episodic_memory.log": [
-    215757,
-    1786364302
+    229997,
+    1786961278
    ]
   },
-  "parsed_at": "2026-08-10 14:28:57",
+  "parsed_at": "2026-08-17 12:10:37",
   "parser_version": "2"
  },
  "new_exp_0_gemma_base/seed_42": {

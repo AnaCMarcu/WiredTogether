@@ -260,123 +260,121 @@
   "is_rl": false,
   "quarantined": false,
   "comm": {
-   "n_messages": 8268,
-   "n_valid": 4130,
-   "msgs_per_100_steps": 149.85,
-   "dup_rate": 0.0375,
-   "teammate_naming_rate": 0.1276,
-   "object_naming_rate": 0.6409,
-   "numeral_rate": 0.2797,
+   "n_messages": 8838,
+   "n_valid": 4412,
+   "msgs_per_100_steps": 149.71,
+   "dup_rate": 0.0415,
+   "teammate_naming_rate": 0.0947,
+   "object_naming_rate": 0.5236,
+   "numeral_rate": 0.2407,
    "categories_by_chamber": {
     "ch1": {
-     "status_report": 195,
-     "commitment": 32,
-     "directive": 21,
+     "commitment": 29,
+     "status_report": 165,
+     "acknowledgment": 2,
      "request": 2,
-     "question": 2,
-     "acknowledgment": 2
+     "directive": 14,
+     "question": 4
     },
     "?": {
-     "status_report": 159,
-     "commitment": 17,
-     "question": 7,
-     "request": 4,
-     "directive": 13,
-     "acknowledgment": 4
+     "status_report": 153,
+     "question": 13,
+     "commitment": 18,
+     "request": 9,
+     "directive": 13
     },
     "ch2": {
-     "status_report": 377,
-     "request": 18,
-     "question": 26,
-     "commitment": 17,
-     "acknowledgment": 1,
-     "directive": 7
+     "status_report": 398,
+     "commitment": 22,
+     "question": 28,
+     "request": 24,
+     "acknowledgment": 4,
+     "directive": 13
     },
     "ch3": {
-     "commitment": 52,
-     "status_report": 276,
+     "status_report": 298,
      "request": 52,
-     "directive": 26,
-     "question": 58,
-     "acknowledgment": 2
+     "commitment": 29,
+     "question": 113,
+     "directive": 21,
+     "acknowledgment": 3
     },
     "ch4": {
-     "status_report": 340,
-     "request": 24,
-     "question": 19,
-     "commitment": 36,
-     "directive": 15,
-     "acknowledgment": 6
+     "status_report": 297,
+     "question": 16,
+     "request": 23,
+     "commitment": 26,
+     "directive": 14
     },
     "ch5": {
-     "status_report": 118,
-     "commitment": 22,
-     "directive": 4,
-     "request": 8,
-     "question": 9
+     "status_report": 147,
+     "commitment": 23,
+     "request": 15,
+     "question": 11,
+     "acknowledgment": 4
     }
    },
    "valid_by_chamber": {
-    "ch1": 628,
-    "?": 527,
-    "ch2": 811,
-    "ch3": 896,
-    "ch4": 770,
-    "ch5": 498
+    "ch1": 521,
+    "?": 460,
+    "ch2": 1023,
+    "ch3": 901,
+    "ch4": 753,
+    "ch5": 754
    },
    "routing_by_chamber": {
     "ch1": {
-     "model": 1254
+     "model": 1042
     },
     "?": {
-     "model": 1062
+     "model": 935
     },
     "ch2": {
-     "model": 1624
+     "model": 2034
     },
     "ch3": {
-     "model": 1796
+     "model": 1811
     },
     "ch4": {
-     "model": 1535
+     "model": 1505
     },
     "ch5": {
-     "model": 997
+     "model": 1511
     }
    },
-   "ch3_switch_talk": 624,
-   "ch3_msgs": 896,
-   "ch3_chains": 0,
-   "ch3_chain_latency_median": null,
-   "ch3_silent_presses": 0
+   "ch3_switch_talk": 513,
+   "ch3_msgs": 901,
+   "ch3_chains": 25,
+   "ch3_chain_latency_median": 7,
+   "ch3_silent_presses": 5
   },
   "failures": {
-   "task_repeat_loop": 3,
-   "action_stuck_loop": 7,
-   "critic_false_positive": 6,
-   "hallucinated_object_belief": 213,
-   "hallucinated_object_thought": 1231,
-   "hallucinated_object_message": 260,
-   "door_confusion": 13
+   "task_repeat_loop": 4,
+   "action_stuck_loop": 11,
+   "critic_false_positive": 4,
+   "hallucinated_object_belief": 204,
+   "hallucinated_object_message": 115,
+   "hallucinated_object_thought": 483,
+   "door_confusion": 15
   },
   "failures_per_1k": {
-   "task_repeat_loop": 1.09,
-   "action_stuck_loop": 2.54,
-   "critic_false_positive": 2.18,
-   "hallucinated_object_belief": 77.29,
-   "hallucinated_object_thought": 446.66,
-   "hallucinated_object_message": 94.34,
-   "door_confusion": 4.72
+   "task_repeat_loop": 1.36,
+   "action_stuck_loop": 3.73,
+   "critic_false_positive": 1.36,
+   "hallucinated_object_belief": 69.22,
+   "hallucinated_object_message": 39.02,
+   "hallucinated_object_thought": 163.9,
+   "door_confusion": 5.09
   },
   "beliefs": {
-   "n_perception_updates": 1452,
-   "perception_grounding_rate": 0.8533,
-   "partner_loc_claims": 5603,
-   "partner_loc_accuracy": 0.7624,
-   "belief_responsiveness": 0.8094,
+   "n_perception_updates": 1507,
+   "perception_grounding_rate": 0.8646,
+   "partner_loc_claims": 5862,
+   "partner_loc_accuracy": 0.8115,
+   "belief_responsiveness": 0.8272,
    "responsiveness_n": 1800,
-   "hallucination_rows": 213,
-   "contagion_rate": 0.1315
+   "hallucination_rows": 204,
+   "contagion_rate": 0.0686
   }
  },
  "new_exp_0_gemma_base/seed_42": {

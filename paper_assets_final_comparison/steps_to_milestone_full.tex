@@ -1,0 +1,517 @@
+\begin{center}
+
+\captionsetup{
+    font=scriptsize,
+    skip=3pt
+}
+
+\captionof{table}{
+\textbf{Steps to first completion of every milestone.}
+Full schedule; the load-bearing subset is \autoref{tab:steps_mini}.
+Each cell is the median environment step at which the milestone was first
+completed, over the episodes that completed it; the subscript is the number
+of completing episodes ($n$; episodes per condition: 18 for Qwen3.5-2B, Qwen3.5-9B, Qwen3.5-2B+Heb, Qwen3.5-9B+Heb, Gemma-E4B, Gemma-E4B+Heb, Qwen3.5-2B MAPPO, Qwen3.5-2B IPPO+Heb; 15 for Qwen3.5-2B MAPPO+Heb; 12 for Qwen3.5-2B IPPO).
+``--'' means never completed. Lower step and larger subscript are better.
+Chamber-entry milestones (M12, M16, M20) are only credited when the team
+advances on its own before the chamber timer, never for rescue teleports.
+IDs and triggers follow Table~\ref{tab:milestone_schedule}.
+}
+\label{tab:steps_to_milestone}
+
+\vspace{2pt}
+
+\begin{adjustbox}{
+    max width=\textwidth,
+    max totalheight=0.72\textheight,
+    center
+}
+
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.88}
+
+\begin{tabular}{l l *{10}{c}}
+\toprule
+ & & \multicolumn{6}{c}{LLM agents}
+ & \multicolumn{4}{c}{RL baselines} \\
+
+\cmidrule(lr){3-8}
+\cmidrule(lr){9-12}
+
+ID & Milestone
+ & \rotatebox{90}{Qwen3.5-2B~}
+ & \rotatebox{90}{Qwen3.5-9B~}
+ & \rotatebox{90}{Qwen3.5-2B+Heb~}
+ & \rotatebox{90}{Qwen3.5-9B+Heb~}
+ & \rotatebox{90}{Gemma-E4B~}
+ & \rotatebox{90}{Gemma-E4B+Heb~}
+ & \rotatebox{90}{Qwen3.5-2B IPPO~}
+ & \rotatebox{90}{Qwen3.5-2B MAPPO~}
+ & \rotatebox{90}{Qwen3.5-2B IPPO+Heb~}
+ & \rotatebox{90}{Qwen3.5-2B MAPPO+Heb~}
+ \\
+
+\midrule
+
+\multicolumn{12}{l}{
+    \emph{Chamber 1 --- solo skill acquisition}
+}\\
+
+M1
+& Move $>$5 from spawn
+& $10_{18}$
+& $6_{18}$
+& $7_{15}$
+& $5_{18}$
+& $1_{18}$
+& $1_{18}$
+& $10_{12}$
+& $6_{18}$
+& $5_{18}$
+& $11_{15}$
+ \\
+
+M2
+& Dig 3 any
+& $14_{18}$
+& $8_{18}$
+& $11_{17}$
+& $8_{18}$
+& $45_{13}$
+& $56_{14}$
+& $18_{12}$
+& $38_{18}$
+& $56_{18}$
+& $27_{15}$
+ \\
+
+M3
+& Pick up 3 items
+& $23_{17}$
+& $36_{17}$
+& $23_{17}$
+& $20_{16}$
+& $86_{4}$
+& $125_{8}$
+& $107_{5}$
+& $72_{12}$
+& $73_{10}$
+& $83_{11}$
+ \\
+
+M4
+& Dig 5 wood
+& $115_{1}$
+& $143_{8}$
+& $90_{2}$
+& $150_{3}$
+& --
+& $182_{1}$
+& --
+& --
+& --
+& $132_{1}$
+ \\
+
+M5
+& Kill 1 animal
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M6
+& Kill 2 animals
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M7
+& Dig 3 stone
+& $84_{3}$
+& $35_{7}$
+& $183_{1}$
+& $34_{7}$
+& --
+& $30_{1}$
+& --
+& --
+& --
+& --
+ \\
+
+M\_door1
+& Door 1 unlocked
+& $13_{17}$
+& $8_{17}$
+& $11_{13}$
+& $8_{16}$
+& $45_{13}$
+& $51_{13}$
+& $18_{12}$
+& $37_{17}$
+& $54_{17}$
+& $27_{15}$
+ \\
+
+\addlinespace
+
+\multicolumn{12}{l}{
+    \emph{Chamber 2 --- cooperative resource acquisition}
+}\\
+
+M8
+& First anvil break
+& --
+& $201_{2}$
+& --
+& $301_{1}$
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M9
+& Second anvil break
+& --
+& $218_{2}$
+& --
+& --
+& $199_{1}$
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M10
+& Sword equipped
+& --
+& $201_{2}$
+& --
+& $301_{1}$
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M11
+& Chestplate equipped
+& --
+& $218_{2}$
+& --
+& --
+& $199_{1}$
+& --
+& --
+& --
+& --
+& --
+ \\
+
+\addlinespace
+
+\multicolumn{12}{l}{
+    \emph{Chamber 3 --- communication under partial obs.}
+}\\
+
+M12
+& Enter isolation cell
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M13
+& Press switch
+& $434_{14}$
+& $415_{18}$
+& $421_{10}$
+& $403_{17}$
+& $406_{7}$
+& $407_{12}$
+& $488_{7}$
+& $486_{7}$
+& $454_{8}$
+& $509_{4}$
+ \\
+
+M14
+& Door opened
+& $434_{14}$
+& $415_{18}$
+& $421_{10}$
+& $403_{17}$
+& $406_{7}$
+& $407_{12}$
+& $488_{7}$
+& $486_{7}$
+& $454_{8}$
+& $509_{4}$
+ \\
+
+M15
+& All in communal room
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+\addlinespace
+
+\multicolumn{12}{l}{
+    \emph{Chamber 4 --- team combat}
+}\\
+
+M16
+& Enter Chamber 4
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M17
+& First mob kill
+& --
+& $679_{10}$
+& $756_{1}$
+& $696_{7}$
+& $670_{10}$
+& $662_{13}$
+& --
+& --
+& $736_{3}$
+& $789_{2}$
+ \\
+
+M18
+& All mobs killed
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M19
+& All survive (damage)
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+\addlinespace
+
+\multicolumn{12}{l}{
+    \emph{Chamber 5 --- cooperative boss fight}
+}\\
+
+M20
+& Enter Chamber 5
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M21
+& First boss damage
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M22
+& Boss at 50\% HP
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M23
+& Boss defeated
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+M24
+& All alive at kill
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+& --
+ \\
+
+\addlinespace
+
+\multicolumn{12}{l}{
+    \emph{Communication track}
+}\\
+
+M\_comm\_ch1
+& Valid messaging, Ch1
+& $5_{18}$
+& $5_{18}$
+& $5_{18}$
+& $5_{18}$
+& $5_{18}$
+& $5_{18}$
+& $5_{12}$
+& $5_{18}$
+& $5_{18}$
+& $5_{15}$
+ \\
+
+M\_comm\_ch2
+& Valid messaging, Ch2
+& $204_{18}$
+& $204_{18}$
+& $204_{18}$
+& $204_{18}$
+& $138_{18}$
+& $88_{18}$
+& $143_{12}$
+& $178_{18}$
+& $138_{18}$
+& $110_{15}$
+ \\
+
+M\_comm\_ch3
+& Valid messaging, Ch3
+& $604_{18}$
+& $502_{18}$
+& $604_{18}$
+& $560_{18}$
+& $604_{18}$
+& $542_{18}$
+& $603_{12}$
+& $604_{18}$
+& $604_{18}$
+& $605_{15}$
+ \\
+
+M\_comm\_ch4
+& Valid messaging, Ch4
+& $612_{18}$
+& $613_{18}$
+& $612_{18}$
+& $614_{18}$
+& $612_{18}$
+& $611_{18}$
+& $610_{12}$
+& $610_{18}$
+& $610_{18}$
+& $609_{15}$
+ \\
+
+M\_comm\_ch5
+& Valid messaging, Ch5
+& $850_{1}$
+& $805_{4}$
+& $810_{3}$
+& $806_{2}$
+& $809_{10}$
+& $811_{10}$
+& $805_{1}$
+& $807_{5}$
+& $809_{4}$
+& $809_{5}$
+ \\
+
+\bottomrule
+\end{tabular}
+
+\end{adjustbox}
+\end{center}
+
+\clearpage
+\twocolumn

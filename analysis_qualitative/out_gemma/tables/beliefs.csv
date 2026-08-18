@@ -1,7 +1,7 @@
 belief_responsiveness,contagion_rate,hallucination_rows,label,n_perception_updates,partner_loc_accuracy,partner_loc_claims,perception_grounding_rate,quarantined,responsiveness_n,run,seed
 0.86,0.0448,223,Gemma-E4B,1259,0.7764,5228,0.8229,False,1800,new_exp_0_gemma_base/seed_1011,1011
 0.8309,0.0574,209,Gemma-E4B,1324,0.8481,4636,0.8421,False,1798,new_exp_0_gemma_base/seed_1213,1213
-0.8094,0.1315,213,Gemma-E4B,1452,0.7624,5603,0.8533,False,1800,new_exp_0_gemma_base/seed_123,123
+0.8272,0.0686,204,Gemma-E4B,1507,0.8115,5862,0.8646,False,1800,new_exp_0_gemma_base/seed_123,123
 0.8922,0.1324,204,Gemma-E4B,1304,0.7713,5238,0.8436,False,1800,new_exp_0_gemma_base/seed_42,42
 0.8533,0.0955,220,Gemma-E4B,1397,0.7856,5378,0.8425,False,1800,new_exp_0_gemma_base/seed_456,456
 0.8428,0.0524,191,Gemma-E4B,1294,0.804,5265,0.8524,False,1800,new_exp_0_gemma_base/seed_789,789

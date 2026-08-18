@@ -1,0 +1,24 @@
+% ── Table 1: experiment design ───────────────────────────────
+LLM-2B & Qwen3.5-2B & none (frozen LLM) & — & 6 \\
+LLM-2B+Heb & Qwen3.5-2B & none (frozen LLM) & Hebbian + prompt & 6 \\
+LLM-9B & Qwen3.5-9B & none (frozen LLM) & — & 6 \\
+LLM-9B+Heb & Qwen3.5-9B & none (frozen LLM) & Hebbian + prompt & 6 \\
+Gemma-E4B & Gemma-4-E4B & none (frozen LLM) & — & 6 \\
+Gemma-E4B+Heb & Gemma-4-E4B & none (frozen LLM) & Hebbian + prompt & 6 \\
+IPPO & Qwen3.5-2B & IPPO (LoRA) & — & 4 \\
+IPPO+Heb & Qwen3.5-2B & IPPO (LoRA) & Hebbian graph & 6 \\
+MAPPO & Qwen3.5-2B & MAPPO (shared critic) & — & 6 \\
+MAPPO+Heb & Qwen3.5-2B & MAPPO (shared critic) & Hebbian graph & 5 \\
+
+% ── Table 2: task performance + perception ──────────────────
+% cols: return, milestone \%, coop \%, steps(A,B,switch,mob), grounding, partner-loc
+LLM-2B & 358 $\pm$ 163 & 22.9 $\pm$ 4.6 & 9.2 $\pm$ 4.9 & -- & -- & 434 (14) & -- & 0.417 & 0.594 \\
+LLM-2B+Heb & 363 $\pm$ 196 & 20.4 $\pm$ 5.6 & 6.9 $\pm$ 5.6 & -- & -- & 421 (10) & 756 (1) & 0.393 & 0.592 \\
+LLM-9B & 622 $\pm$ 150 & 31.1 $\pm$ 5.1 & 17.6 $\pm$ 6.2 & 201 (2) & 218 (2) & 415 (18) & 679 (10) & 0.822 & 0.721 \\
+LLM-9B+Heb & 574 $\pm$ 123 & 27.3 $\pm$ 5.2 & 14.1 $\pm$ 5.6 & 301 (1) & -- & 403 (17) & 696 (7) & 0.809 & 0.754 \\
+Gemma-E4B & 521 $\pm$ 117 & 16.4 $\pm$ 4.8 & 8.5 $\pm$ 4.9 & -- & 199 (1) & 406 (7) & 670 (10) & 0.845 & 0.799 \\
+Gemma-E4B+Heb & 570 $\pm$ 125 & 22.0 $\pm$ 5.5 & 12.1 $\pm$ 5.0 & -- & -- & 407 (12) & 662 (13) & 0.843 & 0.790 \\
+IPPO & 425 $\pm$ 99 & 18.3 $\pm$ 4.5 & 6.9 $\pm$ 5.8 & -- & -- & 488 (7) & -- & 0.448 & 0.451 \\
+IPPO+Heb & 418 $\pm$ 102 & 18.4 $\pm$ 4.8 & 6.2 $\pm$ 6.0 & -- & -- & 454 (8) & 736 (3) & 0.431 & 0.410 \\
+MAPPO & 390 $\pm$ 86 & 17.8 $\pm$ 4.5 & 4.6 $\pm$ 5.7 & -- & -- & 486 (7) & -- & 0.392 & 0.565 \\
+MAPPO+Heb & 424 $\pm$ 92 & 17.9 $\pm$ 4.8 & 3.9 $\pm$ 5.1 & -- & -- & 509 (4) & 789 (2) & 0.413 & 0.543 \\

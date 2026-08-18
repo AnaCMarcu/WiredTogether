@@ -1,7 +1,7 @@
 ch3_chain_latency_median,ch3_chains,ch3_msgs,ch3_silent_presses,ch3_switch_talk,dup_rate,label,msgs_per_100_steps,n_messages,n_valid,numeral_rate,object_naming_rate,quarantined,run,seed,teammate_naming_rate
 7,58,892,3,520,0.0511,Gemma-E4B,149.44,7260,3621,0.2563,0.5142,False,new_exp_0_gemma_base/seed_1011,1011,0.0898
 ,0,892,0,526,0.0362,Gemma-E4B,149.46,7470,3726,0.2606,0.4732,False,new_exp_0_gemma_base/seed_1213,1213,0.1001
-,0,896,0,624,0.0375,Gemma-E4B,149.85,8268,4130,0.2797,0.6409,False,new_exp_0_gemma_base/seed_123,123,0.1276
+7,25,901,5,513,0.0415,Gemma-E4B,149.71,8838,4412,0.2407,0.5236,False,new_exp_0_gemma_base/seed_123,123,0.0947
 11,25,886,3,417,0.0602,Gemma-E4B,149.21,7410,3690,0.2442,0.5618,False,new_exp_0_gemma_base/seed_42,42,0.093
 ,0,980,0,778,0.0241,Gemma-E4B,149.75,7875,3934,0.2755,0.5574,False,new_exp_0_gemma_base/seed_456,456,0.1301
 10,29,886,1,628,0.0333,Gemma-E4B,149.29,7344,3659,0.2615,0.5187,False,new_exp_0_gemma_base/seed_789,789,0.1137
