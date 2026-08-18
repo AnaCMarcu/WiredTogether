@@ -102,26 +102,36 @@ fi
 : "${WANDB_PROJECT:=cofiring_final_wired_together}"
 export RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT
 
-EXPS=(
-    exp20_cofire_prc
-    exp21_cofire_pro
-    exp22_cofire_pri
-    exp29_cofire_prco
-    exp23_cofire_prcoi
-    exp27_cofire_anchor
-    exp28_cofire_null
-)
-# ACTREW reruns only the arms where obs/imit are choosable (Comm, None and
-# the anchor are unaffected by paying obs/imit acts).
-if [ "${ACTREW_EXPS:-0}" = "1" ]; then
+# Arm/seed overrides (2026-08-18, 12-seed extension): space-separated lists.
+# Seeds are only ever ADDED (42/123/456 stay binding; extension follows the
+# medium-runs numbering 789/1011/1213/...). Pass the FULL seed list — the
+# idempotent skip queues only missing runs and back-fills any seed that
+# never finished. EXPS restricts arms (e.g. to drop the retired anchor).
+#   EXPS="exp20_cofire_prc ..." SEEDS="42 123 456 789 ... 2425" bash submit_cofiring.sh
+if [ -n "${EXPS:-}" ]; then
+    EXPS=($EXPS)
+else
     EXPS=(
+        exp20_cofire_prc
         exp21_cofire_pro
         exp22_cofire_pri
         exp29_cofire_prco
         exp23_cofire_prcoi
+        exp27_cofire_anchor
+        exp28_cofire_null
     )
+    # ACTREW reruns only the arms where obs/imit are choosable (Comm, None
+    # and the anchor are unaffected by paying obs/imit acts).
+    if [ "${ACTREW_EXPS:-0}" = "1" ]; then
+        EXPS=(
+            exp21_cofire_pro
+            exp22_cofire_pri
+            exp29_cofire_prco
+            exp23_cofire_prcoi
+        )
+    fi
 fi
-SEEDS=(42 123 456)
+SEEDS=(${SEEDS:-42 123 456})
 
 # Smoke: THREE short jobs —
 #   prcoi  : act mix + channel coverage (the model must actually choose)
