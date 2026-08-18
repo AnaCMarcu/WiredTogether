@@ -214,7 +214,9 @@ for exp in "${EXPS[@]}"; do
             n_skipped=$((n_skipped + 1))
             continue
         fi
-        jobname="${exp}_s${seed}"
+        # RUN_GROUP is part of the name: the same exp/seed exists in several
+        # suites (final/noreward/actrew) and must dedup independently.
+        jobname="${RUN_GROUP}-${exp}_s${seed}"
         if printf '%s\n' "$QUEUED_NAMES" | grep -Fqx "$jobname"; then
             echo "in queue     $exp  seed_$seed"
             n_inqueue=$((n_inqueue + 1))
