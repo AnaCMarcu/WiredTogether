@@ -157,6 +157,7 @@ class CustomAgent(BaseChatAgent):
         bond_weights=None,
         bond_deltas=None,
         social_returns=None,
+        orchestrator_directive=None,
     ):
 
         self._call_count += 1
@@ -380,6 +381,18 @@ class CustomAgent(BaseChatAgent):
             social_directive = self.social_module.render_directive()
             self.metric.log(
                 f"Agent {self.name} social directive: {social_directive}"
+            )
+
+        # ── Orchestrator directive (O2 baseline) ──
+        # Occupies the SAME {social_directive} prompt slot the social module
+        # uses (advisory coupling). Only ever non-None when --orchestrator is
+        # on, which is mutually exclusive with the Hebbian/social-module
+        # condition — so this never races the deliberation above.
+        if orchestrator_directive:
+            social_directive = orchestrator_directive
+            self.metric.log(
+                f"Agent {self.name} orchestrator directive: "
+                f"{orchestrator_directive}"
             )
 
         beliefs = {

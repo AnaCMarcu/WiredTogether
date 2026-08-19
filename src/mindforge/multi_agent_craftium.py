@@ -346,6 +346,60 @@ def parse_args():
                              "(growing at the η0 floor, without comm-reward "
                              "salience) still equilibrate in the analyzable "
                              "band against the homeostatic decay.")
+    # ── Centralized task-ledger orchestrator (O2 baseline) ──────────────
+    # Mutually exclusive with the Hebbian condition (validated in __main__).
+    # All flags default to the disabled/no-op values so legacy runs are
+    # byte-identical.
+    parser.add_argument("--orchestrator", action="store_true",
+                        help="Enable the O2 centralized orchestrator: a "
+                             "non-embodied coordinator called every "
+                             "--orchestrator-cadence steps (and on events) "
+                             "that keeps a within-episode task ledger and "
+                             "issues per-agent comm_target/help directives. "
+                             "Runs INSTEAD of the Hebbian coupling.")
+    parser.add_argument("--orchestrator-mode", type=str, default="advisory",
+                        choices=["advisory", "bias"],
+                        help="'advisory' = directives rendered into the same "
+                             "{social_directive} action-prompt slot the "
+                             "social module uses; 'bias' = additionally "
+                             "override the emitted communication_target at "
+                             "the routing site (mirrors --social-module "
+                             "bias exactly)")
+    parser.add_argument("--orchestrator-cadence", type=int, default=8,
+                        help="Steps between scheduled orchestrator calls "
+                             "(default 8 = the social module's T_soc "
+                             "default, --social-interval)")
+    parser.add_argument("--orchestrator-event-triggers",
+                        action=argparse.BooleanOptionalAction, default=True,
+                        help="Also call the orchestrator when a milestone / "
+                             "chamber change / death occurred since its "
+                             "last call (default on)")
+    parser.add_argument("--orchestrator-stall-threshold", type=int, default=2,
+                        help="The orchestrator is told to replan when its "
+                             "ledger stall_counter exceeds this (default 2)")
+    parser.add_argument("--orchestrator-max-task-facts", type=int, default=15,
+                        help="Ledger task-facts cap; FIFO eviction keeps the "
+                             "most recent (default 15)")
+    parser.add_argument("--orchestrator-max-digest-events", type=int,
+                        default=30,
+                        help="Events included in the since-last-call digest "
+                             "(default 30; older events are dropped with a "
+                             "'(showing last K of M)' banner)")
+    parser.add_argument("--orchestrator-use-map-image",
+                        action=argparse.BooleanOptionalAction, default=True,
+                        help="Attach the schematic top-down map PNG to the "
+                             "orchestrator call (default on; falls back to "
+                             "a text world-state block when off or when the "
+                             "client lacks vision)")
+    parser.add_argument("--orchestrator-model", type=str, default=None,
+                        help="LLM for the orchestrator (default None = reuse "
+                             "the agents' backbone/client). Only supported "
+                             "on the HTTP-client path — rejected when "
+                             "LLM_MODEL_PATH pins a local in-process model.")
+    parser.add_argument("--orchestrator-log-dir-name", type=str,
+                        default="orchestrator",
+                        help="Subdirectory of the run dir for orchestrator "
+                             "calls.jsonl / compliance.jsonl / maps/")
     # ── Experiment tracking ──
     parser.add_argument("--experiment-id", type=str, default=None,
                         help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
@@ -705,6 +759,7 @@ async def agent_do_action(
     bond_weights=None,
     bond_deltas=None,
     social_returns=None,
+    orchestrator_directive=None,
 ):
     """Have one agent observe and choose an action.
 
@@ -747,6 +802,7 @@ async def agent_do_action(
         bond_weights=bond_weights,
         bond_deltas=bond_deltas,
         social_returns=social_returns,
+        orchestrator_directive=orchestrator_directive,
     )
 
     last_action = "NoOp"
@@ -772,6 +828,7 @@ async def agent_do_action(
                 bond_weights=bond_weights,
                 bond_deltas=bond_deltas,
                 social_returns=social_returns,
+                orchestrator_directive=orchestrator_directive,
             )
         else:
             logging.error(f"Agent {agent_id} exceeded retry limit, using NoOp")
@@ -1332,6 +1389,54 @@ async def run(args):
         print("[FEATURES] Hardcoded W (row i = agent i's bonds toward j):")
         print(_np.array2string(hebbian_graph.get_all_weights(),
                                precision=2, suppress_small=True))
+
+    # ── Centralized task-ledger orchestrator (O2 baseline) ────────────────
+    # Everything below is None when --orchestrator is off, and every hook in
+    # the loop is guarded on that — legacy runs are untouched.
+    orchestrator_state = None
+    orchestrator_config = None
+    orchestrator_client = None
+    orch_logger = None
+    _orch_core = None
+    _orch_events = None
+    if args.orchestrator:
+        from orchestrator import core as _orch_core
+        from orchestrator import events as _orch_events
+        from orchestrator.config import OrchestratorConfig
+        from orchestrator.logging import OrchestratorLogger
+        from orchestrator.state import OrchestratorState
+
+        orchestrator_config = OrchestratorConfig(
+            enabled=True,
+            mode=args.orchestrator_mode,
+            cadence=args.orchestrator_cadence,
+            event_triggers=args.orchestrator_event_triggers,
+            stall_threshold=args.orchestrator_stall_threshold,
+            max_task_facts=args.orchestrator_max_task_facts,
+            max_digest_events=args.orchestrator_max_digest_events,
+            use_map_image=args.orchestrator_use_map_image,
+            model=args.orchestrator_model,
+            log_dir_name=args.orchestrator_log_dir_name,
+        )
+        orchestrator_config.validate()
+        orchestrator_state = OrchestratorState()
+        orchestrator_client = _orch_core.create_orchestrator_client(
+            orchestrator_config
+        )
+        orch_logger = OrchestratorLogger(
+            run_dir=str(run_paths.root),
+            dir_name=orchestrator_config.log_dir_name,
+        )
+        print(f"[FEATURES] Orchestrator:     ENABLED "
+              f"[{orchestrator_config.mode}]  "
+              f"cadence={orchestrator_config.cadence}  "
+              f"event_triggers={orchestrator_config.event_triggers}  "
+              f"stall_threshold={orchestrator_config.stall_threshold}  "
+              f"max_task_facts={orchestrator_config.max_task_facts}  "
+              f"map_image={orchestrator_config.use_map_image}  "
+              f"model={orchestrator_config.model or 'backbone'}  "
+              f"log_dir={orch_logger.dir}")
+
     comm_mode = "off" if not communication else "targeted"
     print(f"\nConfig: {num_agents} agents, {num_episodes} episodes, "
           f"{max_steps} max steps, comm={comm_mode}, "
@@ -1459,6 +1564,15 @@ async def run(args):
         if episode > resume_episode:
             for _ag in agents:
                 await _ag.on_reset(CancellationToken())
+
+        # ── Orchestrator: within-episode memory horizon ──
+        # The ledger/directives/event buffer are wiped at EVERY episode
+        # start (this is the experimental contrast with W(t), which
+        # persists across episodes). _orch_prev_chambers feeds the
+        # chamber_change events.
+        _orch_prev_chambers: dict = {}
+        if orchestrator_state is not None:
+            orchestrator_state.reset()
 
         import time as _time
         skip_warmup = (
@@ -1836,6 +1950,60 @@ async def run(args):
                 if _ch:
                     _visited_chambers[_i].add(_ch)
 
+            # ── Orchestrator (O2): chamber events, scheduled call, and
+            # per-agent directive text for this step's action prompts ──
+            _orch_directives_text: dict = {}
+            if orchestrator_state is not None:
+                _orch_new_chambers = set()
+                for _i in range(num_agents):
+                    _ch = environment.get_chamber(_i)
+                    if _ch and _ch != _orch_prev_chambers.get(_i):
+                        if (_orch_prev_chambers.get(_i) is not None
+                                and _ch not in _orch_new_chambers):
+                            _orch_new_chambers.add(_ch)
+                            orchestrator_state.add_event(
+                                _orch_events.chamber_change_event(step, _ch)
+                            )
+                        _orch_prev_chambers[_i] = _ch
+                _orch_living = [
+                    f"agent_{_i}" for _i in range(num_agents)
+                    if not environment._terminations.get(f"agent_{_i}", False)
+                ]
+                if _orch_living and _orch_core.should_call(
+                        orchestrator_state, step, orchestrator_config):
+                    _orch_recent_msgs = [
+                        (_ev.get("sender"), _ev.get("target"))
+                        for _ev in orchestrator_state.event_buffer
+                        if _ev.get("type") == "message"
+                    ]
+                    _orch_env_state = _orch_core.collect_env_state(
+                        environment, num_agents, step,
+                        recent_messages=_orch_recent_msgs,
+                    )
+                    try:
+                        await _orch_core.orchestrate(
+                            orchestrator_state, _orch_env_state,
+                            orchestrator_client, orchestrator_config,
+                            living_agents=_orch_living,
+                            episode=episode + 1, t=step,
+                            orch_logger=orch_logger,
+                            num_agents=num_agents,
+                        )
+                    except (KeyboardInterrupt, SystemExit):
+                        raise
+                    except Exception as _orch_exc:
+                        logging.error(
+                            "Orchestrator call crashed at ep=%d step=%d: %s "
+                            "— keeping previous directives",
+                            episode + 1, step, _orch_exc,
+                        )
+                for _i in range(num_agents):
+                    _orch_directives_text[_i] = (
+                        _orch_core.render_agent_directive(
+                            f"agent_{_i}", orchestrator_state
+                        )
+                    )
+
             # ── Phase 0: encode the PRE-step joint state (s_t) ──
             # Computed BEFORE any agent acts so V_global represents V(s_t),
             # not V(s_{t+1}). Each agent's pending transition gets this V_global
@@ -1944,6 +2112,9 @@ async def run(args):
                                 "\n".join(agent_social_returns[_i])
                                 if agent_social_returns.get(_i) else ""
                             ),
+                            orchestrator_directive=(
+                                _orch_directives_text.get(_i)
+                            ),
                         )
                         return _i, _content
                     except Exception as _exc:
@@ -2038,6 +2209,9 @@ async def run(args):
                         social_returns=(
                             "\n".join(agent_social_returns[agent_id])
                             if agent_social_returns.get(agent_id) else ""
+                        ),
+                        orchestrator_directive=(
+                            _orch_directives_text.get(agent_id)
                         ),
                     )
                     agents_error_count[agent_id] = error_count
@@ -2178,6 +2352,33 @@ async def run(args):
                                     ):
                                         recv_idx = _sm_idx
                                         routing_source = "social_bias"
+                                except (IndexError, ValueError):
+                                    pass
+
+                    # ── Orchestrator bias coupling (O2) ──
+                    # Mirrors the social-module bias exactly: in "bias" mode
+                    # the orchestrator's standing comm_target for the sender
+                    # overrides whatever the action LLM emitted, making the
+                    # directive a hard guarantee on routing. Skipped in
+                    # "advisory" mode (directive stays prompt-text only).
+                    if (orchestrator_state is not None
+                            and args.orchestrator_mode == "bias"):
+                        _o_target = _orch_core.directive_comm_target(
+                            orchestrator_state, agent.name
+                        )
+                        if _o_target:
+                            _m3 = _re.match(
+                                r"^\s*agent_?(\d+)\s*$", str(_o_target).lower()
+                            )
+                            if _m3:
+                                try:
+                                    _o_idx = int(_m3.group(1))
+                                    if (
+                                        _o_idx != sender_idx
+                                        and 0 <= _o_idx < num_agents
+                                    ):
+                                        recv_idx = _o_idx
+                                        routing_source = "orchestrator_bias"
                                 except (IndexError, ValueError):
                                     pass
 
@@ -2503,6 +2704,30 @@ async def run(args):
                     _msg["receiver_chamber"] = None
                 ep_logger.log_message(_msg)
 
+            # ── Orchestrator: message events + per-step compliance log ──
+            # Uses the routed metadata the loop already built; complied is
+            # whether the actual receiver matches the standing directive.
+            if orchestrator_state is not None:
+                for _msg in _messages_this_step:
+                    orchestrator_state.add_event(
+                        _orch_events.message_event(
+                            step, _msg["sender"], _msg["receiver"],
+                            _msg["text"],
+                        )
+                    )
+                    _o_directed = _orch_core.directive_comm_target(
+                        orchestrator_state, _msg["sender"]
+                    )
+                    orch_logger.log_compliance({
+                        "episode": episode + 1,
+                        "t": step,
+                        "agent": _msg["sender"],
+                        "directed_comm_target": _o_directed,
+                        "actual_comm_target": _msg["receiver"],
+                        "complied": (_o_directed is not None
+                                     and _o_directed == _msg["receiver"]),
+                    })
+
             coop_metric.observe_step(
                 step,
                 positions=_agent_pos_map,
@@ -2571,6 +2796,16 @@ async def run(args):
                         step_rewards_raw[_aid] += _rw
                         _step_milestone_drain[_aid] += _rw
 
+            # ── Orchestrator: milestone events for the digest ──
+            if orchestrator_state is not None:
+                for _ev in _milestone_events_this_step:
+                    orchestrator_state.add_event(
+                        _orch_events.milestone_event(
+                            step, _ev.get("milestone", ""),
+                            _ev.get("contributors", []),
+                        )
+                    )
+
             # ── Phase 1d: Drain death / would-die penalties ──
             # deaths.lua emits these to death_events.jsonl; like milestones, the
             # server-side craftium.reward() it also fires does NOT reach
@@ -2597,6 +2832,23 @@ async def run(args):
                 if 0 <= _aid < num_agents:
                     step_rewards_raw[_aid] += _rw
                     _step_death_drain[_aid] += _rw
+
+            # ── Orchestrator: death events for the digest ──
+            # Real Ch5 deaths only; would-die near-misses are penalties,
+            # not deaths, and stay out of the event schema.
+            if orchestrator_state is not None:
+                for _ev in _death_events_this_step:
+                    if _ev.get("kind") != "death":
+                        continue
+                    _s = str(_ev.get("agent", "")) \
+                        .removeprefix("agent_").removeprefix("agent")
+                    try:
+                        _dead_name = f"agent_{int(_s)}"
+                    except ValueError:
+                        _dead_name = str(_ev.get("agent", "?"))
+                    orchestrator_state.add_event(
+                        _orch_events.death_event(step, _dead_name)
+                    )
 
             # ── Phase 2: Hebbian update + reward diffusion ──
 
@@ -3417,5 +3669,21 @@ if __name__ == "__main__":
     if args.start_chamber and args.max_chamber:
         raise SystemExit(
             "--start-chamber and --max-chamber are mutually exclusive"
+        )
+    if args.orchestrator and args.hebbian:
+        # The orchestrator (O2) is a BASELINE against the Hebbian condition;
+        # enabling both would confound the comparison. Reward diffusion
+        # (--hebbian-gamma) belongs to the Hebbian condition and is only
+        # active under --hebbian, so this one check also excludes it. Fail
+        # loudly rather than silently disabling either.
+        raise SystemExit(
+            "orchestrator and Hebbian coupling are mutually exclusive "
+            "conditions; disable one (--orchestrator vs --hebbian; reward "
+            "diffusion is part of the Hebbian condition)"
+        )
+    if args.orchestrator and args.social_module != "none":
+        raise SystemExit(
+            "--orchestrator and --social-module both write the "
+            "{social_directive} action-prompt slot; disable one"
         )
     asyncio.run(run(args))
