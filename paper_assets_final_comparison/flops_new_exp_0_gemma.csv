@@ -1,0 +1,13 @@
+run,exp,seed,llm_calls,generate_calls,frames,prompt_chars,chars_per_token,cpt_source,prefill_source,prefill_tokens,decode_tokens_exact,total_tokens,flops
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_base\seed_1011,new_exp_0_gemma_base,seed_1011,14099,14099,9077,125729706,4.4,auto,estimate,31964848,1532177,33497025,3.01473225e+17
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_base\seed_1213,new_exp_0_gemma_base,seed_1213,14625,14625,9337,136460574,4.411,auto,estimate,34425055,1596675,36021730,3.2419557e+17
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_base\seed_123,new_exp_0_gemma_base,seed_123,17101,17101,11047,159530257,4.4,auto,estimate,40377052,1903777,42280829,3.80527461e+17
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_base\seed_42,new_exp_0_gemma_base,seed_42,14393,14393,9261,131531483,4.403,auto,estimate,33326528,1551388,34877916,3.13901244e+17
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_base\seed_456,new_exp_0_gemma_base,seed_456,15179,15179,9843,138614231,4.403,auto,estimate,35146299,1715348,36861647,3.31754823e+17
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_base\seed_789,new_exp_0_gemma_base,seed_789,14211,14211,9180,129237683,4.401,auto,estimate,32790796,1557668,34348464,3.09136176e+17
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_hebbian\seed_1011,new_exp_0_gemma_hebbian,seed_1011,15054,15054,9075,140053860,4.346,auto,estimate,35672623,1647606,37320229,3.35882061e+17
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_hebbian\seed_1213,new_exp_0_gemma_hebbian,seed_1213,15082,15082,9131,137989088,4.334,auto,estimate,35301280,1656421,36957701,3.32619309e+17
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_hebbian\seed_123,new_exp_0_gemma_hebbian,seed_123,18180,18180,10875,168973342,4.343,auto,estimate,43043393,1999662,45043055,4.05387495e+17
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_hebbian\seed_42,new_exp_0_gemma_hebbian,seed_42,15227,15227,9177,140122559,4.351,auto,estimate,35688934,1651159,37340093,3.36060837e+17
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_hebbian\seed_456,new_exp_0_gemma_hebbian,seed_456,15164,15164,9114,138356234,4.357,auto,estimate,35213712,1656974,36870686,3.31836174e+17
+runs_from_daic\new_exp_0_gemma\new_exp_0_gemma_hebbian\seed_789,new_exp_0_gemma_hebbian,seed_789,15801,15801,9486,145614928,4.312,auto,estimate,37376496,1750011,39126507,3.52138563e+17
