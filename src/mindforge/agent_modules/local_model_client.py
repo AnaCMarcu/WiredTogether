@@ -464,6 +464,11 @@ class LocalModelClient(ChatCompletionClient):
         text, input_len, completion_tokens = self._generate(
             chat_messages, images, max_new, enable_thinking
         )
+        # input_len counts the full tokenized prompt, image soft tokens and
+        # chat template included — scripts/compute_flops.py prefers this line
+        # over its char-based prefill estimate when present.
+        logger.info("[LocalModel usage] prompt_tokens=%d completion_tokens=%d",
+                    input_len, completion_tokens)
         text = _strip_thinking_and_extract_json(text)
         logger.info("[LocalModel PARSED output]: %s", text[:300])
 
