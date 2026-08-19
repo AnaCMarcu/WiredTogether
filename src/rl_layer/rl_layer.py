@@ -30,9 +30,15 @@ import torch.nn.functional as F
 
 from rl_layer.config import RLConfig
 from rl_layer.heads import RunningMeanStd, ValueHead
+from rl_layer.peft_compat import make_lora_targets_linear
 from rl_layer.trajectory_buffer import RolloutBuffer
 
 logger = logging.getLogger(__name__)
+
+# Attention projections every agent's LoRA adapter lands on. Shared between
+# the bootstrap wrap, per-agent add_adapter, and the peft_compat pass that
+# makes Gemma 4's ClippableLinear projections wrappable at all.
+LORA_TARGET_MODULES = ("q_proj", "v_proj")
 
 
 def _text_hidden_size(config) -> int:
@@ -461,11 +467,17 @@ class RLLayer:
                         config.model_path, exc)
             base = _load_multimodal_base(config, device)
 
+        # Gemma 4 projections are ClippableLinear (not nn.Linear); reparent
+        # them before ANY PEFT call or adapter injection dies with
+        # "Target module Gemma4ClippableLinear(...) is not supported".
+        # No-op (returns 0) on Qwen-style checkpoints.
+        make_lora_targets_linear(base, LORA_TARGET_MODULES)
+
         boot_lora = LoraConfig(
             r=config.lora_rank,
             lora_alpha=config.lora_alpha,
             lora_dropout=config.lora_dropout,
-            target_modules=["q_proj", "v_proj"],
+            target_modules=list(LORA_TARGET_MODULES),
             bias="none",
             task_type="CAUSAL_LM",
         )
@@ -511,7 +523,7 @@ class RLLayer:
                 r=config.lora_rank,
                 lora_alpha=config.lora_alpha,
                 lora_dropout=config.lora_dropout,
-                target_modules=["q_proj", "v_proj"],
+                target_modules=list(LORA_TARGET_MODULES),
                 bias="none",
                 task_type="CAUSAL_LM",
             )

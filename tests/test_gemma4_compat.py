@@ -289,3 +289,126 @@ def test_text_hidden_size_prefers_nested_text_config():
 
 def test_text_hidden_size_falls_back_to_flat_attribute():
     assert _text_hidden_size(_TextOnlyConfig) == 3584
+
+
+# ── PEFT/LoRA injection on ClippableLinear projections (RL arms) ────────────
+#
+# Gemma 4's attention projections are Gemma4ClippableLinear — linear + output
+# clip, but not an nn.Linear subclass — so PEFT's dispatch rejected them and
+# every MAPPO/IPPO arm died at model load. peft_compat reparents the targeted
+# instances so all injection paths (get_peft_model / add_adapter /
+# load_adapter) see plain Linears, without changing a single forward number.
+
+import torch  # noqa: E402
+import torch.nn as nn  # noqa: E402
+import torch.nn.functional as F  # noqa: E402
+
+from rl_layer.peft_compat import make_lora_targets_linear  # noqa: E402
+from rl_layer.rl_layer import LORA_TARGET_MODULES  # noqa: E402
+
+peft = pytest.importorskip("peft")
+
+
+class _ClippableLinear(nn.Module):
+    """Stand-in for Gemma4ClippableLinear: linear-with-clip, NOT an nn.Linear.
+
+    Deliberately exposes no in_features/out_features — the shim must derive
+    them from the weight, because PEFT's LoraLayer reads them off the base.
+    """
+
+    def __init__(self, in_features, out_features, clip=4.0):
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(out_features, in_features) * 0.2)
+        self.bias = nn.Parameter(torch.zeros(out_features))
+        self.clip = clip
+
+    def forward(self, x):
+        return F.linear(x, self.weight, self.bias).clamp(-self.clip, self.clip)
+
+
+class _TinyGemmaLike(nn.Module):
+    """Minimal module tree with Gemma-4-shaped projection names."""
+
+    def __init__(self, h=8):
+        super().__init__()
+        self.q_proj = _ClippableLinear(h, h)
+        self.k_proj = _ClippableLinear(h, h)
+        self.v_proj = _ClippableLinear(h, h)
+        self.o_proj = nn.Linear(h, h)
+
+    def forward(self, x):
+        return self.o_proj(self.q_proj(x) + self.k_proj(x) + self.v_proj(x))
+
+
+def _lora_cfg():
+    return peft.LoraConfig(
+        r=2, lora_alpha=4, target_modules=list(LORA_TARGET_MODULES), bias="none",
+    )
+
+
+def test_clippable_projections_reproduce_the_peft_rejection():
+    """Unshimmed: the exact failure that killed the RL arms on Gemma 4."""
+    with pytest.raises(ValueError, match="not supported"):
+        peft.get_peft_model(_TinyGemmaLike(), _lora_cfg())
+
+
+def test_shim_reparents_only_lora_targets():
+    model = _TinyGemmaLike()
+    assert make_lora_targets_linear(model, LORA_TARGET_MODULES) == 2
+    # q/v become nn.Linear for PEFT while keeping their original class.
+    assert isinstance(model.q_proj, nn.Linear)
+    assert isinstance(model.q_proj, _ClippableLinear)
+    assert isinstance(model.v_proj, nn.Linear)
+    # Non-targets stay exactly what they were.
+    assert type(model.k_proj) is _ClippableLinear
+    assert type(model.o_proj) is nn.Linear
+    # in/out features derived from the (out, in) weight layout.
+    assert model.q_proj.in_features == 8
+    assert model.q_proj.out_features == 8
+
+
+def test_shim_is_bit_identical_and_keeps_the_clip():
+    torch.manual_seed(0)
+    model = _TinyGemmaLike()
+    x = torch.randn(2, 8)
+    y_before = model(x)
+    make_lora_targets_linear(model, LORA_TARGET_MODULES)
+    assert torch.equal(model(x), y_before)
+    big = model.q_proj(torch.randn(4, 8) * 100)
+    assert (big.abs() <= 4.0).all()
+
+
+def test_shim_is_a_noop_on_qwen_style_linears():
+    """Qwen projections are plain nn.Linear — nothing to reparent."""
+    model = nn.Sequential()
+    model.q_proj = nn.Linear(8, 8)
+    model.v_proj = nn.Linear(8, 8)
+    assert make_lora_targets_linear(model, LORA_TARGET_MODULES) == 0
+
+
+def test_peft_bootstrap_and_per_agent_adapters_after_shim():
+    """The full RLLayer flow: bootstrap wrap, add_adapter per role, optimizer
+    filtering by adapter tag, and gradient flow through the LoRA delta."""
+    torch.manual_seed(0)
+    model = _TinyGemmaLike()
+    make_lora_targets_linear(model, LORA_TARGET_MODULES)
+
+    peft_model = peft.get_peft_model(model, _lora_cfg(), adapter_name="__bootstrap__")
+    wrapped = peft_model.base_model.model
+    assert type(wrapped.q_proj).__name__ == "Linear"  # peft.tuners.lora.Linear
+    assert type(wrapped.k_proj) is _ClippableLinear   # untouched
+
+    # _ensure_adapter path: one adapter per role on the shared base.
+    peft_model.add_adapter("gatherer", _lora_cfg())
+    peft_model.set_adapter("gatherer")
+
+    out = peft_model(torch.randn(2, 8))
+    out.sum().backward()
+
+    # RLLayer's optimizer selects params whose name contains ".<adapter>.".
+    tagged = [
+        (n, p) for n, p in peft_model.named_parameters()
+        if ".gatherer." in n and p.requires_grad
+    ]
+    assert len(tagged) == 4  # lora_A + lora_B for q_proj and v_proj
+    assert all(p.grad is not None for _, p in tagged)

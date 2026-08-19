@@ -44,12 +44,13 @@ export MAX_STEPS=1000
 export WANDB_PROJECT=medium_wired_together
 
 # The reasoning core is part of the medium config too. _common.sh now defaults
-# MODEL_LLM (and with it MODEL_2B/MODEL_9B) to Gemma 4, which (a) is not what
-# the existing 60 medium runs used and (b) hard-crashes every RL arm — PEFT
-# cannot inject LoRA into Gemma4ClippableLinear:
-#     ValueError: Target module Gemma4ClippableLinear(...) is not supported.
-# That killed the 2026-08-04 and 2026-08-06 re-run batches at model load.
-# Pin both sizes to the Qwen models the medium suite was actually run with.
+# MODEL_LLM (and with it MODEL_2B/MODEL_9B) to Gemma 4, which is not what the
+# existing 60 medium runs used — pin both sizes to the Qwen models the medium
+# suite was actually run with.
+# (Historical note: Gemma 4 also used to hard-crash every RL arm at model
+# load — "ValueError: Target module Gemma4ClippableLinear(...) is not
+# supported", which killed the 2026-08-04/06 re-run batches. Fixed since
+# rl_layer/peft_compat.py; the pin here is now purely about reproducibility.)
 export MODEL_2B="${MODEL_2B:-$WORKSPACE_MODELS/Qwen3.5-2B}"
 export MODEL_9B="${MODEL_9B:-$WORKSPACE_MODELS/Qwen3.5-9B}"
 

@@ -13,9 +13,9 @@
 # submit_seed_extension.sh, which this extends):
 #   RUN_GROUP=legacy, EPISODES=3, MAX_STEPS=1000,
 #   WANDB_PROJECT=medium_wired_together, MODEL_2B/9B pinned to Qwen3.5
-#   (the _common.sh default is now Gemma 4, which the medium runs never used
-#   and which hard-crashes the RL arms — PEFT cannot LoRA-wrap
-#   Gemma4ClippableLinear).
+#   (the _common.sh default is now Gemma 4, which the medium runs never
+#   used; the old PEFT-vs-Gemma4ClippableLinear crash on RL arms is fixed
+#   by rl_layer/peft_compat.py, so the pin is purely for reproducibility).
 #
 # Gemma arms go through new_exp_0_gemma.sbatch, whose own defaults already
 # match its suite (runs/new_exp_0_gemma/, 3x1000, Gemma image, vision on).
