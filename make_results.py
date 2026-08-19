@@ -86,6 +86,22 @@ CONDITIONS = [
     # registry (which reads CONDITIONS) can discover these runs.
     ("Gemma-E4B",     "new_exp_0_gemma_base",      "gemma", False),
     ("Gemma-E4B+Heb", "new_exp_0_gemma_hebbian",   "gemma", True),
+    # Agent-count scaling suite (runs/agent_scaling, submit_agent_scaling.sh).
+    # Group "scaling": no table emitter selects it (same pattern as "cofire"
+    # and "gemma"), present so the qualitative registry and
+    # make_scaling_fig.py can discover the runs.
+    ("Scale-N2",      "scale_gemma_base_n2",       "scaling", False),
+    ("Scale-N3",      "scale_gemma_base_n3",       "scaling", False),
+    ("Scale-N4",      "scale_gemma_base_n4",       "scaling", False),
+    ("Scale-N5",      "scale_gemma_base_n5",       "scaling", False),
+    ("Scale-N6",      "scale_gemma_base_n6",       "scaling", False),
+    ("Scale-N9",      "scale_gemma_base_n9",       "scaling", False),
+    ("Scale-N2+Heb",  "scale_gemma_hebbian_n2",    "scaling", True),
+    ("Scale-N3+Heb",  "scale_gemma_hebbian_n3",    "scaling", True),
+    ("Scale-N4+Heb",  "scale_gemma_hebbian_n4",    "scaling", True),
+    ("Scale-N5+Heb",  "scale_gemma_hebbian_n5",    "scaling", True),
+    ("Scale-N6+Heb",  "scale_gemma_hebbian_n6",    "scaling", True),
+    ("Scale-N9+Heb",  "scale_gemma_hebbian_n9",    "scaling", True),
 ]
 TOPO_REFERENCE = "LLM-9B"   # reference row repeated in the topology table
 EXCLUDED_AGENT = "agent_2"  # the excluded agent in Allied-pair

@@ -1,4 +1,4 @@
-You are one of three agents in a five-chamber cooperative dungeon. Your shared goal
+You are one of {num_agents_word} agents in a five-chamber cooperative dungeon. Your shared goal
 is to progress through all chambers and defeat the boss in Chamber 5. The objective and
 mechanics of the room you are CURRENTLY in are given each step in the "Chamber" field
 (ROOM FACTS) — this prompt covers only the general mechanics shared across all rooms.

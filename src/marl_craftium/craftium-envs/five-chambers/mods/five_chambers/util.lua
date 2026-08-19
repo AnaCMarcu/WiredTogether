@@ -72,12 +72,22 @@ function five_chambers.ch1_spawn_pos(i)
     if N == 3 and five_chambers.CH1_SPAWNS_3 and five_chambers.CH1_SPAWNS_3[i] then
         return five_chambers.CH1_SPAWNS_3[i]
     end
-    -- Generic: spread along Z=5, X:1-10, on top of the dirt layer.
+    -- Generic (N ~= 3): spread along X:1-10 on top of the dirt layer.
+    -- Row choice is gated by TEAM_SCALING (config.lua / WT_TEAM_SCALING):
+    --   * legacy suites (switch off): the original Z=5 row, unchanged —
+    --     the N=2 pair and N=6 transplant runs reproduce exactly. That row
+    --     puts some spawns inside the 2-high stone pillars at (3,5)/(7,5)
+    --     (e.g. N=4 -> x=7, N=5/6/9 -> x=3), wedging the agent in stone.
+    --   * scaling suite (switch on): Z=12, the one row with NO solid
+    --     resources. Trees/stones/animals all sit at z<=9, and the nearest
+    --     resources (sheep (3,9), tree (7,9), chicken (9,9), stone (5,8))
+    --     stay within ~3 blocks of the row.
+    local z_row = five_chambers.TEAM_SCALING and 12 or 5
     local frac = (N == 1) and 0.5 or (i / (N - 1))
     return {
         x = math.floor(1 + frac * 9 + 0.5),
         y = (five_chambers.CH1_DIRT_Y or 11) + 1,
-        z = 5,
+        z = z_row,
     }
 end
 

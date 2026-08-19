@@ -47,6 +47,25 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run Mindforge agents in Craftium OpenWorld")
     parser.add_argument("--num-agents", type=int, default=3,
                         help="Number of agents in five-chambers (all share the agent role)")
+    parser.add_argument("--team-scaling", action="store_true",
+                        help="Master switch for the agent-count scaling suite. "
+                             "ON: prompt text is rendered truthfully for the "
+                             "actual --num-agents (team size, cell letters, "
+                             "switch ring) and Lua uses the collision-free "
+                             "generic Ch1 spawn row (WT_TEAM_SCALING=1 is "
+                             "exported for the Lua side). OFF (default): every "
+                             "prompt renders the historical 3-agent wording "
+                             "byte-identically and the env behaves exactly as "
+                             "all pre-scaling suites — leave this off for "
+                             "legacy/medium/cofiring/transplant runs.")
+    parser.add_argument("--ch4-mob-count", type=int, default=None,
+                        help="Pin the Ch4 zombie count to this value regardless of "
+                             "--num-agents (exported as FC_CH4_MOB_COUNT to the Lua "
+                             "server AND used for the prompt text, so agents are "
+                             "told the true count). Default: unset — legacy "
+                             "one-zombie-per-agent, min(num_agents, 6). The "
+                             "agent-count scaling suite pins 3 so the environment "
+                             "is identical for every team size.")
     parser.add_argument("--episodes", type=int, default=1,
                         help="Number of episodes to run")
     parser.add_argument("--max-steps", type=int, default=1500,
@@ -1097,7 +1116,27 @@ async def run(args):
 
     log_interval = args.log_interval
 
-    prompts = load_prompts()
+    # FC_CH4_MOB_COUNT / WT_TEAM_SCALING must be set BEFORE the prompt
+    # substitution below (which reads them) and before the env/server
+    # construction (Lua reads both in config.lua via the same os.environ
+    # merge that delivers FC_NUM_AGENTS).
+    if args.ch4_mob_count is not None:
+        os.environ["FC_CH4_MOB_COUNT"] = str(args.ch4_mob_count)
+    team_scaling = bool(args.team_scaling) \
+        or os.environ.get("WT_TEAM_SCALING") == "1"
+    if team_scaling:
+        os.environ["WT_TEAM_SCALING"] = "1"
+
+    # Resolve the prompt placeholders ({num_agents_word}, {cell_letters},
+    # {switch_rotation}, {ch4_zombies}, ...). Gated: with --team-scaling the
+    # text is rendered truthfully for THIS run's team size; without it (all
+    # legacy suites) the frozen 3-agent wording is rendered byte-identically
+    # regardless of N. Must happen before build_role_configs (whose .format
+    # would otherwise trip on the placeholders) and before any template
+    # reaches llm_call.
+    from agent_modules.team_scaling import apply_team_scaling_to_prompts
+    prompts = apply_team_scaling_to_prompts(
+        load_prompts(), num_agents, enabled=team_scaling)
     environment_prompt = prompts["environment"]
 
     from agent_modules.util import safe_format

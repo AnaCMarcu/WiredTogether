@@ -241,9 +241,13 @@ end
 -- ── Ch4 zombie spawn ─────────────────────────────────────────────
 
 function five_chambers.spawn_ch4_mobs()
-    -- Spawn min(NUM_AGENTS, #positions) zombies — one per agent so a solo
-    -- DEBUG run faces 1 zombie, a 3-agent run faces 3.
-    local n = math.min(five_chambers.NUM_AGENTS, #CH4_SPAWN_POSITIONS)
+    -- Spawn min(CH4_MOB_COUNT or NUM_AGENTS, #positions) zombies — by
+    -- default one per agent, so a solo DEBUG run faces 1 zombie and a
+    -- 3-agent run faces 3. CH4_MOB_COUNT (FC_CH4_MOB_COUNT env var,
+    -- config.lua) pins the count so agent-count scaling runs keep the
+    -- chamber identical across team sizes.
+    local want = five_chambers.CH4_MOB_COUNT or five_chambers.NUM_AGENTS
+    local n = math.min(want, #CH4_SPAWN_POSITIONS)
     for i = 1, n do
         local pos = CH4_SPAWN_POSITIONS[i]
         local obj = minetest.add_entity(pos, "mobs_mc:zombie")

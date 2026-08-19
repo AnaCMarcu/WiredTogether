@@ -6,8 +6,10 @@ switch ring, Ch4 zombie count, all-N bonus phrasing) can be generated from
 At num_agents=3 every generated string is byte-identical to the original
 hardcoded text (pinned by tests/test_chamber_facts.py).
 
-No imports — safe to import anywhere.
+Stdlib-only (os, for the FC_CH4_MOB_COUNT pin) — safe to import anywhere.
 """
+
+import os
 
 _CHAMBER_OBJECT_WHITELIST = {
     "ch1": (
@@ -75,9 +77,24 @@ def _cell_letter(i: int) -> str:
 
 
 def _zombie_count(num_agents: int) -> int:
-    # Mirrors Lua: min(NUM_AGENTS, #CH4_SPAWN_POSITIONS) with 6 spawn
-    # positions defined in mobs.lua.
+    # Mirrors Lua's spawn_ch4_mobs: min(CH4_MOB_COUNT or NUM_AGENTS,
+    # #CH4_SPAWN_POSITIONS) with 6 spawn positions defined in mobs.lua.
+    # FC_CH4_MOB_COUNT is the agent-count-scaling pin (set by
+    # --ch4-mob-count via multi_agent_craftium.py, read here at call time
+    # so prompt text always matches what the Lua server actually spawns).
+    # Unset/invalid -> legacy one-zombie-per-agent behavior.
+    try:
+        pinned = int(os.environ.get("FC_CH4_MOB_COUNT", ""))
+    except ValueError:
+        pinned = 0
+    if pinned > 0:
+        return min(pinned, 6)
     return min(num_agents, 6)
+
+
+def ch4_zombie_count(num_agents: int) -> int:
+    """Public alias: how many zombies Ch4 spawns for this run."""
+    return _zombie_count(num_agents)
 
 
 def _ch4_whitelist(num_agents: int) -> str:

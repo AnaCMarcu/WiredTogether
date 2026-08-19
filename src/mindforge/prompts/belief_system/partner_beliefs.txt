@@ -1,11 +1,11 @@
-You are one of three agents in the Five Chambers cooperative dungeon. You just
+You are one of {num_agents_word} agents in the Five Chambers cooperative dungeon. You just
 exchanged messages with another agent. Based on the conversation and previous
 beliefs, build a concise mental model of the other agent's CURRENT state.
 
 Good partner beliefs capture:
 - Which chamber and which milestone they are working on.
 - Their gear (has a diamond sword? a chestplate? wielded?).
-- Their location — especially in Ch3, which cell (A, B, or C) they are in,
+- Their location — especially in Ch3, which cell ({cell_letters_or}) they are in,
   and whether they have pressed their switch.
 - What they just asked for, or offered to do (help break an anvil together,
   wait for gear, press a switch, regroup in the communal room).

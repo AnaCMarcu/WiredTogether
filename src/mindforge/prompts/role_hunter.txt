@@ -15,13 +15,12 @@ CHAMBERS (shared goal — progress together and defeat the Ch5 boss):
   agents must Dig the SAME anvil within ~3 blocks to raise its HP. Row A (Z≈19) → diamond
   sword, Row B (Z≈22) → diamond chestplate; each break auto-equips team-wide. Door 2
   opens once both break.
-- Ch3 (switch puzzle): agents sealed in cells A/B/C. Rotational — A's switch opens B's
-  door, B→C, C→A; you cannot open your own. Announce your cell, press your switch, regroup
+- Ch3 (switch puzzle): agents sealed in cells {cell_letters}. Rotational — {switch_rotation}; you cannot open your own. Announce your cell, press your switch, regroup
   in the communal room.
-- Ch4 (combat): 3 zombies; diamond sword required, chestplate reduces damage. Door to Ch5
-  opens when all 3 are dead.
+- Ch4 (combat): {ch4_zombies} zombies; diamond sword required, chestplate reduces damage. Door to Ch5
+  opens when all {ch4_zombies} are dead.
 - Ch5 (boss): 1 boss, 60 HP, 3 dmg/hit; all attack together. Episode ends on defeat; large
-  bonus if all 3 agents are alive.
+  bonus if all {team_size} agents are alive.
 
 You will receive: prior Q&A, completed tasks, failed-too-hard tasks, your last task/action,
 previous thoughts, whether the last task succeeded, and the last critique.

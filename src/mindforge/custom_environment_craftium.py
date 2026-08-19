@@ -8,6 +8,15 @@ import PIL.Image
 
 from marl_craftium import OpenWorldMultiAgentEnv
 
+try:
+    # Runtime path: multi_agent_craftium.py runs as a script from
+    # src/mindforge, so agent_modules is a top-level package.
+    from agent_modules.chamber_facts import ch4_zombie_count
+    from agent_modules.team_scaling import apply_team_scaling
+except ImportError:  # test-suite path (PYTHONPATH=src, mindforge.* form)
+    from mindforge.agent_modules.chamber_facts import ch4_zombie_count
+    from mindforge.agent_modules.team_scaling import apply_team_scaling
+
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Load environment prompt
@@ -157,7 +166,10 @@ class CraftiumEnvironmentInterface:
             voxel_obs_rz=voxel_obs_rz,
         )
         self.voxel_obs_enabled = voxel_obs
-        self.environment_prompt = environment_prompt
+        # Resolve the N-dependent placeholders ({num_agents_word}, ...) in
+        # the module-level template for THIS env's team size; renders the
+        # historical wording at num_agents=3.
+        self.environment_prompt = apply_team_scaling(environment_prompt, num_agents)
 
         # Per-agent state
         self._observations = {}   # agent_name -> np.ndarray (H, W, 3)
@@ -940,9 +952,13 @@ class CraftiumEnvironmentInterface:
         if self._door_state_file_exists("door4_state.txt"):
             return ("Door 4: OPEN — walk north into Chamber 5 to fight "
                     "the boss zombie.")
-        return ("Door 4: LOCKED — kill all 3 zombies in Chamber 4 to open "
+        # Zombie count mirrors what the Lua server actually spawns
+        # (min(FC_CH4_MOB_COUNT or num_agents, 6)); previously hardcoded
+        # "3", which contradicted chamber_facts' ROOM FACTS at N != 3.
+        return ("Door 4: LOCKED — kill all %d zombies in Chamber 4 to open "
                 "it (use Dig while facing each zombie; the diamond sword "
-                "from Ch2 makes this much faster).")
+                "from Ch2 makes this much faster)."
+                % ch4_zombie_count(self.num_agents))
 
     def consume_futile(self, agentId: int) -> int:
         """Pop and return the count of pitch-cap-redirected actions since

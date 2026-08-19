@@ -27,6 +27,23 @@ if five_chambers.DEBUG_SINGLE then
     five_chambers.NUM_AGENTS = 1
 end
 
+-- Ch4 zombie-count pin. By default the combat chamber spawns one zombie
+-- per agent (min(NUM_AGENTS, #CH4_SPAWN_POSITIONS) in mobs.lua), which
+-- couples the ENVIRONMENT to the team size. The agent-count scaling suite
+-- pins this to the 3-agent design (FC_CH4_MOB_COUNT=3, set by Python's
+-- --ch4-mob-count and delivered through the same os.environ merge as
+-- FC_NUM_AGENTS above) so every team size faces the identical chamber.
+-- Unset -> nil -> legacy one-zombie-per-agent behavior.
+local _env_ch4_mobs = tonumber(os and os.getenv and os.getenv("FC_CH4_MOB_COUNT") or "")
+five_chambers.CH4_MOB_COUNT = _env_ch4_mobs
+
+-- Master switch for the agent-count scaling suite's Lua-side tweaks
+-- (currently only the generic N~=3 Ch1 spawn row in util.lua). Set to "1"
+-- by Python's --team-scaling; every legacy suite leaves it unset so their
+-- behavior is bit-for-bit unchanged.
+five_chambers.TEAM_SCALING =
+    ((os and os.getenv and os.getenv("WT_TEAM_SCALING")) or "") == "1"
+
 -- Per-chamber enable flags. Set enabled=false to skip a chamber
 -- entirely; world_gen will leave its space void and open the connecting
 -- door so the sequence still connects.

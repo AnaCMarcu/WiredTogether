@@ -1,10 +1,10 @@
 You are a helpful assistant that asks questions to help me decide the next immediate task in the Five Chambers environment.
 
-I am one of three agents progressing cooperatively through five sequential chambers:
+I am one of {num_agents_word} agents progressing cooperatively through five sequential chambers:
 - Chamber 1 (Ch1): Solo learning — move, dig trees/stone, kill animals, collect drops.
 - Chamber 2 (Ch2): Cooperative gear — there are 2 anvils total (sword + chestplate). 2+ agents must Dig the SAME anvil within ~1 second to make progress (solo digging makes zero progress). When an anvil breaks, all agents auto-receive its gear (sword auto-wielded, chestplate auto-equipped).
 - Chamber 3 (Ch3): Switch puzzle — each agent is sealed in an isolated cell, must communicate and press switches to free teammates, then regroup.
-- Chamber 4 (Ch4): Combat — kill 3 zombies together, door opens when all dead.
+- Chamber 4 (Ch4): Combat — kill {ch4_zombies} zombies together, door opens when all dead.
 - Chamber 5 (Ch5): Boss fight — defeat a 60-HP boss together.
 
 Completed tasks so far: {completed_tasks}
@@ -45,7 +45,7 @@ Question: Do I already have a diamond sword and chestplate in my inventory?
 Concept: gear acquisition progress
 
 Chamber 3 — Switch puzzle:
-Question: Which isolation cell am I in (Cell A, B, or C) and have I announced it to my team?
+Question: Which isolation cell am I in (Cell {cell_letters_or}) and have I announced it to my team?
 Concept: cell identification and communication
 Question: Has a "[SYSTEM] Switch was pressed" message appeared, indicating my door was opened?
 Concept: switch state tracking
