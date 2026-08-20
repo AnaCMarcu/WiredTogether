@@ -68,6 +68,92 @@ def _normalize_agent(s) -> Optional[str]:
     return f"agent_{int(m.group(1))}"
 
 
+# ── Response parsing ─────────────────────────────────────────────────────
+# The shared load_json() cannot handle this schema's nesting depth. Its
+# salvage regex only matches ONE level of braces, so on a 4-deep response it
+# returns an inner fragment (literally {"comm_target": ..., "help": ...}),
+# which then fails validation as "missing/invalid top-level 'ledger'".
+#
+# That matters because of a failure the backbone makes reliably here: it
+# closes `ledger` one brace early, emitting stall_counter as a SIBLING of
+# ledger, closing the outer object, and then continuing anyway —
+#     {"ledger": {...}, "stall_counter": N}, "directives": {...}, "why": "..."}
+# json.loads stops at the first complete document ("Extra data"). In the
+# first smoke run this cost 14 of 27 attempts (52%), rising to 6 of the last
+# 8 calls once the ledger reached its facts cap and responses got longer —
+# even though BOTH halves were individually valid and complete.
+#
+# So: decode successive top-level chunks and merge them, rather than
+# demanding one well-formed document.
+
+def _strip_fences(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    return text.strip()
+
+
+def _decode_wrapped(decoder, fragment: str) -> Optional[dict]:
+    """Decode a continuation fragment like ``"directives": {...}, "why": "x"}``
+    by re-opening the object the model closed too early."""
+    for candidate in ("{" + fragment, "{" + fragment + "}"):
+        try:
+            obj, _ = decoder.raw_decode(candidate)
+        except ValueError:
+            continue
+        if isinstance(obj, dict):
+            return obj
+    return None
+
+
+def parse_orchestrator_json(raw: str) -> dict:
+    """Parse a response into one dict, tolerating a premature outer close.
+
+    Well-formed output takes the fast path unchanged: the first raw_decode
+    consumes the whole string. Otherwise the trailing remainder is decoded
+    as a continuation and merged. Earlier keys win, so the first complete
+    object stays authoritative.
+    """
+    text = _strip_fences(raw or "")
+    if not text:
+        return {}
+    decoder = json.JSONDecoder()
+    merged: dict = {}
+    idx, n = 0, len(text)
+    while idx < n:
+        while idx < n and text[idx] in ", \t\r\n":
+            idx += 1
+        if idx >= n:
+            break
+        if text[idx] != "{":
+            if merged:
+                obj = _decode_wrapped(decoder, text[idx:])
+                if obj:
+                    for k, v in obj.items():
+                        merged.setdefault(k, v)
+                break
+            nxt = text.find("{", idx)  # leading prose before the first object
+            if nxt < 0:
+                break
+            idx = nxt
+            continue
+        try:
+            obj, end = decoder.raw_decode(text, idx)
+        except ValueError:
+            break
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                merged.setdefault(k, v)
+        if end <= idx:
+            break
+        idx = end
+    return merged
+
+
 # ── Client construction ──────────────────────────────────────────────────
 
 def create_orchestrator_client(cfg: OrchestratorConfig):
@@ -269,6 +355,14 @@ def validate_response(parsed: dict, living_agents: list, t: int) -> dict:
         result["error"] = "missing/invalid top-level 'directives'"
         return result
 
+    # The backbone reliably emits stall_counter as a SIBLING of ledger rather
+    # than inside it (the same brace-nesting slip parse_orchestrator_json
+    # recovers from). Accept either placement instead of discarding the value.
+    if "stall_counter" not in ledger and "stall_counter" in parsed:
+        ledger = {**ledger, "stall_counter": parsed["stall_counter"]}
+        result["warnings"].append(
+            "stall_counter arrived at the top level; hoisted into ledger")
+
     living = [_normalize_agent(a) or a for a in living_agents]
 
     # ── Directives: exactly the living agents ──
@@ -353,11 +447,24 @@ def validate_response(parsed: dict, living_agents: list, t: int) -> dict:
 # ── The call ─────────────────────────────────────────────────────────────
 
 def _default_parse_json():
-    try:
-        from agent_modules.util import load_json
-    except ImportError:
-        from mindforge.agent_modules.util import load_json
-    return load_json
+    """Tolerant parser first, the repo's shared load_json as a backstop.
+
+    parse_orchestrator_json handles this schema's depth (which load_json's
+    one-level salvage regex cannot); load_json still covers the malformations
+    it was written for — missing commas, single quotes, prose around the JSON.
+    """
+    def _parse(raw: str) -> dict:
+        parsed = parse_orchestrator_json(raw)
+        if isinstance(parsed, dict) and "ledger" in parsed:
+            return parsed
+        try:
+            from agent_modules.util import load_json
+        except ImportError:
+            from mindforge.agent_modules.util import load_json
+        fallback = load_json(raw)
+        return fallback if fallback else parsed
+
+    return _parse
 
 
 async def orchestrate(
@@ -447,7 +554,10 @@ async def orchestrate(
                 getattr(usage, "completion_tokens", 0) or 0)
         raw = response.content if isinstance(response.content, str) \
             else str(response.content)
-        raw_tail = raw[:2000]
+        # 6000, not 2000: at 2000 the first smoke run's failed responses were
+        # clipped mid-object, so the log could not distinguish "model was
+        # truncated" from "model closed a brace early" without a re-run.
+        raw_tail = raw[:6000]
         # The repo's load_json returns {} on garbage, but tolerate parsers
         # that raise instead — either way it's a failed attempt, not a crash.
         try:

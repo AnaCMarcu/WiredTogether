@@ -255,6 +255,85 @@ def test_relational_leakage_filter_drops_and_reports():
     assert len(v["leakage_filtered"]) == 5
 
 
+# ── Response parsing (regressions from the first smoke run) ─────────────
+# The backbone closes `ledger` one brace early, emitting stall_counter as a
+# sibling and continuing past the outer close. This cost 14/27 attempts in
+# runs/orchestrator_smoke seed_42 before parse_orchestrator_json existed.
+
+# Verbatim shape from that run (t=120), abbreviated but structurally exact.
+PREMATURE_CLOSE = (
+    '{"ledger": {"task_facts": ["Agent 1 died at t=119."], '
+    '"progress": {"current_stage_goal": "clear Ch5", "issued_at_step": 114, '
+    '"expected_signal": "zombies defeated within 15 steps"}}, '
+    '"stall_counter": 1}, '
+    '"directives": {"agent_0": {"comm_target": "agent_2", "help": "Observe."}, '
+    '"agent_1": {"comm_target": "agent_0", "help": "Advance."}, '
+    '"agent_2": {"comm_target": "agent_0", "help": "Engage."}}, '
+    '"changed": true, "why": "Agent 1 died."}'
+)
+
+# Shape from t=106: a second document with no joining comma.
+TWO_DOCUMENTS = (
+    '{"ledger": {"task_facts": ["f1"], "progress": null}, "stall_counter": 2}'
+    '{"directives": {"agent_0": {"comm_target": "agent_1", "help": "h0"}, '
+    '"agent_1": {"comm_target": "agent_0", "help": "h1"}, '
+    '"agent_2": {"comm_target": "agent_0", "help": "h2"}}, "changed": false, '
+    '"why": "unchanged"}'
+)
+
+
+def test_parse_wellformed_response_unchanged():
+    raw = json.dumps(good_response())
+    assert ocore.parse_orchestrator_json(raw) == good_response()
+
+
+def test_parse_recovers_premature_outer_close():
+    parsed = ocore.parse_orchestrator_json(PREMATURE_CLOSE)
+    assert set(parsed) == {"ledger", "stall_counter", "directives",
+                           "changed", "why"}
+    assert parsed["stall_counter"] == 1
+    assert list(parsed["directives"]) == ["agent_0", "agent_1", "agent_2"]
+
+
+def test_parse_recovers_two_concatenated_documents():
+    parsed = ocore.parse_orchestrator_json(TWO_DOCUMENTS)
+    assert parsed["ledger"]["task_facts"] == ["f1"]
+    assert list(parsed["directives"]) == ["agent_0", "agent_1", "agent_2"]
+    assert parsed["changed"] is False
+
+
+def test_parse_strips_fences_and_leading_prose():
+    raw = "Here is my answer:\n```json\n" + json.dumps(good_response()) + "\n```"
+    assert ocore.parse_orchestrator_json(raw) == good_response()
+
+
+def test_parse_garbage_returns_empty():
+    assert ocore.parse_orchestrator_json("not json at all") == {}
+    assert ocore.parse_orchestrator_json("") == {}
+
+
+def test_premature_close_validates_end_to_end():
+    """The whole point: a response in the broken shape must now produce
+    usable directives instead of being discarded."""
+    parsed = ocore.parse_orchestrator_json(PREMATURE_CLOSE)
+    v = ocore.validate_response(parsed, LIVING, t=120)
+    assert v["ok"], v["error"]
+    # stall_counter was a sibling of ledger — it must survive, not reset to 0.
+    assert v["ledger"]["stall_counter"] == 1
+    assert any("hoisted" in w for w in v["warnings"])
+    assert v["directives"]["agent_0"]["comm_target"] == "agent_2"
+
+
+def test_stall_counter_inside_ledger_takes_precedence():
+    resp = good_response()
+    resp["ledger"]["stall_counter"] = 4
+    resp["stall_counter"] = 99          # stray sibling must not win
+    v = ocore.validate_response(resp, LIVING, t=12)
+    assert v["ok"]
+    assert v["ledger"]["stall_counter"] == 4
+    assert not any("hoisted" in w for w in v["warnings"])
+
+
 # ── Coupling surfaces ────────────────────────────────────────────────────
 
 def test_render_directive_and_comm_target():

@@ -26,9 +26,23 @@ INSTRUCTIONS:
    itself, never "all") and one short, concrete help suggestion. Include a new
    expected_signal: a concrete observable outcome and a rough step budget.
 
-Respond with EXACTLY this JSON, no extra text:
-{{"ledger": {{"task_facts": [...], "progress": {{"current_stage_goal": "...",
- "assignments": {{...}}, "issued_at_step": N, "expected_signal": "..."}},
- "stall_counter": N}},
- "directives": {{"agent_0": {{"comm_target": "...", "help": "..."}}, ...}},
- "changed": true, "why": "<one sentence>"}}
+Respond with EXACTLY this JSON — ONE object, no extra text before or after it:
+{{
+  "ledger": {{
+    "task_facts": ["<fact>", "<fact>"],
+    "progress": {{"current_stage_goal": "...", "issued_at_step": N,
+                 "expected_signal": "..."}},
+    "stall_counter": N
+  }},
+  "directives": {{
+    "agent_0": {{"comm_target": "agent_1", "help": "..."}},
+    "agent_1": {{"comm_target": "agent_0", "help": "..."}}
+  }},
+  "changed": true,
+  "why": "<one sentence>"
+}}
+
+Structure rules — get these exactly right:
+- "stall_counter" goes INSIDE "ledger", alongside "task_facts" and "progress".
+- "directives", "changed" and "why" are SIBLINGS of "ledger", not inside it.
+- Emit one complete JSON object and then STOP. Do not repeat or revise it.
