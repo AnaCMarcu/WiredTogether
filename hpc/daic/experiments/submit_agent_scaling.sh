@@ -32,6 +32,17 @@ WORKSPACE=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu
 REPO="$WORKSPACE/WiredTogether"
 
 # ── Configuration (all env-overridable) ─────────────────────────────────────
+# Record which knobs the CALLER set before any default is applied, so the
+# SMOKE block below can supply defaults without clobbering an explicit
+# value. (It used to plain-assign RUN_GROUP, which silently discarded
+# `RUN_GROUP=foo SMOKE=1 bash submit_agent_scaling.sh` and sent the run
+# back to the group whose final_metrics.json then made it "skipped".)
+_EXPLICIT_RUN_GROUP="${RUN_GROUP:+1}"
+_EXPLICIT_EPISODES="${EPISODES:+1}"
+_EXPLICIT_MAX_STEPS="${MAX_STEPS:+1}"
+_EXPLICIT_NS="${NS:+1}"
+_EXPLICIT_SEEDS="${SEEDS:+1}"
+
 : "${MODEL_LLM:=$WORKSPACE/models/gemma-4-E4B-it}"
 : "${WT_IMAGE:=$WORKSPACE/images/wiredtogether_gemma4.sif}"
 : "${LLM_VISION_MODE:=vision}"
@@ -47,12 +58,16 @@ SEEDS_LIST=(${SEEDS:-42 123 456})
 # point of the figure. ARMS="0" for base only, ARMS="1" for Hebbian only.
 ARMS_LIST=(${ARMS:-0 1})        # 0 = base, 1 = hebbian
 
+# SMOKE supplies DEFAULTS, never overrides: each knob is only forced when
+# the caller did not set it, so `RUN_GROUP=... SMOKE=1` re-tests into a
+# fresh group instead of colliding with the previous smoke's results.
 if [ "${SMOKE:-0}" = "1" ]; then
-    NS_LIST=(2 9)               # cheapest + most demanding client count
-    SEEDS_LIST=(42)
-    RUN_GROUP=agent_scaling_smoke
-    EPISODES=1
-    MAX_STEPS=${SMOKE_STEPS:-150}
+    # cheapest + most demanding client count
+    [ -z "$_EXPLICIT_NS" ]        && NS_LIST=(2 9)
+    [ -z "$_EXPLICIT_SEEDS" ]     && SEEDS_LIST=(42)
+    [ -z "$_EXPLICIT_RUN_GROUP" ] && RUN_GROUP=agent_scaling_smoke
+    [ -z "$_EXPLICIT_EPISODES" ]  && EPISODES=1
+    [ -z "$_EXPLICIT_MAX_STEPS" ] && MAX_STEPS=${SMOKE_STEPS:-150}
     export RUN_GROUP EPISODES MAX_STEPS
     export WANDB=0
 fi
