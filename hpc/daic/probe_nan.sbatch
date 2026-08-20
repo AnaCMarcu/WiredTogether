@@ -7,8 +7,14 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64GB
 #SBATCH --gres=gpu:2
-#SBATCH --output=slurm_logs/probe_nan_%j.out
-#SBATCH --error=slurm_logs/probe_nan_%j.err
+# Paths are relative to the SUBMISSION directory, and sbatch resolves them
+# before the script body runs -- so the dir must already exist or the job
+# dies at startup with nowhere to write. hpc/daic/experiments/slurm_logs/ is
+# created by submit_pareto.sh / submit_cofiring.sh, so it is always there;
+# the repo root has no slurm_logs/ (that cost jobs 12790125-6 on 2026-08-20).
+# => SUBMIT THIS FROM THE REPO ROOT.
+#SBATCH --output=hpc/daic/experiments/slurm_logs/probe_nan_%j.out
+#SBATCH --error=hpc/daic/experiments/slurm_logs/probe_nan_%j.err
 #SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
