@@ -30,14 +30,15 @@ import torch.nn.functional as F
 
 from rl_layer.config import RLConfig
 from rl_layer.heads import RunningMeanStd, ValueHead
-from rl_layer.peft_compat import make_lora_targets_linear
+from rl_layer.peft_compat import resolve_lora_targets
 from rl_layer.trajectory_buffer import RolloutBuffer
 
 logger = logging.getLogger(__name__)
 
-# Attention projections every agent's LoRA adapter lands on. Shared between
-# the bootstrap wrap, per-agent add_adapter, and the peft_compat pass that
-# makes Gemma 4's ClippableLinear projections wrappable at all.
+# Attention projections every agent's LoRA adapter lands on. These are
+# LOGICAL names: peft_compat.resolve_lora_targets turns them into explicit
+# module paths within the checkpoint's text tower (see that module for why
+# the bare suffixes cannot be handed to PEFT directly on Gemma 4).
 LORA_TARGET_MODULES = ("q_proj", "v_proj")
 
 
@@ -121,6 +122,10 @@ class RLLayer:
     _shared_model = None
     _shared_tokenizer = None
     _shared_model_path: Optional[str] = None
+    # Explicit module paths resolved from LORA_TARGET_MODULES for the loaded
+    # checkpoint. Every agent's adapter reuses this exact list, so all
+    # adapters cover the same parameter set.
+    _lora_targets: Optional[List[str]] = None
 
     def __init__(self, config: RLConfig, role: str, agent_id: int,
                  centralized_critic: "Optional[object]" = None):
@@ -467,17 +472,17 @@ class RLLayer:
                         config.model_path, exc)
             base = _load_multimodal_base(config, device)
 
-        # Gemma 4 projections are ClippableLinear (not nn.Linear); reparent
-        # them before ANY PEFT call or adapter injection dies with
-        # "Target module Gemma4ClippableLinear(...) is not supported".
-        # No-op (returns 0) on Qwen-style checkpoints.
-        make_lora_targets_linear(base, LORA_TARGET_MODULES)
+        # Resolve the logical projection names to explicit text-tower module
+        # paths. On Gemma 4 the bare suffixes would also select the vision
+        # and audio towers, whose ClippableLinear projections PEFT cannot
+        # wrap (and which the text-only RL forward would never train).
+        cls._lora_targets = resolve_lora_targets(base, LORA_TARGET_MODULES)
 
         boot_lora = LoraConfig(
             r=config.lora_rank,
             lora_alpha=config.lora_alpha,
             lora_dropout=config.lora_dropout,
-            target_modules=list(LORA_TARGET_MODULES),
+            target_modules=cls._lora_targets,
             bias="none",
             task_type="CAUSAL_LM",
         )
@@ -523,7 +528,9 @@ class RLLayer:
                 r=config.lora_rank,
                 lora_alpha=config.lora_alpha,
                 lora_dropout=config.lora_dropout,
-                target_modules=list(LORA_TARGET_MODULES),
+                # Same resolved paths as the bootstrap adapter — see
+                # peft_compat.resolve_lora_targets.
+                target_modules=RLLayer._lora_targets,
                 bias="none",
                 task_type="CAUSAL_LM",
             )

@@ -291,115 +291,164 @@ def test_text_hidden_size_falls_back_to_flat_attribute():
     assert _text_hidden_size(_TextOnlyConfig) == 3584
 
 
-# ── PEFT/LoRA injection on ClippableLinear projections (RL arms) ────────────
+# ── LoRA target resolution for multimodal towers (RL arms) ──────────────────
 #
-# Gemma 4's attention projections are Gemma4ClippableLinear — linear + output
-# clip, but not an nn.Linear subclass — so PEFT's dispatch rejected them and
-# every MAPPO/IPPO arm died at model load. peft_compat reparents the targeted
-# instances so all injection paths (get_peft_model / add_adapter /
-# load_adapter) see plain Linears, without changing a single forward number.
+# The gemma4_smoke run (2026-08-19, exp03_mappo) showed the real failure
+# shape: Gemma 4's VISION and AUDIO towers implement q/v_proj as
+# Gemma4ClippableLinear — a wrapper holding an inner nn.Linear — while the
+# text tower's projections are plain nn.Linear. Suffix-matching "q_proj"
+# therefore reached into towers PEFT cannot wrap (56 rejections: 32 vision,
+# 24 audio, 0 text) AND towers the text-only RL forward would never train.
+# resolve_lora_targets confines targeting to the text tower and returns
+# explicit module paths.
 
 import torch  # noqa: E402
 import torch.nn as nn  # noqa: E402
-import torch.nn.functional as F  # noqa: E402
 
-from rl_layer.peft_compat import make_lora_targets_linear  # noqa: E402
+from rl_layer.peft_compat import resolve_lora_targets  # noqa: E402
 from rl_layer.rl_layer import LORA_TARGET_MODULES  # noqa: E402
 
 peft = pytest.importorskip("peft")
 
 
 class _ClippableLinear(nn.Module):
-    """Stand-in for Gemma4ClippableLinear: linear-with-clip, NOT an nn.Linear.
+    """Mirrors Gemma4ClippableLinear as the smoke-run repr showed it:
+    a wrapper around an inner nn.Linear, with no weight of its own."""
 
-    Deliberately exposes no in_features/out_features — the shim must derive
-    them from the weight, because PEFT's LoraLayer reads them off the base.
-    """
-
-    def __init__(self, in_features, out_features, clip=4.0):
+    def __init__(self, h):
         super().__init__()
-        self.weight = nn.Parameter(torch.randn(out_features, in_features) * 0.2)
-        self.bias = nn.Parameter(torch.zeros(out_features))
-        self.clip = clip
+        self.linear = nn.Linear(h, h, bias=False)
+        self.clip = 4.0
 
     def forward(self, x):
-        return F.linear(x, self.weight, self.bias).clamp(-self.clip, self.clip)
+        return self.linear(x).clamp(-self.clip, self.clip)
 
 
-class _TinyGemmaLike(nn.Module):
-    """Minimal module tree with Gemma-4-shaped projection names."""
+def _attn(h, proj_cls):
+    block = nn.Module()
+    block.q_proj = proj_cls(h)
+    block.k_proj = proj_cls(h)
+    block.v_proj = proj_cls(h)
+    return block
 
-    def __init__(self, h=8):
+
+class _TinyGemma4(nn.Module):
+    """Multimodal layout from the smoke log: text tower under
+    model.language_model with plain Linears, vision/audio towers with
+    ClippableLinear wrappers."""
+
+    def __init__(self, h=8, layers=2):
         super().__init__()
-        self.q_proj = _ClippableLinear(h, h)
-        self.k_proj = _ClippableLinear(h, h)
-        self.v_proj = _ClippableLinear(h, h)
-        self.o_proj = nn.Linear(h, h)
+        plain = lambda h: nn.Linear(h, h)  # noqa: E731
+        self.model = nn.Module()
+        self.model.language_model = nn.Module()
+        self.model.language_model.layers = nn.ModuleList(
+            [_attn(h, plain) for _ in range(layers)])
+        self.model.vision_tower = nn.Module()
+        self.model.vision_tower.layers = nn.ModuleList(
+            [_attn(h, _ClippableLinear) for _ in range(layers)])
+        self.model.audio_tower = nn.Module()
+        self.model.audio_tower.layers = nn.ModuleList(
+            [_attn(h, _ClippableLinear) for _ in range(layers)])
 
     def forward(self, x):
-        return self.o_proj(self.q_proj(x) + self.k_proj(x) + self.v_proj(x))
+        # Text-only path, like RLLayer feeding input_ids: the vision and
+        # audio towers are never entered.
+        for block in self.model.language_model.layers:
+            x = block.q_proj(x) + block.v_proj(x)
+        return x
 
 
-def _lora_cfg():
+class _TinyQwen(nn.Module):
+    """Text-only layout: no towers, projections are plain nn.Linear."""
+
+    def __init__(self, h=8, layers=2):
+        super().__init__()
+        plain = lambda h: nn.Linear(h, h)  # noqa: E731
+        self.layers = nn.ModuleList([_attn(h, plain) for _ in range(layers)])
+
+    def forward(self, x):
+        for block in self.layers:
+            x = block.q_proj(x) + block.v_proj(x)
+        return x
+
+
+def _lora_cfg(targets):
     return peft.LoraConfig(
-        r=2, lora_alpha=4, target_modules=list(LORA_TARGET_MODULES), bias="none",
+        r=2, lora_alpha=4, target_modules=list(targets), bias="none",
     )
 
 
-def test_clippable_projections_reproduce_the_peft_rejection():
-    """Unshimmed: the exact failure that killed the RL arms on Gemma 4."""
+def test_suffix_targeting_reproduces_the_smoke_run_crash():
+    """The pre-fix behavior: bare q/v_proj suffixes reach the vision tower's
+    ClippableLinear and PEFT rejects it — exp03_mappo's exact failure."""
     with pytest.raises(ValueError, match="not supported"):
-        peft.get_peft_model(_TinyGemmaLike(), _lora_cfg())
+        peft.get_peft_model(_TinyGemma4(), _lora_cfg(LORA_TARGET_MODULES))
 
 
-def test_shim_reparents_only_lora_targets():
-    model = _TinyGemmaLike()
-    assert make_lora_targets_linear(model, LORA_TARGET_MODULES) == 2
-    # q/v become nn.Linear for PEFT while keeping their original class.
-    assert isinstance(model.q_proj, nn.Linear)
-    assert isinstance(model.q_proj, _ClippableLinear)
-    assert isinstance(model.v_proj, nn.Linear)
-    # Non-targets stay exactly what they were.
-    assert type(model.k_proj) is _ClippableLinear
-    assert type(model.o_proj) is nn.Linear
-    # in/out features derived from the (out, in) weight layout.
-    assert model.q_proj.in_features == 8
-    assert model.q_proj.out_features == 8
+def test_resolution_confines_targets_to_the_text_tower():
+    targets = resolve_lora_targets(_TinyGemma4(), LORA_TARGET_MODULES)
+    assert len(targets) == 4  # q+v over 2 text layers
+    assert all(t.startswith("model.language_model.") for t in targets)
+    assert not any("vision" in t or "audio" in t for t in targets)
+    assert not any(t.endswith("k_proj") for t in targets)
 
 
-def test_shim_is_bit_identical_and_keeps_the_clip():
+def test_resolution_on_text_only_matches_old_suffix_behavior():
+    """Qwen path unchanged: every q/v_proj, none skipped, exact paths."""
+    targets = resolve_lora_targets(_TinyQwen(), LORA_TARGET_MODULES)
+    assert sorted(targets) == [
+        "layers.0.q_proj", "layers.0.v_proj",
+        "layers.1.q_proj", "layers.1.v_proj",
+    ]
+
+
+def test_wrapped_text_projection_resolves_to_inner_linear():
+    """If the TEXT tower ever ships ClippableLinear too, LoRA lands on the
+    inner nn.Linear — inside the clip, per the checkpoint's own arithmetic."""
+    model = _TinyGemma4()
+    h = 8
+    model.model.language_model.layers[0].q_proj = _ClippableLinear(h)
+    targets = resolve_lora_targets(model, LORA_TARGET_MODULES)
+    assert "model.language_model.layers.0.q_proj.linear" in targets
+    assert len(targets) == 4
+
+
+def test_ambiguous_wrapper_is_skipped_not_guessed():
+    model = _TinyGemma4()
+    amb = nn.Module()
+    amb.a = nn.Linear(8, 8)
+    amb.b = nn.Linear(8, 8)
+    model.model.language_model.layers[0].q_proj = amb
+    targets = resolve_lora_targets(model, LORA_TARGET_MODULES)
+    assert len(targets) == 3  # the ambiguous q_proj dropped, rest intact
+
+
+def test_nothing_resolved_raises_instead_of_training_nothing():
+    with pytest.raises(RuntimeError, match="no LoRA target"):
+        resolve_lora_targets(_TinyQwen(), ("nonexistent_proj",))
+
+
+def test_peft_bootstrap_and_per_agent_adapters_with_resolved_targets():
+    """The full RLLayer flow on the multimodal fake: bootstrap wrap,
+    add_adapter per role, adapter-tag optimizer filtering, grad flow —
+    and the vision/audio towers left untouched."""
     torch.manual_seed(0)
-    model = _TinyGemmaLike()
-    x = torch.randn(2, 8)
-    y_before = model(x)
-    make_lora_targets_linear(model, LORA_TARGET_MODULES)
-    assert torch.equal(model(x), y_before)
-    big = model.q_proj(torch.randn(4, 8) * 100)
-    assert (big.abs() <= 4.0).all()
+    model = _TinyGemma4()
+    targets = resolve_lora_targets(model, LORA_TARGET_MODULES)
 
-
-def test_shim_is_a_noop_on_qwen_style_linears():
-    """Qwen projections are plain nn.Linear — nothing to reparent."""
-    model = nn.Sequential()
-    model.q_proj = nn.Linear(8, 8)
-    model.v_proj = nn.Linear(8, 8)
-    assert make_lora_targets_linear(model, LORA_TARGET_MODULES) == 0
-
-
-def test_peft_bootstrap_and_per_agent_adapters_after_shim():
-    """The full RLLayer flow: bootstrap wrap, add_adapter per role, optimizer
-    filtering by adapter tag, and gradient flow through the LoRA delta."""
-    torch.manual_seed(0)
-    model = _TinyGemmaLike()
-    make_lora_targets_linear(model, LORA_TARGET_MODULES)
-
-    peft_model = peft.get_peft_model(model, _lora_cfg(), adapter_name="__bootstrap__")
+    peft_model = peft.get_peft_model(
+        model, _lora_cfg(targets), adapter_name="__bootstrap__")
     wrapped = peft_model.base_model.model
-    assert type(wrapped.q_proj).__name__ == "Linear"  # peft.tuners.lora.Linear
-    assert type(wrapped.k_proj) is _ClippableLinear   # untouched
+    text0 = wrapped.model.language_model.layers[0]
+    assert type(text0.q_proj).__name__ == "Linear"      # peft.tuners.lora
+    assert hasattr(text0.q_proj, "lora_A")
+    assert type(text0.k_proj) is nn.Linear              # untouched
+    vis0 = wrapped.model.vision_tower.layers[0]
+    assert type(vis0.q_proj) is _ClippableLinear        # untouched
 
     # _ensure_adapter path: one adapter per role on the shared base.
-    peft_model.add_adapter("gatherer", _lora_cfg())
+    peft_model.add_adapter("gatherer", _lora_cfg(targets))
     peft_model.set_adapter("gatherer")
 
     out = peft_model(torch.randn(2, 8))
@@ -410,5 +459,10 @@ def test_peft_bootstrap_and_per_agent_adapters_after_shim():
         (n, p) for n, p in peft_model.named_parameters()
         if ".gatherer." in n and p.requires_grad
     ]
-    assert len(tagged) == 4  # lora_A + lora_B for q_proj and v_proj
+    assert len(tagged) == 8  # lora_A + lora_B for q+v over 2 text layers
     assert all(p.grad is not None for _, p in tagged)
+    # No adapter parameters anywhere in the vision/audio towers.
+    assert not any(
+        ("vision_tower" in n or "audio_tower" in n)
+        for n, _ in peft_model.named_parameters() if "lora" in n
+    )

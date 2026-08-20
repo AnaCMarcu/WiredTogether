@@ -1,111 +1,154 @@
-"""PEFT/LoRA compatibility for checkpoints whose projections are not nn.Linear.
+"""Resolve LoRA target modules for multimodal checkpoints (Gemma 4).
 
-Gemma 4 (any size, incl. the 4B/E4B checkpoints) implements its attention
-projections as ``Gemma4ClippableLinear`` — functionally a linear layer with
-output clipping, but a direct ``nn.Module`` subclass rather than an
-``nn.Linear``. PEFT's LoRA dispatch matches target modules with
-``isinstance(target_base_layer, torch.nn.Linear)``, so adapter injection on a
-Gemma 4 base dies at load with::
+PEFT matches ``target_modules`` by name suffix, so the bare names
+``q_proj`` / ``v_proj`` select attention projections in EVERY tower of a
+multimodal checkpoint. On Gemma 4 that is a problem twice over:
 
-    ValueError: Target module Gemma4ClippableLinear(...) is not supported.
+1. **It crashes.** The vision and audio towers implement their projections
+   as ``Gemma4ClippableLinear`` — a *wrapper* holding an inner ``nn.Linear``
+   (``Gemma4ClippableLinear((linear): Linear(in_features=768, ...))``), not
+   an ``nn.Linear`` itself. PEFT's LoRA dispatch requires
+   ``isinstance(target, nn.Linear)`` and raises::
 
-which is what killed every MAPPO/IPPO arm on the 2026-08-04/06 batches
-(Qwen3.5 projections are plain ``nn.Linear``, so RL only ever ran on Qwen).
+       ValueError: Target module Gemma4ClippableLinear(...) is not supported.
 
-Fix: reparent each *targeted* instance to a dynamically created subclass of
-``(OriginalClass, nn.Linear)``. The MRO keeps the original ``forward`` first,
-so numerics are bit-identical and the clipping stays exactly where the
-checkpoint put it; ``isinstance(module, nn.Linear)`` becomes True, which is
-the one predicate every PEFT injection path (``get_peft_model``,
-``add_adapter``, ``load_adapter``) dispatches on. LoRA then wraps the module
-as its ``base_layer`` and adds the low-rank delta to the clipped output,
-exactly as it does for Qwen.
+   which killed every MAPPO/IPPO arm at model load (the 2026-08-04/06
+   batches, and again in the 2026-08-19 gemma4_smoke run). The text tower's
+   projections are plain ``nn.Linear`` — in the smoke run all 56 rejected
+   modules were vision (32) or audio (24), none text.
 
-Two alternatives were rejected:
+2. **The adapters would be dead weight even if it did not crash.** The RL
+   policy scores actions through ``RLLayer._score_actions``, which feeds the
+   model ``input_ids`` only; the vision/audio towers are never entered, so
+   LoRA parameters placed on them receive no gradient. They would sit in
+   each agent's optimizer forever at their initial values, inflating the
+   trainable-parameter count and making it incomparable with the Qwen runs
+   (which have no such towers at all).
 
-- ``LoraConfig._register_custom_module`` (PEFT >= 0.11 dynamic dispatch) is
-  runtime-only state that is not serialised into ``adapter_config.json`` —
-  the ``load_adapter``-from-checkpoint path in ``RLLayer._ensure_adapter``
-  would rebuild the config from disk and crash all over again.
-- Re-implementing the clipped forward on a fresh ``nn.Linear`` risks silently
-  diverging from whatever transformers does (clip value semantics, dtype of
-  the clamp), and would break again on the next upstream tweak.
+So targeting is restricted to the text tower, and the resolved module names
+are passed to PEFT *explicitly* rather than as suffixes — the injection then
+cannot wander into a tower we did not choose, on this or any future
+checkpoint layout. Text-only checkpoints (Qwen) have no separate towers, so
+resolution returns exactly the same set the old suffix matching produced.
+
+A wrapper-descent step is kept for the case where a text-tower projection is
+itself a ``ClippableLinear``-style wrapper: LoRA is then attached to the
+inner ``nn.Linear``, which also puts the low-rank delta *inside* the clip
+rather than after it — the placement the checkpoint's own arithmetic implies.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Dict, Sequence
+from typing import List, Optional, Sequence
 
-import torch
 import torch.nn as nn
 
 logger = logging.getLogger(__name__)
 
-# One compat class per original class, so repeated loads (and repeated
-# RLLayer constructions in tests) reuse the same type object.
-_COMPAT_CLASSES: Dict[type, type] = {}
+# Submodule names that root the text tower of a multimodal wrapper. The
+# outermost match wins, and targeting is confined to its subtree.
+_TEXT_SUBTREE_NAMES = ("language_model", "text_model")
+
+# Fallback only, for a multimodal layout that names its text tower something
+# we do not know: these subtrees are excluded instead. Positive selection via
+# _TEXT_SUBTREE_NAMES is preferred because it excludes unknown future towers
+# automatically, whereas this list only excludes what it already lists.
+_NON_TEXT_SUBTREE_NAMES = (
+    "vision_tower", "audio_tower", "vision_model", "audio_model",
+    "vision_encoder", "audio_encoder", "multi_modal_projector",
+)
 
 
-def _compat_class(cls: type) -> type:
-    compat = _COMPAT_CLASSES.get(cls)
-    if compat is None:
-        try:
-            compat = type(cls.__name__, (cls, nn.Linear), {})
-        except TypeError as exc:  # inconsistent MRO / incompatible layout
-            raise RuntimeError(
-                f"peft_compat: cannot graft nn.Linear onto {cls.__module__}."
-                f"{cls.__qualname__}; PEFT will not be able to LoRA-wrap it"
-            ) from exc
-        _COMPAT_CLASSES[cls] = compat
-    return compat
+def _text_subtree_prefix(model: nn.Module) -> Optional[str]:
+    """Dotted path of the outermost text tower, or None if there isn't one.
 
-
-def make_lora_targets_linear(model: nn.Module,
-                             target_modules: Sequence[str]) -> int:
-    """Make LoRA-targeted linear-like modules pass PEFT's nn.Linear dispatch.
-
-    Walks ``model`` and, for every submodule whose name matches
-    ``target_modules`` (same suffix semantics PEFT uses: exact name or
-    ``.<target>`` suffix) and that is linear-like (2-D ``weight``) but NOT an
-    ``nn.Linear``, swaps ``__class__`` to a subclass that also inherits
-    ``nn.Linear``. Parameters, buffers, attributes and ``forward`` are
-    untouched. ``in_features``/``out_features`` are derived from the weight
-    shape when absent, because PEFT's ``LoraLayer.__init__`` reads them off
-    the base layer.
-
-    Must run on the bare base model BEFORE ``get_peft_model``; afterwards all
-    PEFT paths — bootstrap wrap, per-agent ``add_adapter``, and
-    ``load_adapter`` from a saved checkpoint — see plain Linears.
-
-    Returns the number of modules reparented (0 for Qwen-style checkpoints
-    whose projections already are ``nn.Linear`` — the call is then a no-op).
+    Shallowest match wins: a checkpoint that nests ``language_model`` inside
+    another ``language_model`` should be confined by the outer one.
     """
-    patched = 0
+    candidates = [
+        name for name, _ in model.named_modules()
+        if name and name.rsplit(".", 1)[-1] in _TEXT_SUBTREE_NAMES
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda n: (n.count("."), len(n)))
+
+
+def _resolve_linear(name: str, module: nn.Module) -> Optional[str]:
+    """Return the name of the ``nn.Linear`` LoRA should wrap for this target.
+
+    ``name`` itself when the module already is one; otherwise the path of its
+    single ``nn.Linear`` descendant (the ``Gemma4ClippableLinear.linear``
+    shape). Ambiguous or non-linear targets return None and are skipped —
+    PEFT would only reject them later with a less informative error.
+    """
+    if isinstance(module, nn.Linear):
+        return name
+    inner = [
+        sub for sub, m in module.named_modules()
+        if sub and isinstance(m, nn.Linear)
+    ]
+    if len(inner) == 1:
+        return f"{name}.{inner[0]}"
+    logger.warning(
+        "peft_compat: %s (%s) is a LoRA target but holds %d nn.Linear "
+        "submodules; skipping it (expected exactly 1)",
+        name, type(module).__name__, len(inner),
+    )
+    return None
+
+
+def resolve_lora_targets(model: nn.Module,
+                         target_names: Sequence[str]) -> List[str]:
+    """Full module names PEFT should attach LoRA adapters to.
+
+    ``target_names`` are the logical projection names (``q_proj``,
+    ``v_proj``). Matching is on the final path component, confined to the
+    text tower, with wrapper modules resolved to their inner ``nn.Linear``.
+
+    Must be called on the bare base model BEFORE ``get_peft_model``. The
+    returned list is reused verbatim for every per-agent ``add_adapter``, so
+    all adapters cover an identical parameter set — which the per-agent
+    optimizer filtering in ``RLLayer.__init__`` assumes.
+
+    Raises
+    ------
+    RuntimeError
+        If nothing resolved. Training would otherwise proceed with zero
+        adaptable parameters and silently learn nothing for the whole run —
+        the failure mode this check exists to prevent.
+    """
+    prefix = _text_subtree_prefix(model)
+    targets: List[str] = []
+    skipped_towers = 0
+
     for name, module in model.named_modules():
-        if not any(name == t or name.endswith("." + t) for t in target_modules):
+        if name.rsplit(".", 1)[-1] not in target_names:
             continue
-        if isinstance(module, nn.Linear):
+        if prefix is not None:
+            if not name.startswith(prefix + "."):
+                skipped_towers += 1
+                continue
+        elif any(part in _NON_TEXT_SUBTREE_NAMES for part in name.split(".")):
+            skipped_towers += 1
             continue
-        weight = getattr(module, "weight", None)
-        if not isinstance(weight, torch.Tensor) or weight.dim() != 2:
-            logger.warning(
-                "peft_compat: %s (%s) matches a LoRA target but has no 2-D "
-                "weight; leaving it for PEFT to reject explicitly",
-                name, type(module).__name__,
-            )
-            continue
-        # nn.Linear stores weight as (out_features, in_features); any
-        # checkpoint-compatible linear variant must follow the same layout.
-        if not hasattr(module, "in_features"):
-            module.in_features = weight.shape[1]
-        if not hasattr(module, "out_features"):
-            module.out_features = weight.shape[0]
-        module.__class__ = _compat_class(type(module))
-        patched += 1
-    if patched:
-        logger.info(
-            "peft_compat: reparented %d LoRA target modules (e.g. Gemma 4's "
-            "ClippableLinear) so PEFT can inject adapters", patched,
+        resolved = _resolve_linear(name, module)
+        if resolved is not None:
+            targets.append(resolved)
+
+    if not targets:
+        raise RuntimeError(
+            f"peft_compat: no LoRA target resolved for {tuple(target_names)} "
+            f"in {type(model).__name__} (text tower: {prefix or '<none>'}). "
+            "Adapters would train nothing — check the projection names for "
+            "this checkpoint."
         )
-    return patched
+
+    logger.info(
+        "peft_compat: %d LoRA targets in text tower '%s'%s",
+        len(targets), prefix or "<root>",
+        f"; {skipped_towers} vision/audio projections excluded"
+        if skipped_towers else "",
+    )
+    return targets
