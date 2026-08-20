@@ -65,7 +65,14 @@ fi
 # E4B wall-clock measured 19-38 h for 3×1000, the rest scaled from it).
 size_resources() {
     case "$1" in
-        e2b) S_GPU=gpu:1 S_MEM=32G S_QOS=medium S_TIME=36:00:00 ;;
+        # e2b was medium/36h on the assumption it would run ~half E4B's speed.
+        # The 2026-08-20 smoke MEASURED 34.0 s/step (base) and 39.6 s/step
+        # (hebbian) = 28-33 h for 3x1000, i.e. indistinguishable from 12b:
+        # per-step cost is dominated by the ~5 LLM calls/step and the fixed env
+        # overhead, not by parameter count. 33 h projected against a 36 h wall,
+        # on a config whose E4B equivalent varied 19-38 h across seeds, would
+        # lose runs to the limit. long/96h leaves real margin.
+        e2b) S_GPU=gpu:1 S_MEM=32G S_QOS=long   S_TIME=96:00:00 ;;
         e4b) S_GPU=gpu:1 S_MEM=32G S_QOS=long   S_TIME=48:00:00 ;;
         12b) S_GPU=gpu:1 S_MEM=48G S_QOS=long   S_TIME=96:00:00 ;;
         26b) S_GPU=gpu:2 S_MEM=64G S_QOS=long   S_TIME=96:00:00 ;;
