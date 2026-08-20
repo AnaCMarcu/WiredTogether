@@ -139,34 +139,103 @@ def _bootstrap_last_value(rl: "RLLayer") -> float:
 
 
 def _collect_social_replay(rl: "RLLayer", neighbour_buffers, hebbian_graph):
-    """Sample neighbour transitions weighted by Hebbian bonds (Eq. 7)."""
+    """Sample neighbour transitions weighted by Hebbian bonds (Eq. 7).
+
+    Two correctness properties this function is responsible for:
+
+    **Advantages are computed here, on a copy.** Agents update in sequence
+    within the same step, so at the moment agent i samples, a neighbour's
+    buffer has NOT had its own ``compute_gae`` run yet (its update comes
+    later — or its buffer was already cleared by an earlier update). The
+    dataclass-default ``advantage=0.0`` would contribute zero policy
+    gradient but a spurious entropy/value term. So each selected
+    neighbour's transitions are deep-copied and GAE is computed on the
+    copy, with the same γ/λ and the same centralised/independent baseline
+    switch the owner would use; the neighbour's real buffer is untouched.
+    (Historical note: before 2026-08-20 this function also passed a sizes
+    list that put 0 at agent_i's own slot, so ``int(ρ·own_size)`` was
+    always 0 and social replay silently never fired — in ANY run.)
+
+    **Off-policy correction is PPO's own ratio.** A neighbour transition
+    stores log π_j(a|s) as ``old_log_prob``; ``action_level_ppo_step``
+    re-scores the prompt under agent i's adapter, so its ratio
+    exp(log π_i − log π_j) IS the importance weight π_i/π_j, and the PPO
+    clip bounds its variance — shared-experience actor-critic (SEAC,
+    Christianos et al. 2020) with a clipped estimator instead of a raw
+    IS weight. This is the correction the old "disabled until IS
+    correction is added" note in hebbian/config.py asked for.
+    """
     social_transitions = []
     if not neighbour_buffers or hebbian_graph is None:
         return social_transitions
 
+    # Full per-agent sizes INCLUDING our own buffer at agent_id's slot —
+    # get_social_replay_indices scales the neighbour count by own_size.
     buffer_sizes = {aid: len(buf) for aid, buf in neighbour_buffers.items()}
-    max_id = max(buffer_sizes.keys()) + 1 if buffer_sizes else 0
-    sizes_list = [buffer_sizes.get(i, 0) for i in range(max_id)]
+    buffer_sizes[rl.agent_id] = len(rl.buffer)
+    sizes_list = [buffer_sizes.get(i, 0) for i in range(max(buffer_sizes) + 1)]
     indices = hebbian_graph.get_social_replay_indices(
         agent_i=rl.agent_id,
         buffer_sizes=sizes_list,
         rho=hebbian_graph.config.social_replay_rho,
     )
-    for buf_idx, agent_j in indices:
+    if not indices:
+        return social_transitions
+
+    # GAE-on-copy, once per neighbour that was actually selected.
+    gaed: Dict[int, list] = {}
+    for agent_j in {j for _, j in indices}:
         buf_j = neighbour_buffers.get(agent_j)
-        if buf_j is None:
+        if buf_j is None or len(buf_j) == 0:
             continue
-        all_j = buf_j.get_all()
-        if buf_idx < len(all_j):
+        gaed[agent_j] = _gae_on_copy(rl, buf_j)
+
+    for buf_idx, agent_j in indices:
+        all_j = gaed.get(agent_j)
+        if all_j is not None and buf_idx < len(all_j):
             social_transitions.append(all_j[buf_idx])
 
     if social_transitions:
         logger.info(
-            "RLLayer agent %d: social replay — %d neighbour transitions from %d agents",
-            rl.agent_id, len(social_transitions),
-            len({j for _, j in indices}),
+            "RLLayer agent %d: social replay — %d neighbour transitions "
+            "from %d agents (rho=%.2f, own=%d)",
+            rl.agent_id, len(social_transitions), len(gaed),
+            hebbian_graph.config.social_replay_rho, len(rl.buffer),
         )
     return social_transitions
+
+
+def _gae_on_copy(rl: "RLLayer", buf_j) -> list:
+    """Deep-copy a neighbour buffer's transitions and compute GAE on the copy.
+
+    Baseline switch mirrors the owner's own update: centralised mode uses
+    ``old_value_global`` (the shared critic's V_global, identical for all
+    agents at a step) with the critic re-evaluating the last joint state as
+    bootstrap; independent mode uses the neighbour's stored ``old_value``
+    (its value head's V(s) at selection time) throughout — including as the
+    bootstrap, matching the codebase's V(s_T) ≈ V(s_{T-1}) approximation in
+    ``_bootstrap_last_value`` without needing the neighbour's value head.
+    """
+    import copy
+
+    from rl_layer.trajectory_buffer import RolloutBuffer
+
+    tmp = RolloutBuffer(max_size=buf_j.max_size)
+    tmp._buf = copy.deepcopy(buf_j.get_all())
+    last = tmp._buf[-1]
+    if last.done:
+        last_value = 0.0
+    elif rl._use_centralized and last.joint_state is not None:
+        last_value = float(rl.centralized_critic.evaluate(last.joint_state))
+    elif rl._use_centralized and last.old_value_global is not None:
+        last_value = last.old_value_global
+    else:
+        last_value = last.old_value
+    tmp.compute_gae(
+        rl.config.gamma, rl.config.gae_lambda, last_value,
+        use_global_value=rl._use_centralized,
+    )
+    return tmp.get_all()
 
 
 def _anneal_entropy(rl: "RLLayer") -> float:

@@ -870,17 +870,24 @@ class HebbianSocialGraph:
     ) -> List[Tuple[int, int]]:
         """Compute social replay sample indices for agent_i.
 
-        Implements Eq. 7 from the thesis proposal.  Returns a list of
-        (buffer_idx, agent_j) pairs to sample from neighbour buffers.
-        The number of samples from agent_j is proportional to w̄ij * ρ.
-        Agent_i's own buffer gets weight (1-ρ).
+        Implements the weight-gated experience-sharing mixture (Eq. 7):
+
+            (o,a,r,o') ~ (1-ρ)·D_i + ρ·Σ_{j≠i} w̄ij·D_j
+
+        as sample COUNTS over a pool that already contains all of D_i: with
+        n own transitions, m = n·ρ/(1-ρ) neighbour samples make the social
+        fraction of the pool exactly m/(n+m) = ρ. Per-neighbour allocation
+        is proportional to w̄ij (Eq. 6, normalised over ALL k≠i — mass on
+        excluded weak bonds is simply not sampled, the sparsity
+        approximation). Returns (buffer_idx, agent_j) pairs.
 
         Agents with wij < 0.05 are excluded to keep the graph sparse.
 
         Parameters
         ----------
         agent_i : int
-        buffer_sizes : list of ints (transitions per agent)
+        buffer_sizes : list of ints, one per agent INCLUDING agent_i
+            (the caller supplies its own buffer size at position agent_i).
         rho : float, optional (defaults to config.social_replay_rho)
 
         Returns
@@ -895,13 +902,21 @@ class HebbianSocialGraph:
 
         if rho <= 0.0:
             return []
+        # ρ→1 would request an unbounded neighbour pool; clamp so the
+        # mixture stays defined (0.9 → at most 9n neighbour samples).
+        if rho >= 0.9:
+            logger.warning(
+                "social replay rho=%.2f clamped to 0.9 (rho must be < 1 "
+                "for the (1-rho)/rho mixture to be finite)", rho,
+            )
+            rho = 0.9
 
         w_bar = self.get_normalized_weights(agent_i)
         N = self.config.num_agents
 
-        # Total samples from neighbours = rho * own_buffer_size
+        # m = n·ρ/(1-ρ): neighbour samples so the pool is exactly ρ social.
         own_size = buffer_sizes[agent_i] if agent_i < len(buffer_sizes) else 0
-        total_neighbour_samples = int(rho * own_size)
+        total_neighbour_samples = int(round(own_size * rho / (1.0 - rho)))
         if total_neighbour_samples <= 0:
             return []
 

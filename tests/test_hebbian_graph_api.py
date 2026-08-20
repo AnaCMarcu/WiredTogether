@@ -210,8 +210,10 @@ def test_social_replay_excludes_weak_bonds(hcfg):
         [[0.0, 0.04, 0.5], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=np.float32
     )
     pairs = g.get_social_replay_indices(0, [10, 10, 10], rho=0.5)
-    # total neighbour samples = int(.5*10) = 5; w_bar[2] = .5/.54 -> int(4.63) = 4
-    assert len(pairs) == 4
+    # Mixture-exact: m = round(10·.5/(1-.5)) = 10 neighbour samples so the
+    # pool (10 own + m) is ρ social; w̄[2] = .5/.54 → int(9.26) = 9. The
+    # excluded weak bond's w̄ mass (j=1) is dropped, not reallocated.
+    assert len(pairs) == 9
     assert all(j == 2 for _, j in pairs)
     assert all(0 <= idx < 10 for idx, _ in pairs)
 

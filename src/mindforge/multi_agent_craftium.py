@@ -220,8 +220,12 @@ def parse_args():
                         help="λ passive decay rate")
     parser.add_argument("--hebbian-beta", type=float, default=1.0,
                         help="β modulation sensitivity")
-    parser.add_argument("--hebbian-rho", type=float, default=0.3,
-                        help="ρ social replay blend factor")
+    parser.add_argument("--hebbian-rho", type=float, default=0.0,
+                        help="ρ social replay blend factor (Eq. 7 weight-gated "
+                             "experience sharing). 0 = off (paper default; "
+                             "matches HebbianConfig). Requires --rl and "
+                             "--hebbian; e.g. 0.3 makes ~30%% of each PPO "
+                             "pool bond-weighted neighbour transitions.")
     parser.add_argument("--hebbian-gamma", type=float, default=0.2,
                         help="γ reward diffusion strength")
     parser.add_argument("--hebbian-init-weight", type=float, default=0.1,

@@ -68,8 +68,11 @@ class HebbianConfig:
     failure_grace_threshold: float = 0.3  # F_ij value where grace ends
     failure_ltp_lr: float = 0.015         # bonus LTP rate (3× ltd_lr by default)
 
-    # ── Social replay (Eq. 7) ──
-    social_replay_rho: float = 0.0  # was 0.3 — disabled until IS correction is added
+    # ── Social replay (Eq. 7 weight-gated experience sharing) ──
+    # 0.0 = off (the evaluated-system default; exp30/exp31 opt in at 0.3).
+    # Off-policy correction is PPO's clipped ratio π_i/π_j — see
+    # rl_layer.ppo_update._collect_social_replay for the full argument.
+    social_replay_rho: float = 0.0
 
     # ── Reward diffusion (Eq. 8) ── (shared by ALL modes)
     reward_diffusion_gamma: float = 0.2  # γ
