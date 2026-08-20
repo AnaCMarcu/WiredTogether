@@ -64,6 +64,58 @@ function five_chambers.cell_teleport_pos(i)
     }
 end
 
+-- Deterministic, collision-free placement of agent i (0-based) inside a
+-- rectangle: scan z-rows south→north and x west→east, skip every tile in
+-- `blocked`, and return the i-th free tile.
+--
+-- Why a grid and not a linear spread: the chambers are narrow (Ch2 and Ch5
+-- interiors are only 7 columns wide), so the single-row
+-- `math.floor(x_min + frac*(x_max-x_min) + 0.5)` spread collapses onto
+-- duplicate columns once N exceeds the column count — at N=9 the Ch2/Ch5
+-- rescue teleports landed FOUR pairs of agents on the same tile, and Ch4
+-- landed two. Minetest then resolves the overlap by push-out, which is the
+-- documented source of agents being launched into the air after a
+-- reposition. A grid gives every agent its own tile up to the rectangle's
+-- capacity.
+--
+-- Falls back to the first tile if i exceeds the free-tile count, so the
+-- caller never has to handle nil.
+local function grid_slot(i, x_min, x_max, z_min, z_max, blocked)
+    local n_free = 0
+    for z = z_min, z_max do
+        for x = x_min, x_max do
+            local free = true
+            if blocked then
+                for _, b in ipairs(blocked) do
+                    if b.x == x and b.z == z then
+                        free = false
+                        break
+                    end
+                end
+            end
+            if free then
+                if n_free == i then return {x = x, z = z} end
+                n_free = n_free + 1
+            end
+        end
+    end
+    return {x = x_min, z = z_min}
+end
+
+-- Tiles that are solid at agent height in Ch2: each anvil sits on a
+-- `five_chambers:anvil_pedestal` at FLOOR_Y+1, exactly where an agent
+-- stands. anvil_positions() lives in anvil.lua (dofile'd after this file),
+-- so it is resolved at CALL time, not load time.
+local function ch2_blocked_tiles()
+    local blocked = {}
+    if five_chambers.anvil_positions then
+        for _, info in ipairs(five_chambers.anvil_positions()) do
+            table.insert(blocked, {x = info.pos.x, z = info.pos.z})
+        end
+    end
+    return blocked
+end
+
 -- Returns the Ch1 spawn position for agent index i.
 -- Uses the plan-specified corner spawns for N=3; distributes linearly otherwise.
 -- Y is CH1_DIRT_Y + 1 — agents stand on the dirt layer, not the bedrock subfloor.
@@ -118,14 +170,24 @@ function five_chambers.ch2_fallback_spawn_pos(i)
        and five_chambers.CH2_FALLBACK_SPAWNS_3[i] then
         return five_chambers.CH2_FALLBACK_SPAWNS_3[i]
     end
-    -- Generic: spread along z=CH2.z0+2, X across the chamber width.
-    local x_min = five_chambers.CH2.x0 + 2
-    local x_max = five_chambers.CH2.x1 - 2
+    local c = five_chambers.CH2
+    if five_chambers.TEAM_SCALING then
+        -- Ch2's interior is 7 columns (x=3..9), so a single row cannot hold
+        -- N>7. Three rows (z=19..21) give 21 tiles minus the Row-A anvil
+        -- pedestal, comfortably covering N=9, and keep the team clustered
+        -- around the anvils they have to co-dig.
+        local slot = grid_slot(i, c.x0 + 1, c.x1 - 1, c.z0 + 2, c.z0 + 4,
+                               ch2_blocked_tiles())
+        return {x = slot.x, y = five_chambers.FLOOR_Y + 1, z = slot.z}
+    end
+    -- Legacy: single-row linear spread (duplicates columns for N>=6).
+    local x_min = c.x0 + 2
+    local x_max = c.x1 - 2
     local frac  = (N == 1) and 0.5 or (i / (N - 1))
     return {
         x = math.floor(x_min + frac * (x_max - x_min) + 0.5),
         y = five_chambers.FLOOR_Y + 1,
-        z = five_chambers.CH2.z0 + 2,
+        z = c.z0 + 2,
     }
 end
 
@@ -135,6 +197,15 @@ end
 function five_chambers.ch4_fallback_spawn_pos(i)
     local N = five_chambers.NUM_AGENTS
     local c = five_chambers.CH4
+    if five_chambers.TEAM_SCALING then
+        -- 9 columns (x=2..10) x 3 rows (z=49..51) = 27 tiles; the linear
+        -- spread stacked two pairs at N=9. Zombies are entities, not
+        -- blocks, and only spawn once an agent is detected in Ch4 (i.e.
+        -- after this teleport), so no tiles are excluded.
+        local slot = grid_slot(i, c.x0 + 1, c.x1 - 1, c.z0 + 2, c.z0 + 4, nil)
+        return {x = slot.x, y = five_chambers.FLOOR_Y + 1, z = slot.z}
+    end
+    -- Legacy: single-row linear spread (duplicates columns for N>=9).
     local x_min = c.x0 + 2
     local x_max = c.x1 - 2
     local frac  = (N == 1) and 0.5 or (i / (N - 1))
@@ -151,6 +222,16 @@ end
 function five_chambers.ch5_fallback_spawn_pos(i)
     local N = five_chambers.NUM_AGENTS
     local c = five_chambers.CH5
+    if five_chambers.TEAM_SCALING then
+        -- Same 7-column squeeze as Ch2 (x=3..9): the linear spread stacked
+        -- four pairs at N=9. Rows z=61..63 give 21 tiles; the boss's spawn
+        -- tile is skipped so nobody materialises inside it.
+        local boss_z = math.floor((c.z0 + c.z1) / 2)
+        local slot = grid_slot(i, c.x0 + 1, c.x1 - 1, c.z0 + 2, c.z0 + 4,
+                               {{x = 6, z = boss_z}})
+        return {x = slot.x, y = five_chambers.FLOOR_Y + 1, z = slot.z}
+    end
+    -- Legacy: single-row linear spread (duplicates columns for N>=6).
     local x_min = c.x0 + 2
     local x_max = c.x1 - 2
     local frac  = (N == 1) and 0.5 or (i / (N - 1))

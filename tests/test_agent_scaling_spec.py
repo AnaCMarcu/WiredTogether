@@ -155,6 +155,82 @@ def test_generic_ch1_spawns_clear_of_walls(lua_root, n):
         assert 2 <= x <= 13, f"N={n}: agent_{i} spawns at x={x}, <2 from a wall"
 
 
+def _grid_slot(i, x0, x1, z0, z1, blocked):
+    """Mirrors util.lua's grid_slot: i-th free tile, z-rows then x-columns."""
+    n = 0
+    for z in range(z0, z1 + 1):
+        for x in range(x0, x1 + 1):
+            if (x, z) in blocked:
+                continue
+            if n == i:
+                return (x, z)
+            n += 1
+    return (x0, z0)
+
+
+def _chamber_bounds(config_text: str, name: str) -> dict:
+    m = re.search(
+        rf"five_chambers\.{name}\s*=\s*\{{\s*x0=(-?\d+),\s*x1=(-?\d+),"
+        rf"\s*z0=(-?\d+),\s*z1=(-?\d+)\s*\}}", config_text)
+    assert m, f"{name} bounds not parsed"
+    return dict(zip(("x0", "x1", "z0", "z1"), map(int, m.groups())))
+
+
+@pytest.mark.parametrize("n", [2, 3, 4, 5, 6, 9])
+def test_rescue_teleports_never_stack_agents(lua_root, n):
+    """The Ch1→Ch2 / Ch3→Ch4 / Ch4→Ch5 rescue teleports fire unconditionally
+    once per chamber per episode. Two agents materialising on ONE tile makes
+    the engine resolve the overlap by push-out — the documented cause of
+    agents being launched into the air after a reposition.
+
+    The legacy single-row spread collapses onto duplicate columns once N
+    exceeds the (narrow) chamber width: at N=9 Ch2/Ch5 stacked four pairs
+    each and Ch4 stacked two. Scaling mode uses a grid instead.
+    """
+    config = _lua(lua_root, "config.lua")
+    ch2 = _chamber_bounds(config, "CH2")
+    ch4 = _chamber_bounds(config, "CH4")
+    ch5 = _chamber_bounds(config, "CH5")
+
+    # Ch2: anvil pedestals are solid at agent height (FLOOR_Y+1).
+    anvil_x = (ch2["x0"] + ch2["x1"]) // 2
+    ch2_blocked = {(anvil_x, ch2["z0"] + 2), (anvil_x, ch2["z0"] + 5)}
+    boss_tile = (6, (ch5["z0"] + ch5["z1"]) // 2)
+
+    for label, (c, blocked) in {
+        "ch2": (ch2, ch2_blocked),
+        "ch4": (ch4, set()),
+        "ch5": (ch5, {boss_tile}),
+    }.items():
+        tiles = [
+            _grid_slot(i, c["x0"] + 1, c["x1"] - 1, c["z0"] + 2, c["z0"] + 4,
+                       blocked)
+            for i in range(n)
+        ]
+        assert len(set(tiles)) == n, (
+            f"N={n} {label}: rescue teleport stacks agents — {tiles}")
+        for t in tiles:
+            assert t not in blocked, (
+                f"N={n} {label}: agent teleported onto solid tile {t}")
+            assert c["x0"] < t[0] < c["x1"], f"N={n} {label}: {t} outside x"
+            assert c["z0"] < t[1] < c["z1"], f"N={n} {label}: {t} outside z"
+
+
+def test_rescue_teleports_gated_by_team_scaling(lua_root):
+    """Each fallback keeps its legacy single-row branch behind the gate, so
+    pre-scaling suites reproduce exactly."""
+    util = _lua(lua_root, "util.lua")
+    for fn in ("ch2_fallback_spawn_pos", "ch4_fallback_spawn_pos",
+               "ch5_fallback_spawn_pos"):
+        body = util[util.index(f"function five_chambers.{fn}"):]
+        body = body[:body.index("\nend")]
+        assert "five_chambers.TEAM_SCALING" in body, f"{fn} not gated"
+        assert "grid_slot(" in body, f"{fn} missing grid placement"
+        # Legacy formula still present for the switch-off path.
+        assert "math.floor(x_min + frac * (x_max - x_min) + 0.5)" in body, (
+            f"{fn} lost its legacy linear spread")
+
+
 @pytest.mark.parametrize("n", [2, 4, 5, 6, 9])
 def test_generic_ch1_spawns_near_a_breakable(lua_root, n):
     """Every agent starts within ~3.5 blocks of a tree or stone, so the
