@@ -72,22 +72,41 @@ function five_chambers.ch1_spawn_pos(i)
     if N == 3 and five_chambers.CH1_SPAWNS_3 and five_chambers.CH1_SPAWNS_3[i] then
         return five_chambers.CH1_SPAWNS_3[i]
     end
-    -- Generic (N ~= 3): spread along X:1-10 on top of the dirt layer.
-    -- Row choice is gated by TEAM_SCALING (config.lua / WT_TEAM_SCALING):
-    --   * legacy suites (switch off): the original Z=5 row, unchanged —
-    --     the N=2 pair and N=6 transplant runs reproduce exactly. That row
-    --     puts some spawns inside the 2-high stone pillars at (3,5)/(7,5)
-    --     (e.g. N=4 -> x=7, N=5/6/9 -> x=3), wedging the agent in stone.
-    --   * scaling suite (switch on): Z=12, the one row with NO solid
-    --     resources. Trees/stones/animals all sit at z<=9, and the nearest
-    --     resources (sheep (3,9), tree (7,9), chicken (9,9), stone (5,8))
-    --     stay within ~3 blocks of the row.
-    local z_row = five_chambers.TEAM_SCALING and 12 or 5
+    -- Generic (N ~= 3) spawn row, gated by TEAM_SCALING (config.lua /
+    -- WT_TEAM_SCALING) so legacy suites are bit-for-bit unchanged.
     local frac = (N == 1) and 0.5 or (i / (N - 1))
+    local y = (five_chambers.CH1_DIRT_Y or 11) + 1
+    if five_chambers.TEAM_SCALING then
+        -- Scaling suite: z=10, x in [2,10]. This row satisfies the same
+        -- three criteria CH1_SPAWNS_3 was hand-tuned for:
+        --   1. No solid tile underfoot. All trunks/stone pillars sit at
+        --      z<=9, so z=10 is clear (the legacy z=5 row wedges agents
+        --      inside the pillars at (3,5)/(7,5) for N=4,5,6,9).
+        --   2. >=2 blocks from every bedrock wall. x starts at 2, not 1:
+        --      a wall 1 block ahead fills the agent's first frame with
+        --      grey bedrock, which the LLM reliably misreads as
+        --      mcl_core:stone and Digs -- no break, no milestone. (An
+        --      earlier z=12 row failed BOTH this and criterion 3: it put
+        --      every agent 3 blocks off the north wall with no resource
+        --      in reach, and the N=2 smoke run reported exactly that --
+        --      "solid brick wall directly in front of me".)
+        --   3. A breakable target within ~3 blocks. z=10 hugs the top of
+        --      the resource band, so trees (7,9)/(2,8) and stones
+        --      (5,8)/(8,7) are 1.0-3.2 away for every agent.
+        -- x spans [2,10] rather than [3,10] so the N=9 spread stays
+        -- collision-free (2..10 is exactly 9 distinct columns).
+        return {
+            x = math.floor(2 + frac * 8 + 0.5),
+            y = y,
+            z = 10,
+        }
+    end
+    -- Legacy: the original Z=5 row, spread along X:1-10. Reproduces the
+    -- N=2 pair-bonding and N=6 transplant runs exactly.
     return {
         x = math.floor(1 + frac * 9 + 0.5),
-        y = (five_chambers.CH1_DIRT_Y or 11) + 1,
-        z = z_row,
+        y = y,
+        z = 5,
     }
 end
 

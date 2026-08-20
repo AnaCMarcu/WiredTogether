@@ -8,9 +8,11 @@ assert the contracts the scaling experiment depends on —
    unset), so the Ch4 environment can be held constant across team sizes
    while every legacy suite stays bit-for-bit unchanged.
 2. mobs.lua spawns min(CH4_MOB_COUNT or NUM_AGENTS, #positions) zombies.
-3. util.lua's generic Ch1 spawn row (N ≠ 3) is gated: legacy z=5 unchanged,
-   scaling-mode z=12 collides with no solid resource (the z=5 row puts
-   spawns inside the 2-high stone pillars at (3,5)/(7,5) for several N).
+3. util.lua's generic Ch1 spawn row (N ≠ 3) is gated: legacy x∈[1,10]/z=5
+   unchanged, while scaling mode uses x∈[2,10]/z=10 and satisfies the three
+   criteria CH1_SPAWNS_3 was hand-tuned for — no solid tile underfoot (the
+   z=5 row wedges agents inside the stone pillars at (3,5)/(7,5) for
+   N=4,5,6,9), ≥2 blocks from every wall, and a breakable within ~3 blocks.
 """
 
 import math
@@ -75,29 +77,36 @@ def _positions(config_text: str, table_name: str) -> list[tuple[int, int]]:
             for x, z in re.findall(r"\{x=(\d+),z=(\d+)\}", block)]
 
 
-def _generic_spawn_rows(util_text: str) -> tuple[int, int]:
-    """(scaling_row, legacy_row) used by the generic (N != 3) branch of
-    ch1_spawn_pos: `local z_row = five_chambers.TEAM_SCALING and <s> or <l>`."""
+def _spawn_branch(util_text: str, scaling: bool) -> tuple[int, int, int]:
+    """(x_base, x_span, z_row) for one branch of ch1_spawn_pos's generic
+    (N != 3) path: `x = math.floor(<base> + frac * <span> + 0.5)`, `z = <row>`.
+
+    The scaling branch is the one guarded by `if five_chambers.TEAM_SCALING`;
+    the legacy branch is the fall-through after it.
+    """
     fn = util_text[util_text.index("function five_chambers.ch1_spawn_pos"):]
-    fn = fn[:fn.index("\nend")]
+    guard = fn.index("if five_chambers.TEAM_SCALING then")
+    block = fn[guard:fn.index("\n    end", guard)] if scaling else fn[fn.index("\n    end", guard):]
     m = re.search(
-        r"local z_row = five_chambers\.TEAM_SCALING and (\d+) or (\d+)", fn)
-    assert m, "generic ch1_spawn_pos row must be gated by TEAM_SCALING"
-    return int(m.group(1)), int(m.group(2))
+        r"x = math\.floor\((\d+) \+ frac \* (\d+) \+ 0\.5\),\s*\n"
+        r"\s*y = y,\s*\n\s*z = (\d+),", block)
+    assert m, f"generic ch1_spawn_pos {'scaling' if scaling else 'legacy'} branch not parsed"
+    return int(m.group(1)), int(m.group(2)), int(m.group(3))
 
 
-def _generic_spawn_x(i: int, n: int) -> int:
-    # Mirrors util.lua: math.floor(1 + frac * 9 + 0.5), frac = i/(N-1).
+def _generic_spawn_x(i: int, n: int, base: int, span: int) -> int:
+    # Mirrors util.lua: math.floor(base + frac * span + 0.5), frac = i/(N-1).
     frac = 0.5 if n == 1 else i / (n - 1)
-    return math.floor(1 + frac * 9 + 0.5)
+    return math.floor(base + frac * span + 0.5)
 
 
-def test_generic_ch1_spawn_rows_gated(lua_root):
-    scaling_row, legacy_row = _generic_spawn_rows(_lua(lua_root, "util.lua"))
-    assert scaling_row == 12
-    # Legacy pin: the pre-scaling suites (incl. the N=2 pair and N=6
-    # transplant runs) must keep their original z=5 row.
-    assert legacy_row == 5
+def test_generic_ch1_spawn_branches_gated(lua_root):
+    util = _lua(lua_root, "util.lua")
+    # Scaling branch: the resource-adjacent, wall-clear row.
+    assert _spawn_branch(util, scaling=True) == (2, 8, 10)
+    # Legacy pin: the pre-scaling suites (incl. the N=2 pair-bonding and
+    # N=6 transplant runs) must keep their original x∈[1,10], z=5 row.
+    assert _spawn_branch(util, scaling=False) == (1, 9, 5)
 
 
 @pytest.mark.parametrize("n", [2, 4, 5, 6, 9])
@@ -107,8 +116,7 @@ def test_generic_ch1_spawns_avoid_solid_resources(lua_root, n):
     entities — not checked. (The legacy z=5 row DOES collide for some N —
     that is the historical behavior the gate preserves.)"""
     config = _lua(lua_root, "config.lua")
-    util = _lua(lua_root, "util.lua")
-    z_row, _legacy = _generic_spawn_rows(util)
+    base, span, z_row = _spawn_branch(_lua(lua_root, "util.lua"), scaling=True)
 
     trees = _positions(config, "CH1_TREE_POSITIONS")
     stones = _positions(config, "CH1_STONE_POSITIONS")
@@ -116,17 +124,50 @@ def test_generic_ch1_spawns_avoid_solid_resources(lua_root, n):
     solid = set(trees) | set(stones)
 
     for i in range(n):
-        tile = (_generic_spawn_x(i, n), z_row)
+        tile = (_generic_spawn_x(i, n, base, span), z_row)
         assert tile not in solid, (
             f"N={n}: agent_{i} generic spawn {tile} sits inside a solid "
             f"Ch1 resource")
 
 
-def test_generic_ch1_spawns_inside_chamber(lua_root):
-    """Spawn tiles stay inside Ch1's interior (walls at x/z = 0 and 15)."""
-    util = _lua(lua_root, "util.lua")
-    for z_row in _generic_spawn_rows(util):
-        assert 1 <= z_row <= 14
-    for n in (2, 4, 5, 6, 9):
-        for i in range(n):
-            assert 1 <= _generic_spawn_x(i, n) <= 14
+@pytest.mark.parametrize("n", [2, 4, 5, 6, 9])
+def test_generic_ch1_spawns_are_distinct(lua_root, n):
+    """Two agents must never share a spawn tile (the engine would have to
+    push them apart, and one starts inside the other)."""
+    base, span, _ = _spawn_branch(_lua(lua_root, "util.lua"), scaling=True)
+    xs = [_generic_spawn_x(i, n, base, span) for i in range(n)]
+    assert len(set(xs)) == n, f"N={n}: duplicate spawn columns {xs}"
+
+
+@pytest.mark.parametrize("n", [2, 4, 5, 6, 9])
+def test_generic_ch1_spawns_clear_of_walls(lua_root, n):
+    """>=2 blocks from every bedrock wall (walls at x/z = 0 and 15).
+
+    A wall 1 block ahead fills the agent's first frame with grey bedrock,
+    which the LLM reliably misreads as mcl_core:stone and Digs — no break,
+    no milestone. This is the criterion the earlier z=12 row violated (and
+    the N=2 smoke run reported it verbatim).
+    """
+    base, span, z_row = _spawn_branch(_lua(lua_root, "util.lua"), scaling=True)
+    assert 2 <= z_row <= 13
+    for i in range(n):
+        x = _generic_spawn_x(i, n, base, span)
+        assert 2 <= x <= 13, f"N={n}: agent_{i} spawns at x={x}, <2 from a wall"
+
+
+@pytest.mark.parametrize("n", [2, 4, 5, 6, 9])
+def test_generic_ch1_spawns_near_a_breakable(lua_root, n):
+    """Every agent starts within ~3.5 blocks of a tree or stone, so the
+    first 'scan the room' actually has a dig target in it (the third
+    CH1_SPAWNS_3 criterion)."""
+    config = _lua(lua_root, "config.lua")
+    base, span, z_row = _spawn_branch(_lua(lua_root, "util.lua"), scaling=True)
+    solid = set(_positions(config, "CH1_TREE_POSITIONS")) \
+        | set(_positions(config, "CH1_STONE_POSITIONS"))
+
+    for i in range(n):
+        x = _generic_spawn_x(i, n, base, span)
+        nearest = min(math.dist((x, z_row), s) for s in solid)
+        assert nearest <= 3.5, (
+            f"N={n}: agent_{i} at ({x},{z_row}) has no breakable within "
+            f"3.5 blocks (nearest {nearest:.1f})")
