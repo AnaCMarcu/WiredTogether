@@ -3062,6 +3062,11 @@ async def run(args):
                 )
 
             # ── Phase 3: Record (diffused) rewards for metrics + RL ──
+            # Social-replay snapshot, populated lazily by the FIRST agent to
+            # update this step: updates clear live buffers in agent order,
+            # so later agents would otherwise sample from already-emptied
+            # neighbours (agent N-1 would never receive shared experience).
+            _rl_replay_snapshot = None
             for agent_id, agent in enumerate(agents):
                 agent_name = f"agent_{agent_id}"
                 if environment._terminations.get(agent_name, False):
@@ -3123,13 +3128,21 @@ async def run(args):
                     # MAPPO update when enough steps collected.
                     # Pass all agents' buffers so social replay (Eq. 7) can
                     # mix in neighbour transitions weighted by Hebbian bonds.
+                    # Buffers are snapshotted once per step (first updater)
+                    # so agent order does not decide who still has
+                    # neighbours' experience.
                     if agent.rl_layer.should_update():
+                        if _rl_replay_snapshot is None:
+                            _rl_replay_snapshot = {
+                                aid: agents[aid].rl_layer.buffer.snapshot()
+                                for aid in range(num_agents)
+                                if agents[aid].rl_layer
+                                and agents[aid].rl_layer.enabled
+                            }
                         neighbour_buffers = {
-                            aid: agents[aid].rl_layer.buffer
-                            for aid in range(num_agents)
+                            aid: snap
+                            for aid, snap in _rl_replay_snapshot.items()
                             if aid != agent_id
-                            and agents[aid].rl_layer
-                            and agents[aid].rl_layer.enabled
                         }
                         update_info = agent.rl_layer.update(
                             neighbour_buffers=neighbour_buffers,

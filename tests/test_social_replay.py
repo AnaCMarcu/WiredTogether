@@ -160,3 +160,46 @@ def test_extra_transitions_enter_the_minibatch_pool():
             for tr in batch]
     assert len(seen) == len(rl.buffer) + len(social)
     assert any(not tr.prompt_text.startswith("prompt i") for tr in seen)
+
+
+# ── 4. Step-scoped snapshots (update-order asymmetry regression) ────────────
+
+def test_snapshot_survives_clear():
+    buf = _filled_buffer(8)
+    snap = buf.snapshot()
+    buf.clear()
+    assert len(buf) == 0
+    assert len(snap) == 8
+    assert all(tr.prompt_text.startswith("prompt j") for tr in snap.get_all())
+
+
+def test_snapshot_shares_transitions_without_copy():
+    """Shallow by design: the deep copy happens in _gae_on_copy, once, only
+    for neighbours that were actually selected."""
+    buf = _filled_buffer(4)
+    snap = buf.snapshot()
+    assert all(a is b for a, b in zip(buf.get_all(), snap.get_all()))
+    assert snap.max_size == buf.max_size
+
+
+def test_last_agent_still_gets_replay_from_snapshots():
+    """Simulates the call-site sequence that used to starve agent N-1:
+    agents update in index order and each update clears its live buffer.
+    With per-step snapshots, the last agent still samples full neighbours."""
+    graph = _graph(0.3, [[0.0, 0.5, 0.5], [0.5, 0.0, 0.5], [0.5, 0.5, 0.0]])
+    live = {aid: _filled_buffer(16, agent_tag=f"a{aid}-") for aid in range(3)}
+
+    # First updater takes the snapshot of everyone …
+    snapshot = {aid: buf.snapshot() for aid, buf in live.items()}
+
+    collected = {}
+    for agent_id in range(3):  # … then updates run (and clear) in order.
+        rl = _FakeRL(agent_id=agent_id, own_size=16)
+        neighbours = {aid: s for aid, s in snapshot.items() if aid != agent_id}
+        collected[agent_id] = _collect_social_replay(rl, neighbours, graph)
+        live[agent_id].clear()  # what update() does to the live buffer
+
+    for agent_id, out in collected.items():
+        assert len(out) > 0, f"agent {agent_id} starved of social replay"
+        tags = {tr.prompt_text.split("-")[0] for tr in out}
+        assert f"prompt a{agent_id}" not in tags  # never samples itself

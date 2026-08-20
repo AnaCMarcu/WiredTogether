@@ -185,6 +185,21 @@ class RolloutBuffer:
     def get_all(self) -> List[Transition]:
         return list(self._buf)
 
+    def snapshot(self) -> "RolloutBuffer":
+        """Shallow snapshot: a new buffer sharing the same Transition objects.
+
+        Used by the social-replay call site so every agent updating in the
+        same step samples neighbours from the SAME pre-update view — updates
+        clear live buffers in agent order, which would otherwise leave
+        later-indexed agents with already-emptied neighbours (the last agent
+        would never receive any shared experience). The snapshot is
+        insulated from ``clear()`` (new list) but shares Transitions; do not
+        mutate them — ``ppo_update._gae_on_copy`` deep-copies before GAE.
+        """
+        snap = RolloutBuffer(max_size=self.max_size)
+        snap._buf = list(self._buf)
+        return snap
+
     def clear(self) -> None:
         self._buf.clear()
         self._pending = None

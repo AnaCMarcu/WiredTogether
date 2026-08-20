@@ -75,7 +75,11 @@ def run_ppo_update(
                     value_loss_enabled=not rl._use_centralized,
                     scaler=scaler,
                 )
-            if epoch_i == 0 and not _first_batch_checked and info.get("n_kept", 0) > 0:
+            # Ratio sanity check assumes on-policy data: with social replay
+            # mixed in, first-epoch ratios are legitimately π_i/π_j ≠ 1, so
+            # the check would cry "tokenization inconsistent" spuriously.
+            if (epoch_i == 0 and not _first_batch_checked
+                    and not social_transitions and info.get("n_kept", 0) > 0):
                 _first_batch_checked = True
                 r_mean = float(info.get("ratio_mean", 1.0))
                 if abs(r_mean - 1.0) > 0.05:
@@ -112,6 +116,10 @@ def run_ppo_update(
     rl._update_count += 1
     rl.buffer.clear()
     all_info["entropy_coef"] = entropy_coef
+    # How many bond-weighted neighbour transitions entered this update's
+    # pool (0 when replay is off) — lands in record_rl_update/wandb so the
+    # analysis can verify the mixture actually fired per update.
+    all_info["social_replay_n"] = len(social_transitions)
 
     logger.info(
         "RLLayer agent %d update #%d: %s",
