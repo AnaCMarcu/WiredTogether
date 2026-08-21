@@ -74,13 +74,23 @@ fi
 
 # Per-N resources: each agent is a Luanti client + its share of LLM batch
 # state. 3 agents fit the 32GB/8cpu defaults (gemma suite); 6 clients needed
-# 64GB in expB_merged_transplant; 9 gets headroom on both axes. Wall time
-# grows with N too (more LLM calls per env step): keep qos=medium/36h up to
-# N=5, go long above. All overridable: MEM=… TIME=… QOS=… CPUS=….
+# 64GB in expB_merged_transplant; 9 gets headroom on both axes. GPU is NOT
+# the constraint -- the smokes measured 15.88 GB at N=9, identical to N=3,
+# because the model is shared rather than per-agent.
+#
+# Wall time is the real constraint and grows with N (more LLM calls per env
+# step). Measured on the 2026-08-20 smokes (base arm, 121 steps):
+#     N=2 -> 0.52 min/step, N=9 -> 1.86 min/step
+#     fit:  min/step ~= 0.14 + 0.19*N   (near-linear in N)
+# Projected for the full 3 ep x 500 steps = 1500 steps:
+#     N=2 13h   N=3 18h   N=4 23h   N=5 27h   N=6 32h   N=9 47h
+# N=4/5 sit on qos=long rather than medium: at 23-27h against medium's 36h
+# cap the margin was only 1.3-1.6x, and a job that hits the wall loses the
+# whole run. All overridable: MEM=… TIME=… QOS=… CPUS=….
 resources_for_n() {
     local n="$1"
     if   [ "$n" -le 3 ]; then R_MEM=32GB;  R_CPUS=8;  R_QOS=medium; R_TIME=36:00:00
-    elif [ "$n" -le 5 ]; then R_MEM=48GB;  R_CPUS=8;  R_QOS=medium; R_TIME=36:00:00
+    elif [ "$n" -le 5 ]; then R_MEM=48GB;  R_CPUS=8;  R_QOS=long;   R_TIME=72:00:00
     elif [ "$n" -le 6 ]; then R_MEM=64GB;  R_CPUS=10; R_QOS=long;   R_TIME=72:00:00
     else                      R_MEM=96GB;  R_CPUS=12; R_QOS=long;   R_TIME=96:00:00
     fi
