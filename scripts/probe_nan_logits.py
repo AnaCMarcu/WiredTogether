@@ -106,14 +106,26 @@ def build_inputs(processor, model, sys_chars, user_chars, size):
     image = PIL.Image.new("RGB", size, (110, 140, 90))
     messages = [
         {"role": "user", "content": [
+            {"type": "image", "image": image},
             {"type": "text", "text": sys_text + "\n\n" + user_text},
-            {"type": "image"},
         ]},
     ]
-    prompt = processor.apply_chat_template(messages, tokenize=False,
-                                           add_generation_prompt=True)
-    inputs = processor(text=[prompt], images=[image], padding=True,
-                       return_tensors="pt")
+    # ONE call does template + image processing, so the count of image
+    # placeholder tokens the template emits always matches the count of
+    # features the processor produces. Building text and pixels in two separate
+    # calls let them disagree — probe 12790126 died with
+    # "Image features and image tokens do not match, tokens: 266, features: 280"
+    # which was this probe's bug, not the agent's (the real runs pass 12b fine).
+    try:
+        inputs = processor.apply_chat_template(
+            messages, add_generation_prompt=True, tokenize=True,
+            return_dict=True, return_tensors="pt")
+    except (TypeError, ValueError, KeyError):
+        # Older processors reject tokenize/return_dict here.
+        prompt = processor.apply_chat_template(messages, tokenize=False,
+                                               add_generation_prompt=True)
+        inputs = processor(text=[prompt], images=[image], padding=True,
+                           return_tensors="pt")
     return inputs.to(model.device)
 
 
