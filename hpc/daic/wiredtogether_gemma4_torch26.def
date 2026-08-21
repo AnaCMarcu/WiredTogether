@@ -1,0 +1,212 @@
+Bootstrap: docker
+From: python:3.12-slim-bookworm
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Gemma 4 build with torch >= 2.6 — the LARGE-checkpoint variant.
+#
+# WHY A THIRD IMAGE: the 2026-08-20 pareto probe (job 12790125) showed that
+# gemma-4-26B-A4B-it and gemma-4-31B-it fail EVERY forward pass on
+# wiredtogether_gemma4.sif with
+#
+#     transformers/models/gemma4/modeling_gemma4.py:2415  create_masks_for_vision_model(
+#     transformers/models/gemma4/modeling_gemma4.py:2155  sliding_mask = create_causal_mask(
+#     transformers/masking_utils.py:960
+#       ValueError: Using `or_mask_function` or `and_mask_function` arguments
+#                   require torch>=2.6
+#
+# i.e. Gemma 4's VISION sliding-window mask path needs torch 2.6, and that image
+# has 2.5.1. In the real runs this surfaced downstream as a CUDA device-side
+# assert from torch.multinomial ("probability tensor contains inf/nan"), 100%
+# NoOp agents, and a normal-looking final_metrics.json — a silent failure.
+#
+# Why 2.5.1 and not something newer: wiredtogether_gemma4.def asks for
+# 'torch>=2.1.0' from --index-url .../whl/cu121, and cu121 wheels STOP at
+# 2.5.1 (2.6 moved to cu124/cu126). The floor pin looks permissive but is
+# capped by the index. The fix is the index, not the pin.
+#
+# e2b / e4b / 12b are NOT affected: they load modeling_gemma4_unified.py, a
+# different implementation that never reaches that mask code. They ran clean on
+# 2.5.1 (311/311 and 314/314 LLM calls answered), so wiredtogether_gemma4.sif
+# stays valid and byte-identical for every result already produced with it.
+#
+# The ONLY deliberate differences from wiredtogether_gemma4.def:
+#   - torch from the cu126 index, floor-pinned 'torch>=2.6'
+#   - a build-time guard that fails the build if torch < 2.6, so the exact bug
+#     this image exists to fix cannot silently come back
+#   - a build-time guard that BOTH gemma4 modeling modules import
+#
+# If the DAIC driver turns out to be too old for cu126 (it should not be —
+# A40 sm_86 and L40 sm_89 are both CUDA 12.6 targets, and CUDA 12.x has minor
+# version compatibility), drop to cu124, which also carries torch 2.6:
+#     --index-url https://download.pytorch.org/whl/cu124
+# ─────────────────────────────────────────────────────────────────────────────
+
+%labels
+    Author Ana Marcu (acmarcu@tudelft.nl)
+    Project WiredTogether
+    Description Multi-agent RL in Craftium/Luanti with LLM agents — Gemma 4 + torch>=2.6 build.
+
+%environment
+    export HF_HOME=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/models
+    export HF_HUB_CACHE=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/models/hub
+    export TRANSFORMERS_CACHE=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/models/transformers
+    export SENTENCE_TRANSFORMERS_HOME=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu/models/sentence_transformers
+    export PYTHONUNBUFFERED=1
+    export PYTHONDONTWRITEBYTECODE=1
+
+%post
+    set -eu
+
+    # Build-time env: keep pip quiet about being root and steer caches into /tmp.
+    export HOME=/tmp
+    export PIP_ROOT_USER_ACTION=ignore
+
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl wget git \
+        libgl1-mesa-dri libegl1 libgles2 \
+        libxext6 libxrender1 libxxf86vm1 libxi6 libxcursor1 libxrandr2 libxinerama1 \
+        libsm6 libglib2.0-0 \
+        libfreetype6 libsndfile1 \
+        build-essential \
+        xvfb xauth
+    # xvfb pulls in /usr/bin/Xvfb + /usr/bin/xvfb-run. xauth is a separate
+    # package that the Debian xvfb package does NOT pull in by default —
+    # but xvfb-run invokes it at startup and exits with "xauth command not
+    # found" without it. Both are required for the convenience wrapper.
+    # _common.sh also has a manual-Xvfb fallback path that doesn't need
+    # xauth, as a belt-and-braces safety net.
+    rm -rf /var/lib/apt/lists/*
+
+    pip install --no-cache-dir --upgrade pip wheel setuptools
+
+    # torch with CUDA 12.6. THE floor pin is load-bearing: Gemma 4's vision
+    # mask path calls create_causal_mask(or_mask_function=...), which
+    # transformers refuses on torch < 2.6. cu121 cannot satisfy it (its wheels
+    # end at 2.5.1), which is exactly how the older image ended up broken.
+    pip install --no-cache-dir \
+        --index-url https://download.pytorch.org/whl/cu126 \
+        'torch>=2.6' torchvision torchaudio
+
+    # craftium (cp312 wheel; bundles the luanti binary)
+    pip install --no-cache-dir \
+        https://github.com/mikelma/craftium/releases/download/v0.0.1/craftium-0.0.1-cp312-cp312-manylinux_2_28_x86_64.whl
+
+    # Patch the wheel's Python files with the fork's fixes (binary stays from
+    # the wheel). The wheel's _create_mt_dirs misses the `isfile()` branch and
+    # tries shutil.copytree on minetest.conf — fork has the corrected logic.
+    git clone --depth 1 -b daic-changes \
+        https://github.com/AnaCMarcu/craftium_wired_together.git /tmp/craftium-fork
+    install -m 0644 /tmp/craftium-fork/craftium/minetest.py \
+        /usr/local/lib/python3.12/site-packages/craftium/minetest.py
+    install -m 0644 /tmp/craftium-fork/craftium/multiagent_env.py \
+        /usr/local/lib/python3.12/site-packages/craftium/multiagent_env.py
+    rm -rf /tmp/craftium-fork
+
+    # WiredTogether deps (mirrors pyproject.toml).
+    # Pin floors only, EXCEPT gymnasium — craftium pins it to ==0.29.1.
+    pip install --no-cache-dir \
+        'gymnasium==0.29.1' \
+        'pettingzoo>=1.24.3' \
+        'numpy>=1.24.0' \
+        'pandas>=2.1.0' \
+        'scipy>=1.11.0' \
+        'networkx>=3.2' \
+        'hydra-core>=1.3.2' \
+        'rich>=13.7.0' \
+        'loguru>=0.7.2' \
+        'wandb>=0.16.0' \
+        'tensorboard>=2.15.0' \
+        'tqdm>=4.66.0' \
+        'tyro>=0.7.0' \
+        'python-dotenv>=1.0.0' \
+        'pydantic>=2.5.0' \
+        'imageio[ffmpeg]>=2.33.0' \
+        'opencv-python>=4.9.0' \
+        'matplotlib>=3.8.0' \
+        'sentence-transformers>=2.2.0' \
+        'autogen-agentchat>=0.6.0' \
+        'autogen-core>=0.6.0' \
+        'autogen-ext[openai,chromadb]>=0.6.0' \
+        'openai>=1.0.0' \
+        'chromadb>=1.0.0' \
+        'pillow>=10.0.0' \
+        'flask>=3.0.0' \
+        'peft>=0.10.0' \
+        'safetensors>=0.4.0' \
+        'fastapi>=0.100.0' \
+        'uvicorn>=0.20.0'
+
+    # Gemma 4 stack, installed last so nothing above pins transformers down.
+    # --upgrade-strategy only-if-needed so a transitive dep cannot quietly pull
+    # torch back below 2.6; the guard below catches it either way.
+    pip install --no-cache-dir --upgrade --upgrade-strategy only-if-needed \
+        transformers accelerate timm
+
+    # Fail the BUILD, not a 168 h run. Three things must hold:
+    #   1. torch >= 2.6            — the whole reason this image exists
+    #   2. gemma4 registered       — as in wiredtogether_gemma4.def
+    #   3. BOTH modeling modules import — 26b/31b use modeling_gemma4, while
+    #      e2b/e4b/12b use modeling_gemma4_unified; this image must serve both
+    #      so the size sweep can run on ONE software stack
+    python - <<'PY'
+import importlib
+import torch
+import transformers
+from packaging.version import Version
+from transformers.models.auto.configuration_auto import CONFIG_MAPPING_NAMES
+
+print(f"torch {torch.__version__} (CUDA {torch.version.cuda})")
+print(f"transformers {transformers.__version__}")
+
+if Version(torch.__version__.split("+")[0]) < Version("2.6"):
+    raise SystemExit(
+        f"torch {torch.__version__} < 2.6 — Gemma 4's vision mask path "
+        "(create_causal_mask with or_mask_function) will raise at every "
+        "forward pass. This is the exact bug this image exists to fix. "
+        "Check that the cu126 index served a 2.6+ wheel."
+    )
+
+gemma = sorted(k for k in CONFIG_MAPPING_NAMES if "gemma" in k)
+print(f"gemma configs: {gemma}")
+if not any("gemma4" in k or "gemma_4" in k for k in gemma):
+    raise SystemExit(
+        f"transformers {transformers.__version__} does not register a gemma4 "
+        f"architecture (found: {gemma}). Gemma 4 will not load — aborting build."
+    )
+
+for mod in ("transformers.models.gemma4.modeling_gemma4",
+            "transformers.models.gemma4_unified.modeling_gemma4_unified"):
+    try:
+        importlib.import_module(mod)
+        print(f"  import OK: {mod}")
+    except Exception as exc:
+        raise SystemExit(
+            f"cannot import {mod} ({type(exc).__name__}: {exc}). "
+            "26b/31b need modeling_gemma4; e2b/e4b/12b need "
+            "modeling_gemma4_unified. Both must work for a one-stack sweep."
+        )
+PY
+
+%runscript
+    exec "$@"
+
+%help
+    Apptainer image for WiredTogether on DAIC — Gemma 4 with torch >= 2.6.
+
+    Use this one for gemma-4-26B-A4B-it and gemma-4-31B-it, which fail on
+    wiredtogether_gemma4.sif (torch 2.5.1) at every forward pass. It also runs
+    e2b/e4b/12b, so the whole size sweep can share one software stack.
+
+    Build (from a compute node via sbatch, from the REPO ROOT):
+        sbatch hpc/daic/build_image_gemma4_torch26.sbatch
+
+    Verify it actually fixes the big checkpoints before committing GPU-months:
+        WT_IMAGE=$WORKSPACE/images/wiredtogether_gemma4_torch26.sif \
+        MODEL=gemma-4-31B-it CONFIGS=sdpa_auto \
+            sbatch hpc/daic/probe_nan.sbatch
+        # want: "logits finite : True" and a non-empty greedy/sample line
+
+    Then point runs at it without editing any sbatch file:
+        WT_IMAGE=$WORKSPACE/images/wiredtogether_gemma4_torch26.sif \
+        SIZES="26b 31b" bash hpc/daic/experiments/submit_pareto.sh
