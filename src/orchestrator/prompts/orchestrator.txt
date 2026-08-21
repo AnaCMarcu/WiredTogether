@@ -35,8 +35,7 @@ Respond with EXACTLY this JSON — ONE object, no extra text before or after it:
     "stall_counter": N
   }},
   "directives": {{
-    "agent_0": {{"comm_target": "agent_1", "help": "..."}},
-    "agent_1": {{"comm_target": "agent_0", "help": "..."}}
+{directives_example}
   }},
   "changed": true,
   "why": "<one sentence>"
@@ -45,4 +44,7 @@ Respond with EXACTLY this JSON — ONE object, no extra text before or after it:
 Structure rules — get these exactly right:
 - "stall_counter" goes INSIDE "ledger", alongside "task_facts" and "progress".
 - "directives", "changed" and "why" are SIBLINGS of "ledger", not inside it.
+- "directives" MUST have exactly ONE entry for EVERY living agent listed above
+  ({agent_names}) — all {n_agents} of them, no more and no fewer. A response
+  that omits any living agent is discarded in full.
 - Emit one complete JSON object and then STOP. Do not repeat or revise it.

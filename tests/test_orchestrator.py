@@ -8,6 +8,7 @@ pettingzoo, since orchestrate() imports it lazily.
 
 import asyncio
 import json
+import re
 import sys
 import types
 from types import SimpleNamespace
@@ -390,6 +391,56 @@ def test_prompt_renders_ledger_json():
     assert '"f1"' in text and '"stall_counter": 1' in text
     assert '"comm_target": "agent_1"' in text
     assert "step 8 -> 16" in text
+
+
+# ── Response-format example arity (regression, second smoke run) ────────
+# A hardcoded two-agent example was copied LITERALLY: the model emitted
+# directives for agent_0/agent_1 only and omitted agent_2, failing 11 of the
+# first 11 calls in runs/orchestrator_smoke seed_42.
+
+def _example_block(agent_names):
+    out = oprompt.format_prompt(
+        n_agents=len(agent_names), agent_names=agent_names,
+        last_call_step=-1, current_step=0, digest="d",
+        ledger=OrchestratorState().ledger, directives={},
+        stall_threshold=2,
+    )
+    start = out.index('"directives": {')
+    return out[start:out.index('"changed"', start)]
+
+
+def test_directives_example_covers_every_living_agent():
+    block = _example_block(LIVING)
+    for name in LIVING:
+        assert f'"{name}": {{"comm_target"' in block, name
+
+
+def test_directives_example_shrinks_with_the_living_set():
+    # agent_1 died: it must vanish from the example, not linger as a target.
+    block = _example_block(["agent_0", "agent_2"])
+    assert '"agent_1"' not in block
+    assert '"agent_0": {"comm_target": "agent_2"' in block
+    assert '"agent_2": {"comm_target": "agent_0"' in block
+
+
+def test_directives_example_never_targets_self():
+    for names in (["agent_0", "agent_1"], LIVING,
+                  [f"agent_{i}" for i in range(9)]):
+        for line in _example_block(names).splitlines():
+            m = re.match(r'\s*"(agent_\d+)":\s*\{"comm_target":\s*"(agent_\d+)"',
+                         line)
+            if m:
+                assert m.group(1) != m.group(2), line
+
+
+def test_prompt_states_the_required_directive_arity():
+    out = oprompt.format_prompt(
+        n_agents=3, agent_names=LIVING, last_call_step=-1, current_step=0,
+        digest="d", ledger=OrchestratorState().ledger, directives={},
+        stall_threshold=2,
+    )
+    assert "all 3 of them" in out
+    assert "agent_0, agent_1, agent_2" in out
 
 
 # ── Map render ───────────────────────────────────────────────────────────

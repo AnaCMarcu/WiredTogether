@@ -30,6 +30,31 @@ def _ledger_json(ledger: dict) -> str:
     return json.dumps(ledger, indent=1)
 
 
+def _build_directives_example(agent_names: list) -> str:
+    """Render the response-format example with the REAL living agent names.
+
+    A fixed two-agent example was copied LITERALLY by the backbone: in the
+    second smoke run it emitted directives for agent_0/agent_1 only and
+    omitted agent_2, failing validation on 11 of the first 11 calls (it
+    recovered only once a successful 3-agent block appeared in the standing
+    directives for it to copy instead). Generating the example from the
+    living set makes the required arity self-evident and scales to the
+    agent-count sweep (N=2..9) without another prompt edit.
+
+    comm_target cycles to the next agent, so it is never the agent itself.
+    """
+    n = len(agent_names)
+    if n == 0:
+        return '    "agent_0": {"comm_target": "agent_1", "help": "..."}'
+    lines = []
+    for i, name in enumerate(agent_names):
+        target = agent_names[(i + 1) % n] if n > 1 else name
+        lines.append(
+            f'    "{name}": {{"comm_target": "{target}", "help": "..."}}'
+        )
+    return ",\n".join(lines)
+
+
 def _directives_json(directives: dict) -> str:
     if not directives:
         return "(none yet)"
@@ -64,5 +89,6 @@ def format_prompt(
         digest=digest,
         ledger_json=_ledger_json(ledger),
         directives_json=_directives_json(directives),
+        directives_example=_build_directives_example(list(agent_names)),
         stall_threshold=stall_threshold,
     )
