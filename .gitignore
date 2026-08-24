@@ -147,6 +147,13 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+# src/mindforge/env is SOURCE CODE, not a virtualenv: the env/ pattern above
+# (case-insensitive on Windows) silently swallowed a brand-new module on
+# 2026-08-18 and 12 cluster runs crashed on the missing import. The dir must
+# be re-included before its contents can be.
+!src/mindforge/env/
+!src/mindforge/env/**
+src/mindforge/env/__pycache__/
 
 # Spyder project settings
 .spyderproject
