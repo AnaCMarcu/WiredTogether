@@ -96,6 +96,19 @@ if [ "${ACTREW:-0}" = "1" ]; then
     export EXTRA_ARGS="--social-act-rewards"
     ACTREW_EXPS=1
 fi
+# BIDI=1 (opt-in, 2026-08-24): the delivery-symmetric suite — the ACTREW
+# setting (obs/imit paid like messages) plus the revised co-firing mechanism:
+# --social-bidirectional (one obs/imit event credits BOTH W directions and
+# the target is notified in its prompt) and --comm-distance-free (a message
+# co-fires at any distance; the (1-spatial) factor is dropped). Same four
+# arms as ACTREW. Lands in runs/cofiring_bidi — NEVER pool with the
+# cofiring_actrew runs: the wiring rule itself differs.
+if [ "${BIDI:-0}" = "1" ]; then
+    : "${RUN_GROUP:=cofiring_bidi}"
+    : "${WANDB_PROJECT:=cofiring_bidi_wired_together}"
+    export EXTRA_ARGS="--social-act-rewards --social-bidirectional --comm-distance-free"
+    ACTREW_EXPS=1
+fi
 : "${RUN_GROUP:=cofiring_final}"
 : "${EPISODES:=3}"
 : "${MAX_STEPS:=1000}"
