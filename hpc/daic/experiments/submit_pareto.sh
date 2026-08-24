@@ -77,6 +77,13 @@ size_resources() {
         12b) S_GPU=gpu:1 S_MEM=48G S_QOS=long   S_TIME=96:00:00 ;;
         26b) S_GPU=gpu:2 S_MEM=64G S_QOS=long   S_TIME=96:00:00 ;;
         31b) S_GPU=gpu:2 S_MEM=64G S_QOS=long   S_TIME=168:00:00 ;;
+        # Qwen3.5 — second family for the with-Qwen Pareto. Both fit ONE
+        # card (9B measured at 18.82 GB resident in the medium runs), so
+        # neither hits the vision-sharding bug. Wall-clock assumed to track
+        # the gemma sizes: the smoke showed per-step cost is set by the ~5
+        # LLM calls/step and env overhead, not by parameter count.
+        qwen2b) S_GPU=gpu:1 S_MEM=32G S_QOS=long   S_TIME=96:00:00 ;;
+        qwen9b) S_GPU=gpu:1 S_MEM=48G S_QOS=long   S_TIME=96:00:00 ;;
         *)   echo "ERROR: unknown size '$1'" >&2; return 1 ;;
     esac
     # Global env overrides win over the per-size defaults.
@@ -91,6 +98,8 @@ model_path() {
         12b) echo "$WORKSPACE/models/gemma-4-12B-it" ;;
         26b) echo "$WORKSPACE/models/gemma-4-26B-A4B-it" ;;
         31b) echo "$WORKSPACE/models/gemma-4-31B-it" ;;
+        qwen2b) echo "$WORKSPACE/models/Qwen3.5-2B" ;;
+        qwen9b) echo "$WORKSPACE/models/Qwen3.5-9B" ;;
     esac
 }
 
@@ -118,7 +127,10 @@ for size in "${SIZES[@]}"; do
     mp="$(model_path "$size")"
     if [ ! -f "$mp/config.json" ]; then
         echo "ERROR: weights not staged for $size: $mp/config.json" >&2
-        echo "       MODEL=google/${mp##*/} sbatch hpc/daic/download_gemma4.sbatch" >&2
+        case "$size" in
+            qwen*) echo "       (Qwen weights are staged manually — check $WORKSPACE/models/)" >&2 ;;
+            *)     echo "       MODEL=google/${mp##*/} sbatch hpc/daic/download_gemma4.sbatch" >&2 ;;
+        esac
         missing=1
     elif [ ! -f "$mp/processor_config.json" ] && [ ! -f "$mp/preprocessor_config.json" ]; then
         echo "ERROR: $size has no processor config — would load TEXT-ONLY (no perception)." >&2

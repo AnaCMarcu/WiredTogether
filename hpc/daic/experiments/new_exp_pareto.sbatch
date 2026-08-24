@@ -54,7 +54,7 @@
 
 WORKSPACE=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu
 
-MODEL_SIZE="${MODEL_SIZE:?set MODEL_SIZE to one of: e2b e4b 12b 26b 31b}"
+MODEL_SIZE="${MODEL_SIZE:?set MODEL_SIZE to one of: e2b e4b 12b 26b 31b qwen2b qwen9b}"
 TOTAL_GPU_MEM_MIB=""
 case "$MODEL_SIZE" in
     e2b) MODEL_NAME=gemma-4-E2B-it;     : "${MIN_GPU_MEM_MIB:=15000}" ;;
@@ -64,9 +64,19 @@ case "$MODEL_SIZE" in
          TOTAL_GPU_MEM_MIB=60000 ;;
     31b) MODEL_NAME=gemma-4-31B-it;     : "${MIN_GPU_MEM_MIB:=40000}"
          TOTAL_GPU_MEM_MIB=75000 ;;
-    *)   echo "ERROR: unknown MODEL_SIZE=$MODEL_SIZE" >&2; exit 1 ;;
+    # Qwen3.5 arms — the SECOND family, for the with-Qwen Pareto. Both are
+    # already proven in this pipeline (the medium runs loaded Qwen3.5-9B as a
+    # VISION model at 18.82 GB) and both fit one card, so neither touches the
+    # broken vision-sharding path that blocks gemma 26b/31b.
+    qwen2b) MODEL_NAME=Qwen3.5-2B;      : "${MIN_GPU_MEM_MIB:=15000}" ;;
+    qwen9b) MODEL_NAME=Qwen3.5-9B;      : "${MIN_GPU_MEM_MIB:=25000}" ;;
+    *)   echo "ERROR: unknown MODEL_SIZE=$MODEL_SIZE (want: e2b e4b 12b 26b 31b qwen2b qwen9b)" >&2; exit 1 ;;
 esac
 export MIN_GPU_MEM_MIB
+case "$MODEL_SIZE" in
+    qwen*) MODEL_FAMILY=qwen ;;
+    *)     MODEL_FAMILY=gemma4 ;;
+esac
 : "${MODEL_LLM:=$WORKSPACE/models/$MODEL_NAME}"
 export MODEL_LLM
 
@@ -105,7 +115,7 @@ SOCIAL_MODULE="${SOCIAL_MODULE:-prompt}"
 # EXACTLY — across the size sweep the only thing that varies is the backbone.
 if [ "$HEBBIAN" = "1" ]; then
     EXP_NAME="pareto_${MODEL_SIZE}_hebbian"
-    export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,pareto,${MODEL_SIZE},hebbian,${SOCIAL_MODULE}}"
+    export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,${MODEL_FAMILY},vision,pareto,${MODEL_SIZE},hebbian,${SOCIAL_MODULE}}"
     HEBBIAN_ARGS=(
         --hebbian
         --hebbian-eta-0 0.005
@@ -116,7 +126,7 @@ if [ "$HEBBIAN" = "1" ]; then
     )
 else
     EXP_NAME="pareto_${MODEL_SIZE}_base"
-    export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,pareto,${MODEL_SIZE},no_hebbian}"
+    export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,${MODEL_FAMILY},vision,pareto,${MODEL_SIZE},no_hebbian}"
     HEBBIAN_ARGS=()
 fi
 
