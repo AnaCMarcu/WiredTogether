@@ -74,19 +74,39 @@ INK = {
 ARM_COLOR_DARK = {"base": "#3987e5", "hebbian": "#d95926"}
 
 
+# Runs that predate this suite but ARE valid Pareto points, because their
+# protocol and flags are identical to what new_exp_pareto.sbatch submits:
+# 3 episodes x 1000 steps x 3 agents, base = "--simultaneous" and hebbian =
+# "--hebbian --hebbian-eta-0 0.005 --hebbian-reward-norm 50 --hebbian-decay
+# 0.005 --hebbian-gamma 0.2 --social-module prompt --simultaneous" (verified
+# against the exp0*.sbatch files -- new_exp_pareto's arm was written to mirror
+# exp07 exactly). Reusing them is why the Qwen family needs no new GPU time.
+#
+# CAVEAT to state in the paper: these ran on wiredtogether.sif, while the Gemma
+# points ran on wiredtogether_gemma4.sif (newer transformers/torch). That is
+# tolerable only because the families are plotted as separate series and never
+# pooled into one frontier -- the stack difference lies BETWEEN series, never
+# within one.
+LEGACY_RUNS = {
+    "exp01_llm_2b":               ("qwen2b", "base"),
+    "exp02_llm_9b":               ("qwen9b", "base"),
+    "exp07_llm_2b_social_prompt": ("qwen2b", "hebbian"),
+    "exp08_llm_9b_social_prompt": ("qwen9b", "hebbian"),
+    "new_exp_0_gemma_base":       ("e4b", "base"),
+    "new_exp_0_gemma_hebbian":    ("e4b", "hebbian"),
+}
+
+
 def exp_to_size_arm(name: str):
     """Map a run directory name to (size, arm), or None if it is not ours."""
+    if name in LEGACY_RUNS:
+        return LEGACY_RUNS[name]
     if name.startswith("pareto_"):
         rest = name[len("pareto_"):]
         for arm in ("base", "hebbian"):
             if rest.endswith("_" + arm):
                 size = rest[: -len(arm) - 1]
                 return (size, arm) if size in SIZES else None
-    # The E4B point predates this suite and keeps its original directory name.
-    if name.startswith("new_exp_0_gemma_"):
-        arm = name[len("new_exp_0_gemma_"):]
-        if arm in ("base", "hebbian"):
-            return ("e4b", arm)
     return None
 
 
