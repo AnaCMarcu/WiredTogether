@@ -94,7 +94,49 @@ CONFIGS = {
     "sdpa_single":  dict(device_map={"": 0}, attn="sdpa",  dtype=torch.bfloat16),
     "eager_single": dict(device_map={"": 0}, attn="eager", dtype=torch.bfloat16),
     "fp32_auto":    dict(device_map="auto",  attn="sdpa",  dtype=torch.float32),
+    # Vision components pinned to cuda:0, only the text decoder sharded.
+    # Rationale: probe 12809912 showed sharded 12b fail with "Image features
+    # and image tokens do not match, tokens: 266, features: 0" -- the vision
+    # tower's output is lost crossing the device boundary, while the SAME model
+    # on one GPU describes the frame correctly. Keeping the whole vision path
+    # on one device removes that boundary; the decoder still splits, which is
+    # what actually buys the memory.
+    "sdpa_vispin":  dict(device_map="__vision_pinned__", attn="sdpa",
+                         dtype=torch.bfloat16),
 }
+
+# Substrings identifying modules that must stay together on cuda:0 for the
+# vision path to survive: the tower itself, the projector that maps its output
+# into text-embedding space, and the token embedding it is scattered into.
+_VISION_KEYS = ("vision", "multi_modal", "multimodal", "projector",
+                "embed_tokens", "audio", "vision_tower")
+
+
+def vision_pinned_device_map(model_cls, model_path, dtype):
+    """device_map that keeps the whole vision path on cuda:0, shards the rest."""
+    from accelerate import infer_auto_device_map, init_empty_weights
+    from transformers import AutoConfig
+
+    cfg = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
+    with init_empty_weights():
+        empty = model_cls.from_config(cfg, trust_remote_code=True)
+
+    n_dev = torch.cuda.device_count()
+    # 85% headroom per card: activations, the KV cache and the transient load
+    # spike all live outside the weight budget infer_auto_device_map computes.
+    budget = int(torch.cuda.get_device_properties(0).total_memory * 0.85)
+    max_memory = {i: budget for i in range(n_dev)}
+
+    dmap = infer_auto_device_map(
+        empty, max_memory=max_memory, dtype=dtype,
+        no_split_module_classes=list(getattr(empty, "_no_split_modules", None) or []),
+    )
+    moved = [k for k in dmap if any(t in k.lower() for t in _VISION_KEYS)]
+    for k in moved:
+        dmap[k] = 0
+    print("  vision pinned   : {} modules forced to cuda:0 ({})".format(
+        len(moved), moved[:4]))
+    return dmap
 
 
 def build_inputs(processor, model, sys_chars, user_chars, size):
@@ -138,9 +180,15 @@ def probe(name, model_path, args):
 
     from transformers import AutoProcessor
     processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
+    model_cls = _vision_model_class()
+
+    device_map = cfg["device_map"]
+    if device_map == "__vision_pinned__":
+        device_map = vision_pinned_device_map(model_cls, model_path, cfg["dtype"])
+
     model = _from_pretrained(
-        _vision_model_class(), model_path, cfg["dtype"],
-        device_map=cfg["device_map"],
+        model_cls, model_path, cfg["dtype"],
+        device_map=device_map,
         attn_implementation=cfg["attn"],
         trust_remote_code=True,
     )
