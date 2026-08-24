@@ -177,23 +177,63 @@ def probe(name, model_path, args):
 
     tok = getattr(processor, "tokenizer", processor)
     pad = getattr(tok, "pad_token_id", None) or getattr(tok, "eos_token_id", None)
-    for label, kwargs in (("greedy", dict(do_sample=False)),
-                          ("sample", dict(do_sample=True, temperature=0.7, top_p=0.9))):
-        try:
-            with torch.no_grad():
-                gen = model.generate(**inputs, max_new_tokens=24,
-                                     pad_token_id=pad, **kwargs)
-            text = tok.decode(gen[0][inputs["input_ids"].shape[1]:],
-                              skip_special_tokens=True)
-            print("  {:<15} : OK -> {}".format(label, repr(text[:90])))
-        except Exception as exc:
-            first = str(exc).splitlines()[0][:120] if str(exc) else ""
-            print("  {:<15} : FAILED -> {}: {}".format(
-                label, type(exc).__name__, first))
 
+    # Prefill being finite is NOT enough: probe 12798909 showed 31b produce
+    # healthy prefill logits (min=-10.9 max=8.8) and then NaN during DECODE —
+    # greedy silently returned '' (argmax of NaN picks token 0) and sampling
+    # tripped the multinomial assert. Step greedily with per-step logits so we
+    # can see WHICH decode step first goes non-finite; that separates a
+    # prefill/mask problem from a KV-cache/incremental-decode one.
+    try:
+        with torch.no_grad():
+            gen = model.generate(**inputs, max_new_tokens=24, do_sample=False,
+                                 pad_token_id=pad,
+                                 return_dict_in_generate=True,
+                                 output_logits=True, output_scores=True)
+        per_step = getattr(gen, "logits", None) or getattr(gen, "scores", None)
+        bad = None
+        if per_step:
+            for i, step in enumerate(per_step):
+                if not torch.isfinite(step).all():
+                    bad = i
+                    break
+            print("  decode steps    : {} generated, first non-finite = {}".format(
+                len(per_step), "none" if bad is None else "step {}".format(bad)))
+        text = tok.decode(gen.sequences[0][inputs["input_ids"].shape[1]:],
+                          skip_special_tokens=True)
+        print("  greedy          : OK -> {}".format(repr(text[:90])))
+        if not text.strip():
+            print("    !! empty output — with non-finite logits argmax silently "
+                  "returns token 0, so this is a FAILURE that did not raise")
+    except Exception as exc:
+        first = str(exc).splitlines()[0][:120] if str(exc) else ""
+        print("  greedy          : FAILED -> {}: {}".format(
+            type(exc).__name__, first))
+
+    try:
+        with torch.no_grad():
+            gen = model.generate(**inputs, max_new_tokens=24, do_sample=True,
+                                 temperature=0.7, top_p=0.9, pad_token_id=pad)
+        text = tok.decode(gen[0][inputs["input_ids"].shape[1]:],
+                          skip_special_tokens=True)
+        print("  sample          : OK -> {}".format(repr(text[:90])))
+    except Exception as exc:
+        first = str(exc).splitlines()[0][:120] if str(exc) else ""
+        print("  sample          : FAILED -> {}: {}".format(
+            type(exc).__name__, first))
+
+    # A device-side assert poisons the CUDA context for the WHOLE process, so
+    # even empty_cache() raises and any later config would report a misleading
+    # failure. Detect that and stop rather than emit junk for the rest.
     del model, processor, inputs
     gc.collect()
-    torch.cuda.empty_cache()
+    try:
+        torch.cuda.empty_cache()
+    except Exception as exc:
+        print("  !! CUDA context is poisoned ({}) — remaining configs cannot "
+              "run in this process. Submit them as separate jobs, one "
+              "--configs each.".format(type(exc).__name__))
+        raise SystemExit(3)
 
 
 def main():
@@ -224,10 +264,16 @@ def main():
             probe(name, args.model, args)
         except Exception:
             # One config OOMing or erroring must not hide the others' results.
+            # (SystemExit from a poisoned CUDA context is NOT caught here — it
+            # is a BaseException, so it correctly ends the process.)
             print("  CONFIG {} ABORTED:".format(name))
             traceback.print_exc()
             gc.collect()
-            torch.cuda.empty_cache()
+            try:
+                torch.cuda.empty_cache()
+            except Exception:
+                print("  !! CUDA context unusable — stopping.")
+                raise SystemExit(3)
 
 
 if __name__ == "__main__":
