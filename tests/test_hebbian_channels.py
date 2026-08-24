@@ -242,3 +242,59 @@ def test_observed_and_imitated_notices_name_the_initiator():
     assert "agent_4" in imit and "'Dig'" in imit
     # Missing action falls back to generic phrasing, never "None".
     assert "None" not in render_imitated_notice("agent_4", None)
+
+
+# ── distance-free comm (--comm-distance-free) ───────────────────────────────
+
+def test_comm_distance_free_defaults_off():
+    assert HebbianConfig().comm_distance_free is False
+
+
+def test_legacy_comm_reduced_when_colocated(hcfg):
+    """Pin the legacy rule this flag relaxes: co-located messaging earns only
+    the engagement-gated spatial credit (comm itself is zeroed by the
+    (1-spatial) factor). Both parties of a comm event count as socially
+    engaged — unlike obs, which is initiator-only — so c_spat = 0.5·0.5 =
+    0.25 < the 0.5 the same message earns at distance: the 'penalty for
+    talking while together'."""
+    g = _graph(hcfg)
+    w0 = g.W.copy()
+    g.update(NEAR, comm_events=[(0, 1)],
+             bond_rewards=[0.0] * 3, total_rewards=[0.0] * 3)
+    assert np.isclose(g.W[0, 1] - w0[0, 1], 0.01 * 0.25 * 0.9)
+    assert np.isclose(g._last_c_comm[0, 1], 0.0)
+
+
+def test_comm_distance_free_credits_when_colocated(hcfg):
+    g = _graph(hcfg, comm_distance_free=True)
+    w0 = g.W.copy()
+    g.update(NEAR, comm_events=[(0, 1)],
+             bond_rewards=[0.0] * 3, total_rewards=[0.0] * 3)
+    # comm (0.5) now stacks on the mutual-engagement spatial credit (0.25):
+    # c = clip(0.25 + 0.5) = 0.75 → ΔW = 0.01·0.75·0.9 each way.
+    assert np.isclose(g.W[0, 1] - w0[0, 1], 0.01 * 0.75 * 0.9)
+    assert np.isclose(g.W[1, 0] - w0[1, 0], 0.01 * 0.75 * 0.9)
+    assert np.isclose(g._last_c_comm[0, 1], 0.5)
+
+
+def test_comm_distance_free_far_pair_unchanged(hcfg):
+    """At distance the factor was already 1, so the flag is a no-op there."""
+    ga = _graph(hcfg)
+    gb = _graph(hcfg, comm_distance_free=True)
+    for _ in range(3):
+        ga.update(FAR, comm_events=[(0, 1)],
+                  bond_rewards=[0.0] * 3, total_rewards=[0.0] * 3)
+        gb.update(FAR, comm_events=[(0, 1)],
+                  bond_rewards=[0.0] * 3, total_rewards=[0.0] * 3)
+    np.testing.assert_array_equal(ga.W, gb.W)
+
+
+def test_colocated_engaged_chat_stacks_and_clips(hcfg):
+    """Both agents messaging while co-located: spatial (g_i·g_j = 0.25) +
+    comm (0.5) stack to c = 0.75 under the flag — the amplified
+    proximity+chatter regime the config comment warns about."""
+    g = _graph(hcfg, comm_distance_free=True)
+    w0 = g.W.copy()
+    g.update(NEAR, comm_events=[(0, 1), (1, 0)],
+             bond_rewards=[0.0] * 3, total_rewards=[0.0] * 3)
+    assert np.isclose(g.W[0, 1] - w0[0, 1], 0.01 * 0.75 * 0.9)

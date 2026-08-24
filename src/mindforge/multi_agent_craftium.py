@@ -334,6 +334,13 @@ def parse_args():
                              "Choice mode only. Default off: directed "
                              "obs/imit terms, no notice — byte-identical to "
                              "the historical behavior.")
+    parser.add_argument("--comm-distance-free", action="store_true",
+                        help="Drop the (1 - spatial) factor from the comm "
+                             "co-firing term: a message co-fires at ANY "
+                             "distance, unifying comm with obs/imit "
+                             "(c_k = delta*1[event]; the c_ij clip bounds "
+                             "stacking with the spatial term). Default off: "
+                             "legacy long-range-only comm.")
     parser.add_argument("--social-act-rewards", action="store_true",
                         help="Pay observation and imitation acts EXACTLY "
                              "like communication (same 0.5 base reward, cap, "
@@ -1385,6 +1392,7 @@ async def run(args):
         # Hardcoded / frozen graph (LLM-only social-bias ablation)
         freeze_weights=args.hebbian_freeze,
         social_bidirectional=args.social_bidirectional,
+        comm_distance_free=args.comm_distance_free,
         init_preset=args.hebbian_preset,
         preset_bond_strong=args.hebbian_bond_strong,
         preset_bond_weak=args.hebbian_bond_weak,

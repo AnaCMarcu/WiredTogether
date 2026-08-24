@@ -470,9 +470,17 @@ class HebbianSocialGraph:
                 if not (0 <= s < N and 0 <= r < N and s != r):
                     continue
                 if ch == "comm" and delta_comm > 0.0:
-                    # Communication co-activity (only when NOT co-located).
+                    # Communication co-activity. Legacy: only when NOT
+                    # co-located (the (1-spatial) anti-double-count).
+                    # comm_distance_free: a message co-fires at any distance,
+                    # same form as obs/imit; the c_ij clip bounds stacking.
                     for a, b in ((s, r), (r, s)):  # symmetric exchange
-                        c_comm[a, b] = delta_comm * (1.0 - spatial_gate[a, b])
+                        if cfg.comm_distance_free:
+                            c_comm[a, b] = delta_comm
+                        else:
+                            c_comm[a, b] = (
+                                delta_comm * (1.0 - spatial_gate[a, b])
+                            )
                 elif ch == "obs" and delta_soc > 0.0:
                     c_obs[s, r] = delta_soc
                     if cfg.social_bidirectional:

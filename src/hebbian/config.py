@@ -45,6 +45,13 @@ class HebbianConfig:
     # like comm already does — paired with the router notifying the target so
     # the signal actually reaches both members. False = legacy directed terms.
     social_bidirectional: bool = False
+    # Drop the (1 - spatial_gate) factor from the comm term: a message is a
+    # co-firing event regardless of distance, unifying comm with obs/imit
+    # (c_k = δ_k·1[event]; the clip on c_ij bounds stacking with c_spat).
+    # NOTE: co-located chatty pairs then stack comm on spatial credit, which
+    # AMPLIFIES the proximity+chatter effect on W. False = legacy long-range-
+    # only comm ("talk across distance").
+    comm_distance_free: bool = False
 
     # ── LTP — potentiation on positive advantage ──
     ltp_lr: float = 0.01  # η_+
