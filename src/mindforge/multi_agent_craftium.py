@@ -2581,6 +2581,17 @@ async def run(args):
                                             _t_idx, _t_actions, step,
                                         )
                                     )
+                                    if args.social_bidirectional:
+                                        # Notice #1 (trigger): the target
+                                        # learns it is being studied. Notice
+                                        # #2 (adoption, above) fires only if
+                                        # the imitator re-enacts — Hebbian
+                                        # credit stays on adoption only.
+                                        agent_social_returns[_t_idx].append(
+                                            _sacts.render_imitation_started_notice(
+                                                agent.name, len(_t_actions)
+                                            )
+                                        )
                                     # Paid at delivery — symmetric to a
                                     # message being paid when sent.
                                     if act_reward_tracker is not None:

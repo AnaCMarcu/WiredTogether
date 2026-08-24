@@ -379,6 +379,17 @@ def render_observed_notice(observer_name: str) -> str:
     )
 
 
+def render_imitation_started_notice(imitator_name: str, n_actions: int) -> str:
+    """Notice delivered to the TARGET when an imitation is TRIGGERED
+    (bidirectional mode): a teammate just received this agent's recent action
+    sequence and is studying it. Fires at payload delivery; the adopted notice
+    below fires later, only if the imitator actually re-enacts an action."""
+    return (
+        f"[social] {imitator_name} is imitating you: they studied your last "
+        f"{n_actions} actions and may re-enact them."
+    )
+
+
 def render_imitated_notice(imitator_name: str, action) -> str:
     """Notice delivered to the TARGET of an adopted imitation (bidirectional
     mode): its behavior was influential enough that a teammate re-enacted it."""

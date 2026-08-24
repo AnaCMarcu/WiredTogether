@@ -234,7 +234,8 @@ def test_bidirectional_leaves_comm_and_engagement_unchanged(hcfg):
 
 def test_observed_and_imitated_notices_name_the_initiator():
     from mindforge.agent_modules.social_acts import (
-        render_imitated_notice, render_observed_notice,
+        render_imitated_notice, render_imitation_started_notice,
+        render_observed_notice,
     )
     obs = render_observed_notice("agent_2")
     assert "agent_2" in obs and "observed you" in obs
@@ -242,6 +243,22 @@ def test_observed_and_imitated_notices_name_the_initiator():
     assert "agent_4" in imit and "'Dig'" in imit
     # Missing action falls back to generic phrasing, never "None".
     assert "None" not in render_imitated_notice("agent_4", None)
+
+
+def test_imitation_started_notice_distinct_from_adopted():
+    """Two imitation notices: trigger (payload delivered, target is being
+    studied) vs adoption (an action was actually re-enacted). They must be
+    distinguishable in the target's prompt."""
+    from mindforge.agent_modules.social_acts import (
+        render_imitated_notice, render_imitation_started_notice,
+    )
+    started = render_imitation_started_notice("agent_4", 5)
+    adopted = render_imitated_notice("agent_4", "Dig")
+    assert "agent_4" in started and "5" in started
+    assert "is imitating you" in started and "studied" in started
+    # Trigger notice must not claim a re-enactment happened.
+    assert "re-enacted" not in started
+    assert started != adopted
 
 
 # ── distance-free comm (--comm-distance-free) ───────────────────────────────
