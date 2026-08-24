@@ -433,6 +433,24 @@ def test_directives_example_never_targets_self():
                 assert m.group(1) != m.group(2), line
 
 
+def test_prompt_states_task_facts_are_cumulative():
+    """The ledger IS the within-episode memory being contrasted with W(t).
+
+    A two-slot "task_facts": ["<fact>", "<fact>"] example made the model copy
+    that arity literally: retention fell to 56% per call (vs 94%) and the
+    ledger stopped accumulating across runs/orchestrator_smoke_v3.
+    """
+    out = oprompt.format_prompt(
+        n_agents=3, agent_names=LIVING, last_call_step=8, current_step=16,
+        digest="d", ledger=OrchestratorState().ledger, directives={},
+        stall_threshold=2,
+    )
+    assert "CUMULATIVE" in out
+    assert "GROWS across calls" in out
+    # The literal two-slot example must be gone.
+    assert '["<fact>", "<fact>"]' not in out
+
+
 def test_prompt_states_the_required_directive_arity():
     out = oprompt.format_prompt(
         n_agents=3, agent_names=LIVING, last_call_step=-1, current_step=0,

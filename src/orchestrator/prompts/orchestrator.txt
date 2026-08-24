@@ -16,10 +16,14 @@ YOUR CURRENT STANDING DIRECTIVES:
 {directives_json}
 
 INSTRUCTIONS:
-1. UPDATE: compare the ledger's expected_signal to the events above. Add anything you can
-   now conclude about how this stage works to task_facts (facts about the WORLD and TASK
-   only — never opinions about which agents work well together). If the expected signal
-   did not occur, increment stall_counter; if a relevant milestone fired, reset it to 0.
+1. UPDATE: compare the ledger's expected_signal to the events above. task_facts is
+   CUMULATIVE — it is your memory for the WHOLE episode. Copy every fact from the
+   ledger above into your reply, then append anything you can now conclude about how
+   this stage works. Drop a fact ONLY if it has been proven false; never drop one
+   merely because it is old or no longer immediate. Record facts about the WORLD and
+   TASK only — never opinions about which agents work well together. If the expected
+   signal did not occur, increment stall_counter; if a relevant milestone fired,
+   reset it to 0.
 2. DECIDE: keep the current directives UNLESS the expected signal occurred, the chamber
    changed, an agent died, or stall_counter > {stall_threshold}. Only then issue new ones.
 3. EMIT: for each living agent, one comm_target (a TEAMMATE's exact name, never the agent
@@ -29,7 +33,8 @@ INSTRUCTIONS:
 Respond with EXACTLY this JSON — ONE object, no extra text before or after it:
 {{
   "ledger": {{
-    "task_facts": ["<fact>", "<fact>"],
+    "task_facts": ["<every fact from the ledger above that is still true>",
+                   "<...>", "<any new fact you concluded this call>"],
     "progress": {{"current_stage_goal": "...", "issued_at_step": N,
                  "expected_signal": "..."}},
     "stall_counter": N
@@ -47,4 +52,8 @@ Structure rules — get these exactly right:
 - "directives" MUST have exactly ONE entry for EVERY living agent listed above
   ({agent_names}) — all {n_agents} of them, no more and no fewer. A response
   that omits any living agent is discarded in full.
+- "task_facts" GROWS across calls: it must contain the facts already in your ledger
+  above (minus any now proven false) plus any new ones. It is a running record, not
+  a fresh summary of this moment. Do not trim it yourself — old facts are pruned
+  automatically once the list is full.
 - Emit one complete JSON object and then STOP. Do not repeat or revise it.
