@@ -475,8 +475,12 @@ class HebbianSocialGraph:
                         c_comm[a, b] = delta_comm * (1.0 - spatial_gate[a, b])
                 elif ch == "obs" and delta_soc > 0.0:
                     c_obs[s, r] = delta_soc
+                    if cfg.social_bidirectional:
+                        c_obs[r, s] = delta_soc
                 elif ch == "imit" and delta_soc > 0.0:
                     c_imit[s, r] = delta_soc
+                    if cfg.social_bidirectional:
+                        c_imit[r, s] = delta_soc
 
         cij = np.clip(c_spat + c_comm + c_obs + c_imit, 0.0, 1.0)
         np.fill_diagonal(cij, 0.0)

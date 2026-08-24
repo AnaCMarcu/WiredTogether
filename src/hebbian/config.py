@@ -40,6 +40,11 @@ class HebbianConfig:
     # δ for the directed obs/imit terms; None → use communication_coactivity_bonus
     # (one shared δ across channels, for parity between arms).
     social_coactivity_bonus: float | None = None
+    # Delivery-symmetric obs/imit ("agents that co-fire wire together"): a
+    # single observation/imitation event credits BOTH directions of the pair,
+    # like comm already does — paired with the router notifying the target so
+    # the signal actually reaches both members. False = legacy directed terms.
+    social_bidirectional: bool = False
 
     # ── LTP — potentiation on positive advantage ──
     ltp_lr: float = 0.01  # η_+

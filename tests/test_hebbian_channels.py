@@ -178,3 +178,67 @@ def test_obs_initiator_only_engagement(hcfg):
     assert eng_comm[0] == eng_comm[1] == 0.5
     eng_obs = g._engagement(np.zeros(3, dtype=np.float32), {0})
     assert eng_obs[0] == 0.5 and eng_obs[1] == 0.0
+
+
+# ── delivery-symmetric obs/imit (--social-bidirectional) ────────────────────
+
+def test_bidirectional_defaults_off():
+    """Non-regression pin: the flag defaults to the directed legacy terms."""
+    assert HebbianConfig().social_bidirectional is False
+
+
+def test_bidirectional_obs_credits_both_directions(hcfg):
+    g = _graph(hcfg, social_act_channels=("obs",), social_bidirectional=True)
+    w0 = g.W.copy()
+    g.update(FAR, social_events=[(0, 1, "obs")],
+             bond_rewards=[0.0] * 3, total_rewards=[0.0] * 3)
+    # Same per-cell arithmetic as the directed test — now BOTH directions.
+    assert np.isclose(g.W[0, 1] - w0[0, 1], 0.01 * 0.5 * 0.9)
+    assert np.isclose(g.W[1, 0] - w0[1, 0], 0.01 * 0.5 * 0.9)
+    assert g.W[0, 2] == w0[0, 2]           # uninvolved pair untouched
+
+
+def test_bidirectional_imit_credits_both_directions(hcfg):
+    """Co-located adoption (the act gate's own situation) credits the pair
+    symmetrically; c_spat stays 0 (target is not socially engaged)."""
+    g = _graph(hcfg, social_act_channels=("imit",), social_bidirectional=True)
+    w0 = g.W.copy()
+    g.update(NEAR, social_events=[(0, 1, "imit")],
+             bond_rewards=[0.0] * 3, total_rewards=[0.0] * 3)
+    assert np.isclose(g.W[0, 1] - w0[0, 1], 0.01 * 0.5 * 0.9)
+    assert np.isclose(g.W[1, 0] - w0[1, 0], 0.01 * 0.5 * 0.9)
+
+
+def test_bidirectional_attribution_matrices_symmetric(hcfg):
+    g = _graph(hcfg, social_act_channels=("obs", "imit"),
+               social_bidirectional=True)
+    g.update(FAR, social_events=[(0, 1, "obs"), (2, 0, "imit")],
+             bond_rewards=[0.0] * 3, total_rewards=[0.0] * 3)
+    np.testing.assert_array_equal(g._last_c_obs, g._last_c_obs.T)
+    np.testing.assert_array_equal(g._last_c_imit, g._last_c_imit.T)
+
+
+def test_bidirectional_leaves_comm_and_engagement_unchanged(hcfg):
+    """The flag touches ONLY the obs/imit terms: comm events produce the
+    identical W trajectory with the flag on and off (comm was already
+    symmetric), and the target of an obs event still earns no engagement."""
+    ga = _graph(hcfg)
+    gb = _graph(hcfg, social_bidirectional=True)
+    for _ in range(3):
+        ga.update(FAR, comm_events=[(0, 1)],
+                  bond_rewards=[0.0] * 3, total_rewards=[0.0] * 3)
+        gb.update(FAR, comm_events=[(0, 1)],
+                  bond_rewards=[0.0] * 3, total_rewards=[0.0] * 3)
+    np.testing.assert_array_equal(ga.W, gb.W)
+
+
+def test_observed_and_imitated_notices_name_the_initiator():
+    from mindforge.agent_modules.social_acts import (
+        render_imitated_notice, render_observed_notice,
+    )
+    obs = render_observed_notice("agent_2")
+    assert "agent_2" in obs and "observed you" in obs
+    imit = render_imitated_notice("agent_4", "Dig")
+    assert "agent_4" in imit and "'Dig'" in imit
+    # Missing action falls back to generic phrasing, never "None".
+    assert "None" not in render_imitated_notice("agent_4", None)

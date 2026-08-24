@@ -364,3 +364,26 @@ def load_social_module_choice_prompt(enabled_channels: Sequence[str]) -> str:
     return txt.replace(
         "{enabled_acts_menu}", render_enabled_acts_menu(enabled_channels)
     )
+
+
+def render_observed_notice(observer_name: str) -> str:
+    """Notice delivered to the TARGET of an observe act (bidirectional mode).
+
+    Makes the channel delivery-symmetric: the observed agent learns who is
+    paying attention to it, mirroring how a message lands in the recipient's
+    inbox. Kept short — it is information, not an instruction.
+    """
+    return (
+        f"[social] {observer_name} observed you last step: they can now see "
+        f"your position, status, inventory, and stated beliefs."
+    )
+
+
+def render_imitated_notice(imitator_name: str, action) -> str:
+    """Notice delivered to the TARGET of an adopted imitation (bidirectional
+    mode): its behavior was influential enough that a teammate re-enacted it."""
+    act = action or "one of your recent actions"
+    return (
+        f"[social] {imitator_name} imitated you: they re-enacted your "
+        f"action '{act}' after studying your recent behavior."
+    )

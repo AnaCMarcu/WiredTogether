@@ -325,6 +325,15 @@ def parse_args():
                              "comm,obs,imit or 'none'. Defaults to the value "
                              "of --social-acts (credit what is afforded). "
                              "Ignored in legacy mode (legacy credits comm).")
+    parser.add_argument("--social-bidirectional", action="store_true",
+                        help="Delivery-symmetric obs/imit ('agents that "
+                             "co-fire wire together'): one observation/"
+                             "imitation event credits BOTH directions of the "
+                             "pair (as comm already does), and the target is "
+                             "notified next step who observed/imitated it. "
+                             "Choice mode only. Default off: directed "
+                             "obs/imit terms, no notice — byte-identical to "
+                             "the historical behavior.")
     parser.add_argument("--social-act-rewards", action="store_true",
                         help="Pay observation and imitation acts EXACTLY "
                              "like communication (same 0.5 base reward, cap, "
@@ -1375,6 +1384,7 @@ async def run(args):
         reward_norm_R=args.hebbian_reward_norm,
         # Hardcoded / frozen graph (LLM-only social-bias ablation)
         freeze_weights=args.hebbian_freeze,
+        social_bidirectional=args.social_bidirectional,
         init_preset=args.hebbian_preset,
         preset_bond_strong=args.hebbian_bond_strong,
         preset_bond_weak=args.hebbian_bond_weak,
@@ -2439,6 +2449,15 @@ async def run(args):
                             social_events.append(
                                 (_init_idx, _pend.target, "imit")
                             )
+                            if args.social_bidirectional:
+                                # Delivery-symmetric channel: tell the target
+                                # its behavior was adopted (mirrors a message
+                                # landing in the recipient's inbox).
+                                agent_social_returns[_pend.target].append(
+                                    _sacts.render_imitated_notice(
+                                        agent.name, content.get("action")
+                                    )
+                                )
                             _adopted_agents_this_step.add(_init_idx)
                             _sa_metrics["imitation_adopted_steps"] += 1
                             if _social_acts_path:
@@ -2502,6 +2521,12 @@ async def run(args):
                                     f"Interactions: {_tb.interaction_beliefs or '(none)'}"
                                 )
                                 social_events.append((_init_idx, _t_idx, "obs"))
+                                if args.social_bidirectional:
+                                    # Delivery-symmetric channel: tell the
+                                    # target who observed it.
+                                    agent_social_returns[_t_idx].append(
+                                        _sacts.render_observed_notice(agent.name)
+                                    )
                                 if act_reward_tracker is not None:
                                     _act_events_this_step.append(
                                         (_init_idx, "obs", _sa_routing != "model")
