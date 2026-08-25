@@ -58,6 +58,15 @@ class RLConfig:
     # ── Rollout / update schedule ──
     buffer_size: int = 2048
     update_interval: int = 128
+    # Stagger per-agent updates by agent_id steps (agent i updates at
+    # interval+i) so the env is stepped BETWEEN updates instead of idling
+    # for one long 3×update pause. Motivation: on Gemma E4B each agent's
+    # PPO update takes ~10-14 min; the resulting ~40-min env idle window
+    # hung the Minetest bridge within 1-2 steps afterwards in the 2026-08
+    # gemma4 exp03 runs (seed_123 at step 65, seed_42 at step 129), while
+    # Qwen's ~20-min windows never hung. Off by default: the completed
+    # Qwen suites ran unstaggered and their gap-fill seeds must match.
+    update_stagger: bool = False
 
     # ── Token-level self-improvement ──
     auto_token_opt: bool = False  # let agent decide when to do token-level PPO

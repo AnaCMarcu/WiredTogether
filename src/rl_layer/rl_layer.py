@@ -393,11 +393,19 @@ class RLLayer:
             self._recent_rewards.pop(0)
 
     def should_update(self) -> bool:
-        """True when enough steps have been collected for a MAPPO update."""
-        return (
-            self.config.enabled
-            and len(self.buffer) >= self.config.update_interval
-        )
+        """True when enough steps have been collected for a MAPPO update.
+
+        With ``config.update_stagger`` on, agent i waits ``agent_id`` extra
+        steps, so the agents' updates land on consecutive env steps instead
+        of back-to-back within one step — the env keeps stepping between
+        them and never idles for the full 3×update wall time (see
+        RLConfig.update_stagger for the Gemma env-hang this prevents).
+        Cadence is unchanged: every ``update_interval`` steps, phase-shifted.
+        """
+        threshold = self.config.update_interval
+        if getattr(self.config, "update_stagger", False):
+            threshold += self.agent_id
+        return self.config.enabled and len(self.buffer) >= threshold
 
     def update(self, neighbour_buffers: Optional[Dict[int, "RolloutBuffer"]] = None,
                hebbian_graph=None) -> Dict:

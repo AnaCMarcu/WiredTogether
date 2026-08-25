@@ -160,6 +160,14 @@ def parse_args():
                         help="LoRA rank for RL adapter")
     parser.add_argument("--rl-update-interval", type=int, default=256,
                         help="Steps between MAPPO updates")
+    parser.add_argument("--rl-update-stagger", action="store_true",
+                        default=os.environ.get("RL_UPDATE_STAGGER", "0") == "1",
+                        help="Stagger per-agent PPO updates by agent_id steps "
+                             "so the env steps between them instead of idling "
+                             "for the whole update round (default off; also "
+                             "via RL_UPDATE_STAGGER=1). Needed for Gemma E4B, "
+                             "whose ~40-min update rounds hang the Minetest "
+                             "bridge; Qwen's ~20-min rounds are safe without.")
     parser.add_argument("--rl-lr", type=float, default=1e-4,
                         help="Learning rate for RL optimiser")
     parser.add_argument("--rl-auto-token-opt", action="store_true",
@@ -1329,6 +1337,7 @@ async def run(args):
         model_path=args.rl_model_path,
         lora_rank=args.rl_lora_rank,
         update_interval=args.rl_update_interval,
+        update_stagger=args.rl_update_stagger,
         lr=args.rl_lr,
         auto_token_opt=args.rl_auto_token_opt,
         rl_prompt_max_tokens=args.rl_prompt_max_tokens,
@@ -1861,6 +1870,14 @@ async def run(args):
             3: environment.force_ch3_teleport,
             4: environment.force_ch4_teleport,
         }
+
+        # Social-replay snapshot state, scoped to one UPDATE CYCLE (not one
+        # step): with --rl-update-stagger the agents' updates land on
+        # consecutive steps, and all of them must sample the same pre-round
+        # view. Taken lazily by the first updater of a cycle; cleared once
+        # every agent that was expected to update has consumed it.
+        _rl_replay_snapshot = None
+        _rl_replay_pending = set()
 
         for step in range(max_steps):
             global_step += 1
@@ -3226,11 +3243,6 @@ async def run(args):
                 )
 
             # ── Phase 3: Record (diffused) rewards for metrics + RL ──
-            # Social-replay snapshot, populated lazily by the FIRST agent to
-            # update this step: updates clear live buffers in agent order,
-            # so later agents would otherwise sample from already-emptied
-            # neighbours (agent N-1 would never receive shared experience).
-            _rl_replay_snapshot = None
             for agent_id, agent in enumerate(agents):
                 agent_name = f"agent_{agent_id}"
                 if environment._terminations.get(agent_name, False):
@@ -3292,8 +3304,10 @@ async def run(args):
                     # MAPPO update when enough steps collected.
                     # Pass all agents' buffers so social replay (Eq. 7) can
                     # mix in neighbour transitions weighted by Hebbian bonds.
-                    # Buffers are snapshotted once per step (first updater)
-                    # so agent order does not decide who still has
+                    # Buffers are snapshotted once per UPDATE CYCLE (first
+                    # updater takes it; cleared when every expected agent has
+                    # consumed it) so neither agent order within a step nor
+                    # --rl-update-stagger across steps decides who still has
                     # neighbours' experience.
                     if agent.rl_layer.should_update():
                         if _rl_replay_snapshot is None:
@@ -3303,6 +3317,7 @@ async def run(args):
                                 if agents[aid].rl_layer
                                 and agents[aid].rl_layer.enabled
                             }
+                            _rl_replay_pending = set(_rl_replay_snapshot)
                         neighbour_buffers = {
                             aid: snap
                             for aid, snap in _rl_replay_snapshot.items()
@@ -3312,6 +3327,17 @@ async def run(args):
                             neighbour_buffers=neighbour_buffers,
                             hebbian_graph=hebbian_graph,
                         )
+                        # Retire the snapshot once everyone expected has
+                        # updated (agents that died mid-cycle are dropped so
+                        # a permadeath cannot pin a stale snapshot forever).
+                        _rl_replay_pending.discard(agent_id)
+                        _rl_replay_pending = {
+                            aid for aid in _rl_replay_pending
+                            if not environment._terminations.get(
+                                f"agent_{aid}", False)
+                        }
+                        if not _rl_replay_pending:
+                            _rl_replay_snapshot = None
                         metric.record_rl_update(agent_id, update_info)
                         _wb.log_rl_update(agent_id, update_info, step=global_step)
 

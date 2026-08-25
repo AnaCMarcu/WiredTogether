@@ -203,3 +203,62 @@ def test_last_agent_still_gets_replay_from_snapshots():
         assert len(out) > 0, f"agent {agent_id} starved of social replay"
         tags = {tr.prompt_text.split("-")[0] for tr in out}
         assert f"prompt a{agent_id}" not in tags  # never samples itself
+
+
+# ── 5. Staggered updates (Gemma env-idle hang mitigation) ───────────────────
+
+def _stagger_rl(agent_id, n, stagger=True):
+    from rl_layer.config import RLConfig
+    from rl_layer.rl_layer import RLLayer
+    rl = RLLayer.__new__(RLLayer)  # skip model loading; should_update only
+    rl.config = RLConfig(enabled=True, update_interval=64,
+                         update_stagger=stagger)
+    rl.agent_id = agent_id
+    rl.buffer = _filled_buffer(0)
+    rl.buffer._buf = [None] * n  # only len() is consulted
+    return rl
+
+
+def test_stagger_shifts_threshold_by_agent_id():
+    """Agent i fires at interval+i, so updates land on consecutive steps
+    and the env never idles for the whole 3-agent round."""
+    for aid in range(3):
+        assert not _stagger_rl(aid, 64 + aid - 1).should_update()
+        assert _stagger_rl(aid, 64 + aid).should_update()
+
+
+def test_stagger_off_keeps_synchronous_updates():
+    for aid in range(3):
+        assert _stagger_rl(aid, 64, stagger=False).should_update()
+
+
+def test_cycle_snapshot_survives_staggered_consumption():
+    """Call-site protocol: first updater of a cycle takes the snapshot; it is
+    retired only after every expected agent consumed it — so under stagger,
+    agents updating on LATER steps still see the same pre-round view even
+    though earlier updaters already cleared their live buffers."""
+    graph = _graph(0.3, [[0.0, 0.5, 0.5], [0.5, 0.0, 0.5], [0.5, 0.5, 0.0]])
+    live = {aid: _filled_buffer(16, agent_tag=f"a{aid}-") for aid in range(3)}
+
+    snapshot, pending = None, set()
+    collected = {}
+    for agent_id in range(3):  # three consecutive steps, one updater each
+        if snapshot is None:
+            snapshot = {aid: buf.snapshot() for aid, buf in live.items()}
+            pending = set(snapshot)
+        rl = _FakeRL(agent_id=agent_id, own_size=16)
+        neighbours = {a: s for a, s in snapshot.items() if a != agent_id}
+        collected[agent_id] = _collect_social_replay(rl, neighbours, graph)
+        live[agent_id].clear()
+        live[agent_id].store_action(prompt_text="fresh", action_idx=0,
+                                    log_prob=-1.0, value=0.5)
+        pending.discard(agent_id)
+        if not pending:
+            snapshot = None
+
+    assert snapshot is None  # cycle retired after the last consumer
+    for agent_id, out in collected.items():
+        assert len(out) > 0
+        # Everyone sampled the pre-round view: 16-transition buffers, never
+        # the post-clear "fresh" refills of earlier updaters.
+        assert all(tr.prompt_text.startswith("prompt a") for tr in out)
