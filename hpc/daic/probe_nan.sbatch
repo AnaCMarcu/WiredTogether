@@ -45,6 +45,12 @@ IMG="${WT_IMAGE:-$WORKSPACE/images/wiredtogether_gemma4.sif}"
 MODEL="${MODEL:-gemma-4-31B-it}"
 MODEL_PATH="$WORKSPACE/models/${MODEL##*/}"
 CONFIGS="${CONFIGS:-sdpa_auto,eager_auto}"
+# Extra CLI args for probe_nan_logits.py — e.g. force a real split when
+# validating sdpa_vispin on a model small enough to fit one card (job
+# 12810410 was vacuous because 12b fit cuda:0 whole):
+#   EXTRA_ARGS="--gpu0-budget-gib 14" MODEL=gemma-4-12B-it CONFIGS=sdpa_vispin \
+#       sbatch hpc/daic/probe_nan.sbatch
+EXTRA_ARGS="${EXTRA_ARGS:-}"
 
 TMP_ROOT="/tmp/$USER/probe_nan_${SLURM_JOB_ID:-nojob}"
 export APPTAINER_TMPDIR="$TMP_ROOT/apptainer"
@@ -74,6 +80,7 @@ apptainer exec --nv \
     "$IMG" \
     python -u "$REPO/scripts/probe_nan_logits.py" \
         --model "$MODEL_PATH" \
-        --configs "$CONFIGS"
+        --configs "$CONFIGS" \
+        $EXTRA_ARGS
 
 echo "== probe_nan done: $(date) =="
