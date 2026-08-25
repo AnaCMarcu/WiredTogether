@@ -36,6 +36,10 @@ class OrchestratorLogger:
         os.makedirs(self.maps_dir, exist_ok=True)
         self.calls_path = os.path.join(self.dir, "calls.jsonl")
         self.compliance_path = os.path.join(self.dir, "compliance.jsonl")
+        # Plan variant only: one record per task CHANGE while a plan note
+        # was standing — {episode, t, agent, active_note, old_task, new_task}.
+        self.task_compliance_path = os.path.join(self.dir,
+                                                 "task_compliance.jsonl")
 
     @staticmethod
     def _append(path: str, record: dict) -> None:
@@ -57,6 +61,9 @@ class OrchestratorLogger:
 
     def log_compliance(self, record: dict) -> None:
         self._append(self.compliance_path, record)
+
+    def log_task_compliance(self, record: dict) -> None:
+        self._append(self.task_compliance_path, record)
 
     def map_path(self, episode: int, t: int) -> str:
         return os.path.join(self.maps_dir, f"ep{episode:04d}_t{t:06d}.png")

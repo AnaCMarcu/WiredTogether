@@ -489,42 +489,63 @@ async def orchestrate(
     if parse_json is None:
         parse_json = _default_parse_json()
     n_total = num_agents if num_agents is not None else len(living_agents)
+    variant = getattr(cfg, "variant", "task")
 
-    # 1. Map (image when possible, else the text fallback block).
     map_path = None
     map_image = None
-    map_text = ""
-    if cfg.use_map_image and _client_supports_vision(llm):
-        out_path = (orch_logger.map_path(episode, t) if orch_logger
-                    else f"orchestrator_map_ep{episode}_t{t}.png")
-        map_path = _map_render.render_map(env_state, out_path,
-                                          num_agents=n_total)
-        if map_path is not None:
-            try:
-                import PIL.Image as _PILImage
-                from autogen_core import Image as _AutogenImage
+    if variant == "task":
+        # 1. Map (image when possible, else the text fallback block).
+        map_text = ""
+        if cfg.use_map_image and _client_supports_vision(llm):
+            out_path = (orch_logger.map_path(episode, t) if orch_logger
+                        else f"orchestrator_map_ep{episode}_t{t}.png")
+            map_path = _map_render.render_map(env_state, out_path,
+                                              num_agents=n_total)
+            if map_path is not None:
+                try:
+                    import PIL.Image as _PILImage
+                    from autogen_core import Image as _AutogenImage
 
-                map_image = _AutogenImage.from_pil(_PILImage.open(map_path))
-            except Exception as exc:
-                logger.warning("Orchestrator: map image attach failed (%s); "
-                               "falling back to text block", exc)
-                map_image = None
-    if map_image is None:
-        map_text = _map_render.render_map_text(env_state, num_agents=n_total)
+                    map_image = _AutogenImage.from_pil(
+                        _PILImage.open(map_path))
+                except Exception as exc:
+                    logger.warning("Orchestrator: map image attach failed "
+                                   "(%s); falling back to text block", exc)
+                    map_image = None
+        if map_image is None:
+            map_text = _map_render.render_map_text(env_state,
+                                                   num_agents=n_total)
 
-    # 2. Digest + prompt.
-    digest = _events.build_digest(state.event_buffer, cfg.max_digest_events)
-    filled = _prompt.format_prompt(
-        n_agents=len(living_agents),
-        agent_names=living_agents,
-        last_call_step=state.last_call_step,
-        current_step=t,
-        digest=digest,
-        ledger=state.ledger,
-        directives=state.directives,
-        stall_threshold=cfg.stall_threshold,
-        map_text_fallback=map_text,
-    )
+        # 2. Digest + prompt.
+        digest = _events.build_digest(state.event_buffer,
+                                      cfg.max_digest_events)
+        filled = _prompt.format_prompt(
+            n_agents=len(living_agents),
+            agent_names=living_agents,
+            last_call_step=state.last_call_step,
+            current_step=t,
+            digest=digest,
+            ledger=state.ledger,
+            directives=state.directives,
+            stall_threshold=cfg.stall_threshold,
+            map_text_fallback=map_text,
+        )
+    else:
+        # social/plan: information-matched to the Hebbian rule — the
+        # pair-activity digest only, no map, no message text. env_state is
+        # {"pair_digest": str, "task_table": str|None}.
+        filled = _prompt.format_social_prompt(
+            n_agents=len(living_agents),
+            agent_names=living_agents,
+            last_call_step=state.last_call_step,
+            current_step=t,
+            pair_digest=env_state.get("pair_digest")
+                or "(no steps recorded since your last call)",
+            ledger=state.ledger,
+            directives=state.directives,
+            task_table=(env_state.get("task_table")
+                        if variant == "plan" else None),
+        )
 
     # 3-5. Call + parse + validate; max 1 retry, then keep previous state.
     from autogen_core import CancellationToken
@@ -566,7 +587,11 @@ async def orchestrate(
             logger.warning("Orchestrator: JSON parse raised (attempt %d): %s",
                            attempt + 1, exc)
             parsed = None
-        verdict = validate_response(parsed, living_agents, t)
+        if variant == "task":
+            verdict = validate_response(parsed, living_agents, t)
+        else:
+            verdict = validate_social_response(parsed, living_agents, t,
+                                               variant=variant)
         if verdict["ok"]:
             break
         logger.warning("Orchestrator: response failed validation "
@@ -595,6 +620,9 @@ async def orchestrate(
             "directives": state.directives,
             "leakage_filtered": verdict["leakage_filtered"],
             "warnings": verdict["warnings"],
+            # social/plan only: how many notes match the relational patterns
+            # (counted for observability, never dropped in those variants).
+            "relational_matches": verdict.get("relational_matches", 0),
         })
         if verdict["leakage_filtered"]:
             logger.warning("Orchestrator: filtered %d relational task_facts: "
@@ -647,8 +675,204 @@ def directive_comm_target(state: OrchestratorState,
                           agent_name: str) -> Optional[str]:
     """Canonical 'agent_N' the orchestrator directed ``agent_name`` to
     message, or None. Used by the bias coupling at the routing site and by
-    the per-step compliance log."""
+    the per-step compliance log. Task-variant directives carry
+    ``comm_target``; social/plan directives carry ``ask_target`` (which is
+    exactly what the SocialModule's bias coupling reads)."""
     entry = state.directives.get(_normalize_agent(agent_name) or agent_name)
     if not entry:
         return None
-    return _normalize_agent(entry.get("comm_target"))
+    return _normalize_agent(entry.get("comm_target") or entry.get("ask_target"))
+
+
+# ── Social / plan variants ───────────────────────────────────────────────
+
+PLAN_NOTE_MAX_CHARS = 280
+
+
+def collect_task_table(agents, num_agents: int) -> str:
+    """Per-agent task snapshot for the plan variant: current auto-curriculum
+    task + recent completed/failed. Read-only over loop-owned objects."""
+    def _clip(s, n=90):
+        s = str(s or "")
+        return s if len(s) <= n else s[:n - 1] + "..."
+
+    lines = []
+    for i in range(num_agents):
+        try:
+            cur = agents[i].auto_curriculum
+        except (IndexError, AttributeError):
+            continue
+        done = [_clip(x) for x in (getattr(cur, "completed_tasks", []) or [])[-3:]]
+        failed = [_clip(x) for x in (getattr(cur, "failed_tasks", []) or [])[-3:]]
+        cur_task = _clip(cur.current_task) or "(none yet)"
+        lines.append(
+            f'  agent_{i}: current="{cur_task}"'
+            f" | recently completed: {'; '.join(done) or '(none)'}"
+            f" | recently failed: {'; '.join(failed) or '(none)'}"
+        )
+    return "\n".join(lines) or "  (no task information available)"
+
+
+def validate_social_response(parsed: dict, living_agents: list, t: int,
+                             variant: str = "social") -> dict:
+    """Validate one social/plan-variant response.
+
+    Per-agent SocialThought shape: reasoning, ask_target (nullable — 'stay
+    focused' is a legitimate outcome, exactly as the SocialModule allows),
+    ask_message, respond_to, pair_notes, and (plan variant) plan_note.
+    Relational content is this variant's SUBJECT, so nothing is dropped —
+    but matches of the relational patterns are counted for observability.
+    """
+    result = {"ok": False, "error": None, "ledger": None, "directives": None,
+              "leakage_filtered": [], "warnings": [],
+              "relational_matches": 0}
+    if not isinstance(parsed, dict):
+        result["error"] = "response is not a JSON object"
+        return result
+    ledger = parsed.get("ledger")
+    directives = parsed.get("directives")
+    if not isinstance(ledger, dict):
+        result["error"] = "missing/invalid top-level 'ledger'"
+        return result
+    if not isinstance(directives, dict):
+        result["error"] = "missing/invalid top-level 'directives'"
+        return result
+    if "stall_counter" not in ledger and "stall_counter" in parsed:
+        ledger = {**ledger, "stall_counter": parsed["stall_counter"]}
+        result["warnings"].append(
+            "stall_counter arrived at the top level; hoisted into ledger")
+
+    living = [_normalize_agent(a) or a for a in living_agents]
+
+    cleaned = {}
+    for raw_name, entry in directives.items():
+        name = _normalize_agent(raw_name)
+        if name is None or name not in living:
+            result["warnings"].append(
+                f"stripped directive for non-living/unknown agent "
+                f"{raw_name!r}")
+            continue
+        if not isinstance(entry, dict):
+            result["error"] = f"directive for {name} is not an object"
+            return result
+        ask_raw = entry.get("ask_target")
+        ask = None
+        if ask_raw not in (None, "", "null", "none", "None"):
+            ask = _normalize_agent(ask_raw)
+            if ask is None:
+                result["error"] = (f"directive for {name}: ask_target "
+                                   f"{ask_raw!r} is not an agent name or null")
+                return result
+            if ask == name:
+                result["error"] = f"directive for {name}: ask_target is itself"
+                return result
+            if ask not in living:
+                result["error"] = (f"directive for {name}: ask_target {ask} "
+                                   f"is not a living teammate")
+                return result
+        respond_to = []
+        for r in (entry.get("respond_to") or []):
+            rn = _normalize_agent(r)
+            if rn is None or rn == name or rn not in living:
+                result["warnings"].append(
+                    f"dropped invalid respond_to entry {r!r} for {name}")
+                continue
+            if rn not in respond_to:
+                respond_to.append(rn)
+        pair_notes = {}
+        raw_notes = entry.get("pair_notes")
+        if isinstance(raw_notes, dict):
+            for k, v in raw_notes.items():
+                kn = _normalize_agent(k)
+                if kn is not None and kn != name and kn in living:
+                    pair_notes[kn] = str(v)
+        cleaned_entry = {
+            "reasoning": str(entry.get("reasoning") or ""),
+            "ask_target": ask,
+            "ask_message": (str(entry.get("ask_message"))
+                            if ask is not None and entry.get("ask_message")
+                            else None),
+            "respond_to": respond_to,
+            "pair_notes": pair_notes,
+        }
+        if variant == "plan":
+            cleaned_entry["plan_note"] = str(
+                entry.get("plan_note") or "")[:PLAN_NOTE_MAX_CHARS]
+        cleaned[name] = cleaned_entry
+    missing = [a for a in living if a not in cleaned]
+    if missing:
+        result["error"] = f"directives missing for living agents: {missing}"
+        return result
+
+    raw_notes_list = ledger.get("notes")
+    if raw_notes_list is None:
+        raw_notes_list = []
+    if not isinstance(raw_notes_list, list):
+        result["error"] = "ledger.notes is not a list"
+        return result
+    notes = [n if isinstance(n, str) else str(n) for n in raw_notes_list]
+    result["relational_matches"] = sum(
+        1 for n in notes if is_relational_leakage(n))
+    try:
+        stall = int(ledger.get("stall_counter", 0))
+    except (TypeError, ValueError):
+        stall = 0
+
+    result["ok"] = True
+    result["ledger"] = {"notes": notes, "progress": None,
+                        "stall_counter": stall}
+    result["directives"] = cleaned
+    return result
+
+
+# Byte-format mirror of SocialModule.render_directive (social_module.py):
+# the action LLM must not be able to distinguish the conditions by the SHAPE
+# of the directive text — only by its content/provenance. The pre-first-call
+# fallback string is likewise the exact legacy string.
+_SOCIAL_NONE_DIRECTIVE = ("Social directive: (none — social module disabled "
+                          "or not yet run)")
+
+
+def render_social_directive(agent_name: str, state: OrchestratorState) -> str:
+    entry = state.directives.get(_normalize_agent(agent_name) or agent_name)
+    if not entry:
+        return _SOCIAL_NONE_DIRECTIVE
+    ask_target = entry.get("ask_target")
+    ask_message = entry.get("ask_message")
+    respond_to = entry.get("respond_to") or []
+    reasoning = entry.get("reasoning", "")
+    pair_notes = entry.get("pair_notes") or {}
+
+    outgoing = (
+        f"Ask {ask_target} for help. Suggested message: \"{ask_message}\". "
+        f"Put {ask_target} in your communication_target field and a help "
+        f"request in your communication field."
+        if ask_target
+        else "No help to ask for this step."
+    )
+    incoming = (
+        f"You have decided to help: {', '.join(respond_to)}. Your "
+        f"communication this step should acknowledge them, and your "
+        f"action should move toward or support their stated goal."
+        if respond_to
+        else "No pending requests warrant your help this step."
+    )
+    bond_notes = (
+        "\n  ".join(f"- {k}: {v}" for k, v in pair_notes.items())
+        if pair_notes
+        else "(no significant bond changes)"
+    )
+    return (
+        "Social directive (from your social-reasoning step):\n"
+        f"  Reasoning: {reasoning}\n"
+        f"  Outgoing: {outgoing}\n"
+        f"  Incoming: {incoming}\n"
+        f"  Bond changes noted:\n  {bond_notes}"
+    )
+
+
+def plan_note_for(state: OrchestratorState, agent_name: str) -> str:
+    entry = state.directives.get(_normalize_agent(agent_name) or agent_name)
+    if not entry:
+        return ""
+    return str(entry.get("plan_note") or "")

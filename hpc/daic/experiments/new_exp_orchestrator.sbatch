@@ -73,14 +73,30 @@ export WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT
 
 source "$WORKSPACE/WiredTogether/hpc/daic/experiments/_common.sh"
 
-# The one knob. Validated here as well as in code — refuse to burn GPU-hours
-# on a typo'd arm name.
+# The two knobs. Validated here as well as in code — refuse to burn
+# GPU-hours on a typo'd arm name.
 ORCH_MODE="${ORCH_MODE:-advisory}"
 case "$ORCH_MODE" in
     advisory|bias) ;;
     *)
         echo "ERROR: ORCH_MODE must be 'advisory' or 'bias' (got '${ORCH_MODE}')." >&2
         echo "       e.g. SEED=42 ORCH_MODE=bias sbatch new_exp_orchestrator.sbatch" >&2
+        exit 1
+        ;;
+esac
+
+# ORCH_VARIANT selects the arm family:
+#   task   (default) — O2 task-ledger orchestrator (map + event digest)
+#   social           — centralized social deliberation, information-matched
+#                      to the Hebbian rule (pair digest only)
+#   plan             — social + task visibility + per-agent plan notes into
+#                      the auto-curriculum (upper baseline)
+ORCH_VARIANT="${ORCH_VARIANT:-task}"
+case "$ORCH_VARIANT" in
+    task|social|plan) ;;
+    *)
+        echo "ERROR: ORCH_VARIANT must be 'task', 'social' or 'plan' (got '${ORCH_VARIANT}')." >&2
+        echo "       e.g. SEED=42 ORCH_VARIANT=social sbatch new_exp_orchestrator.sbatch" >&2
         exit 1
         ;;
 esac
@@ -96,16 +112,24 @@ case "$ORCH_CADENCE" in
         ;;
 esac
 
-EXP_NAME="new_exp_0_gemma_orch_${ORCH_MODE}"
-export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,orchestrator,${ORCH_MODE},cadence${ORCH_CADENCE},new_exp_0}"
+# Arm naming: the task variant keeps its original name
+# (new_exp_0_gemma_orch_<mode>) so completed runs and the submit script's
+# idempotency checks stay valid; social/plan get the variant in the name.
+if [ "$ORCH_VARIANT" = "task" ]; then
+    EXP_NAME="new_exp_0_gemma_orch_${ORCH_MODE}"
+else
+    EXP_NAME="new_exp_0_gemma_orch_${ORCH_VARIANT}_${ORCH_MODE}"
+fi
+export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,orchestrator,${ORCH_VARIANT},${ORCH_MODE},cadence${ORCH_CADENCE},new_exp_0}"
 
 ORCH_ARGS=(
     --orchestrator
+    --orchestrator-variant "$ORCH_VARIANT"
     --orchestrator-mode "$ORCH_MODE"
     --orchestrator-cadence "$ORCH_CADENCE"
 )
 
-echo "── new_exp_orchestrator: ORCH_MODE=$ORCH_MODE cadence=$ORCH_CADENCE → $EXP_NAME ──"
+echo "── new_exp_orchestrator: ORCH_VARIANT=$ORCH_VARIANT ORCH_MODE=$ORCH_MODE cadence=$ORCH_CADENCE → $EXP_NAME ──"
 
 run_exp "$EXP_NAME" "$MODEL_LLM" \
     "${ORCH_ARGS[@]}" \

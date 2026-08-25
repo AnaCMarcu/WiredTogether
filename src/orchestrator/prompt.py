@@ -17,9 +17,14 @@ import os
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts")
 
-with open(os.path.join(_PROMPT_DIR, "orchestrator.txt"), "r",
-          encoding="utf-8") as f:
-    _orchestrator_prompt = f.read()
+def _load(name: str) -> str:
+    with open(os.path.join(_PROMPT_DIR, name), "r", encoding="utf-8") as f:
+        return f.read()
+
+
+_orchestrator_prompt = _load("orchestrator.txt")
+_orchestrator_social_prompt = _load("orchestrator_social.txt")
+_orchestrator_plan_prompt = _load("orchestrator_plan.txt")
 
 
 def _ledger_json(ledger: dict) -> str:
@@ -92,3 +97,73 @@ def format_prompt(
         directives_example=_build_directives_example(list(agent_names)),
         stall_threshold=stall_threshold,
     )
+
+
+# ── Social / plan variants ───────────────────────────────────────────────
+
+def _notes_ledger_json(ledger: dict) -> str:
+    if not ledger or (not ledger.get("notes")
+                      and not ledger.get("stall_counter")):
+        return "(none yet — this is your first call)"
+    view = {"notes": ledger.get("notes") or [],
+            "stall_counter": ledger.get("stall_counter", 0)}
+    return json.dumps(view, indent=1)
+
+
+def _build_social_directives_example(agent_names: list,
+                                     with_plan: bool) -> str:
+    """SocialThought-shaped example generated from the REAL living agents —
+    same lesson as _build_directives_example: this backbone copies example
+    arity literally, so the example must always show every living agent (and
+    an open-ended shape everywhere a list can grow)."""
+    n = len(agent_names)
+    if n == 0:
+        agent_names, n = ["agent_0", "agent_1"], 2
+    lines = []
+    plan_part = ', "plan_note": ""' if with_plan else ""
+    for i, name in enumerate(agent_names):
+        target = agent_names[(i + 1) % n] if n > 1 else "null"
+        if i == n - 1 and n > 1:
+            # Show the stay-focused shape too, so null is visibly legal.
+            entry = (f'    "{name}": {{"reasoning": "...", '
+                     f'"ask_target": null, "ask_message": null, '
+                     f'"respond_to": ["{agent_names[0]}"], '
+                     f'"pair_notes": {{}}{plan_part}}}')
+        else:
+            entry = (f'    "{name}": {{"reasoning": "...", '
+                     f'"ask_target": "{target}", "ask_message": "...", '
+                     f'"respond_to": [], '
+                     f'"pair_notes": {{"{target}": "..."}}{plan_part}}}')
+        lines.append(entry)
+    return ",\n".join(lines)
+
+
+def format_social_prompt(
+    *,
+    n_agents: int,
+    agent_names: list,
+    last_call_step: int,
+    current_step: int,
+    pair_digest: str,
+    ledger: dict,
+    directives: dict,
+    task_table: str = None,
+) -> str:
+    """Fill the social (task_table=None) or plan template."""
+    template = (_orchestrator_plan_prompt if task_table is not None
+                else _orchestrator_social_prompt)
+    kwargs = dict(
+        n_agents=n_agents,
+        agent_names=", ".join(agent_names),
+        last_call_step=(last_call_step if last_call_step >= 0
+                        else "episode start"),
+        current_step=current_step,
+        pair_digest=pair_digest,
+        ledger_json=_notes_ledger_json(ledger),
+        directives_json=_directives_json(directives),
+        directives_example=_build_social_directives_example(
+            list(agent_names), with_plan=task_table is not None),
+    )
+    if task_table is not None:
+        kwargs["task_table"] = task_table
+    return template.format(**kwargs)

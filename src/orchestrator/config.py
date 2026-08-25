@@ -20,6 +20,24 @@ class OrchestratorConfig:
     # ── Master switch for the O2 condition ──
     enabled: bool = False
 
+    # ── Variant ──
+    # "task":   the original O2 task-ledger orchestrator — world-state map +
+    #           event digest in, comm_target/help directives out, relational
+    #           content excluded from the ledger, ledger reset per episode.
+    # "social": centralized social deliberation — the orchestrator replaces
+    #           the per-agent SocialModule: it sees ONLY the signals the
+    #           Hebbian rule consumes (pair co-presence, message counts,
+    #           co-rewards, chambers; no map, no message text) and emits a
+    #           SocialThought per agent (ask_target/ask_message/respond_to),
+    #           rendered in the SocialModule's exact directive format.
+    #           Relational notes allowed; ledger persists across episodes
+    #           (matching W(t)'s horizon).
+    # "plan":   "social" plus each agent's auto-curriculum task in view and a
+    #           per-agent plan_note delivered to that agent's curriculum the
+    #           next time it generates a task. Upper baseline (exceeds the
+    #           Hebbian condition's information and influence by design).
+    variant: str = "task"
+
     # ── Coupling mode ──
     # "advisory": directives rendered as text in the action prompt (same
     #             {social_directive} slot the social module uses); the action
@@ -58,11 +76,17 @@ class OrchestratorConfig:
     log_dir_name: str = "orchestrator"
 
     VALID_MODES = ("advisory", "bias")
+    VALID_VARIANTS = ("task", "social", "plan")
 
     def validate(self) -> None:
-        """Raise ValueError on an invalid mode. Cheap, call at startup."""
+        """Raise ValueError on an invalid mode/variant. Cheap, call at startup."""
         if self.mode not in self.VALID_MODES:
             raise ValueError(
                 f"orchestrator.mode must be one of {self.VALID_MODES}, "
                 f"got {self.mode!r}"
+            )
+        if self.variant not in self.VALID_VARIANTS:
+            raise ValueError(
+                f"orchestrator.variant must be one of {self.VALID_VARIANTS}, "
+                f"got {self.variant!r}"
             )

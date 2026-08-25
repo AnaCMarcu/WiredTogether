@@ -158,6 +158,7 @@ class CustomAgent(BaseChatAgent):
         bond_deltas=None,
         social_returns=None,
         orchestrator_directive=None,
+        orchestrator_plan_note=None,
     ):
 
         self._call_count += 1
@@ -292,7 +293,17 @@ class CustomAgent(BaseChatAgent):
                 completed_milestones=completed_milestones,
                 milestone_progress=milestone_progress,
                 do_question_answers=False,
+                # O-plan orchestrator variant: the coordinator's standing
+                # plan note for THIS agent, consumed at task-generation time
+                # via the {team_plan_note} curriculum-prompt suffix. Empty/
+                # None in every other configuration (str.format ignores it).
+                team_plan_note=orchestrator_plan_note or "",
             )
+            if orchestrator_plan_note:
+                self.metric.log(
+                    f"Agent {self.name}: curriculum consumed team plan "
+                    f"note: {orchestrator_plan_note}"
+                )
             self.metric.log(f"Agent {self.name}: New task: {task}")
             self.belief_system.task_beliefs = context
             error_count = 0

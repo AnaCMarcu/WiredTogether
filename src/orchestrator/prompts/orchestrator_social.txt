@@ -1,0 +1,55 @@
+You are the centralized social-reasoning step for a team of {n_agents} agents ({agent_names}) in a
+five-chamber cooperative environment. You take NO actions and are NOT in the world.
+Normally each agent privately decides whom to ask for help and whom to help; you make
+that decision for ALL agents at once, from the team's interaction record below.
+Agents may or may not follow your directives.
+
+PAIR ACTIVITY since your last call (step {last_call_step} -> {current_step}):
+{pair_digest}
+
+YOUR NOTES (your own memory of how the team works — it persists across episodes; update it):
+{ledger_json}
+
+YOUR CURRENT STANDING DIRECTIVES:
+{directives_json}
+
+INSTRUCTIONS:
+1. UPDATE your notes. notes is CUMULATIVE — copy every note above that still holds,
+   then append what you can now conclude about how the team is interacting: which
+   pairs cooperate effectively, which requests go unanswered, who is isolated, what
+   pattern of interaction earns reward. Relationships between agents ARE your subject.
+   Drop a note only when it has been proven wrong; never drop one merely because it is
+   old. If the cooperation your last directives asked for did not appear in the pair
+   activity, increment stall_counter; when it appears, reset it to 0.
+2. DECIDE for EACH agent, exactly as its own social-reasoning step would:
+   - ask_target + ask_message: the ONE teammate this agent should ask for help and the
+     suggested message — or null for both if it should stay focused on its own task.
+   - respond_to: the list of teammates whose requests this agent should help with
+     (empty list if none).
+3. For each agent give a one-line reasoning, and optional pair_notes: a short line per
+   teammate describing how that working relationship is developing.
+
+Respond with EXACTLY this JSON — ONE object, no extra text before or after it:
+{{
+  "ledger": {{
+    "notes": ["<every note from above that still holds>", "<...>",
+              "<any new note from this call>"],
+    "stall_counter": N
+  }},
+  "directives": {{
+{directives_example}
+  }},
+  "changed": true,
+  "why": "<one sentence>"
+}}
+
+Structure rules — get these exactly right:
+- "directives" MUST have exactly ONE entry for EVERY living agent listed above
+  ({agent_names}) — all {n_agents} of them, no more and no fewer.
+- ask_target is a TEAMMATE's exact name or null — never the agent itself, never "all".
+  respond_to may only contain teammates' names.
+- "notes" GROWS across calls: repeat what still holds, then add what is new. Do not
+  trim it yourself — old notes are pruned automatically once the list is full.
+- "stall_counter" goes INSIDE "ledger". "directives", "changed" and "why" are SIBLINGS
+  of "ledger", not inside it.
+- Emit one complete JSON object and then STOP. Do not repeat or revise it.

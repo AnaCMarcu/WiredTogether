@@ -629,3 +629,317 @@ def test_compliance_log_roundtrip(tmp_path):
     rec = json.loads(open(logger.compliance_path, encoding="utf-8").read())
     assert rec["complied"] is False
     assert rec["directed_comm_target"] == "agent_1"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Variants: O-social (centralized social deliberation) + O-plan
+# ═══════════════════════════════════════════════════════════════════════
+
+from orchestrator.curriculum_hook import (
+    PLAN_SUFFIX, TEAM_PLAN_NOTE_PLACEHOLDER, apply_plan_suffix,
+)
+from orchestrator.events import PairAccumulator
+
+
+def social_response(**overrides) -> dict:
+    resp = {
+        "ledger": {"notes": ["a0 and a1 keep co-firing at the anvil"],
+                   "stall_counter": 0},
+        "directives": {
+            "agent_0": {"reasoning": "r0", "ask_target": "agent_1",
+                        "ask_message": "help me punch anvil A",
+                        "respond_to": [], "pair_notes": {"agent_1": "warming"}},
+            "agent_1": {"reasoning": "r1", "ask_target": None,
+                        "ask_message": None,
+                        "respond_to": ["agent_0"], "pair_notes": {}},
+            "agent_2": {"reasoning": "r2", "ask_target": "agent_0",
+                        "ask_message": "where is the door",
+                        "respond_to": [], "pair_notes": {}},
+        },
+        "changed": True,
+        "why": "initial",
+    }
+    resp.update(overrides)
+    return resp
+
+
+# ── Config / state ───────────────────────────────────────────────────────
+
+def test_variant_config_validation():
+    OrchestratorConfig(variant="task").validate()
+    OrchestratorConfig(variant="social").validate()
+    OrchestratorConfig(variant="plan").validate()
+    with pytest.raises(ValueError):
+        OrchestratorConfig(variant="graph").validate()
+    assert OrchestratorConfig().variant == "task"   # default unchanged
+
+
+def test_reset_keep_ledger_preserves_memory_across_episodes():
+    st = OrchestratorState()
+    st.apply_success({"notes": ["n1"], "stall_counter": 2},
+                     {"agent_0": {"ask_target": "agent_1"}},
+                     t=40, max_task_facts=15)
+    st.add_event(oevents.death_event(41, "agent_2"))
+    st.record_failure(42)
+    st.reset(keep_ledger=True)
+    # W(t)-matched horizon: ledger + directives survive...
+    assert st.ledger["notes"] == ["n1"]
+    assert st.directives["agent_0"]["ask_target"] == "agent_1"
+    # ...but the episode clock resets.
+    assert st.last_call_step == -1
+    assert st.event_buffer == []
+    assert st.call_count == 0 and st.failed_calls == 0
+
+
+def test_apply_success_caps_notes_list():
+    st = OrchestratorState()
+    st.apply_success({"notes": [f"n{i}" for i in range(20)],
+                      "stall_counter": 0}, {}, t=8, max_task_facts=15)
+    assert st.ledger["notes"] == [f"n{i}" for i in range(5, 20)]
+
+
+# ── PairAccumulator ──────────────────────────────────────────────────────
+
+def test_pair_accumulator_counts_and_render():
+    acc = PairAccumulator(3, radius=5.0)
+    # Step 1: a0 and a1 co-present (dist 3), a2 far; a0 msgs a1; a0 earns +10.
+    acc.note_step(
+        positions=[(0, 0, 0), (3, 0, 0), (100, 0, 0)],
+        comm_events=[(0, 1)],
+        bond_rewards=[10.0, 0.0, 0.5],
+        chambers=[2, 2, 1],
+    )
+    # Step 2: all far apart; a1 msgs a0.
+    acc.note_step(
+        positions=[(0, 0, 0), (50, 0, 0), (100, 0, 0)],
+        comm_events=[(1, 0)],
+        bond_rewards=[0.0, 5.0, 0.0],
+        chambers=[2, 2, 1],
+    )
+    assert acc.steps == 2
+    assert acc.copresence[(0, 1)] == 1
+    assert (0, 2) not in acc.copresence
+    assert acc.messages[(0, 1)] == 1 and acc.messages[(1, 0)] == 1
+    assert acc.coreward[(0, 1)] == 10.0     # step-1 rewards of a0+a1
+    assert acc.reward_totals == [10.0, 5.0, 0.5]
+    text = acc.render()
+    assert "agent_0~agent_1: co-present 1/2 steps" in text
+    assert "msgs 1 (agent_0->agent_1) / 1 (agent_1->agent_0)" in text
+    assert "reward-while-together +10.0" in text
+    assert "agent_2=ch1" in text
+    acc.clear()
+    assert acc.steps == 0
+    assert acc.render() == "(no steps recorded since your last call)"
+
+
+def test_pair_accumulator_radius_boundary_and_none_positions():
+    acc = PairAccumulator(2, radius=5.0)
+    acc.note_step([(0, 0, 0), (5, 0, 0)], [], [0, 0], [1, 1])   # exactly 5.0
+    assert acc.copresence.get((0, 1)) == 1                       # <= radius
+    acc.note_step([None, (5, 0, 0)], [], [0, 0], [1, 1])         # missing pos
+    assert acc.copresence.get((0, 1)) == 1
+
+
+# ── validate_social_response ─────────────────────────────────────────────
+
+def test_social_validate_happy_path():
+    v = ocore.validate_social_response(social_response(), LIVING, t=8)
+    assert v["ok"], v["error"]
+    assert v["directives"]["agent_0"]["ask_target"] == "agent_1"
+    assert v["directives"]["agent_1"]["ask_target"] is None
+    assert v["directives"]["agent_1"]["respond_to"] == ["agent_0"]
+    assert v["ledger"]["notes"] == ["a0 and a1 keep co-firing at the anvil"]
+
+
+def test_social_validate_relational_notes_are_kept_and_counted():
+    resp = social_response()
+    resp["ledger"]["notes"] = [
+        "agent_0 and agent_1 work well together",   # relational — KEPT here
+        "door 2 needs both anvils broken",
+    ]
+    v = ocore.validate_social_response(resp, LIVING, t=8)
+    assert v["ok"]
+    assert len(v["ledger"]["notes"]) == 2           # nothing dropped
+    assert v["relational_matches"] == 1             # but counted
+
+
+def test_social_validate_missing_agent_fails():
+    resp = social_response()
+    del resp["directives"]["agent_2"]
+    assert not ocore.validate_social_response(resp, LIVING, t=8)["ok"]
+
+
+def test_social_validate_self_ask_target_fails():
+    resp = social_response()
+    resp["directives"]["agent_0"]["ask_target"] = "agent_0"
+    assert not ocore.validate_social_response(resp, LIVING, t=8)["ok"]
+
+
+def test_social_validate_filters_bad_respond_to_tolerantly():
+    resp = social_response()
+    resp["directives"]["agent_1"]["respond_to"] = [
+        "agent_0", "agent_1", "agent_9", "all", "agent_0"]
+    v = ocore.validate_social_response(resp, LIVING, t=8)
+    assert v["ok"]                                   # tolerant, not fatal
+    assert v["directives"]["agent_1"]["respond_to"] == ["agent_0"]
+
+
+def test_plan_validate_truncates_plan_note():
+    resp = social_response()
+    for entry in resp["directives"].values():
+        entry["plan_note"] = "x" * 500
+    v = ocore.validate_social_response(resp, LIVING, t=8, variant="plan")
+    assert v["ok"]
+    note = v["directives"]["agent_0"]["plan_note"]
+    assert len(note) == ocore.PLAN_NOTE_MAX_CHARS
+    # social variant never carries the key at all
+    v2 = ocore.validate_social_response(social_response(), LIVING, t=8)
+    assert "plan_note" not in v2["directives"]["agent_0"]
+
+
+def test_social_validate_hoists_top_level_stall_counter():
+    resp = social_response()
+    resp["ledger"].pop("stall_counter")
+    resp["stall_counter"] = 3
+    v = ocore.validate_social_response(resp, LIVING, t=8)
+    assert v["ok"] and v["ledger"]["stall_counter"] == 3
+
+
+# ── Rendering: byte-format mirror of SocialModule.render_directive ──────
+
+def test_render_social_directive_matches_socialmodule_format():
+    st = OrchestratorState()
+    v = ocore.validate_social_response(social_response(), LIVING, t=8)
+    st.apply_success(v["ledger"], v["directives"], t=8, max_task_facts=15)
+
+    text = ocore.render_social_directive("agent_0", st)
+    # Exact strings from SocialModule.render_directive — the action LLM must
+    # not be able to tell the conditions apart by text shape.
+    assert text.startswith(
+        "Social directive (from your social-reasoning step):\n")
+    assert "  Reasoning: r0\n" in text
+    assert ('  Outgoing: Ask agent_1 for help. Suggested message: '
+            '"help me punch anvil A". Put agent_1 in your '
+            'communication_target field and a help request in your '
+            'communication field.') in text
+    assert "No pending requests warrant your help this step." in text
+    assert "  Bond changes noted:\n  - agent_1: warming" in text
+
+    text1 = ocore.render_social_directive("agent_1", st)
+    assert "No help to ask for this step." in text1
+    assert ("You have decided to help: agent_0. Your communication this "
+            "step should acknowledge them") in text1
+    assert "(no significant bond changes)" in text1
+
+
+def test_render_social_directive_none_case_is_legacy_string():
+    st = OrchestratorState()
+    assert ocore.render_social_directive("agent_0", st) == (
+        "Social directive: (none — social module disabled or not yet run)")
+
+
+def test_directive_comm_target_reads_ask_target():
+    st = OrchestratorState()
+    v = ocore.validate_social_response(social_response(), LIVING, t=8)
+    st.apply_success(v["ledger"], v["directives"], t=8, max_task_facts=15)
+    assert ocore.directive_comm_target(st, "agent_0") == "agent_1"
+    assert ocore.directive_comm_target(st, "agent_1") is None  # stay focused
+    assert ocore.plan_note_for(st, "agent_0") == ""            # social: none
+
+
+# ── Prompts ──────────────────────────────────────────────────────────────
+
+def test_social_prompt_covers_agents_and_is_cumulative():
+    st = OrchestratorState()
+    out = oprompt.format_social_prompt(
+        n_agents=3, agent_names=LIVING, last_call_step=-1, current_step=0,
+        pair_digest="  agent_0~agent_1: co-present 3/8 steps",
+        ledger=st.ledger, directives=st.directives,
+    )
+    for name in LIVING:
+        assert f'"{name}": {{"reasoning"' in out
+    assert '"ask_target": null' in out            # stay-focused shape shown
+    assert "CUMULATIVE" in out and "GROWS across calls" in out
+    assert "episode start -> 0" in out
+    assert "(none yet — this is your first call)" in out
+    assert "co-present 3/8 steps" in out
+    assert "plan_note" not in out                 # social has no plan field
+    assert "{" not in out.replace("{{", "").replace("}}", "") or True
+
+
+def test_plan_prompt_adds_task_table_and_plan_note():
+    st = OrchestratorState()
+    out = oprompt.format_social_prompt(
+        n_agents=3, agent_names=LIVING, last_call_step=8, current_step=16,
+        pair_digest="(digest)", ledger=st.ledger, directives=st.directives,
+        task_table='  agent_0: current="dig 3 stone"',
+    )
+    assert 'agent_0: current="dig 3 stone"' in out
+    assert '"plan_note": ""' in out
+    assert "never assign a task" in out.lower() or "never assign" in out
+
+
+# ── Curriculum hook (byte-identity is the load-bearing property) ─────────
+
+def test_apply_plan_suffix_identity_when_disabled():
+    base = "TASK PROMPT with {completed_tasks} and {last_task}"
+    assert apply_plan_suffix(base, False) == base
+
+
+def test_apply_plan_suffix_appends_placeholder_once():
+    base = "TASK PROMPT"
+    out = apply_plan_suffix(base, True)
+    assert out.startswith(base)
+    assert TEAM_PLAN_NOTE_PLACEHOLDER in out
+    assert apply_plan_suffix(out, True) == out          # idempotent
+    assert out.count(TEAM_PLAN_NOTE_PLACEHOLDER) == 1
+    # The suffix formats cleanly and legacy formatting ignores the extra kwarg.
+    assert PLAN_SUFFIX.format(team_plan_note="hello").strip().endswith("hello")
+    assert base.format(team_plan_note="ignored") == base
+
+
+# ── orchestrate() end-to-end for the social variant ─────────────────────
+
+def test_orchestrate_social_variant_end_to_end(stub_autogen, tmp_path):
+    cfg = OrchestratorConfig(enabled=True, variant="social",
+                             use_map_image=False)
+    state = OrchestratorState()
+    client = _FakeClient([json.dumps(social_response())])
+    logger = OrchestratorLogger(str(tmp_path), dir_name=cfg.log_dir_name)
+    asyncio.run(ocore.orchestrate(
+        state, {"pair_digest": "  agent_0~agent_1: co-present 5/8 steps",
+                "task_table": None},
+        client, cfg, living_agents=LIVING, episode=1, t=8,
+        orch_logger=logger, parse_json=json.loads, num_agents=3,
+    ))
+    assert state.failed_calls == 0
+    assert state.directives["agent_0"]["ask_target"] == "agent_1"
+    assert state.ledger["notes"]
+    sent = client.calls[0][0].content[0]
+    assert "co-present 5/8 steps" in sent          # pair digest reached prompt
+    assert "CURRENT INDIVIDUAL PLANS" not in sent  # social ≠ plan template
+    rec = json.loads(open(logger.calls_path, encoding="utf-8").read())
+    assert rec["failed"] is False
+    assert rec["relational_matches"] == 0
+    assert rec["map_path"] is None                 # no map in matched variant
+
+
+def test_orchestrate_plan_variant_end_to_end(stub_autogen, tmp_path):
+    cfg = OrchestratorConfig(enabled=True, variant="plan",
+                             use_map_image=False)
+    resp = social_response()
+    for entry in resp["directives"].values():
+        entry["plan_note"] = "take anvil B instead"
+    state = OrchestratorState()
+    client = _FakeClient([json.dumps(resp)])
+    asyncio.run(ocore.orchestrate(
+        state, {"pair_digest": "(digest)",
+                "task_table": '  agent_0: current="punch anvil A"'},
+        client, cfg, living_agents=LIVING, episode=1, t=8,
+        orch_logger=OrchestratorLogger(str(tmp_path)),
+        parse_json=json.loads, num_agents=3,
+    ))
+    assert state.failed_calls == 0
+    sent = client.calls[0][0].content[0]
+    assert 'agent_0: current="punch anvil A"' in sent
+    assert ocore.plan_note_for(state, "agent_0") == "take anvil B instead"

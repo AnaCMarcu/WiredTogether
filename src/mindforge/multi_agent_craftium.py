@@ -377,6 +377,23 @@ def parse_args():
                              "that keeps a within-episode task ledger and "
                              "issues per-agent comm_target/help directives. "
                              "Runs INSTEAD of the Hebbian coupling.")
+    parser.add_argument("--orchestrator-variant", type=str, default="task",
+                        choices=["task", "social", "plan"],
+                        help="'task' (default) = the O2 task-ledger "
+                             "orchestrator (map + event digest in, "
+                             "comm_target/help out, relational content "
+                             "filtered, ledger reset per episode). 'social' "
+                             "= centralized social deliberation, information-"
+                             "matched to the Hebbian rule: pair co-presence/"
+                             "message-count/co-reward digest in, a per-agent "
+                             "SocialThought (ask_target/ask_message/"
+                             "respond_to) out, rendered in the SocialModule's "
+                             "exact directive format; relational notes "
+                             "allowed; ledger persists across episodes like "
+                             "W(t). 'plan' = social + each agent's auto-"
+                             "curriculum task in view + a per-agent plan_note "
+                             "delivered to that agent's curriculum at its "
+                             "next task generation (upper baseline).")
     parser.add_argument("--orchestrator-mode", type=str, default="advisory",
                         choices=["advisory", "bias"],
                         help="'advisory' = directives rendered into the same "
@@ -594,7 +611,8 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
                  centralized_critic=None, is_resume: bool = False,
                  social_module_mode: str = "none", social_interval: int = 8,
                  social_act_mode: str = "legacy",
-                 social_act_channels: tuple = ()):
+                 social_act_channels: tuple = (),
+                 orchestrator_plan: bool = False):
     """Initialize all Mindforge agents.
 
     ``centralized_critic`` (when not None) is shared by all agents' RLLayers
@@ -609,6 +627,16 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
     templates + the SocialAgentResponse schema; "legacy" (default) keeps the
     original templates and AgentResponse byte-for-byte.
     """
+    # O-plan orchestrator variant: curriculum USER template with the
+    # {team_plan_note} placeholder appended. None in every other
+    # configuration → AutoCurriculum falls back to its module-level default,
+    # byte-identical to the historical prompt.
+    _task_info_override = None
+    if orchestrator_plan:
+        from agent_modules.auto_curriculum import curriculum_info as _cur_info
+        from orchestrator.curriculum_hook import apply_plan_suffix
+        _task_info_override = apply_plan_suffix(_cur_info, True)
+
     # Choice-mode template/client setup — built once, shared by all agents.
     _choice_action_kwargs = {}
     _choice_sm_prompt = None
@@ -690,6 +718,7 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
             auto_curriculum=AutoCurriculum(
                 override_curriculum_prompt=role_cfg["curriculum_prompt"],
                 override_questions_prompt=prompts["curriculum_questions"],
+                override_task_info_prompt=_task_info_override,
                 agent_name=role_cfg["agent_name"],
             ),
             critic=Critic(override_critic_prompt=prompts["critic"]),
@@ -780,6 +809,7 @@ async def agent_do_action(
     bond_deltas=None,
     social_returns=None,
     orchestrator_directive=None,
+    orchestrator_plan_note=None,
 ):
     """Have one agent observe and choose an action.
 
@@ -823,6 +853,7 @@ async def agent_do_action(
         bond_deltas=bond_deltas,
         social_returns=social_returns,
         orchestrator_directive=orchestrator_directive,
+        orchestrator_plan_note=orchestrator_plan_note,
     )
 
     last_action = "NoOp"
@@ -849,6 +880,7 @@ async def agent_do_action(
                 bond_deltas=bond_deltas,
                 social_returns=social_returns,
                 orchestrator_directive=orchestrator_directive,
+                orchestrator_plan_note=orchestrator_plan_note,
             )
         else:
             logging.error(f"Agent {agent_id} exceeded retry limit, using NoOp")
@@ -1332,7 +1364,10 @@ async def run(args):
                          social_module_mode=args.social_module,
                          social_interval=args.social_interval,
                          social_act_mode=social_act_mode,
-                         social_act_channels=_social_menu_channels)
+                         social_act_channels=_social_menu_channels,
+                         orchestrator_plan=(
+                             args.orchestrator
+                             and args.orchestrator_variant == "plan"))
 
     if args.agent_state_init:
         # Transplant memories into the freshly-constructed agents. Must run
@@ -1421,6 +1456,7 @@ async def run(args):
     orch_logger = None
     _orch_core = None
     _orch_events = None
+    _orch_pair_acc = None
     if args.orchestrator:
         from orchestrator import core as _orch_core
         from orchestrator import events as _orch_events
@@ -1430,6 +1466,7 @@ async def run(args):
 
         orchestrator_config = OrchestratorConfig(
             enabled=True,
+            variant=args.orchestrator_variant,
             mode=args.orchestrator_mode,
             cadence=args.orchestrator_cadence,
             event_triggers=args.orchestrator_event_triggers,
@@ -1449,8 +1486,16 @@ async def run(args):
             run_dir=str(run_paths.root),
             dir_name=orchestrator_config.log_dir_name,
         )
+        # social/plan variants: the Hebbian-rule-matched pair-activity
+        # accumulator (fed each step from Phase-2 scope). Radius from
+        # --hebbian-radius so a radius ablation stays matched.
+        _orch_pair_acc = None
+        if orchestrator_config.variant != "task":
+            _orch_pair_acc = _orch_events.PairAccumulator(
+                num_agents, radius=args.hebbian_radius,
+            )
         print(f"[FEATURES] Orchestrator:     ENABLED "
-              f"[{orchestrator_config.mode}]  "
+              f"[{orchestrator_config.variant}/{orchestrator_config.mode}]  "
               f"cadence={orchestrator_config.cadence}  "
               f"event_triggers={orchestrator_config.event_triggers}  "
               f"stall_threshold={orchestrator_config.stall_threshold}  "
@@ -1587,14 +1632,21 @@ async def run(args):
             for _ag in agents:
                 await _ag.on_reset(CancellationToken())
 
-        # ── Orchestrator: within-episode memory horizon ──
-        # The ledger/directives/event buffer are wiped at EVERY episode
-        # start (this is the experimental contrast with W(t), which
-        # persists across episodes). _orch_prev_chambers feeds the
-        # chamber_change events.
+        # ── Orchestrator: memory horizon at the episode boundary ──
+        # task variant: ledger/directives wiped every episode (the
+        # experimental contrast with W(t)). social/plan variants: ledger AND
+        # directives survive, matching W(t)'s cross-episode horizon; only
+        # the episode-clock state resets. _orch_prev_chambers feeds the
+        # chamber_change events; _orch_prev_tasks feeds the plan variant's
+        # task-compliance log.
         _orch_prev_chambers: dict = {}
+        _orch_prev_tasks: dict = {}
         if orchestrator_state is not None:
-            orchestrator_state.reset()
+            orchestrator_state.reset(
+                keep_ledger=(orchestrator_config.variant != "task")
+            )
+            if _orch_pair_acc is not None:
+                _orch_pair_acc.clear()
 
         import time as _time
         skip_warmup = (
@@ -1975,6 +2027,7 @@ async def run(args):
             # ── Orchestrator (O2): chamber events, scheduled call, and
             # per-agent directive text for this step's action prompts ──
             _orch_directives_text: dict = {}
+            _orch_plan_notes: dict = {}
             if orchestrator_state is not None:
                 _orch_new_chambers = set()
                 for _i in range(num_agents):
@@ -1993,15 +2046,28 @@ async def run(args):
                 ]
                 if _orch_living and _orch_core.should_call(
                         orchestrator_state, step, orchestrator_config):
-                    _orch_recent_msgs = [
-                        (_ev.get("sender"), _ev.get("target"))
-                        for _ev in orchestrator_state.event_buffer
-                        if _ev.get("type") == "message"
-                    ]
-                    _orch_env_state = _orch_core.collect_env_state(
-                        environment, num_agents, step,
-                        recent_messages=_orch_recent_msgs,
-                    )
+                    if orchestrator_config.variant == "task":
+                        _orch_recent_msgs = [
+                            (_ev.get("sender"), _ev.get("target"))
+                            for _ev in orchestrator_state.event_buffer
+                            if _ev.get("type") == "message"
+                        ]
+                        _orch_env_state = _orch_core.collect_env_state(
+                            environment, num_agents, step,
+                            recent_messages=_orch_recent_msgs,
+                        )
+                    else:
+                        # social/plan: the Hebbian-rule-matched inputs only.
+                        _orch_env_state = {
+                            "pair_digest": _orch_pair_acc.render(),
+                            "task_table": (
+                                _orch_core.collect_task_table(
+                                    agents, num_agents)
+                                if orchestrator_config.variant == "plan"
+                                else None
+                            ),
+                        }
+                    _orch_fails_before = orchestrator_state.failed_calls
                     try:
                         await _orch_core.orchestrate(
                             orchestrator_state, _orch_env_state,
@@ -2019,12 +2085,30 @@ async def run(args):
                             "— keeping previous directives",
                             episode + 1, step, _orch_exc,
                         )
+                    # Mirror the event-buffer policy: a successful call
+                    # consumed the pair window; a failed one keeps it so the
+                    # next call still sees those signals.
+                    if (_orch_pair_acc is not None
+                            and orchestrator_state.failed_calls
+                            == _orch_fails_before):
+                        _orch_pair_acc.clear()
                 for _i in range(num_agents):
-                    _orch_directives_text[_i] = (
-                        _orch_core.render_agent_directive(
-                            f"agent_{_i}", orchestrator_state
+                    if orchestrator_config.variant == "task":
+                        _orch_directives_text[_i] = (
+                            _orch_core.render_agent_directive(
+                                f"agent_{_i}", orchestrator_state
+                            )
                         )
-                    )
+                    else:
+                        _orch_directives_text[_i] = (
+                            _orch_core.render_social_directive(
+                                f"agent_{_i}", orchestrator_state
+                            )
+                        )
+                        if orchestrator_config.variant == "plan":
+                            _orch_plan_notes[_i] = _orch_core.plan_note_for(
+                                orchestrator_state, f"agent_{_i}"
+                            )
 
             # ── Phase 0: encode the PRE-step joint state (s_t) ──
             # Computed BEFORE any agent acts so V_global represents V(s_t),
@@ -2137,6 +2221,9 @@ async def run(args):
                             orchestrator_directive=(
                                 _orch_directives_text.get(_i)
                             ),
+                            orchestrator_plan_note=(
+                                _orch_plan_notes.get(_i)
+                            ),
                         )
                         return _i, _content
                     except Exception as _exc:
@@ -2234,6 +2321,9 @@ async def run(args):
                         ),
                         orchestrator_directive=(
                             _orch_directives_text.get(agent_id)
+                        ),
+                        orchestrator_plan_note=(
+                            _orch_plan_notes.get(agent_id)
                         ),
                     )
                     agents_error_count[agent_id] = error_count
@@ -2776,6 +2866,25 @@ async def run(args):
                                      and _o_directed == _msg["receiver"]),
                     })
 
+            # ── Orchestrator plan variant: task-compliance log ──
+            # One record per task CHANGE, carrying the plan note that was
+            # standing when the new task was generated — the raw material
+            # for scoring whether coordination notes actually shape plans.
+            if (orchestrator_state is not None
+                    and orchestrator_config.variant == "plan"):
+                for _i in range(num_agents):
+                    _cur_task = agents[_i].auto_curriculum.current_task
+                    if _cur_task != _orch_prev_tasks.get(_i):
+                        orch_logger.log_task_compliance({
+                            "episode": episode + 1,
+                            "t": step,
+                            "agent": f"agent_{_i}",
+                            "active_note": _orch_plan_notes.get(_i) or "",
+                            "old_task": _orch_prev_tasks.get(_i),
+                            "new_task": _cur_task,
+                        })
+                        _orch_prev_tasks[_i] = _cur_task
+
             coop_metric.observe_step(
                 step,
                 positions=_agent_pos_map,
@@ -2952,6 +3061,17 @@ async def run(args):
                 + _step_pitch_penalty[_i]
                 for _i in range(num_agents)
             ]
+            # ── Orchestrator social/plan: feed the pair accumulator the SAME
+            # per-step streams the Hebbian rule consumes (positions for
+            # co-presence, comm pair events, bondable rewards, chambers).
+            if _orch_pair_acc is not None:
+                _orch_pair_acc.note_step(
+                    positions,
+                    comm_events if communication else [],
+                    _bond_rewards,
+                    _chambers,
+                )
+
             hebbian_graph.update(
                 positions=positions,
                 step_rewards=step_rewards_raw,

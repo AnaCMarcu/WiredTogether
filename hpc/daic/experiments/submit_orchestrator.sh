@@ -57,6 +57,9 @@ export MODEL_LLM WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PRO
 
 MODES=(${MODES:-advisory})
 SEEDS=(${SEEDS:-42 123 456})
+# Arm families: task (O2 task-ledger), social (Hebbian-matched centralized
+# deliberation), plan (social + curriculum plan notes; upper baseline).
+VARIANTS=(${VARIANTS:-task})
 
 # Smoke: one advisory seed, one short episode — proves the orchestrator call
 # fires on Gemma 4 (map image attaches, JSON validates, directives reach the
@@ -65,6 +68,7 @@ SEEDS=(${SEEDS:-42 123 456})
 if [ "${SMOKE:-0}" = "1" ]; then
     MODES=(advisory)
     SEEDS=(42)
+    # VARIANTS is honoured in smoke mode: SMOKE=1 VARIANTS="social plan" ...
     RUN_GROUP=orchestrator_smoke
     EPISODES=1
     MAX_STEPS=${SMOKE_STEPS:-150}
@@ -93,6 +97,7 @@ echo "  run_group : $RUN_GROUP"
 echo "  episodes  : $EPISODES"
 echo "  max_steps : $MAX_STEPS"
 echo "  wandb     : ${WANDB:-1} (project=$WANDB_PROJECT)"
+echo "  variants  : ${VARIANTS[*]}"
 echo "  modes     : ${MODES[*]}  (anchors: base=no coupling, hebbian=W(t))"
 echo "  seeds     : ${SEEDS[*]}"
 [ ${#SBATCH_OVERRIDES[@]} -gt 0 ] && echo "  overrides : ${SBATCH_OVERRIDES[*]}"
@@ -123,8 +128,15 @@ n_queued=0
 n_skipped=0
 n_inqueue=0
 n_failed=0
+for variant in "${VARIANTS[@]}"; do
 for mode in "${MODES[@]}"; do
-    exp="new_exp_0_gemma_orch_${mode}"
+    # Naming mirrors the sbatch file: the task variant keeps its original
+    # arm name so finished runs keep matching the idempotency check.
+    if [ "$variant" = "task" ]; then
+        exp="new_exp_0_gemma_orch_${mode}"
+    else
+        exp="new_exp_0_gemma_orch_${variant}_${mode}"
+    fi
     for seed in "${SEEDS[@]}"; do
         if [ -f "$REPO/runs/$RUN_GROUP/$exp/seed_$seed/final_metrics.json" ]; then
             n_skipped=$((n_skipped + 1))
@@ -145,7 +157,8 @@ for mode in "${MODES[@]}"; do
             echo "would queue  $exp  seed_$seed"
             n_queued=$((n_queued + 1))
         else
-            jobid=$(SEED=$seed ORCH_MODE=$mode sbatch --parsable --job-name="$jobname" \
+            jobid=$(SEED=$seed ORCH_MODE=$mode ORCH_VARIANT=$variant \
+                sbatch --parsable --job-name="$jobname" \
                 ${SBATCH_OVERRIDES[@]:+"${SBATCH_OVERRIDES[@]}"} \
                 new_exp_orchestrator.sbatch)
             if [ -n "$jobid" ]; then
@@ -158,10 +171,11 @@ for mode in "${MODES[@]}"; do
                 # drains; dedup makes that safe.
                 echo "FAILED  $exp  seed_$seed  — sbatch rejected the job" >&2
                 n_failed=$((n_failed + 1))
-                break 2
+                break 3
             fi
         fi
     done
+done
 done
 echo "── done: $n_queued submitted, $n_skipped already complete, $n_inqueue in queue, $n_failed failed ──"
 [ "$n_failed" -gt 0 ] && exit 1
