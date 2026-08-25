@@ -112,8 +112,20 @@ _VISION_KEYS = ("vision", "multi_modal", "multimodal", "projector",
                 "embed_tokens", "audio", "vision_tower")
 
 
-def vision_pinned_device_map(model_cls, model_path, dtype):
-    """device_map that keeps the whole vision path on cuda:0, shards the rest."""
+def vision_pinned_device_map(model_cls, model_path, dtype, gpu0_budget_gib=None):
+    """device_map that keeps the whole vision path on cuda:0, shards the rest.
+
+    Device 0 deliberately gets a LOWER weight budget than the other cards, for
+    two reasons:
+      - the vision modules are forced onto it AFTER placement, so real
+        headroom must exist for that forced move plus the KV cache;
+      - a model that fits entirely inside device 0's budget is not sharded at
+        all, which makes a validation run VACUOUS: probe 12810410 ran 12b
+        "vispin" and silently reproduced sdpa_single ("device map: single
+        device cuda:0", "0 modules forced"), proving nothing about the
+        cross-device boundary. For such a validation, pass --gpu0-budget-gib
+        (e.g. 14 for 12b) to force the decoder to actually split.
+    """
     from accelerate import infer_auto_device_map, init_empty_weights
     from transformers import AutoConfig
 
@@ -122,10 +134,14 @@ def vision_pinned_device_map(model_cls, model_path, dtype):
         empty = model_cls.from_config(cfg, trust_remote_code=True)
 
     n_dev = torch.cuda.device_count()
-    # 85% headroom per card: activations, the KV cache and the transient load
-    # spike all live outside the weight budget infer_auto_device_map computes.
-    budget = int(torch.cuda.get_device_properties(0).total_memory * 0.85)
-    max_memory = {i: budget for i in range(n_dev)}
+    if gpu0_budget_gib:
+        budget0 = int(gpu0_budget_gib * 2 ** 30)
+    else:
+        budget0 = int(torch.cuda.get_device_properties(0).total_memory * 0.70)
+    max_memory = {0: budget0}
+    for i in range(1, n_dev):
+        max_memory[i] = int(
+            torch.cuda.get_device_properties(i).total_memory * 0.85)
 
     dmap = infer_auto_device_map(
         empty, max_memory=max_memory, dtype=dtype,
@@ -136,6 +152,12 @@ def vision_pinned_device_map(model_cls, model_path, dtype):
         dmap[k] = 0
     print("  vision pinned   : {} modules forced to cuda:0 ({})".format(
         len(moved), moved[:4]))
+    devs_used = sorted({str(v) for v in dmap.values()})
+    if len(devs_used) < 2:
+        print("  !! NOT SHARDED — the whole model fit device {} and no "
+              "cross-device boundary exists. As a sharding test this run is "
+              "VACUOUS; re-run with --gpu0-budget-gib to force a real split."
+              .format(devs_used))
     return dmap
 
 
@@ -184,7 +206,9 @@ def probe(name, model_path, args):
 
     device_map = cfg["device_map"]
     if device_map == "__vision_pinned__":
-        device_map = vision_pinned_device_map(model_cls, model_path, cfg["dtype"])
+        device_map = vision_pinned_device_map(
+            model_cls, model_path, cfg["dtype"],
+            gpu0_budget_gib=args.gpu0_budget_gib)
 
     model = _from_pretrained(
         model_cls, model_path, cfg["dtype"],
@@ -293,6 +317,10 @@ def main():
     ap.add_argument("--user-chars", type=int, default=2617)
     ap.add_argument("--width", type=int, default=1024)
     ap.add_argument("--height", type=int, default=768)
+    ap.add_argument("--gpu0-budget-gib", type=float, default=None,
+                    help="cap device 0's weight budget (GiB) in sdpa_vispin — "
+                         "force a real split when validating on a model that "
+                         "would otherwise fit one card (e.g. 14 for 12b)")
     args = ap.parse_args()
 
     print("model : {}".format(args.model))
