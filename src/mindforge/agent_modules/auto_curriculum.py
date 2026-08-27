@@ -186,6 +186,7 @@ class AutoCurriculum:
         completed_milestones=None,
         milestone_progress=None,
         team_plan_note="",
+        assigned_objective="",
     ):
         completed = self.get_completed_tasks()
         failed = self.get_failed_tasks()
@@ -204,8 +205,10 @@ class AutoCurriculum:
             parse_check=_require_key("task"),
             log_prefix="Auto Curriculum get_new_task: ",
             # Inert for the legacy template (str.format ignores unused
-            # kwargs); fills {team_plan_note} when the O-plan suffix is on.
+            # kwargs); fills {team_plan_note} when the O-plan suffix is on
+            # and {assigned_objective} when the villager suffix is on.
             team_plan_note=team_plan_note or "(none)",
+            assigned_objective=assigned_objective or "(none)",
             completed_tasks=completed,
             failed_tasks=failed,
             last_task=self.current_task,

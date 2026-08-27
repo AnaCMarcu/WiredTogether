@@ -159,6 +159,7 @@ class CustomAgent(BaseChatAgent):
         social_returns=None,
         orchestrator_directive=None,
         orchestrator_plan_note=None,
+        orchestrator_assigned_objective=None,
     ):
 
         self._call_count += 1
@@ -298,11 +299,20 @@ class CustomAgent(BaseChatAgent):
                 # via the {team_plan_note} curriculum-prompt suffix. Empty/
                 # None in every other configuration (str.format ignores it).
                 team_plan_note=orchestrator_plan_note or "",
+                # Villager variant: the HARD assigned objective this task
+                # must advance ({assigned_objective} suffix). Same inertness
+                # everywhere else.
+                assigned_objective=orchestrator_assigned_objective or "",
             )
             if orchestrator_plan_note:
                 self.metric.log(
                     f"Agent {self.name}: curriculum consumed team plan "
                     f"note: {orchestrator_plan_note}"
+                )
+            if orchestrator_assigned_objective:
+                self.metric.log(
+                    f"Agent {self.name}: curriculum constrained by assigned "
+                    f"objective: {orchestrator_assigned_objective}"
                 )
             self.metric.log(f"Agent {self.name}: New task: {task}")
             self.belief_system.task_beliefs = context

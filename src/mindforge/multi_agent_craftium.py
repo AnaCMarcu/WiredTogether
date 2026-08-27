@@ -386,7 +386,7 @@ def parse_args():
                              "issues per-agent comm_target/help directives. "
                              "Runs INSTEAD of the Hebbian coupling.")
     parser.add_argument("--orchestrator-variant", type=str, default="task",
-                        choices=["task", "social", "plan"],
+                        choices=["task", "social", "plan", "villager"],
                         help="'task' (default) = the O2 task-ledger "
                              "orchestrator (map + event digest in, "
                              "comm_target/help out, relational content "
@@ -401,7 +401,27 @@ def parse_args():
                              "W(t). 'plan' = social + each agent's auto-"
                              "curriculum task in view + a per-agent plan_note "
                              "delivered to that agent's curriculum at its "
-                             "next task generation (upper baseline).")
+                             "next task generation (upper baseline). "
+                             "'villager' = VillagerAgent-style centralized "
+                             "DAG orchestration: a decomposer LLM proposes "
+                             "milestone-verified subtasks into a dependency "
+                             "graph, an allocator LLM HARD-assigns ready "
+                             "tasks to free agents (curriculum constrained "
+                             "to the objective; replans on reassignment); "
+                             "no communication routing.")
+    parser.add_argument("--orchestrator-node-timeout-steps", type=int,
+                        default=60,
+                        help="Villager only: a running DAG task fails after "
+                             "this many steps without one of its milestones "
+                             "firing (default 60)")
+    parser.add_argument("--orchestrator-max-open-tasks", type=int, default=0,
+                        help="Villager only: cap on open+running DAG tasks; "
+                             "0 = auto (2 x num agents)")
+    parser.add_argument("--orchestrator-decompose-min-interval", type=int,
+                        default=8,
+                        help="Villager only: minimum steps between "
+                             "decomposer calls, and the cooldown after a "
+                             "failed allocator call (default 8)")
     parser.add_argument("--orchestrator-mode", type=str, default="advisory",
                         choices=["advisory", "bias"],
                         help="'advisory' = directives rendered into the same "
@@ -620,7 +640,8 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
                  social_module_mode: str = "none", social_interval: int = 8,
                  social_act_mode: str = "legacy",
                  social_act_channels: tuple = (),
-                 orchestrator_plan: bool = False):
+                 orchestrator_plan: bool = False,
+                 orchestrator_villager: bool = False):
     """Initialize all Mindforge agents.
 
     ``centralized_critic`` (when not None) is shared by all agents' RLLayers
@@ -644,6 +665,12 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
         from agent_modules.auto_curriculum import curriculum_info as _cur_info
         from orchestrator.curriculum_hook import apply_plan_suffix
         _task_info_override = apply_plan_suffix(_cur_info, True)
+    elif orchestrator_villager:
+        # Villager: HARD assignment block ({assigned_objective}) instead of
+        # the advisory plan-note block.
+        from agent_modules.auto_curriculum import curriculum_info as _cur_info
+        from orchestrator.curriculum_hook import apply_villager_suffix
+        _task_info_override = apply_villager_suffix(_cur_info, True)
 
     # Choice-mode template/client setup — built once, shared by all agents.
     _choice_action_kwargs = {}
@@ -818,6 +845,7 @@ async def agent_do_action(
     social_returns=None,
     orchestrator_directive=None,
     orchestrator_plan_note=None,
+    orchestrator_assigned_objective=None,
 ):
     """Have one agent observe and choose an action.
 
@@ -862,6 +890,7 @@ async def agent_do_action(
         social_returns=social_returns,
         orchestrator_directive=orchestrator_directive,
         orchestrator_plan_note=orchestrator_plan_note,
+        orchestrator_assigned_objective=orchestrator_assigned_objective,
     )
 
     last_action = "NoOp"
@@ -889,6 +918,7 @@ async def agent_do_action(
                 social_returns=social_returns,
                 orchestrator_directive=orchestrator_directive,
                 orchestrator_plan_note=orchestrator_plan_note,
+                orchestrator_assigned_objective=orchestrator_assigned_objective,
             )
         else:
             logging.error(f"Agent {agent_id} exceeded retry limit, using NoOp")
@@ -1376,7 +1406,10 @@ async def run(args):
                          social_act_channels=_social_menu_channels,
                          orchestrator_plan=(
                              args.orchestrator
-                             and args.orchestrator_variant == "plan"))
+                             and args.orchestrator_variant == "plan"),
+                         orchestrator_villager=(
+                             args.orchestrator
+                             and args.orchestrator_variant == "villager"))
 
     if args.agent_state_init:
         # Transplant memories into the freshly-constructed agents. Must run
@@ -1466,6 +1499,7 @@ async def run(args):
     _orch_core = None
     _orch_events = None
     _orch_pair_acc = None
+    villager_controller = None
     if args.orchestrator:
         from orchestrator import core as _orch_core
         from orchestrator import events as _orch_events
@@ -1485,24 +1519,53 @@ async def run(args):
             use_map_image=args.orchestrator_use_map_image,
             model=args.orchestrator_model,
             log_dir_name=args.orchestrator_log_dir_name,
+            node_timeout_steps=args.orchestrator_node_timeout_steps,
+            max_open_tasks=args.orchestrator_max_open_tasks,
+            decompose_min_interval=args.orchestrator_decompose_min_interval,
         )
         orchestrator_config.validate()
         orchestrator_state = OrchestratorState()
-        orchestrator_client = _orch_core.create_orchestrator_client(
-            orchestrator_config
-        )
         orch_logger = OrchestratorLogger(
             run_dir=str(run_paths.root),
             dir_name=orchestrator_config.log_dir_name,
         )
+        if orchestrator_config.variant == "villager":
+            # Villager: an event-driven controller with two dedicated
+            # clients (distinct response schemas on the shared backbone —
+            # same pattern as the curriculum/critic/social clients). The
+            # generic orchestrate() client is never used for this variant.
+            from orchestrator import villager as _orch_villager
+            villager_controller = _orch_villager.VillagerController(
+                orchestrator_config, num_agents,
+                decompose_client=_orch_core.create_orchestrator_client(
+                    orchestrator_config,
+                    response_format=_orch_villager.VillagerDecomposeResponse,
+                ),
+                allocate_client=_orch_core.create_orchestrator_client(
+                    orchestrator_config,
+                    response_format=_orch_villager.VillagerAllocateResponse,
+                ),
+                orch_logger=orch_logger,
+            )
+        else:
+            orchestrator_client = _orch_core.create_orchestrator_client(
+                orchestrator_config
+            )
         # social/plan variants: the Hebbian-rule-matched pair-activity
         # accumulator (fed each step from Phase-2 scope). Radius from
         # --hebbian-radius so a radius ablation stays matched.
         _orch_pair_acc = None
-        if orchestrator_config.variant != "task":
+        if orchestrator_config.variant in ("social", "plan"):
             _orch_pair_acc = _orch_events.PairAccumulator(
                 num_agents, radius=args.hebbian_radius,
             )
+        _villager_info = (
+            f"node_timeout={orchestrator_config.node_timeout_steps}  "
+            f"max_open={orchestrator_config.max_open_tasks or 2 * num_agents}  "
+            f"decompose_min_interval="
+            f"{orchestrator_config.decompose_min_interval}  "
+            if orchestrator_config.variant == "villager" else ""
+        )
         print(f"[FEATURES] Orchestrator:     ENABLED "
               f"[{orchestrator_config.variant}/{orchestrator_config.mode}]  "
               f"cadence={orchestrator_config.cadence}  "
@@ -1510,6 +1573,7 @@ async def run(args):
               f"stall_threshold={orchestrator_config.stall_threshold}  "
               f"max_task_facts={orchestrator_config.max_task_facts}  "
               f"map_image={orchestrator_config.use_map_image}  "
+              f"{_villager_info}"
               f"model={orchestrator_config.model or 'backbone'}  "
               f"log_dir={orch_logger.dir}")
 
@@ -1651,11 +1715,17 @@ async def run(args):
         _orch_prev_chambers: dict = {}
         _orch_prev_tasks: dict = {}
         if orchestrator_state is not None:
+            # Only social/plan keep memory across episodes (W(t)'s horizon);
+            # task AND villager start fresh — explicit variant set, not
+            # `!= "task"`, so a new variant never inherits the wrong horizon.
             orchestrator_state.reset(
-                keep_ledger=(orchestrator_config.variant != "task")
+                keep_ledger=(orchestrator_config.variant
+                             in ("social", "plan"))
             )
             if _orch_pair_acc is not None:
                 _orch_pair_acc.clear()
+            if villager_controller is not None:
+                villager_controller.reset()
 
         import time as _time
         skip_warmup = (
@@ -2045,6 +2115,7 @@ async def run(args):
             # per-agent directive text for this step's action prompts ──
             _orch_directives_text: dict = {}
             _orch_plan_notes: dict = {}
+            _orch_assigned_objectives: dict = {}
             if orchestrator_state is not None:
                 _orch_new_chambers = set()
                 for _i in range(num_agents):
@@ -2061,7 +2132,49 @@ async def run(args):
                     f"agent_{_i}" for _i in range(num_agents)
                     if not environment._terminations.get(f"agent_{_i}", False)
                 ]
-                if _orch_living and _orch_core.should_call(
+                if orchestrator_config.variant == "villager":
+                    # ── Villager: event-driven controller tick ──
+                    # Deterministic scheduling every step (event drain,
+                    # timeouts, cascades); LLM decompose/allocate calls only
+                    # when due. Short-circuits the cadence-based should_call
+                    # path entirely. tick() also runs on a team wipe (fails
+                    # running nodes, no LLM calls).
+                    try:
+                        _v_tick = await villager_controller.tick(
+                            state=orchestrator_state,
+                            living_agents=_orch_living,
+                            episode=episode + 1, t=step,
+                            environment=environment, agents=agents,
+                            metric=metric,
+                        )
+                        # HARD enforcement: a reassigned agent's curriculum
+                        # replans immediately under the new objective (the
+                        # _initialized guard makes clearing current_task a
+                        # pure replan, never a DB wipe).
+                        for _nm in _v_tick.reassigned:
+                            try:
+                                _ri = int(str(_nm).rsplit("_", 1)[-1])
+                            except (ValueError, IndexError):
+                                continue
+                            if 0 <= _ri < num_agents:
+                                agents[_ri].auto_curriculum.current_task = None
+                    except (KeyboardInterrupt, SystemExit):
+                        raise
+                    except Exception as _orch_exc:
+                        logging.error(
+                            "Villager tick crashed at ep=%d step=%d: %s "
+                            "— keeping previous assignments",
+                            episode + 1, step, _orch_exc,
+                        )
+                    for _i in range(num_agents):
+                        _orch_directives_text[_i] = (
+                            villager_controller.directive_text(f"agent_{_i}")
+                        )
+                        _orch_assigned_objectives[_i] = (
+                            villager_controller.assigned_objective(
+                                f"agent_{_i}")
+                        )
+                elif _orch_living and _orch_core.should_call(
                         orchestrator_state, step, orchestrator_config):
                     if orchestrator_config.variant == "task":
                         _orch_recent_msgs = [
@@ -2109,23 +2222,27 @@ async def run(args):
                             and orchestrator_state.failed_calls
                             == _orch_fails_before):
                         _orch_pair_acc.clear()
-                for _i in range(num_agents):
-                    if orchestrator_config.variant == "task":
-                        _orch_directives_text[_i] = (
-                            _orch_core.render_agent_directive(
-                                f"agent_{_i}", orchestrator_state
+                if orchestrator_config.variant != "villager":
+                    # (villager filled its directives inside its own branch)
+                    for _i in range(num_agents):
+                        if orchestrator_config.variant == "task":
+                            _orch_directives_text[_i] = (
+                                _orch_core.render_agent_directive(
+                                    f"agent_{_i}", orchestrator_state
+                                )
                             )
-                        )
-                    else:
-                        _orch_directives_text[_i] = (
-                            _orch_core.render_social_directive(
-                                f"agent_{_i}", orchestrator_state
+                        else:
+                            _orch_directives_text[_i] = (
+                                _orch_core.render_social_directive(
+                                    f"agent_{_i}", orchestrator_state
+                                )
                             )
-                        )
-                        if orchestrator_config.variant == "plan":
-                            _orch_plan_notes[_i] = _orch_core.plan_note_for(
-                                orchestrator_state, f"agent_{_i}"
-                            )
+                            if orchestrator_config.variant == "plan":
+                                _orch_plan_notes[_i] = (
+                                    _orch_core.plan_note_for(
+                                        orchestrator_state, f"agent_{_i}"
+                                    )
+                                )
 
             # ── Phase 0: encode the PRE-step joint state (s_t) ──
             # Computed BEFORE any agent acts so V_global represents V(s_t),
@@ -2241,6 +2358,9 @@ async def run(args):
                             orchestrator_plan_note=(
                                 _orch_plan_notes.get(_i)
                             ),
+                            orchestrator_assigned_objective=(
+                                _orch_assigned_objectives.get(_i)
+                            ),
                         )
                         return _i, _content
                     except Exception as _exc:
@@ -2341,6 +2461,9 @@ async def run(args):
                         ),
                         orchestrator_plan_note=(
                             _orch_plan_notes.get(agent_id)
+                        ),
+                        orchestrator_assigned_objective=(
+                            _orch_assigned_objectives.get(agent_id)
                         ),
                     )
                     agents_error_count[agent_id] = error_count
@@ -2870,33 +2993,42 @@ async def run(args):
                             _msg["text"],
                         )
                     )
-                    _o_directed = _orch_core.directive_comm_target(
-                        orchestrator_state, _msg["sender"]
-                    )
-                    orch_logger.log_compliance({
-                        "episode": episode + 1,
-                        "t": step,
-                        "agent": _msg["sender"],
-                        "directed_comm_target": _o_directed,
-                        "actual_comm_target": _msg["receiver"],
-                        "complied": (_o_directed is not None
-                                     and _o_directed == _msg["receiver"]),
-                    })
+                    # Villager issues task assignments, not comm directives —
+                    # a compliance stream would be all-None noise rows.
+                    if orchestrator_config.variant != "villager":
+                        _o_directed = _orch_core.directive_comm_target(
+                            orchestrator_state, _msg["sender"]
+                        )
+                        orch_logger.log_compliance({
+                            "episode": episode + 1,
+                            "t": step,
+                            "agent": _msg["sender"],
+                            "directed_comm_target": _o_directed,
+                            "actual_comm_target": _msg["receiver"],
+                            "complied": (_o_directed is not None
+                                         and _o_directed == _msg["receiver"]),
+                        })
 
-            # ── Orchestrator plan variant: task-compliance log ──
-            # One record per task CHANGE, carrying the plan note that was
-            # standing when the new task was generated — the raw material
-            # for scoring whether coordination notes actually shape plans.
+            # ── Orchestrator plan/villager variants: task-compliance log ──
+            # One record per task CHANGE, carrying the guidance that was
+            # standing when the new task was generated (plan: the advisory
+            # note; villager: the HARD assigned objective) — the raw
+            # material for scoring whether central guidance shapes plans.
             if (orchestrator_state is not None
-                    and orchestrator_config.variant == "plan"):
+                    and orchestrator_config.variant in ("plan", "villager")):
                 for _i in range(num_agents):
                     _cur_task = agents[_i].auto_curriculum.current_task
                     if _cur_task != _orch_prev_tasks.get(_i):
+                        _active_note = (
+                            _orch_plan_notes.get(_i)
+                            if orchestrator_config.variant == "plan"
+                            else _orch_assigned_objectives.get(_i)
+                        )
                         orch_logger.log_task_compliance({
                             "episode": episode + 1,
                             "t": step,
                             "agent": f"agent_{_i}",
-                            "active_note": _orch_plan_notes.get(_i) or "",
+                            "active_note": _active_note or "",
                             "old_task": _orch_prev_tasks.get(_i),
                             "new_task": _cur_task,
                         })
@@ -3892,5 +4024,12 @@ if __name__ == "__main__":
         raise SystemExit(
             "--orchestrator and --social-module both write the "
             "{social_directive} action-prompt slot; disable one"
+        )
+    if (args.orchestrator and args.orchestrator_variant == "villager"
+            and args.orchestrator_mode == "bias"):
+        raise SystemExit(
+            "the villager variant issues task assignments, not comm "
+            "directives — there is no comm_target to bias; use "
+            "--orchestrator-mode advisory"
         )
     asyncio.run(run(args))

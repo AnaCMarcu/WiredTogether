@@ -91,15 +91,23 @@ esac
 #                      to the Hebbian rule (pair digest only)
 #   plan             — social + task visibility + per-agent plan notes into
 #                      the auto-curriculum (upper baseline)
+#   villager         — VillagerAgent-style DAG orchestration: decomposer +
+#                      allocator LLMs, HARD task assignments constraining
+#                      the auto-curriculum; no comm routing. Produces
+#                      dag.jsonl/assignments.jsonl instead of compliance/maps.
 ORCH_VARIANT="${ORCH_VARIANT:-task}"
 case "$ORCH_VARIANT" in
-    task|social|plan) ;;
+    task|social|plan|villager) ;;
     *)
-        echo "ERROR: ORCH_VARIANT must be 'task', 'social' or 'plan' (got '${ORCH_VARIANT}')." >&2
-        echo "       e.g. SEED=42 ORCH_VARIANT=social sbatch new_exp_orchestrator.sbatch" >&2
+        echo "ERROR: ORCH_VARIANT must be 'task', 'social', 'plan' or 'villager' (got '${ORCH_VARIANT}')." >&2
+        echo "       e.g. SEED=42 ORCH_VARIANT=villager sbatch new_exp_orchestrator.sbatch" >&2
         exit 1
         ;;
 esac
+if [ "$ORCH_VARIANT" = "villager" ] && [ "$ORCH_MODE" = "bias" ]; then
+    echo "ERROR: villager issues task assignments, not comm directives — bias mode is invalid; use ORCH_MODE=advisory." >&2
+    exit 1
+fi
 
 # Cadence 8 = the Hebbian anchor's social-interval default (matched call
 # rate). Passing a different value makes the arm non-comparable to the

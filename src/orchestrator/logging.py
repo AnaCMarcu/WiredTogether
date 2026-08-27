@@ -40,6 +40,10 @@ class OrchestratorLogger:
         # was standing — {episode, t, agent, active_note, old_task, new_task}.
         self.task_compliance_path = os.path.join(self.dir,
                                                  "task_compliance.jsonl")
+        # Villager variant only: DAG snapshots (per change, with trigger)
+        # and per-agent assignment lifecycle rows (allocate / freed_*).
+        self.dag_path = os.path.join(self.dir, "dag.jsonl")
+        self.assignments_path = os.path.join(self.dir, "assignments.jsonl")
 
     @staticmethod
     def _append(path: str, record: dict) -> None:
@@ -64,6 +68,12 @@ class OrchestratorLogger:
 
     def log_task_compliance(self, record: dict) -> None:
         self._append(self.task_compliance_path, record)
+
+    def log_dag(self, record: dict) -> None:
+        self._append(self.dag_path, record)
+
+    def log_assignment(self, record: dict) -> None:
+        self._append(self.assignments_path, record)
 
     def map_path(self, episode: int, t: int) -> str:
         return os.path.join(self.maps_dir, f"ep{episode:04d}_t{t:06d}.png")

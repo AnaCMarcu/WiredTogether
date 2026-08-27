@@ -58,7 +58,9 @@ export MODEL_LLM WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PRO
 MODES=(${MODES:-advisory})
 SEEDS=(${SEEDS:-42 123 456})
 # Arm families: task (O2 task-ledger), social (Hebbian-matched centralized
-# deliberation), plan (social + curriculum plan notes; upper baseline).
+# deliberation), plan (social + curriculum plan notes; upper baseline),
+# villager (VillagerAgent-style DAG task orchestration; hard assignments,
+# advisory mode only). Smoke example: SMOKE=1 VARIANTS=villager
 VARIANTS=(${VARIANTS:-task})
 
 # Smoke: one advisory seed, one short episode — proves the orchestrator call

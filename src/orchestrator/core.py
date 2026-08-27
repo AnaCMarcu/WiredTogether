@@ -156,20 +156,27 @@ def parse_orchestrator_json(raw: str) -> dict:
 
 # ── Client construction ──────────────────────────────────────────────────
 
-def create_orchestrator_client(cfg: OrchestratorConfig):
+def create_orchestrator_client(cfg: OrchestratorConfig,
+                               response_format=OrchestratorResponse):
     """Build the orchestrator's LLM client.
 
     ``cfg.model is None`` (default) reuses the agents' backbone via the same
     ``create_model_client`` factory every other module uses. A model override
     is only supported on the HTTP-client path — the local in-process client
     holds ONE shared model, and loading a second would clobber the agents'.
+
+    ``response_format`` is the pydantic schema injected/enforced by the
+    client (default: the ledger/directives shape shared by the task/social/
+    plan variants; the villager variant passes its decompose/allocate
+    schemas — without this the HTTP structured-output path would coerce
+    those responses into the wrong shape).
     """
     import os
 
     from agent_modules.util import create_model_client
 
     if cfg.model is None:
-        return create_model_client(response_format=OrchestratorResponse)
+        return create_model_client(response_format=response_format)
 
     if os.environ.get("LLM_MODEL_PATH", ""):
         raise ValueError(
@@ -187,7 +194,7 @@ def create_orchestrator_client(cfg: OrchestratorConfig):
         model=cfg.model,
         base_url=base_url,
         api_key=_resolve_api_key("api.key"),
-        response_format=OrchestratorResponse,
+        response_format=response_format,
         model_info={
             "vision": True,
             "function_calling": False,
