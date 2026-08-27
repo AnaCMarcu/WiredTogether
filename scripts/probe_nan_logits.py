@@ -101,18 +101,38 @@ CONFIGS = {
     # on one GPU describes the frame correctly. Keeping the whole vision path
     # on one device removes that boundary; the decoder still splits, which is
     # what actually buys the memory.
-    "sdpa_vispin":  dict(device_map="__vision_pinned__", attn="sdpa",
-                         dtype=torch.bfloat16),
+    #
+    # TWO pin sets, because probe 12821339 showed the first attempt create a
+    # WEIGHT-TYING conflict: Gemma ties embed_tokens to lm_head, so pinning
+    # embed_tokens to cuda:0 while accelerate placed lm_head (end of the
+    # decoder) on cuda:1 left the single shared tensor on 1 and every lookup
+    # died with "index is on cuda:0, ... other tensors on cuda:1".
+    #   _min  : pin ONLY the vision/audio towers + projector; leave
+    #           embed_tokens/lm_head wherever accelerate puts the tied pair.
+    #   full  : pin the towers AND embed_tokens AND lm_head together on 0,
+    #           so the tied tensor and both its users agree.
+    # Both are plain-Python failures if wrong (not CUDA asserts), so they can
+    # share one job; run _min first -- fewer forced placements is the better
+    # fix if it suffices.
+    "sdpa_vispin_min": dict(device_map="__vision_pinned__", attn="sdpa",
+                            dtype=torch.bfloat16, pin_keys="min"),
+    "sdpa_vispin":     dict(device_map="__vision_pinned__", attn="sdpa",
+                            dtype=torch.bfloat16, pin_keys="full"),
 }
 
-# Substrings identifying modules that must stay together on cuda:0 for the
-# vision path to survive: the tower itself, the projector that maps its output
-# into text-embedding space, and the token embedding it is scattered into.
-_VISION_KEYS = ("vision", "multi_modal", "multimodal", "projector",
-                "embed_tokens", "audio", "vision_tower")
+# Substrings identifying modules forced to cuda:0. Module names seen on
+# gemma4_unified 12b: model.embed_vision, model.embed_audio,
+# model.language_model.embed_tokens, lm_head.
+_PIN_KEYS = {
+    "min":  ("vision", "multi_modal", "multimodal", "projector", "audio",
+             "vision_tower"),
+    "full": ("vision", "multi_modal", "multimodal", "projector", "audio",
+             "vision_tower", "embed_tokens", "lm_head"),
+}
 
 
-def vision_pinned_device_map(model_cls, model_path, dtype, gpu0_budget_gib=None):
+def vision_pinned_device_map(model_cls, model_path, dtype, pin_keys,
+                             gpu0_budget_gib=None):
     """device_map that keeps the whole vision path on cuda:0, shards the rest.
 
     Device 0 deliberately gets a LOWER weight budget than the other cards, for
@@ -147,7 +167,7 @@ def vision_pinned_device_map(model_cls, model_path, dtype, gpu0_budget_gib=None)
         empty, max_memory=max_memory, dtype=dtype,
         no_split_module_classes=list(getattr(empty, "_no_split_modules", None) or []),
     )
-    moved = [k for k in dmap if any(t in k.lower() for t in _VISION_KEYS)]
+    moved = [k for k in dmap if any(t in k.lower() for t in _PIN_KEYS[pin_keys])]
     for k in moved:
         dmap[k] = 0
     print("  vision pinned   : {} modules forced to cuda:0 ({})".format(
@@ -207,7 +227,7 @@ def probe(name, model_path, args):
     device_map = cfg["device_map"]
     if device_map == "__vision_pinned__":
         device_map = vision_pinned_device_map(
-            model_cls, model_path, cfg["dtype"],
+            model_cls, model_path, cfg["dtype"], cfg["pin_keys"],
             gpu0_budget_gib=args.gpu0_budget_gib)
 
     model = _from_pretrained(
