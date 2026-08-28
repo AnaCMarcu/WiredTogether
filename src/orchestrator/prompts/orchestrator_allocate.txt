@@ -18,8 +18,11 @@ INSTRUCTIONS:
 2. Only use agents listed among a subtask's candidates (when it names candidates).
 3. A subtask that needs several agents (min_agents > 1) must receive ALL of them in
    THIS response — give each selected agent its own one-line "role" describing its
-   part of the shared objective.
-4. An agent may appear AT MOST once. Minimize idle agents, but leaving an agent
+   part of the shared objective. A partially-crewed multi-agent subtask is DISCARDED.
+4. NEVER split the team across several multi-agent subtasks you cannot all fully
+   crew: when more multi-agent subtasks are ready than the free agents can cover,
+   pick ONE of them and give it its full crew before assigning anyone elsewhere.
+5. An agent may appear AT MOST once. Minimize idle agents, but leaving an agent
    unassigned is allowed when no ready subtask suits it.
 
 Respond with EXACTLY this JSON — ONE object, no extra text before or after it:

@@ -136,6 +136,12 @@ ORCH_ARGS=(
     --orchestrator-mode "$ORCH_MODE"
     --orchestrator-cadence "$ORCH_CADENCE"
 )
+# Villager only: node timeout. Default 60 suits the 1000-step runs (chamber
+# phases of ~200 steps); a 150-step smoke teleports every 30 steps, so pass
+# ORCH_NODE_TIMEOUT=20 there or every Ch1 node outlives its chamber.
+if [ "$ORCH_VARIANT" = "villager" ]; then
+    ORCH_ARGS+=(--orchestrator-node-timeout-steps "${ORCH_NODE_TIMEOUT:-60}")
+fi
 
 echo "── new_exp_orchestrator: ORCH_VARIANT=$ORCH_VARIANT ORCH_MODE=$ORCH_MODE cadence=$ORCH_CADENCE → $EXP_NAME ──"
 

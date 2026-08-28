@@ -616,10 +616,51 @@ class VillagerController:
                         else "LLM call failed"),
                 "raw_output": raw_tail,
             })
-            logger.error("Villager: allocation failed — agents stay free "
-                         "until cooldown expires (failed call #%d)",
-                         self.failed_calls)
+            # Deterministic fallback (same house style as the comm-routing
+            # random_fallback): when the allocator cannot produce a usable
+            # assignment after its retry, crew the FIRST ready task that the
+            # free agents can fully staff, in decomposer priority order.
+            # Observed failure this guards against: two parallel min_agents=3
+            # tasks with 3 free agents — the model split the team across
+            # both eight calls in a row and nobody was ever assigned.
+            fallback = self._fallback_assignment(ready, free)
+            if fallback is not None:
+                tid, crew = fallback
+                roles = {a: "(fallback assignment)" for a in crew}
+                self.dag.assign(tid, crew, roles, t)
+                task = self.dag.get(tid)
+                result.allocated = True
+                for agent in crew:
+                    result.reassigned.append(agent)
+                    if self.orch_logger is not None:
+                        self.orch_logger.log_assignment({
+                            "episode": episode, "t": t, "agent": agent,
+                            "task_id": tid,
+                            "description": task.description,
+                            "role": roles[agent],
+                            "reason": "allocate_fallback",
+                        })
+                record["fallback"] = {"task_id": tid, "agents": crew}
+                logger.warning("Villager: allocation failed twice — "
+                               "deterministic fallback assigned %s to %s",
+                               crew, tid)
+            else:
+                logger.error("Villager: allocation failed and no ready task "
+                             "is fully crewable — agents stay free until "
+                             "cooldown expires (failed call #%d)",
+                             self.failed_calls)
         self._log_call(record)
+
+    @staticmethod
+    def _fallback_assignment(ready: list, free: list):
+        """First ready task (decomposer order) fully crewable from the free
+        agents, respecting candidates. Returns (task_id, crew) or None."""
+        for task in ready:
+            eligible = [a for a in free
+                        if not task.candidates or a in task.candidates]
+            if len(eligible) >= task.min_agents:
+                return task.id, eligible[:task.min_agents]
+        return None
 
     def _sync_state_mirror(self, state: OrchestratorState) -> None:
         """Mirror current assignments into state.directives (the DAG stays

@@ -33,7 +33,10 @@ INSTRUCTIONS:
    parallel — prefer that where possible.
 4. Use "candidates" to restrict which agents may be assigned (an empty list means
    any agent), and "min_agents" for objectives that need several agents at once
-   (e.g. anvils need 2 simultaneous punchers).
+   (e.g. anvils need 2 simultaneous punchers). Never propose SIMULTANEOUSLY
+   executable subtasks whose min_agents add up to more than the team — order such
+   subtasks with "required" instead, so the whole crew works through them one at
+   a time.
 5. If earlier subtasks FAILED, propose a different approach for what they tried to
    achieve — do not simply re-emit the same task.
 

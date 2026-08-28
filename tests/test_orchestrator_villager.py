@@ -511,3 +511,59 @@ def test_milestone_catalog_and_blocks():
         ["agent_0"])
     assert "agent_0: chamber=ch1, hp=20" in free_block
     assert 'current="dig wood"' in free_block
+
+
+# ── Allocation fallback (regression: villager smoke seed_42) ────────────
+# Two parallel min_agents=3 tasks were ready with 3 free agents; the
+# allocator split the team across both on 8 consecutive calls, every group
+# was under-crewed, and nobody was assigned for 60 steps.
+
+def test_allocation_fallback_crews_first_crewable_task(stub_autogen,
+                                                       tmp_path):
+    split = json.dumps(allocate_response([
+        {"agent": "agent_0", "task_id": "communal", "role": "go"},
+        {"agent": "agent_1", "task_id": "communal", "role": "go"},
+        {"agent": "agent_2", "task_id": "switches", "role": "press"},
+    ]))
+    ctrl, logger = _controller(allocate_raws=[split, split],
+                               tmp_path=tmp_path)
+    ctrl.dag.add_task(_task("communal", milestones=["m17_switch_pressed"],
+                            min_agents=3))
+    ctrl.dag.add_task(_task("switches", milestones=["m8_anvil_A1"],
+                            min_agents=3))
+    ctrl.last_decompose_step = 0
+    state = OrchestratorState()
+    tick = _run_tick(ctrl, state, t=8)
+    assert len(ctrl.allocate_client.calls) == 2           # initial + retry
+    assert tick.allocated
+    assert sorted(tick.reassigned) == LIVING              # whole crew
+    assert ctrl.dag.get("communal").status == "running"   # first in order
+    assert ctrl.dag.get("switches").status == "open"
+    rows = [json.loads(l) for l in open(logger.assignments_path)]
+    assert {r["reason"] for r in rows} == {"allocate_fallback"}
+    calls = [json.loads(l) for l in open(logger.calls_path)]
+    assert calls[-1]["failed"] and calls[-1]["fallback"]["task_id"] == "communal"
+
+
+def test_allocation_fallback_respects_candidates_and_min_agents():
+    dag = TaskDAG()
+    dag.add_task(_task("needs_pair_of_a1", candidates=["agent_1"],
+                       min_agents=2))                     # uncrewable
+    dag.add_task(_task("solo", candidates=["agent_2"]))
+    fb = ovillager.VillagerController._fallback_assignment(
+        dag.ready_tasks(), ["agent_0", "agent_2"])
+    assert fb == ("solo", ["agent_2"])
+    assert ovillager.VillagerController._fallback_assignment(
+        dag.ready_tasks(), ["agent_0"]) is None
+
+
+def test_prompts_carry_crewing_rules():
+    out = oprompt.format_allocate_prompt(
+        current_step=1, ready_tasks_block="RT", free_agents_block="FA",
+        dag_summary="DS", free_agents=LIVING, ready_task_ids=["t"])
+    assert "pick ONE of them and give it its full crew" in out
+    out2 = oprompt.format_decompose_prompt(
+        n_agents=3, agent_names=LIVING, current_step=1, chamber_facts="C",
+        milestone_catalog="M", env_state_text="E", task_table="T",
+        dag_summary="D", open_slots=2, example_milestones=["m1_move_5"])
+    assert "min_agents add up to more than the team" in out2
