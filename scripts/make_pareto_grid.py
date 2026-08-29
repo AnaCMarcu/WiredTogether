@@ -1,4 +1,4 @@
-"""Pareto plot GRID for the model-size sweep, CoDe-style (dashed lines + markers).
+"""Pareto figures for the model-size sweep (compute vs performance).
 
 Produces every combination of
 
@@ -35,17 +35,20 @@ tables — the helpers are IMPORTED from it, not re-implemented):
                    an earlier version; it is a backbone property, identical
                    for both arms, and is no longer plotted.)
 
-Style (dataviz skill + the CoDe Fig. 10 reference): colour = arm (base blue /
-hebbian orange, the two palette slots that validate all-pairs in both modes),
-marker shape = family (circle Gemma / square Qwen), dashed connecting lines
-within a (family, arm) series, families NEVER joined to each other, boxed
-legend inside the axes, thin +-1 sd error bars over seeds, each point labelled
-with its size.
+Style: identical to make_pareto_social_fig's social-interval frontier (itself
+after the compute-vs-reward frontiers in the inference-time-scaling
+literature) -- OPEN markers in the house colours (base #2c7fb8 squares,
++Hebbian #d95f0e circles, shared with make_scaling_fig), solid connecting line
+within an arm, framed legend lower-right, no grid, LINEAR compute axis, no
+error bars (--errorbars adds them; the table carries the sd). Each size is
+direct-labelled once. Families are NEVER joined to each other.
+
+Default --ys is coop_pct,milestone_pct,reward, so a bare run emits the three
+paper figures + the composite + the two-panel --paper variant.
 
 Usage:
     python scripts/make_pareto_grid.py runs_from_daic/pareto_gemma4 \
-        runs_from_daic/new_exp_0_gemma runs_from_daic/medium_runs \
-        --out-dir paper_assets_pareto/grid
+        runs_from_daic/new_exp_0_gemma --out-dir paper_assets_pareto/grid --paper
     python scripts/make_pareto_grid.py ... --beliefs analysis_qualitative/out_pareto/tables/beliefs.csv
     python scripts/make_pareto_grid.py ... --families gemma --ys coop_pct --xs flops
 

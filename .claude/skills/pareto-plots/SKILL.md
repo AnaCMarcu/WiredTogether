@@ -83,32 +83,48 @@ Verified 2026-08-28: the pareto table reproduces
   (MMMU-Pro from the model cards was used in an earlier version and dropped:
   a backbone property, identical for both arms.)
 
-## Style rules — a 1:1 match of CoDe Fig. 10 (Singh et al., TMLR 2025)
+## Style rules — the house compute-figure look
 
-- `matplotlib.rcdefaults()`: white canvas, full black box, NO grid, default
-  ticks and fonts, terse axis labels ("Compute [10^17 FLOPs]", "Task return").
-- Base arm = tab green, dashed, filled circles (the reference's "CoDe");
-  Hebbian arm = tab blue, solid, filled triangles (its "[eta]" variant).
-  Marker + line style carry the arm, so identity is never colour-alone.
-  Qwen (if ever plotted) = hollow markers.
-- Framed legend lower-right; NO error bars by default (`--errorbars` adds
-  ±1 sd over pooled episodes; the table carries the sd). `--normalize`
-  divides by the base arm's cheapest point (the "(Normalized) Reward" look).
-- Each size direct-labelled once (E2B/E4B/12B), small grey, above the taller arm.
-- Dashed/solid lines connect points WITHIN an arm only; families are never
-  joined into one frontier.
-- After generating, OPEN the PNGs: the validator checks colour, not clipping.
+Identical to `make_pareto_social_fig.fig_pareto_paper` (the social-interval
+frontier), so every compute figure in the paper reads as one family:
 
-## The paper figure
+- OPEN markers in the house colours, shared with `make_scaling_fig`:
+  base `#2c7fb8` squares (ms 8, mew 1.9), +Hebbian `#d95f0e` circles
+  (ms 7, mew 1.7). Colour AND marker carry the arm.
+- Solid connecting line (lw 1.6) within an arm; families never joined.
+- No grid, linear compute axis, framed legend lower-right (fontsize 8.5,
+  framealpha 0.95), figsize 5.0×3.5, dpi 200, PNG only.
+- NO error bars by default — `--errorbars` adds ±1 sd over pooled episodes;
+  the spread is large and the table carries it. `--normalize` divides by the
+  base arm's cheapest point.
+- Each size direct-labelled once (E2B/E4B/12B) in `#555555`, fontsize 8.5,
+  11 pt above the higher arm — the same treatment as the frontier's Δ labels.
+- After generating, OPEN the PNGs: nothing checks label collisions but you.
 
-`--paper` emits `pareto_gemma_paper.png`: task return (left) and cooperative
-milestone coverage (right) vs compute — the two RQ1 columns of
-tab:final_comparison, so the figure and the table say the same thing. Use the
-RAW version (natural units, matches the table); `grid/normalized/` holds the
-normalized variant. Perception axes (`--xs grounding,partner_loc`) are
-available but DROPPED from the paper: grounding is a precision-style rate that
-rewards terseness (E2B 0.92 > 12B 0.87 > E4B 0.85) and is non-monotonic in
-size.
+## The paper figures
+
+A bare run emits the three the paper uses, all vs compute:
+
+| file | y-axis |
+|---|---|
+| `pareto_gemma_coop_pct_vs_flops.png` | Coop. milestones [%] — **the headline** |
+| `pareto_gemma_milestone_pct_vs_flops.png` | Milestones [%] |
+| `pareto_gemma_reward_vs_flops.png` | Task return |
+
+plus `pareto_gemma_grid.png` (all three stacked) and, with `--paper`,
+`pareto_gemma_paper.png` (return + coop side by side, one legend).
+`grid/normalized/` holds the `--normalize` variants.
+
+Use COVERAGE (`coop_pct`, `milestone_pct`), not the attainment metrics
+(`completions`, `coop_completions`) — coverage is the paper's own definition,
+so figure and table cross-check. Attainment earns its place only for the
+redundancy point: at 12B, Hebbian reaches fewer distinct milestones
+(5.61 vs 6.06) with more agents each (1.60 vs 1.49 per milestone), so
+completions tie 9.00 while coverage favours base.
+
+Perception axes (`--xs grounding,partner_loc`) still work but are DROPPED from
+the paper: grounding is a precision-style rate that rewards terseness
+(E2B 0.92 > 12B 0.87 > E4B 0.85) — a verbosity axis, not a capability one.
 
 ## Adding a size or family
 
