@@ -65,7 +65,9 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 import make_results as MR                                  # noqa: E402
 from compute_flops import analyze_run                      # noqa: E402
-from make_pareto_fig import SIZES, exp_to_size_arm, mean_sd  # noqa: E402
+from make_pareto_fig import (  # noqa: E402
+    SIZES, exp_to_size_arm, mean_sd, run_metrics,
+)
 
 FAMILIES = {
     "gemma": ["gemma"],
@@ -95,45 +97,7 @@ INK = dict(surface="#ffffff", primary="#1a1a19", secondary="#55554e",
 
 
 # ─── per-run metrics ────────────────────────────────────────────────────
-def run_metrics(run: dict) -> dict:
-    """reward / milestone_pct / coop_pct for one loaded run (make_results schema)."""
-    sets = MR.episode_milestone_sets(run)
-    returns, _ = MR.episode_task_returns(run)
-    if not sets:
-        return {}
-    ms_pct = [100.0 * sum(1 for m in s
-                          if MR.MILESTONE_TRACK.get(m) not in MR.SOCIAL_ACT_TRACKS)
-              / MR.NONCOMM_MAX for s in sets]
-    coop_pct = [100.0 * MR.coop_count(s) / MR.COOP_MAX for s in sets]
-
-    # ATTAINMENT, as opposed to the COVERAGE above. The env credits each
-    # milestone only to the agents who actually earned or took part in it
-    # (five_chambers.fire_milestone: {name} for solo/gear/entry milestones,
-    # participant lists for m22/m25/m26/m27/m28, all-present for m19), so
-    # summing per-agent completions counts agents that attained it, not one
-    # achievement three times. Coverage says how far the team got; attainment
-    # says how many agents got there. Both exclude the social-act tracks.
-    per_agent = run.get("milestones_per_episode", [])
-    compl, coop_compl = [], []
-    for e in range(len(sets)):
-        c = cc = 0
-        for a in per_agent:
-            if e < len(a):
-                ms = set(a[e])
-                c += sum(1 for m in ms
-                         if MR.MILESTONE_TRACK.get(m) not in MR.SOCIAL_ACT_TRACKS)
-                cc += MR.coop_count(ms)
-        compl.append(c)
-        coop_compl.append(cc)
-    out = {
-        "milestone_pct": sum(ms_pct) / len(ms_pct),
-        "coop_pct": sum(coop_pct) / len(coop_pct),
-        "completions": sum(compl) / len(compl),
-        "coop_completions": sum(coop_compl) / len(coop_compl),
-    }
-    if returns:
-        out["reward"] = sum(returns) / len(returns)
-    return out
+# run_metrics is imported from make_pareto_fig (single source of truth).
 
 
 def run_flops(run_dir: Path, n_eff: float, cache: dict, flops_args: dict):

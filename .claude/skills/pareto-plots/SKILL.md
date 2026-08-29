@@ -11,7 +11,7 @@ Two scripts, both read the SAME run directories and agree with the paper's
 | script | produces |
 |---|---|
 | `scripts/make_pareto_grid.py` | the 18-panel grid: {gemma, qwen, both} × {reward, milestone_pct, coop_pct} × {flops, perception}, PNG+PDF singles + one composite per family, `points.csv` |
-| `scripts/make_pareto_fig.py` | the two log-x milestone figures + `pareto_results.tex/.md` tables |
+| `scripts/make_pareto_fig.py` | the two log-x headline figures (`--metric`, default `milestone_pct`) + `pareto_results.tex/.md` tables; ALSO the home of `run_metrics()` — the single source of truth the grid imports |
 
 ## Standard invocation (from the repo root)
 

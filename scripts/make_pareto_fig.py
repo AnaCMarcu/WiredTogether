@@ -41,8 +41,11 @@ from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from compute_flops import analyze_run  # noqa: E402
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))            # make_results.py lives at the root
+sys.path.insert(0, str(REPO / "scripts"))
+import make_results as MR                  # noqa: E402
+from compute_flops import analyze_run      # noqa: E402
 
 # N_eff is what the 2*N*tokens rule counts: parameters in the ACTIVE compute
 # path. Two deliberate choices, both stated in the paper:
@@ -110,70 +113,107 @@ def exp_to_size_arm(name: str):
     return None
 
 
-METRICS = {
-    "milestones": "mean_milestone_count_per_agent",
-    "return":     "mean_return_per_agent",
-    "comm":       "mean_comm_count_per_agent",
-}
+# The SINGLE source of truth for the performance metrics of every pareto
+# figure and table (make_pareto_grid.py imports run_metrics from here). All
+# five mirror make_results.py so the plots agree with the paper tables.
+#
+# History: the first version of this script used
+# final_metrics["mean_milestone_count_per_agent"], which is
+# (task completions + COMMUNICATION completions) / n_agents. m_comm_ch1-5
+# fire whenever agents talk (~12-13 per-agent completions per episode in
+# every arm), so that field is dominated by a talk reward: the 12B Hebbian
+# "advantage" it showed was entirely the comm term (task completions were a
+# 9.00 vs 9.00 tie). Never use it as a performance axis.
 METRIC_LABEL = {
-    "milestones": "Cooperative milestones per agent",
-    "return":     "Return per agent",
-    "comm":       "Messages per agent",
+    "reward":           "Task return (team, per episode)",
+    "milestone_pct":    "Milestone coverage (team-distinct) [%]",
+    "coop_pct":         "Coop. milestone coverage (team-distinct) [%]",
+    "completions":      "Milestone completions (all agents, per episode)",
+    "coop_completions": "Coop. milestone completions (all agents, per episode)",
 }
 
 
-def performance(run_dir: Path):
-    """All team metrics for one run (mean over agents), or None if unreadable.
+def run_metrics(run: dict) -> dict:
+    """Per-run performance metrics from a make_results.load_runs() record.
 
-    One pass over every metric: re-collecting per metric would re-parse the
-    50+ MB log.txt each time, and that parse is the whole cost here.
+    reward          team task return per episode (task + comm streams,
+                    hebbian_diffuse excluded, chamber-entry honesty filter)
+    milestone_pct   100 * |distinct team milestones outside the social-act
+                    tracks| / NONCOMM_MAX, per episode
+    coop_pct        100 * |distinct team milestones in Ch2-Ch5| / COOP_MAX
+    completions     per-agent milestone completions summed over agents
+                    (ATTAINMENT: the env credits a milestone only to the agents
+                    who earned or took part in it -- fire_milestone's
+                    contributor lists -- so this counts agents that got there,
+                    not one event x3). Social-act tracks excluded.
+    coop_completions  same, restricted to Ch2-Ch5.
+    All values are means over the run's episodes.
     """
-    fm = run_dir / "final_metrics.json"
-    if not fm.is_file():
-        return None
-    try:
-        d = json.loads(fm.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    out = {}
-    for metric, key in METRICS.items():
-        vals = d.get(key)
-        if isinstance(vals, list) and vals:
-            out[metric] = sum(vals) / len(vals)
-    # The primary metric must exist; the rest are optional.
-    return out if "milestones" in out else None
+    sets = MR.episode_milestone_sets(run)
+    if not sets:
+        return {}
+    returns, _ = MR.episode_task_returns(run)
+    ms_pct = [100.0 * sum(1 for m in s
+                          if MR.MILESTONE_TRACK.get(m) not in MR.SOCIAL_ACT_TRACKS)
+              / MR.NONCOMM_MAX for s in sets]
+    coop_pct = [100.0 * MR.coop_count(s) / MR.COOP_MAX for s in sets]
+    per_agent = run.get("milestones_per_episode", [])
+    compl, coop_compl = [], []
+    for e in range(len(sets)):
+        c = cc = 0
+        for a in per_agent:
+            if e < len(a):
+                ms = set(a[e])
+                c += sum(1 for m in ms
+                         if MR.MILESTONE_TRACK.get(m) not in MR.SOCIAL_ACT_TRACKS)
+                cc += MR.coop_count(ms)
+        compl.append(c)
+        coop_compl.append(cc)
+    out = {
+        "milestone_pct": sum(ms_pct) / len(ms_pct),
+        "coop_pct": sum(coop_pct) / len(coop_pct),
+        "completions": sum(compl) / len(compl),
+        "coop_completions": sum(coop_compl) / len(coop_compl),
+    }
+    if returns:
+        out["reward"] = sum(returns) / len(returns)
+    return out
 
 
 def collect(roots, flops_args):
     """{(size, arm): {"flops": [...], "perf": {metric: [...]}, "proto": [...]}}."""
     out = defaultdict(lambda: {"flops": [], "proto": [],
-                               "perf": {m: [] for m in METRICS}})
+                               "perf": {m: [] for m in METRIC_LABEL}})
     for root in roots:
         if not root.is_dir():
             print("  (skipping missing root {})".format(root))
             continue
-        for run_dir in sorted(p.parent for p in root.glob("*/*/final_metrics.json")):
-            sa = exp_to_size_arm(run_dir.parent.name)
+        for cond in sorted(p for p in root.iterdir() if p.is_dir()):
+            sa = exp_to_size_arm(cond.name)
             if sa is None:
                 continue
             size, arm = sa
-            perf = performance(run_dir)
-            if perf is None:
-                continue
-            args = SimpleNamespace(n_eff=SIZES[size]["n_eff"], **flops_args)
-            row = analyze_run(run_dir, args)
-            if row is None:
-                print("  !! {} has final_metrics but no log.txt/llm_logs — "
-                      "cannot compute FLOPs, skipped".format(run_dir))
-                continue
-            if row["decode_tokens_exact"] == 0:
-                print("  !! {} logged ZERO generated tokens — the model never "
-                      "answered; excluded".format(run_dir))
-                continue
-            out[(size, arm)]["flops"].append(row["flops"])
-            for metric, val in perf.items():
-                out[(size, arm)]["perf"][metric].append(val)
-            out[(size, arm)]["proto"].append(protocol(run_dir))
+            # make_results.load_runs applies the chamber-entry honesty filter
+            # and the episode slicing that the paper's numbers rely on.
+            for run in MR.load_runs(root, cond.name):
+                run_dir = Path(run["_path"]).parent
+                perf = run_metrics(run)
+                if not perf:
+                    continue
+                args = SimpleNamespace(n_eff=SIZES[size]["n_eff"], **flops_args)
+                row = analyze_run(run_dir, args)
+                if row is None:
+                    print("  !! {} has final_metrics but no log.txt/llm_logs — "
+                          "cannot compute FLOPs, skipped".format(run_dir))
+                    continue
+                if row["decode_tokens_exact"] == 0:
+                    print("  !! {} logged ZERO generated tokens — the model "
+                          "never answered; excluded".format(run_dir))
+                    continue
+                out[(size, arm)]["flops"].append(row["flops"])
+                for metric, val in perf.items():
+                    out[(size, arm)]["perf"][metric].append(val)
+                out[(size, arm)]["proto"].append(protocol(run_dir))
     return out
 
 
@@ -216,11 +256,11 @@ def write_tables(data, out_dir, stem="pareto_results"):
                 continue
             fx, _ = mean_sd(d["flops"])
             cells = {}
-            for m in METRICS:
+            for m in METRIC_LABEL:
                 vals = d["perf"][m]
                 cells[m] = mean_sd(vals) if vals else None
             rows.append((meta["family"], meta["label"], meta["n_eff"], arm,
-                         len(d["perf"]["milestones"]), fx, cells))
+                         len(d["perf"]["milestone_pct"]), fx, cells))
     rows.sort(key=lambda r: (r[0] != "gemma", r[2], r[3] != "base"))
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -230,9 +270,14 @@ def write_tables(data, out_dir, stem="pareto_results"):
         f.write("% Compute = 2*N_eff*(prefill+decode tokens), summed over all\n")
         f.write("% agents/modules/retries. N_eff is ACTIVE parameters: effective\n")
         f.write("% (not raw) for the Gemma E-series, active (not total) for MoE.\n")
-        f.write("\\begin{tabular}{llrlrrrr}\n\\toprule\n")
+        f.write("% Coverage = distinct team milestones (excl. comm track) as a\n")
+        f.write("% percentage of the 25 task milestones (Coop.: of the 17 in\n")
+        f.write("% Ch2-Ch5). Completions = per-agent milestone completions summed\n")
+        f.write("% over agents per episode (the env credits only contributors).\n")
+        f.write("\\begin{tabular}{llrlrrrrrr}\n\\toprule\n")
         f.write("Family & Model & $N_{\\mathrm{eff}}$ & Arm & $n$ & "
-                "Compute [FLOPs] & Milestones & Return \\\\\n\\midrule\n")
+                "Compute [FLOPs] & Coverage [\\%] & Coop.\\ cov.\\ [\\%] & "
+                "Completions & Task return \\\\\n\\midrule\n")
         prev_family = None
         for family, label, n_eff, arm, n, fx, cells in rows:
             if prev_family is not None and family != prev_family:
@@ -241,23 +286,25 @@ def write_tables(data, out_dir, stem="pareto_results"):
             def cell(m):
                 c = cells.get(m)
                 return "--" if c is None else "${:.2f} \\pm {:.2f}$".format(*c)
-            f.write("{} & {} & {:.1f}B & {} & {} & ${}$ & {} & {} \\\\\n".format(
+            f.write("{} & {} & {:.1f}B & {} & {} & ${}$ & {} & {} & {} & {} \\\\\n".format(
                 family.capitalize(), label, n_eff / 1e9, arm, n,
-                fmt_flops_tex(fx), cell("milestones"), cell("return")))
+                fmt_flops_tex(fx), cell("milestone_pct"), cell("coop_pct"),
+                cell("completions"), cell("reward")))
         f.write("\\bottomrule\n\\end{tabular}\n")
 
     md = out_dir / (stem + ".md")
     with open(md, "w", encoding="utf-8") as f:
         f.write("| Family | Model | N_eff | Arm | n | Compute [FLOPs] | "
-                "Milestones | Return |\n")
-        f.write("|---|---|---:|---|---:|---:|---:|---:|\n")
+                "Coverage [%] | Coop. cov. [%] | Completions | Task return |\n")
+        f.write("|---|---|---:|---|---:|---:|---:|---:|---:|---:|\n")
         for family, label, n_eff, arm, n, fx, cells in rows:
             def cell(m):
                 c = cells.get(m)
                 return "—" if c is None else "{:.2f} ± {:.2f}".format(*c)
-            f.write("| {} | {} | {:.1f}B | {} | {} | {:.2e} | {} | {} |\n".format(
+            f.write("| {} | {} | {:.1f}B | {} | {} | {:.2e} | {} | {} | {} | {} |\n".format(
                 family.capitalize(), label, n_eff / 1e9, arm, n, fx,
-                cell("milestones"), cell("return")))
+                cell("milestone_pct"), cell("coop_pct"), cell("completions"),
+                cell("reward")))
     print("  wrote {}\n  wrote {}".format(tex, md))
     return md
 
@@ -334,9 +381,7 @@ def draw(data, families, out_path, metric, theme):
     # Headroom so the direct labels (drawn above the topmost error bar, and at
     # the extreme x points) are not clipped by the axes box.
     ax.margins(x=0.10, y=0.16)
-    ylabel = {"milestones": "Cooperative milestones per agent",
-              "return": "Return per agent",
-              "comm": "Messages per agent"}[metric]
+    ylabel = METRIC_LABEL[metric]
     ax.set_xlabel("Inference compute  [FLOPs, $2\\,N_{\\mathrm{eff}}\\,T$]",
                   fontsize=10, color=ink["primary"])
     ax.set_ylabel(ylabel, fontsize=10, color=ink["primary"])
@@ -371,8 +416,8 @@ def main():
                     help="run-group dirs holding <exp>/<seed>/ (e.g. "
                          "runs_from_daic/pareto_gemma4 runs_from_daic/new_exp_0_gemma)")
     ap.add_argument("--out-dir", type=Path, default=Path("paper_assets_pareto"))
-    ap.add_argument("--metric", default="milestones",
-                    choices=["milestones", "return", "comm"])
+    ap.add_argument("--metric", default="milestone_pct",
+                    choices=list(METRIC_LABEL))
     ap.add_argument("--theme", default="light", choices=["light", "dark"])
     ap.add_argument("--image-tokens", type=int, default=280)
     ap.add_argument("--overhead-tokens", type=int, default=60)
@@ -432,15 +477,15 @@ def main():
         with open(args.csv, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             cols = ["size", "family", "arm", "n_seeds", "n_eff", "mean_flops"]
-            for m in METRICS:
+            for m in METRIC_LABEL:
                 cols += ["mean_" + m, "sd_" + m]
             w.writerow(cols)
             for (size, arm), d in sorted(data.items()):
                 fx, _ = mean_sd(d["flops"])
                 row = [size, SIZES[size]["family"], arm,
-                       len(d["perf"]["milestones"]), SIZES[size]["n_eff"],
+                       len(d["perf"]["milestone_pct"]), SIZES[size]["n_eff"],
                        "{:.4e}".format(fx)]
-                for m in METRICS:
+                for m in METRIC_LABEL:
                     vals = d["perf"][m]
                     if vals:
                         mm, ss = mean_sd(vals)
