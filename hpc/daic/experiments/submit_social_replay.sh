@@ -5,7 +5,8 @@
 # Submits exp30 (MAPPO+Heb+replay) and exp31 (IPPO+Heb+replay) on BOTH
 # reasoning cores, as two separated lanes:
 #
-#   qwen    MODEL=Qwen3.5-2B, wiredtogether.sif, text-only
+#   qwen    MODEL=Qwen3.5-2B, wiredtogether.sif, vision auto (= ON, as in
+#           the medium suite: Qwen3.5-2B is a VL model)
 #           → runs/social_replay_qwen/, poolable against the medium-suite
 #             exp05/exp06 baselines (same model, same 3×1000 budget)
 #   gemma4  MODEL=gemma-4-E4B-it, wiredtogether_gemma4.sif, vision ON
@@ -62,11 +63,17 @@ for lane in $LANES; do
         qwen)
             LANE_MODEL="$WORKSPACE/models/Qwen3.5-2B"
             LANE_IMAGE="$WORKSPACE/images/wiredtogether.sif"
-            LANE_VISION="text"
             LANE_GROUP="social_replay_qwen"
             LANE_GPU="${GPU:-}"
             LANE_MEM="${MEM:-48GB}"      # Qwen RL seeds have OOM'd at 32GB before
             LANE_STAGGER=0
+            # "auto" = the medium suite's setting: Qwen3.5-2B is a VL model and
+            # the sniff turns vision ON (every exp03-06 medium run logs
+            # "vision=True"). The first 6 replay seeds (2026-08-23/24) were
+            # launched with "text" by mistake and are kept aside as
+            # runs/social_replay_qwen_textonly — NOT comparable to the
+            # baselines (no frames -> perception grounding collapses).
+            LANE_VISION="auto"
             ;;
         gemma4)
             LANE_MODEL="$WORKSPACE/models/gemma-4-E4B-it"

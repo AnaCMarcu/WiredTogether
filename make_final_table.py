@@ -60,7 +60,13 @@ SOCIAL_REPLAY = Path("runs_from_daic/social_replay_qwen")
 #   "diffusion" — exp05/exp06: reward diffusion only (the original rows)
 # Both use the same medium config (3 agents, 3 eps x 1000 steps, Qwen3.5-2B),
 # so the baselines (exp03/exp04) are shared.
-RL_HEB_ARMS = "replay"
+#
+# Set to "replay" once the vision-ON exp30/exp31 Qwen runs have landed in
+# runs_from_daic/social_replay_qwen. The first batch (2026-08-23/24) ran with
+# LLM_VISION_MODE=text by launcher mistake — no frames, vision=False — while
+# every medium baseline ran vision=True; it is kept aside as
+# runs_from_daic/social_replay_qwen_textonly and must not feed this table.
+RL_HEB_ARMS = "diffusion"
 _RL_HEB = {
     "replay": {
         "IPPO+Heb":  ("exp31_ippo_hebbian_replay",  SOCIAL_REPLAY,
