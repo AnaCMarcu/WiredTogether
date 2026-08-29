@@ -101,19 +101,23 @@ X_AXES = {
 # benchmark score, which would be a property of the backbone only.
 BELIEF_COLS = {"grounding": "perception_grounding_rate",
                "partner_loc": "partner_loc_accuracy"}
-# Aesthetics: a 1:1 match of the CoDe Fig. 10 reference (matplotlib defaults:
-# white canvas, full black box, no grid, tab10 colours, dashed/solid lines
-# with per-series markers, framed legend lower-right, no error bars). The
-# base arm mirrors "CoDe" (green, dashed, circles) and the Hebbian arm mirrors
-# its "[eta]" variant (blue, solid, triangles) -- the same base-vs-variant
-# pairing the reference uses. Marker shape + line style carry the arm, so
-# identity is never colour-alone.
+# Aesthetics: identical to make_pareto_social_fig.fig_pareto_paper (the
+# social-interval frontier), which is itself styled after the compute-vs-reward
+# frontiers in the inference-time-scaling literature -- OPEN markers, house
+# colours, solid connecting line, framed legend lower-right, no grid, no error
+# bars, linear compute axis. House colours are shared with make_scaling_fig so
+# every compute figure in the paper reads as one family.
+BASE_COLOR = "#2c7fb8"     # baseline house colour
+SERIES_COLOR = "#d95f0e"   # hebbian house colour
 ARM_STYLE = {
-    "base":    dict(color="#2ca02c", ls="--", marker="o", label="Base"),
-    "hebbian": dict(color="#1f77b4", ls="-",  marker="^", label="Hebbian"),
+    "base":    dict(color=BASE_COLOR,   marker="s", ms=8, mew=1.9,
+                    label="Base"),
+    "hebbian": dict(color=SERIES_COLOR, marker="o", ms=7, mew=1.7,
+                    label="+Hebbian"),
 }
-# Families: Gemma filled markers, Qwen hollow (only relevant with --families).
-FAMILY_FILL = {"gemma": True, "qwen": False}
+# Families: Gemma open markers (the house look); Qwen filled, only relevant
+# when --families is used to bring Qwen back.
+FAMILY_OPEN = {"gemma": True, "qwen": False}
 FAMILY_LABEL = {"gemma": "Gemma 4", "qwen": "Qwen3.5"}
 # Point labels: the family is already carried by marker shape + legend, so
 # the label only needs the size. Gemma keeps E2B/E4B/12B; Qwen gets a short
@@ -249,6 +253,7 @@ def draw_panel(ax, data, families, y, x, perception, label_points=True,
     """
     n = 0
     tops = {}
+    all_y = []
     for family in families:
         ref = None
         if normalize:
@@ -264,16 +269,19 @@ def draw_panel(ax, data, families, y, x, perception, label_points=True,
             ys = [p[1] / scale for p in pts]
             es = [p[2] / scale for p in pts]
             st = ARM_STYLE[arm]
-            filled = FAMILY_FILL.get(family, True)
+            open_marker = FAMILY_OPEN.get(family, True)
             label = st["label"] if len(families) == 1 else \
                 "{} — {}".format(FAMILY_LABEL[family], st["label"])
             if errorbars:
                 ax.errorbar(xs, ys, yerr=es, fmt="none", ecolor=st["color"],
-                            elinewidth=0.8, capsize=2, alpha=0.6, zorder=2)
-            ax.plot(xs, ys, linestyle=st["ls"], linewidth=1.2,
-                    color=st["color"], marker=st["marker"], markersize=5.5,
-                    markerfacecolor=st["color"] if filled else "white",
-                    markeredgecolor=st["color"], markeredgewidth=1.0,
+                            elinewidth=0.9, capsize=2.5, alpha=0.6, zorder=2)
+                all_y += [v + e for v, e in zip(ys, es)]
+                all_y += [v - e for v, e in zip(ys, es)]
+            all_y += ys
+            ax.plot(xs, ys, ls="-", lw=1.6, color=st["color"],
+                    marker=st["marker"], ms=st["ms"],
+                    mfc="none" if open_marker else st["color"],
+                    mec=st["color"], mew=st["mew"],
                     label=label, zorder=3)
             n += 1
             if label_points:
@@ -283,24 +291,27 @@ def draw_panel(ax, data, families, y, x, perception, label_points=True,
                     if key not in tops or top > tops[key][1]:
                         tops[key] = [xv, top]
     if label_points:
-        # One label per size, above the taller arm. Labels are SHORT
-        # ("Q-2B", not "Qwen3.5-2B") so interleaved families cannot collide.
+        # One label per size, above the higher arm; same grey/size as the
+        # Delta labels on the social-interval frontier.
         for (_, lab), (xv, top) in tops.items():
             ax.annotate(lab, (xv, top), textcoords="offset points",
-                        xytext=(0, 7), ha="center", va="bottom",
-                        fontsize=7, color="0.35", zorder=4)
+                        xytext=(0, 11), ha="center", va="bottom",
+                        fontsize=8.5, color="#555555", zorder=4)
     ax.set_xlabel(X_AXES[x])
     ylabel = Y_METRICS[y]
     if normalize:
         ylabel = "(Normalized) " + ylabel[0].lower() + ylabel[1:]
     ax.set_ylabel(ylabel)
-    # Reference look: full box, no grid, default ticks, a little headroom
-    # for the point labels.
+    # Same framing as the social frontier: no grid, generous headroom above so
+    # the size labels clear the top marker.
     ax.grid(False)
-    ax.margins(x=0.08, y=0.15)
+    if all_y:
+        lo, hi = min(all_y), max(all_y)
+        pad = max(1e-9, 0.12 * (hi - lo)) if hi > lo else max(abs(hi) * 0.1, 1.0)
+        ax.set_ylim(lo - pad, hi + 2.0 * pad)
+    ax.margins(x=0.10)
     if n:
-        ax.legend(loc=legend_loc, fontsize=8, frameon=True, framealpha=1.0,
-                  edgecolor="0.8")
+        ax.legend(loc=legend_loc, fontsize=8.5, framealpha=0.95)
     return n
 
 
@@ -322,7 +333,8 @@ def main():
                     help="comma-separated subset of gemma,qwen,both — Qwen is "
                          "excluded from the paper's plots by decision, so the "
                          "default is gemma only")
-    ap.add_argument("--ys", default=",".join(Y_METRICS))
+    ap.add_argument("--ys", default="coop_pct,milestone_pct,reward",
+                    help="comma-separated subset of {}".format(",".join(Y_METRICS)))
     ap.add_argument("--xs", default="flops",
                     help="comma-separated subset of {}; the perception axes "
                          "are available but off by default (dropped from the "
@@ -345,7 +357,7 @@ def main():
 
     import matplotlib
     matplotlib.use("Agg")
-    matplotlib.rcdefaults()   # the reference figure IS the matplotlib default look
+    matplotlib.rcdefaults()   # start from a clean sheet; styling is explicit below
     import matplotlib.pyplot as plt
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -419,7 +431,7 @@ def main():
     for fam in families:
         for y in ys:
             for x in xs:
-                fig, ax = plt.subplots(figsize=(4.6, 3.4), dpi=200)
+                fig, ax = plt.subplots(figsize=(5.0, 3.5), dpi=200)
                 n = draw_panel(ax, data, FAMILIES[fam], y, x, perception,
                                label_points=not args.no_point_labels,
                                errorbars=args.errorbars,
@@ -434,7 +446,7 @@ def main():
         # composite: rows = y metrics, cols = x axes
         if len(ys) > 1 or len(xs) > 1:
             fig, axes = plt.subplots(len(ys), len(xs),
-                                     figsize=(4.6 * len(xs), 3.4 * len(ys)),
+                                     figsize=(5.0 * len(xs), 3.5 * len(ys)),
                                      dpi=200, squeeze=False)
             any_drawn = False
             for i, y in enumerate(ys):
@@ -454,7 +466,7 @@ def main():
         # RQ1 -- task return and cooperative coverage -- against compute, side
         # by side, one legend (right panel).
         if args.paper and "flops" in xs:
-            fig, axes = plt.subplots(1, 2, figsize=(8.6, 3.3), dpi=200)
+            fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.5), dpi=200)
             drawn = 0
             for ax, y in zip(axes, ("reward", "coop_pct")):
                 drawn += draw_panel(ax, data, FAMILIES[fam], y, "flops",
