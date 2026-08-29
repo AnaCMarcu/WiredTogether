@@ -2,11 +2,12 @@
 
 Produces every combination of
 
-    family  in {gemma, qwen, both}
-    y-axis  in {reward, milestone_pct, coop_pct}
-    x-axis  in {flops, perception}
+    family  in {gemma, qwen, both}      default: gemma only (Qwen excluded
+                                        from the paper's plots by decision)
+    y-axis  in {reward, milestone_pct, coop_pct, completions, coop_completions}
+    x-axis  in {flops, grounding, partner_loc}
 
-= 18 single-panel figures (PNG + PDF) plus one composite 3x2 panel per family,
+= one PNG per combination plus one composite (rows = y, cols = x) per family,
 and a CSV with every plotted number.
 
 Definitions (all mirror make_results.py so the plots agree with the paper
@@ -23,11 +24,16 @@ tables — the helpers are IMPORTED from it, not re-implemented):
                    all agents/modules/retries (scripts/compute_flops.py); shown
                    in units of 1e17 on a LINEAR axis to match the reference
                    figure (the range here is ~5x, so log adds nothing)
-    perception     an external, model-level visual-reasoning score: MMMU-Pro,
-                   NON-thinking mode (our agents run with thinking off), from
-                   the official model cards -- see perception_scores.csv, which
-                   carries the source per row. Same value for both arms of a
-                   size (it is a property of the backbone).
+    grounding      perception-grounding rate: fraction of the agents' own
+                   perception statements naming no object impossible for the
+                   agent's current chamber (tab:belief_quality; qualitative
+                   pipeline, beliefs.csv, one value per run). Per ARM.
+    partner_loc    partner-location accuracy: fraction of partner-location
+                   claims matching the partner's true chamber (same source).
+                   Both perception axes carry +-1 sd across seeds as x error
+                   bars. (An external benchmark such as MMMU-Pro was used in
+                   an earlier version; it is a backbone property, identical
+                   for both arms, and is no longer plotted.)
 
 Style (dataviz skill + the CoDe Fig. 10 reference): colour = arm (base blue /
 hebbian orange, the two palette slots that validate all-pairs in both modes),
@@ -40,7 +46,7 @@ Usage:
     python scripts/make_pareto_grid.py runs_from_daic/pareto_gemma4 \
         runs_from_daic/new_exp_0_gemma runs_from_daic/medium_runs \
         --out-dir paper_assets_pareto/grid
-    python scripts/make_pareto_grid.py ... --perception paper_assets_pareto/perception_scores.csv
+    python scripts/make_pareto_grid.py ... --beliefs analysis_qualitative/out_pareto/tables/beliefs.csv
     python scripts/make_pareto_grid.py ... --families gemma --ys coop_pct --xs flops
 
 FLOPs need a pass over each run's 50+ MB log.txt; results are cached in
@@ -82,9 +88,17 @@ Y_METRICS = {
     "coop_completions": "Coop. milestone completions (all agents, per episode)",
 }
 X_AXES = {
-    "flops":      "Inference compute  [$10^{17}$ FLOPs]",
-    "perception": "Perception  [MMMU-Pro, non-thinking, %]",
+    "flops":       "Inference compute  [$10^{17}$ FLOPs]",
+    "grounding":   "Perception grounding rate",
+    "partner_loc": "Partner-location accuracy",
 }
+# Perception axes come from the QUALITATIVE pipeline's beliefs.csv (one row
+# per run): the paper's tab:belief_quality metrics, computed IN the
+# environment from the agents' own belief statements. They are per-arm
+# values (the Hebbian arm has its own grounding rate), unlike an external
+# benchmark score, which would be a property of the backbone only.
+BELIEF_COLS = {"grounding": "perception_grounding_rate",
+               "partner_loc": "partner_loc_accuracy"}
 ARM_COLOR = {"base": "#2a78d6", "hebbian": "#eb6834"}
 FAMILY_MARKER = {"gemma": "o", "qwen": "s"}
 FAMILY_LABEL = {"gemma": "Gemma 4", "qwen": "Qwen3.5"}
@@ -159,18 +173,32 @@ def collect(roots, flops_args, cache):
     return out
 
 
-def load_perception(path: Path | None) -> dict:
-    """size -> MMMU-Pro score (float) from a CSV with columns size,score,...."""
-    if path is None or not path.is_file():
-        return {}
-    scores = {}
-    with open(path, newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            try:
-                scores[row["size"].strip()] = float(row["score"])
-            except (KeyError, ValueError):
-                continue
-    return scores
+def load_beliefs(paths) -> dict:
+    """{(size, arm): {"grounding": [per-run], "partner_loc": [per-run]}}.
+
+    Reads the qualitative pipeline's beliefs.csv files (columns include
+    run="<exp_dir>/seed_N", perception_grounding_rate, partner_loc_accuracy,
+    quarantined). Quarantined runs are dropped, as in make_qual_tables.py.
+    """
+    out = defaultdict(lambda: {k: [] for k in BELIEF_COLS})
+    for path in paths:
+        path = Path(path)
+        if not path.is_file():
+            print("  (no beliefs.csv at {})".format(path))
+            continue
+        with open(path, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                if str(row.get("quarantined", "")).strip().lower() == "true":
+                    continue
+                sa = exp_to_size_arm(row.get("run", "").split("/")[0])
+                if sa is None:
+                    continue
+                for axis, col in BELIEF_COLS.items():
+                    try:
+                        out[sa][axis].append(float(row[col]))
+                    except (KeyError, ValueError, TypeError):
+                        continue
+    return out
 
 
 # ─── drawing ────────────────────────────────────────────────────────────
@@ -184,15 +212,16 @@ def series_points(data, family, arm, y, x, perception):
         if not d or not d.get(y):
             continue
         if x == "flops":
-            xv, _ = mean_sd(d["flops"])
-            xv /= 1e17
+            xv, xe = mean_sd(d["flops"])
+            xv, xe = xv / 1e17, xe / 1e17
         else:
-            xv = perception.get(size)
-            if xv is None:
+            vals = perception.get((size, arm), {}).get(x) or []
+            if not vals:
                 continue
+            xv, xe = mean_sd(vals)          # mean +- sd across runs (seeds)
         ym, ys = mean_sd(d[y])
         pts.append((xv, ym, ys, SHORT_LABEL.get(size, meta["label"].split()[-1]),
-                    len(d["_runs"])))
+                    len(d["_runs"]), xe))
     pts.sort(key=lambda p: p[0])
     return pts
 
@@ -209,7 +238,9 @@ def draw_panel(ax, data, families, y, x, perception, label_points=True):
             xs = [p[0] for p in pts]
             ys = [p[1] for p in pts]
             es = [p[2] for p in pts]
-            ax.errorbar(xs, ys, yerr=es, fmt="none", ecolor=ARM_COLOR[arm],
+            xes = [p[5] for p in pts]
+            ax.errorbar(xs, ys, yerr=es, xerr=xes if x != "flops" else None,
+                        fmt="none", ecolor=ARM_COLOR[arm],
                         elinewidth=0.9, capsize=2.5, alpha=0.55, zorder=2)
             ax.plot(xs, ys, linestyle="--", linewidth=1.6,
                     color=ARM_COLOR[arm], marker=FAMILY_MARKER[family],
@@ -218,7 +249,7 @@ def draw_panel(ax, data, families, y, x, perception, label_points=True):
                     label="{} — {}".format(FAMILY_LABEL[family], arm), zorder=3)
             n += 1
             if label_points:
-                for xv, ym, ys_, lab, _ in pts:
+                for xv, ym, ys_, lab, _, _ in pts:
                     key = (family, lab)
                     top, bot = ym + ys_, ym - ys_
                     if key not in tops:
@@ -258,16 +289,21 @@ def draw_panel(ax, data, families, y, x, perception, label_points=True):
 def save(fig, path_stem: Path):
     path_stem.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(str(path_stem) + ".png", dpi=200, facecolor=INK["surface"])
-    fig.savefig(str(path_stem) + ".pdf", facecolor=INK["surface"])
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("roots", nargs="+", type=Path)
     ap.add_argument("--out-dir", type=Path, default=Path("paper_assets_pareto/grid"))
-    ap.add_argument("--perception", type=Path,
-                    default=Path("paper_assets_pareto/perception_scores.csv"))
-    ap.add_argument("--families", default="gemma,qwen,both")
+    ap.add_argument("--beliefs", type=Path, nargs="+",
+                    default=[Path("analysis_qualitative/out_gemma/tables/beliefs.csv"),
+                             Path("analysis_qualitative/out_pareto/tables/beliefs.csv")],
+                    help="qualitative-pipeline beliefs.csv files (one row per "
+                         "run) supplying the perception axes")
+    ap.add_argument("--families", default="gemma",
+                    help="comma-separated subset of gemma,qwen,both — Qwen is "
+                         "excluded from the paper's plots by decision, so the "
+                         "default is gemma only")
     ap.add_argument("--ys", default=",".join(Y_METRICS))
     ap.add_argument("--xs", default=",".join(X_AXES))
     ap.add_argument("--no-point-labels", action="store_true")
@@ -292,14 +328,17 @@ def main():
     if not data:
         sys.exit("no finished runs found")
 
-    perception = load_perception(args.perception)
+    perception = load_beliefs(args.beliefs)
     families = [f.strip() for f in args.families.split(",") if f.strip()]
     ys = [y.strip() for y in args.ys.split(",") if y.strip()]
     xs = [x.strip() for x in args.xs.split(",") if x.strip()]
-    if "perception" in xs and not perception:
-        print("  !! no perception scores loaded ({}) — skipping the "
-              "perception x-axis".format(args.perception))
-        xs = [x for x in xs if x != "perception"]
+    if not perception:
+        dropped = [x for x in xs if x in BELIEF_COLS]
+        if dropped:
+            print("  !! no beliefs.csv rows matched ({}) — skipping the "
+                  "perception axes {}".format(
+                      ", ".join(str(p) for p in args.beliefs), dropped))
+        xs = [x for x in xs if x not in BELIEF_COLS]
 
     print("\npoints (size, arm): n | FLOPs/1e17 | " + " | ".join(Y_METRICS))
     for (size, arm), d in sorted(data.items()):
@@ -321,13 +360,20 @@ def main():
     with open(args.out_dir / "points.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["size", "family", "arm", "n", "n_eff", "flops_mean",
-                    "perception_mmmu_pro"]
+                    "grounding_mean", "grounding_sd",
+                    "partner_loc_mean", "partner_loc_sd"]
                    + [c for k in Y_METRICS for c in (k + "_mean", k + "_sd")])
         for (size, arm), d in sorted(data.items()):
             fx, _ = mean_sd(d["flops"])
             row = [size, SIZES[size]["family"], arm, len(d["flops"]),
-                   SIZES[size]["n_eff"], "{:.4e}".format(fx),
-                   perception.get(size, "")]
+                   SIZES[size]["n_eff"], "{:.4e}".format(fx)]
+            for axis in BELIEF_COLS:
+                vals = perception.get((size, arm), {}).get(axis) or []
+                if vals:
+                    pm, psd = mean_sd(vals)
+                    row += ["{:.4f}".format(pm), "{:.4f}".format(psd)]
+                else:
+                    row += ["", ""]
             for k in Y_METRICS:
                 if d.get(k):
                     m, s = mean_sd(d[k])
@@ -372,7 +418,7 @@ def main():
                 save(fig, args.out_dir / "pareto_{}_grid".format(fam))
                 n_written += 1
             plt.close(fig)
-    print("\nwrote {} figures (png+pdf) + points.csv to {}".format(
+    print("\nwrote {} figures (png) + points.csv to {}".format(
         n_written, args.out_dir))
 
 

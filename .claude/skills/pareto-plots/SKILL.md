@@ -10,19 +10,20 @@ Two scripts, both read the SAME run directories and agree with the paper's
 
 | script | produces |
 |---|---|
-| `scripts/make_pareto_grid.py` | the 18-panel grid: {gemma, qwen, both} × {reward, milestone_pct, coop_pct} × {flops, perception}, PNG+PDF singles + one composite per family, `points.csv` |
+| `scripts/make_pareto_grid.py` | the grid: {gemma (default; qwen/both on request)} × {reward, milestone_pct, coop_pct, completions, coop_completions} × {flops, grounding, partner_loc}, PNG singles + one composite per family, `points.csv` |
 | `scripts/make_pareto_fig.py` | the two log-x headline figures (`--metric`, default `milestone_pct`) + `pareto_results.tex/.md` tables; ALSO the home of `run_metrics()` — the single source of truth the grid imports |
 
 ## Standard invocation (from the repo root)
 
 ```bash
 python scripts/make_pareto_grid.py runs_from_daic/pareto_gemma4 \
-    runs_from_daic/new_exp_0_gemma runs_from_daic/medium_runs \
-    --out-dir paper_assets_pareto/grid
+    runs_from_daic/new_exp_0_gemma --out-dir paper_assets_pareto/grid
 
 python scripts/make_pareto_fig.py runs_from_daic/pareto_gemma4 \
-    runs_from_daic/new_exp_0_gemma runs_from_daic/medium_runs \
+    runs_from_daic/new_exp_0_gemma \
     --out-dir paper_assets_pareto --csv paper_assets_pareto/points.csv
+# Qwen is excluded from the paper's plots by decision. To get the Qwen variants
+# anyway, add runs_from_daic/medium_runs as a root and --families gemma,qwen,both.
 ```
 
 Roots are run-group directories holding `<condition>/seed_<N>/`. The three
@@ -30,7 +31,7 @@ above are: the pareto suite (e2b, 12b), the E4B point (`new_exp_0_gemma_*`),
 and the Qwen points (`exp01/02` base, `exp07/08` hebbian — same protocol and
 flags as the suite, verified against the sbatch files).
 
-Subset flags: `--families gemma`, `--ys coop_pct,reward`, `--xs flops`,
+Subset flags: `--families gemma,qwen,both`, `--ys coop_pct,reward`, `--xs flops`,
 `--no-point-labels`. FLOPs are cached in `<out-dir>/flops_cache.json`
 (keyed on run path + log.txt mtime), so only the first run is slow.
 
@@ -67,10 +68,20 @@ Verified 2026-08-28: the pareto table reproduces
   (`scripts/compute_flops.py`); linear axis in units of 1e17. `N_eff` per size
   lives in `make_pareto_fig.SIZES` — effective params for the Gemma E-series
   (PLE tables are looked up, not multiplied), ACTIVE params for MoE.
-- **perception**: MMMU-Pro from the official model cards,
-  `paper_assets_pareto/perception_scores.csv` (columns `size,score,mode,source`).
-  Prefer NON-thinking mode — the agents run with thinking off. It is a backbone
-  property: identical for both arms of a size.
+- **grounding / partner_loc** (the perception x-axes): the paper's
+  `tab:belief_quality` metrics from the QUALITATIVE pipeline —
+  *perception-grounding rate* = fraction of perception statements naming no
+  object impossible for the agent's current chamber; *partner-location
+  accuracy* = fraction of partner-location claims matching the partner's true
+  chamber. Read from `analysis_qualitative/out_*/tables/beliefs.csv` (one row
+  per run; quarantined rows dropped); mean ± sd across seeds, drawn as x
+  error bars. They are PER-ARM values. A new size needs the pipeline run:
+  `python analysis_qualitative/run.py parse --runs-root <root> --out analysis_qualitative/out_<name>`
+  then `metrics` with the same flags — and its condition dirs registered in
+  `make_results.CONDITIONS` (group "pareto") + hebbian dirs in
+  `registry.SOCIAL_PROMPT_DIRS`, or the registry will not discover them.
+  (MMMU-Pro from the model cards was used in an earlier version and dropped:
+  a backbone property, identical for both arms.)
 
 ## Style rules (from the dataviz skill + CoDe Fig. 10)
 
@@ -92,8 +103,8 @@ Verified 2026-08-28: the pareto table reproduces
 2. If its runs predate the suite, map the directory name in
    `make_pareto_fig.LEGACY_RUNS`; suite runs are auto-mapped from
    `pareto_<size>_<arm>`.
-3. Add a row to `perception_scores.csv` with the model-card MMMU-Pro and its
-   source URL.
+3. Run the qualitative pipeline on its runs (see the perception bullet) so
+   `beliefs.csv` has its rows.
 4. New family → add a marker in `FAMILY_MARKER` (both scripts) and a label in
    `make_pareto_grid.FAMILY_LABEL`.
 

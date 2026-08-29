@@ -385,6 +385,13 @@ def build_timeline(run, units, per_agent_units, per_agent_rows, align, mapping):
             continue
         mod, meth = u["module"], u["method"]
         resp = u.get("response") or {}
+        # Small backbones sometimes answer a belief/critic prompt with a bare
+        # JSON array instead of an object (Gemma-E2B did this in 9/12 pareto
+        # runs, killing the whole run's parse with "'list' object has no
+        # attribute 'get'"). A non-object response carries none of the fields
+        # read below, so treat it as unparseable and move on.
+        if not isinstance(resp, dict):
+            continue
         if mod == "critic":
             by_turn[(a, t)]["critic"] = {
                 "success": resp.get("success"),

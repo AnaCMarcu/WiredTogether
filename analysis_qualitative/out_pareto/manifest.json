@@ -1,0 +1,2114 @@
+{
+ "pareto_12b_base/seed_1011": {
+  "fingerprint": {
+   "config.json": [
+    2927,
+    1787604984
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    8024,
+    1787604906
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    1506,
+    1787604905
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    781901,
+    1787604906
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    267621,
+    1787604905
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    9631,
+    1787604907
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2032,
+    1787604906
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    771917,
+    1787604907
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    264764,
+    1787604906
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    8842,
+    1787604908
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    1800,
+    1787604907
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    777918,
+    1787604907
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    262478,
+    1787604907
+   ],
+   "final_metrics.json": [
+    1645342,
+    1787604985
+   ],
+   "hebbian_snapshots.jsonl": [
+    336,
+    1787604984
+   ],
+   "llm_logs\\action_selection.log": [
+    8595019,
+    1787604983
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    353350,
+    1787604979
+   ],
+   "llm_logs\\belief_system.log": [
+    2986610,
+    1787604984
+   ],
+   "llm_logs\\critic.log": [
+    236955,
+    1787604984
+   ],
+   "llm_logs\\episodic_memory.log": [
+    225531,
+    1787604984
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:13",
+  "parser_version": "2"
+ },
+ "pareto_12b_base/seed_1213": {
+  "fingerprint": {
+   "config.json": [
+    2927,
+    1787605093
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    11958,
+    1787604989
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2864,
+    1787604989
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    815050,
+    1787604989
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    275023,
+    1787604989
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    8571,
+    1787604990
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1807,
+    1787604990
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    770974,
+    1787604990
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    258183,
+    1787604990
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    10403,
+    1787604992
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2415,
+    1787604991
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    779610,
+    1787604991
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    279003,
+    1787604990
+   ],
+   "final_metrics.json": [
+    1694874,
+    1787605094
+   ],
+   "hebbian_snapshots.jsonl": [
+    349,
+    1787605093
+   ],
+   "llm_logs\\action_selection.log": [
+    8756737,
+    1787605092
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    602489,
+    1787605089
+   ],
+   "llm_logs\\belief_system.log": [
+    2942171,
+    1787605093
+   ],
+   "llm_logs\\critic.log": [
+    241887,
+    1787605093
+   ],
+   "llm_logs\\episodic_memory.log": [
+    238396,
+    1787605093
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:18",
+  "parser_version": "2"
+ },
+ "pareto_12b_base/seed_123": {
+  "fingerprint": {
+   "config.json": [
+    2924,
+    1787604708
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9200,
+    1787604612
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    1826,
+    1787604612
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    964359,
+    1787604612
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    327266,
+    1787604611
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    10901,
+    1787604613
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2418,
+    1787604612
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    965548,
+    1787604612
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    333684,
+    1787604612
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    11075,
+    1787604613
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2534,
+    1787604613
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    848502,
+    1787604613
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    282886,
+    1787604613
+   ],
+   "final_metrics.json": [
+    1981822,
+    1787604708
+   ],
+   "hebbian_snapshots.jsonl": [
+    371,
+    1787604708
+   ],
+   "llm_logs\\action_selection.log": [
+    10107618,
+    1787604706
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    471878,
+    1787604703
+   ],
+   "llm_logs\\belief_system.log": [
+    3505575,
+    1787604707
+   ],
+   "llm_logs\\critic.log": [
+    284847,
+    1787604707
+   ],
+   "llm_logs\\episodic_memory.log": [
+    271936,
+    1787604708
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:22",
+  "parser_version": "2"
+ },
+ "pareto_12b_base/seed_42": {
+  "fingerprint": {
+   "config.json": [
+    2921,
+    1787604607
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9722,
+    1787604529
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2120,
+    1787604528
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    783706,
+    1787604529
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    259194,
+    1787604528
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    10501,
+    1787604529
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2439,
+    1787604529
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    790445,
+    1787604529
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    273698,
+    1787604529
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    10623,
+    1787604531
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2335,
+    1787604530
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    789941,
+    1787604530
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    267694,
+    1787604530
+   ],
+   "final_metrics.json": [
+    1683095,
+    1787604608
+   ],
+   "hebbian_snapshots.jsonl": [
+    367,
+    1787604607
+   ],
+   "llm_logs\\action_selection.log": [
+    8613552,
+    1787604606
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    330298,
+    1787604604
+   ],
+   "llm_logs\\belief_system.log": [
+    2947654,
+    1787604607
+   ],
+   "llm_logs\\critic.log": [
+    240725,
+    1787604607
+   ],
+   "llm_logs\\episodic_memory.log": [
+    229803,
+    1787604607
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:26",
+  "parser_version": "2"
+ },
+ "pareto_12b_base/seed_456": {
+  "fingerprint": {
+   "config.json": [
+    2924,
+    1787604798
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9805,
+    1787604712
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2218,
+    1787604712
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    778380,
+    1787604712
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    270005,
+    1787604712
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    8950,
+    1787604713
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1822,
+    1787604713
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    774860,
+    1787604713
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    262637,
+    1787604713
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    8790,
+    1787604714
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    1807,
+    1787604714
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    775079,
+    1787604714
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    269359,
+    1787604714
+   ],
+   "final_metrics.json": [
+    1660015,
+    1787604798
+   ],
+   "hebbian_snapshots.jsonl": [
+    370,
+    1787604798
+   ],
+   "llm_logs\\action_selection.log": [
+    8513378,
+    1787604796
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    412215,
+    1787604793
+   ],
+   "llm_logs\\belief_system.log": [
+    2888365,
+    1787604797
+   ],
+   "llm_logs\\critic.log": [
+    239023,
+    1787604797
+   ],
+   "llm_logs\\episodic_memory.log": [
+    225045,
+    1787604798
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:31",
+  "parser_version": "2"
+ },
+ "pareto_12b_base/seed_789": {
+  "fingerprint": {
+   "config.json": [
+    2924,
+    1787604900
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9482,
+    1787604803
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2019,
+    1787604802
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    782068,
+    1787604803
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    277275,
+    1787604802
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    10558,
+    1787604803
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2323,
+    1787604803
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    779959,
+    1787604803
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    268062,
+    1787604803
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    9232,
+    1787604804
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    1816,
+    1787604804
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    798120,
+    1787604804
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    277930,
+    1787604804
+   ],
+   "final_metrics.json": [
+    1663816,
+    1787604901
+   ],
+   "hebbian_snapshots.jsonl": [
+    353,
+    1787604900
+   ],
+   "llm_logs\\action_selection.log": [
+    8591225,
+    1787604899
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    407949,
+    1787604895
+   ],
+   "llm_logs\\belief_system.log": [
+    2950441,
+    1787604900
+   ],
+   "llm_logs\\critic.log": [
+    237971,
+    1787604900
+   ],
+   "llm_logs\\episodic_memory.log": [
+    225821,
+    1787604900
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:35",
+  "parser_version": "2"
+ },
+ "pareto_12b_hebbian/seed_1011": {
+  "fingerprint": {
+   "config.json": [
+    2944,
+    1787605610
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9719,
+    1787605528
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2009,
+    1787605528
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    801858,
+    1787605528
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    276515,
+    1787605528
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    9735,
+    1787605529
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2017,
+    1787605529
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    772236,
+    1787605529
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    267958,
+    1787605529
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    10066,
+    1787605530
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2116,
+    1787605530
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    776423,
+    1787605530
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    262392,
+    1787605530
+   ],
+   "final_metrics.json": [
+    1827123,
+    1787605611
+   ],
+   "hebbian_snapshots.jsonl": [
+    777,
+    1787605610
+   ],
+   "llm_logs\\action_selection.log": [
+    8551995,
+    1787605609
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    273039,
+    1787605607
+   ],
+   "llm_logs\\belief_system.log": [
+    2940344,
+    1787605610
+   ],
+   "llm_logs\\critic.log": [
+    240312,
+    1787605610
+   ],
+   "llm_logs\\episodic_memory.log": [
+    230175,
+    1787605610
+   ],
+   "llm_logs\\social_module.log": [
+    651275,
+    1787605607
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:39",
+  "parser_version": "2"
+ },
+ "pareto_12b_hebbian/seed_1213": {
+  "fingerprint": {
+   "config.json": [
+    2944,
+    1787686508
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9751,
+    1787686488
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2014,
+    1787686488
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    769048,
+    1787686488
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    263147,
+    1787686488
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    9835,
+    1787686489
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2012,
+    1787686489
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    825315,
+    1787686489
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    280739,
+    1787686489
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    10575,
+    1787686489
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2212,
+    1787686489
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    974745,
+    1787686489
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    344557,
+    1787686489
+   ],
+   "final_metrics.json": [
+    1985673,
+    1787686508
+   ],
+   "hebbian_snapshots.jsonl": [
+    756,
+    1787686508
+   ],
+   "llm_logs\\action_selection.log": [
+    9464117,
+    1787686507
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    383094,
+    1787686507
+   ],
+   "llm_logs\\belief_system.log": [
+    3234327,
+    1787686508
+   ],
+   "llm_logs\\critic.log": [
+    265320,
+    1787686508
+   ],
+   "llm_logs\\episodic_memory.log": [
+    249032,
+    1787686508
+   ],
+   "llm_logs\\social_module.log": [
+    683045,
+    1787686507
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:44",
+  "parser_version": "2"
+ },
+ "pareto_12b_hebbian/seed_123": {
+  "fingerprint": {
+   "config.json": [
+    2941,
+    1787605324
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    11113,
+    1787605205
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2510,
+    1787605204
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    974704,
+    1787605204
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    337339,
+    1787605204
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    10362,
+    1787605206
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2132,
+    1787605205
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    965363,
+    1787605206
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    333207,
+    1787605205
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    10606,
+    1787605207
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2221,
+    1787605206
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    946808,
+    1787605207
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    314011,
+    1787605206
+   ],
+   "final_metrics.json": [
+    2212677,
+    1787605324
+   ],
+   "hebbian_snapshots.jsonl": [
+    778,
+    1787605324
+   ],
+   "llm_logs\\action_selection.log": [
+    10525309,
+    1787605322
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    565634,
+    1787605313
+   ],
+   "llm_logs\\belief_system.log": [
+    3566758,
+    1787605323
+   ],
+   "llm_logs\\critic.log": [
+    296721,
+    1787605323
+   ],
+   "llm_logs\\episodic_memory.log": [
+    281021,
+    1787605324
+   ],
+   "llm_logs\\social_module.log": [
+    830080,
+    1787605314
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:49",
+  "parser_version": "2"
+ },
+ "pareto_12b_hebbian/seed_42": {
+  "fingerprint": {
+   "config.json": [
+    2938,
+    1787605198
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    10649,
+    1787605099
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2417,
+    1787605099
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    785735,
+    1787605099
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    257056,
+    1787605099
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    10170,
+    1787605100
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2203,
+    1787605100
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    774220,
+    1787605100
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    269199,
+    1787605100
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    11516,
+    1787605101
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2756,
+    1787605101
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    757754,
+    1787605101
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    255311,
+    1787605101
+   ],
+   "final_metrics.json": [
+    1816294,
+    1787605199
+   ],
+   "hebbian_snapshots.jsonl": [
+    776,
+    1787605198
+   ],
+   "llm_logs\\action_selection.log": [
+    8499831,
+    1787605196
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    557373,
+    1787605192
+   ],
+   "llm_logs\\belief_system.log": [
+    2860747,
+    1787605198
+   ],
+   "llm_logs\\critic.log": [
+    240896,
+    1787605198
+   ],
+   "llm_logs\\episodic_memory.log": [
+    233005,
+    1787605198
+   ],
+   "llm_logs\\social_module.log": [
+    669990,
+    1787605193
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:53",
+  "parser_version": "2"
+ },
+ "pareto_12b_hebbian/seed_456": {
+  "fingerprint": {
+   "config.json": [
+    2941,
+    1787605423
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    10210,
+    1787605328
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2210,
+    1787605328
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    771816,
+    1787605328
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    265182,
+    1787605328
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    10153,
+    1787605329
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2121,
+    1787605328
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    768971,
+    1787605329
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    260314,
+    1787605328
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    10011,
+    1787605329
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2030,
+    1787605329
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    770537,
+    1787605329
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    266158,
+    1787605329
+   ],
+   "final_metrics.json": [
+    1810623,
+    1787605424
+   ],
+   "hebbian_snapshots.jsonl": [
+    792,
+    1787605423
+   ],
+   "llm_logs\\action_selection.log": [
+    8416667,
+    1787605421
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    444291,
+    1787605418
+   ],
+   "llm_logs\\belief_system.log": [
+    2874657,
+    1787605423
+   ],
+   "llm_logs\\critic.log": [
+    235617,
+    1787605423
+   ],
+   "llm_logs\\episodic_memory.log": [
+    230250,
+    1787605423
+   ],
+   "llm_logs\\social_module.log": [
+    650916,
+    1787605418
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:57",
+  "parser_version": "2"
+ },
+ "pareto_12b_hebbian/seed_789": {
+  "fingerprint": {
+   "config.json": [
+    2941,
+    1787605523
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9811,
+    1787605429
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2017,
+    1787605428
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    775225,
+    1787605428
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    263230,
+    1787605428
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    10228,
+    1787605430
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2225,
+    1787605429
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    775963,
+    1787605430
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    266433,
+    1787605429
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    9603,
+    1787605431
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2019,
+    1787605430
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    771840,
+    1787605431
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    260302,
+    1787605430
+   ],
+   "final_metrics.json": [
+    1800315,
+    1787605524
+   ],
+   "hebbian_snapshots.jsonl": [
+    791,
+    1787605523
+   ],
+   "llm_logs\\action_selection.log": [
+    8571248,
+    1787605522
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    512935,
+    1787605518
+   ],
+   "llm_logs\\belief_system.log": [
+    2892997,
+    1787605523
+   ],
+   "llm_logs\\critic.log": [
+    239181,
+    1787605523
+   ],
+   "llm_logs\\episodic_memory.log": [
+    228169,
+    1787605523
+   ],
+   "llm_logs\\social_module.log": [
+    645020,
+    1787605518
+   ]
+  },
+  "parsed_at": "2026-08-29 16:30:01",
+  "parser_version": "2"
+ },
+ "pareto_e2b_base/seed_1011": {
+  "fingerprint": {
+   "config.json": [
+    2927,
+    1787603958
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    10192,
+    1787603866
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2209,
+    1787603866
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    974734,
+    1787603866
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    416216,
+    1787603866
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    8083,
+    1787603867
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1324,
+    1787603867
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    881817,
+    1787603867
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    365641,
+    1787603867
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    9575,
+    1787603868
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2010,
+    1787603868
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    901030,
+    1787603868
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    385220,
+    1787603867
+   ],
+   "final_metrics.json": [
+    1720003,
+    1787603959
+   ],
+   "hebbian_snapshots.jsonl": [
+    318,
+    1787603958
+   ],
+   "llm_logs\\action_selection.log": [
+    9449810,
+    1787603956
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    123854,
+    1787603951
+   ],
+   "llm_logs\\belief_system.log": [
+    3138551,
+    1787603958
+   ],
+   "llm_logs\\critic.log": [
+    305359,
+    1787603958
+   ],
+   "llm_logs\\episodic_memory.log": [
+    220143,
+    1787603958
+   ]
+  },
+  "parsed_at": "2026-08-29 16:31:53",
+  "parser_version": "2"
+ },
+ "pareto_e2b_base/seed_1213": {
+  "fingerprint": {
+   "config.json": [
+    2927,
+    1787604023
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    10097,
+    1787603965
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2216,
+    1787603964
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    889001,
+    1787603965
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    382539,
+    1787603964
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    8196,
+    1787603966
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1427,
+    1787603965
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    897269,
+    1787603966
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    372836,
+    1787603965
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    9164,
+    1787603967
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    1916,
+    1787603966
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    879742,
+    1787603967
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    372544,
+    1787603966
+   ],
+   "final_metrics.json": [
+    1654690,
+    1787604024
+   ],
+   "hebbian_snapshots.jsonl": [
+    353,
+    1787604024
+   ],
+   "llm_logs\\action_selection.log": [
+    9004259,
+    1787604022
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    136674,
+    1787604019
+   ],
+   "llm_logs\\belief_system.log": [
+    3038525,
+    1787604023
+   ],
+   "llm_logs\\critic.log": [
+    286204,
+    1787604023
+   ],
+   "llm_logs\\episodic_memory.log": [
+    209354,
+    1787604023
+   ]
+  },
+  "parsed_at": "2026-08-29 16:28:40",
+  "parser_version": "2"
+ },
+ "pareto_e2b_base/seed_123": {
+  "fingerprint": {
+   "config.json": [
+    2924,
+    1787603735
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    10735,
+    1787603681
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2216,
+    1787603680
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    1096270,
+    1787603681
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    457545,
+    1787603680
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    9399,
+    1787603682
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1738,
+    1787603682
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    1089171,
+    1787603682
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    455563,
+    1787603682
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    8880,
+    1787603683
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    1626,
+    1787603682
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    1101960,
+    1787603683
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    461264,
+    1787603682
+   ],
+   "final_metrics.json": [
+    2042354,
+    1787603736
+   ],
+   "hebbian_snapshots.jsonl": [
+    324,
+    1787603736
+   ],
+   "llm_logs\\action_selection.log": [
+    11087457,
+    1787603734
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    153810,
+    1787603732
+   ],
+   "llm_logs\\belief_system.log": [
+    3747135,
+    1787603735
+   ],
+   "llm_logs\\critic.log": [
+    350079,
+    1787603735
+   ],
+   "llm_logs\\episodic_memory.log": [
+    276171,
+    1787603735
+   ]
+  },
+  "parsed_at": "2026-08-29 16:31:56",
+  "parser_version": "2"
+ },
+ "pareto_e2b_base/seed_42": {
+  "fingerprint": {
+   "config.json": [
+    2921,
+    1787603676
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9767,
+    1787603630
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2016,
+    1787603629
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    890139,
+    1787603630
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    378470,
+    1787603629
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    9567,
+    1787603631
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1913,
+    1787603630
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    910668,
+    1787603631
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    390984,
+    1787603630
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    9861,
+    1787603632
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2213,
+    1787603631
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    891837,
+    1787603631
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    387619,
+    1787603631
+   ],
+   "final_metrics.json": [
+    1684974,
+    1787603677
+   ],
+   "hebbian_snapshots.jsonl": [
+    336,
+    1787603676
+   ],
+   "llm_logs\\action_selection.log": [
+    9067955,
+    1787603675
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    183435,
+    1787603673
+   ],
+   "llm_logs\\belief_system.log": [
+    3038112,
+    1787603676
+   ],
+   "llm_logs\\critic.log": [
+    318343,
+    1787603676
+   ],
+   "llm_logs\\episodic_memory.log": [
+    219815,
+    1787603676
+   ]
+  },
+  "parsed_at": "2026-08-29 16:28:48",
+  "parser_version": "2"
+ },
+ "pareto_e2b_base/seed_456": {
+  "fingerprint": {
+   "config.json": [
+    2924,
+    1787603789
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    10733,
+    1787603739
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2318,
+    1787603739
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    920537,
+    1787603739
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    394208,
+    1787603739
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    10744,
+    1787603740
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2417,
+    1787603739
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    920388,
+    1787603740
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    398211,
+    1787603739
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    11195,
+    1787603741
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2613,
+    1787603740
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    921808,
+    1787603741
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    403595,
+    1787603740
+   ],
+   "final_metrics.json": [
+    1721165,
+    1787603790
+   ],
+   "hebbian_snapshots.jsonl": [
+    369,
+    1787603789
+   ],
+   "llm_logs\\action_selection.log": [
+    9370567,
+    1787603788
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    343946,
+    1787603787
+   ],
+   "llm_logs\\belief_system.log": [
+    3130116,
+    1787603789
+   ],
+   "llm_logs\\critic.log": [
+    296708,
+    1787603789
+   ],
+   "llm_logs\\episodic_memory.log": [
+    215017,
+    1787603789
+   ]
+  },
+  "parsed_at": "2026-08-29 16:31:58",
+  "parser_version": "2"
+ },
+ "pareto_e2b_base/seed_789": {
+  "fingerprint": {
+   "config.json": [
+    2924,
+    1787603859
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    10435,
+    1787603793
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2421,
+    1787603793
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    878054,
+    1787603793
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    371092,
+    1787603793
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    8779,
+    1787603794
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1707,
+    1787603793
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    886988,
+    1787603794
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    376969,
+    1787603793
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    8776,
+    1787603795
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    1732,
+    1787603794
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    907429,
+    1787603794
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    387579,
+    1787603794
+   ],
+   "final_metrics.json": [
+    1667321,
+    1787603860
+   ],
+   "hebbian_snapshots.jsonl": [
+    335,
+    1787603859
+   ],
+   "llm_logs\\action_selection.log": [
+    9136078,
+    1787603857
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    231308,
+    1787603853
+   ],
+   "llm_logs\\belief_system.log": [
+    3037766,
+    1787603859
+   ],
+   "llm_logs\\critic.log": [
+    275010,
+    1787603859
+   ],
+   "llm_logs\\episodic_memory.log": [
+    217977,
+    1787603859
+   ]
+  },
+  "parsed_at": "2026-08-29 16:32:00",
+  "parser_version": "2"
+ },
+ "pareto_e2b_hebbian/seed_1011": {
+  "fingerprint": {
+   "config.json": [
+    2944,
+    1787604458
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9202,
+    1787604397
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    1809,
+    1787604396
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    880764,
+    1787604397
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    369214,
+    1787604396
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    11363,
+    1787604398
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    2619,
+    1787604397
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    893523,
+    1787604398
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    378775,
+    1787604397
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    9120,
+    1787604399
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    1803,
+    1787604398
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    873077,
+    1787604399
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    366449,
+    1787604398
+   ],
+   "final_metrics.json": [
+    1800575,
+    1787604459
+   ],
+   "hebbian_snapshots.jsonl": [
+    759,
+    1787604458
+   ],
+   "llm_logs\\action_selection.log": [
+    8939099,
+    1787604456
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    102309,
+    1787604454
+   ],
+   "llm_logs\\belief_system.log": [
+    3017400,
+    1787604457
+   ],
+   "llm_logs\\critic.log": [
+    302083,
+    1787604458
+   ],
+   "llm_logs\\episodic_memory.log": [
+    216805,
+    1787604458
+   ],
+   "llm_logs\\social_module.log": [
+    818440,
+    1787604454
+   ]
+  },
+  "parsed_at": "2026-08-29 16:32:02",
+  "parser_version": "2"
+ },
+ "pareto_e2b_hebbian/seed_1213": {
+  "fingerprint": {
+   "config.json": [
+    2944,
+    1787604524
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9724,
+    1787604462
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2005,
+    1787604462
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    883035,
+    1787604462
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    370384,
+    1787604462
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    9878,
+    1787604463
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1919,
+    1787604462
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    886634,
+    1787604463
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    376959,
+    1787604462
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    9202,
+    1787604464
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    1825,
+    1787604463
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    876081,
+    1787604464
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    370588,
+    1787604463
+   ],
+   "final_metrics.json": [
+    1811767,
+    1787604525
+   ],
+   "hebbian_snapshots.jsonl": [
+    771,
+    1787604524
+   ],
+   "llm_logs\\action_selection.log": [
+    8871771,
+    1787604523
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    118225,
+    1787604520
+   ],
+   "llm_logs\\belief_system.log": [
+    3022144,
+    1787604524
+   ],
+   "llm_logs\\critic.log": [
+    302053,
+    1787604524
+   ],
+   "llm_logs\\episodic_memory.log": [
+    203766,
+    1787604524
+   ],
+   "llm_logs\\social_module.log": [
+    816055,
+    1787604521
+   ]
+  },
+  "parsed_at": "2026-08-29 16:32:04",
+  "parser_version": "2"
+ },
+ "pareto_e2b_hebbian/seed_123": {
+  "fingerprint": {
+   "config.json": [
+    2941,
+    1787604230
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    11576,
+    1787604134
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2517,
+    1787604133
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    1012470,
+    1787604133
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    425972,
+    1787604133
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    9878,
+    1787604134
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1928,
+    1787604134
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    1094846,
+    1787604134
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    457347,
+    1787604134
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    10829,
+    1787604135
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    2215,
+    1787604135
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    1101368,
+    1787604135
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    466267,
+    1787604135
+   ],
+   "final_metrics.json": [
+    2170961,
+    1787604231
+   ],
+   "hebbian_snapshots.jsonl": [
+    760,
+    1787604230
+   ],
+   "llm_logs\\action_selection.log": [
+    10701766,
+    1787604228
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    134577,
+    1787604222
+   ],
+   "llm_logs\\belief_system.log": [
+    3660141,
+    1787604229
+   ],
+   "llm_logs\\critic.log": [
+    324829,
+    1787604230
+   ],
+   "llm_logs\\episodic_memory.log": [
+    261186,
+    1787604230
+   ],
+   "llm_logs\\social_module.log": [
+    998871,
+    1787604223
+   ]
+  },
+  "parsed_at": "2026-08-29 16:32:07",
+  "parser_version": "2"
+ },
+ "pareto_e2b_hebbian/seed_42": {
+  "fingerprint": {
+   "config.json": [
+    2938,
+    1787604128
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9791,
+    1787604028
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2003,
+    1787604027
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    882968,
+    1787604027
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    373448,
+    1787604027
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    9259,
+    1787604028
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1823,
+    1787604028
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    884021,
+    1787604028
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    371438,
+    1787604028
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    9279,
+    1787604029
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    1820,
+    1787604029
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    885561,
+    1787604029
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    383153,
+    1787604029
+   ],
+   "final_metrics.json": [
+    1818078,
+    1787604129
+   ],
+   "hebbian_snapshots.jsonl": [
+    777,
+    1787604128
+   ],
+   "llm_logs\\action_selection.log": [
+    9031186,
+    1787604126
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    130546,
+    1787604122
+   ],
+   "llm_logs\\belief_system.log": [
+    3048184,
+    1787604128
+   ],
+   "llm_logs\\critic.log": [
+    291067,
+    1787604128
+   ],
+   "llm_logs\\episodic_memory.log": [
+    217533,
+    1787604128
+   ],
+   "llm_logs\\social_module.log": [
+    823991,
+    1787604123
+   ]
+  },
+  "parsed_at": "2026-08-29 16:29:04",
+  "parser_version": "2"
+ },
+ "pareto_e2b_hebbian/seed_456": {
+  "fingerprint": {
+   "config.json": [
+    2941,
+    1787604303
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    10604,
+    1787604238
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    2307,
+    1787604237
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    883555,
+    1787604238
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    376288,
+    1787604237
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    9520,
+    1787604239
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1811,
+    1787604238
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    896257,
+    1787604239
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    380170,
+    1787604238
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    8585,
+    1787604241
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    1418,
+    1787604240
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    892328,
+    1787604241
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    370223,
+    1787604240
+   ],
+   "final_metrics.json": [
+    1823758,
+    1787604304
+   ],
+   "hebbian_snapshots.jsonl": [
+    756,
+    1787604303
+   ],
+   "llm_logs\\action_selection.log": [
+    8940876,
+    1787604302
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    170019,
+    1787604299
+   ],
+   "llm_logs\\belief_system.log": [
+    3021110,
+    1787604303
+   ],
+   "llm_logs\\critic.log": [
+    289153,
+    1787604303
+   ],
+   "llm_logs\\episodic_memory.log": [
+    205630,
+    1787604303
+   ],
+   "llm_logs\\social_module.log": [
+    813470,
+    1787604299
+   ]
+  },
+  "parsed_at": "2026-08-29 16:32:10",
+  "parser_version": "2"
+ },
+ "pareto_e2b_hebbian/seed_789": {
+  "fingerprint": {
+   "config.json": [
+    2941,
+    1787604392
+   ],
+   "episodes\\ep_0001\\episode_summary.json": [
+    9221,
+    1787604308
+   ],
+   "episodes\\ep_0001\\event_log.jsonl": [
+    1807,
+    1787604307
+   ],
+   "episodes\\ep_0001\\messages.jsonl": [
+    870043,
+    1787604308
+   ],
+   "episodes\\ep_0001\\step_log.csv": [
+    367140,
+    1787604307
+   ],
+   "episodes\\ep_0002\\episode_summary.json": [
+    8648,
+    1787604309
+   ],
+   "episodes\\ep_0002\\event_log.jsonl": [
+    1521,
+    1787604308
+   ],
+   "episodes\\ep_0002\\messages.jsonl": [
+    885065,
+    1787604308
+   ],
+   "episodes\\ep_0002\\step_log.csv": [
+    378992,
+    1787604308
+   ],
+   "episodes\\ep_0003\\episode_summary.json": [
+    9090,
+    1787604309
+   ],
+   "episodes\\ep_0003\\event_log.jsonl": [
+    1806,
+    1787604309
+   ],
+   "episodes\\ep_0003\\messages.jsonl": [
+    880731,
+    1787604309
+   ],
+   "episodes\\ep_0003\\step_log.csv": [
+    377354,
+    1787604309
+   ],
+   "final_metrics.json": [
+    1817438,
+    1787604393
+   ],
+   "hebbian_snapshots.jsonl": [
+    741,
+    1787604392
+   ],
+   "llm_logs\\action_selection.log": [
+    8901777,
+    1787604390
+   ],
+   "llm_logs\\auto_curriculum.log": [
+    131982,
+    1787604385
+   ],
+   "llm_logs\\belief_system.log": [
+    3015847,
+    1787604392
+   ],
+   "llm_logs\\critic.log": [
+    291371,
+    1787604392
+   ],
+   "llm_logs\\episodic_memory.log": [
+    213978,
+    1787604392
+   ],
+   "llm_logs\\social_module.log": [
+    816805,
+    1787604385
+   ]
+  },
+  "parsed_at": "2026-08-29 16:32:12",
+  "parser_version": "2"
+ }
+}

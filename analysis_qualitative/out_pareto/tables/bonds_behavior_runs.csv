@@ -1,0 +1,13 @@
+agent2_msg_share,agent2_prox_share,label,n_ch5_damage_overlap,n_joint_dig,n_joint_kill,n_messages,n_pair_episodes,n_proximity,quarantined,rho_ch5_damage_overlap,rho_joint_dig,rho_joint_kill,rho_messages,rho_proximity,run,seed
+0.6655,0.7077,Gemma-E2B+Heb,18,18,18,18,18,18,False,,-0.1924,,0.6236,0.5889,pareto_e2b_hebbian/seed_1011,1011
+0.6202,0.6493,Gemma-E2B+Heb,18,18,18,18,18,18,False,,0.4936,,0.7069,0.3401,pareto_e2b_hebbian/seed_1213,1213
+0.5732,0.6346,Gemma-E2B+Heb,18,18,18,18,18,18,False,,-0.365,,0.6612,0.2322,pareto_e2b_hebbian/seed_123,123
+0.7925,0.6385,Gemma-E2B+Heb,18,18,18,18,18,18,False,,0.057,,0.7603,0.0688,pareto_e2b_hebbian/seed_42,42
+0.5396,0.7068,Gemma-E2B+Heb,18,18,18,18,18,18,False,,0.1924,,0.7004,0.3152,pareto_e2b_hebbian/seed_456,456
+0.6103,0.627,Gemma-E2B+Heb,18,18,18,18,18,18,False,,0.3492,,0.6925,0.4603,pareto_e2b_hebbian/seed_789,789
+0.571,0.6312,Gemma-12B+Heb,18,18,18,18,18,18,False,,0.281,,0.8012,-0.2,pareto_12b_hebbian/seed_1011,1011
+0.5242,0.6161,Gemma-12B+Heb,18,18,18,18,18,18,False,,-0.2562,,0.3602,0.1825,pareto_12b_hebbian/seed_1213,1213
+0.5353,0.7301,Gemma-12B+Heb,18,18,18,18,18,18,False,,0.1724,,0.6037,-0.4394,pareto_12b_hebbian/seed_123,123
+0.5293,0.6587,Gemma-12B+Heb,18,18,18,18,18,18,False,,0.5716,,0.6656,-0.1078,pareto_12b_hebbian/seed_42,42
+0.5844,0.6615,Gemma-12B+Heb,18,18,18,18,18,18,False,,0.0397,,0.6987,-0.1659,pareto_12b_hebbian/seed_456,456
+0.5606,0.6255,Gemma-12B+Heb,18,18,18,18,18,18,False,,-0.1241,,0.7193,0.3318,pareto_12b_hebbian/seed_789,789

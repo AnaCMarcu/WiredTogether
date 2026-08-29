@@ -1,0 +1,13 @@
+anti_bond_ask_rate,argmax_consistency,ask_msg_adoption,ask_rate,bond_ref_coverage,faith_mae,faith_resolvable,faith_within_005,follow_baseline,follow_same_step,follow_window,label,n_deliberations,quarantined,respond_follow,run,seed
+0.0,1.0,0.4367,0.0055,0.9647,0.0134,1.0,0.9365,0.7985,1.0,1.0,Gemma-E2B+Heb,906,False,1.0,pareto_e2b_hebbian/seed_1011,1011
+0.0,1.0,0.5208,0.0066,0.9481,0.0111,1.0,0.9541,0.7305,1.0,1.0,Gemma-E2B+Heb,905,False,1.0,pareto_e2b_hebbian/seed_1213,1213
+0.0714,0.9286,0.6513,0.0128,0.9551,0.0126,1.0,0.9394,0.7411,1.0,1.0,Gemma-E2B+Heb,1091,False,1.0,pareto_e2b_hebbian/seed_123,123
+0.4286,0.4286,0.699,0.0077,0.9593,0.012,1.0,0.9474,0.5652,1.0,1.0,Gemma-E2B+Heb,908,False,1.0,pareto_e2b_hebbian/seed_42,42
+0.0,1.0,0.5078,0.0088,0.9584,0.0131,1.0,0.9493,0.946,1.0,1.0,Gemma-E2B+Heb,914,False,1.0,pareto_e2b_hebbian/seed_456,456
+0.0,1.0,0.5182,0.0044,0.9581,0.0124,1.0,0.9452,0.7999,1.0,1.0,Gemma-E2B+Heb,906,False,1.0,pareto_e2b_hebbian/seed_789,789
+0.0,1.0,0.3982,0.0022,0.6699,0.0111,1.0,0.9454,0.5357,1.0,1.0,Gemma-12B+Heb,918,False,0.988,pareto_12b_hebbian/seed_1011,1011
+0.0,1.0,0.2294,0.002,0.6036,0.016,1.0,0.9082,0.7136,1.0,1.0,Gemma-12B+Heb,999,False,0.9789,pareto_12b_hebbian/seed_1213,1213
+0.0,1.0,0.6496,0.0035,0.695,0.0121,1.0,0.9497,0.4503,1.0,1.0,Gemma-12B+Heb,1128,False,0.9893,pareto_12b_hebbian/seed_123,123
+0.0,1.0,0.7905,0.0033,0.6995,0.0131,1.0,0.9428,0.5625,1.0,1.0,Gemma-12B+Heb,915,False,1.0,pareto_12b_hebbian/seed_42,42
+0.6,0.4,0.526,0.0055,0.7075,0.0186,1.0,0.8726,0.4396,1.0,1.0,Gemma-12B+Heb,906,False,0.9921,pareto_12b_hebbian/seed_456,456
+0.0,1.0,0.3533,0.0066,0.6568,0.01,1.0,0.9512,0.5402,1.0,1.0,Gemma-12B+Heb,909,False,0.9874,pareto_12b_hebbian/seed_789,789

@@ -56,6 +56,9 @@ SOCIAL_PROMPT_DIRS = {
     "exp27_cofire_anchor",
     "exp28_cofire_null",
     "exp29_cofire_prco",
+    # Model-size Pareto suite: the hebbian arms run --social-module prompt.
+    "pareto_e2b_hebbian",
+    "pareto_12b_hebbian",
 }
 
 PARSER_VERSION = "2"  # bump to invalidate parse caches

@@ -1,8 +1,0 @@
-size,score,mode,benchmark,source
-e2b,44.2,IT model card (single value; consistent with non-thinking),MMMU-Pro,https://ai.google.dev/gemma/docs/core/model_card_4
-e4b,52.6,IT model card (single value; consistent with non-thinking),MMMU-Pro,https://ai.google.dev/gemma/docs/core/model_card_4
-12b,69.1,IT model card (single value; consistent with non-thinking),MMMU-Pro,https://ai.google.dev/gemma/docs/core/model_card_4
-26b,73.8,IT model card (single value; consistent with non-thinking),MMMU-Pro,https://ai.google.dev/gemma/docs/core/model_card_4
-31b,76.9,IT model card (single value; consistent with non-thinking),MMMU-Pro,https://ai.google.dev/gemma/docs/core/model_card_4
-qwen2b,47.7,non-thinking (card lists 50.3/47.7 thinking/non-thinking),MMMU-Pro,https://huggingface.co/Qwen/Qwen3.5-2B
-qwen9b,63.0,non-thinking (card lists 70.1/63.0 thinking/non-thinking),MMMU-Pro,https://huggingface.co/Qwen/Qwen3.5-9B

@@ -86,6 +86,13 @@ CONDITIONS = [
     # registry (which reads CONDITIONS) can discover these runs.
     ("Gemma-E4B",     "new_exp_0_gemma_base",      "gemma", False),
     ("Gemma-E4B+Heb", "new_exp_0_gemma_hebbian",   "gemma", True),
+    # Model-size Pareto suite (runs/pareto_gemma4, submit_pareto.sh). Group
+    # "pareto": no emitter selects it (same pattern as "gemma"), present so the
+    # qualitative registry can discover these runs for the perception axis.
+    ("Gemma-E2B",     "pareto_e2b_base",           "pareto", False),
+    ("Gemma-E2B+Heb", "pareto_e2b_hebbian",        "pareto", True),
+    ("Gemma-12B",     "pareto_12b_base",           "pareto", False),
+    ("Gemma-12B+Heb", "pareto_12b_hebbian",        "pareto", True),
     # Agent-count scaling suite (runs/agent_scaling, submit_agent_scaling.sh).
     # Group "scaling": no table emitter selects it (same pattern as "cofire"
     # and "gemma"), present so the qualitative registry and

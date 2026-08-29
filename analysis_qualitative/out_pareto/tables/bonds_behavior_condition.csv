@@ -1,0 +1,3 @@
+label,n_ch5_damage_overlap,n_joint_dig,n_joint_kill,n_messages,n_proximity,rho_ch5_damage_overlap,rho_joint_dig,rho_joint_kill,rho_messages,rho_proximity
+Gemma-12B+Heb,108,108,108,108,108,,0.0788,,0.6113,-0.0706
+Gemma-E2B+Heb,108,108,108,108,108,,0.0364,,0.6647,0.2598

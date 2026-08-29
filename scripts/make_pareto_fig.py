@@ -424,6 +424,9 @@ def main():
     ap.add_argument("--metric", default="milestone_pct",
                     choices=list(METRIC_LABEL))
     ap.add_argument("--theme", default="light", choices=["light", "dark"])
+    ap.add_argument("--with-qwen", action="store_true",
+                    help="also emit the Gemma+Qwen figure (off by default: "
+                         "Qwen is excluded from the paper's plots)")
     ap.add_argument("--image-tokens", type=int, default=280)
     ap.add_argument("--overhead-tokens", type=int, default=60)
     ap.add_argument("--chars-per-token", type=float, default=None)
@@ -472,9 +475,12 @@ def main():
     suffix = "" if args.theme == "light" else "_dark"
     draw(data, ["gemma"], args.out_dir / "pareto_gemma{}.png".format(suffix),
          args.metric, args.theme)
-    draw(data, ["gemma", "qwen"],
-         args.out_dir / "pareto_gemma_qwen{}.png".format(suffix),
-         args.metric, args.theme)
+    # Qwen is excluded from the paper's plots by decision (2026-08-28); the
+    # two-family figure stays available behind a flag for comparison only.
+    if args.with_qwen:
+        draw(data, ["gemma", "qwen"],
+             args.out_dir / "pareto_gemma_qwen{}.png".format(suffix),
+             args.metric, args.theme)
 
     if args.csv:
         import csv
