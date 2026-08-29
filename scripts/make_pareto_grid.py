@@ -84,6 +84,10 @@ X_AXES = {
 ARM_COLOR = {"base": "#2a78d6", "hebbian": "#eb6834"}
 FAMILY_MARKER = {"gemma": "o", "qwen": "s"}
 FAMILY_LABEL = {"gemma": "Gemma 4", "qwen": "Qwen3.5"}
+# Point labels: the family is already carried by marker shape + legend, so
+# the label only needs the size. Gemma keeps E2B/E4B/12B; Qwen gets a short
+# prefix so "2B" is not confused with "E2B".
+SHORT_LABEL = {"qwen2b": "Q-2B", "qwen9b": "Q-9B"}
 INK = dict(surface="#ffffff", primary="#1a1a19", secondary="#55554e",
            grid="#e4e4e0")
 
@@ -198,7 +202,8 @@ def series_points(data, family, arm, y, x, perception):
             if xv is None:
                 continue
         ym, ys = mean_sd(d[y])
-        pts.append((xv, ym, ys, meta["label"].split()[-1], len(d[y])))
+        pts.append((xv, ym, ys, SHORT_LABEL.get(size, meta["label"].split()[-1]),
+                    len(d[y])))
     pts.sort(key=lambda p: p[0])
     return pts
 
@@ -233,15 +238,15 @@ def draw_panel(ax, data, families, y, x, perception, label_points=True):
                         tops[key][1] = max(tops[key][1], top)
                         tops[key][2] = min(tops[key][2], bot)
     if label_points:
-        # Gemma labels go ABOVE the taller arm, Qwen labels BELOW the lower
-        # one: on a shared canvas the two families interleave in x, and a
-        # single "above" rule put "Qwen3.5-2B" on top of the E4B markers.
-        for (family, lab), (xv, top, bot) in tops.items():
-            below = family != "gemma"
-            ax.annotate(lab, (xv, bot if below else top),
-                        textcoords="offset points",
-                        xytext=(0, -7 if below else 6),
-                        ha="center", va="top" if below else "bottom",
+        # One label per size, above the taller arm's error bar. Labels are
+        # SHORT ("Q-2B", not "Qwen3.5-2B"): on the shared canvas the families
+        # interleave in x, and the long form collided with the E4B markers.
+        # (Placing Qwen labels below instead was tried and collided with the
+        # other family's line -- below-placement is data-dependent, short
+        # text is not.)
+        for (_, lab), (xv, top, _) in tops.items():
+            ax.annotate(lab, (xv, top), textcoords="offset points",
+                        xytext=(0, 6), ha="center", va="bottom",
                         fontsize=7, color=INK["secondary"], zorder=4)
     ax.set_xlabel(X_AXES[x], fontsize=9.5, color=INK["primary"])
     ax.set_ylabel(Y_METRICS[y], fontsize=9.5, color=INK["primary"])
