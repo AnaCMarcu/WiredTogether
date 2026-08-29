@@ -36,6 +36,15 @@ Subset flags: `--families gemma`, `--ys coop_pct,reward`, `--xs flops`,
 
 ## Metric definitions — do not change silently
 
+**Aggregation = the paper's**: every metric is computed PER EPISODE, the
+episodes of all seeds are POOLED (6 seeds × 3 = n=18), and mean ± POPULATION
+std (`statistics.pstdev`, divide by n) is reported — exactly
+`make_results.aggregate`/`mean_std`. Not "mean of seed means", not sample SD.
+Verified 2026-08-28: the pareto table reproduces
+`paper_assets_final_comparison/final_comparison.md` to the decimal
+(Gemma-E4B 521 ± 117 / 16.4 ± 4.8 / 8.5 ± 4.9; LLM-9B 622 ± 150 / 31.1 ± 5.1 /
+17.6 ± 6.2). The `n` column is seeds; error bars are over the 18 episodes.
+
 - **reward**: team task return per episode via `make_results.episode_task_returns`
   (task + comm streams, `hebbian_diffuse` excluded, chamber-entry honesty
   filter applied), mean over episodes then seeds.

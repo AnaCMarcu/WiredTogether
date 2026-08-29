@@ -143,8 +143,9 @@ def collect(roots, flops_args, cache):
                 if not m:
                     continue
                 out[(size, arm)]["flops"].append(flops)
-                for k, v in m.items():
-                    out[(size, arm)][k].append(v)
+                out[(size, arm)]["_runs"].append(str(run_dir))
+                for k, vals in m.items():        # pool episodes across seeds
+                    out[(size, arm)][k].extend(vals)
                 cfg = run.get("config") or {}
                 out[(size, arm)]["_proto"].append(
                     (cfg.get("num_episodes"), cfg.get("max_steps_per_episode")))
@@ -191,7 +192,7 @@ def series_points(data, family, arm, y, x, perception):
                 continue
         ym, ys = mean_sd(d[y])
         pts.append((xv, ym, ys, SHORT_LABEL.get(size, meta["label"].split()[-1]),
-                    len(d[y])))
+                    len(d["_runs"])))
     pts.sort(key=lambda p: p[0])
     return pts
 

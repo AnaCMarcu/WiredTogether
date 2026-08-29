@@ -147,7 +147,7 @@ def run_metrics(run: dict) -> dict:
                     contributor lists -- so this counts agents that got there,
                     not one event x3). Social-act tracks excluded.
     coop_completions  same, restricted to Ch2-Ch5.
-    All values are means over the run's episodes.
+    Every value is a per-episode list (3 entries for a 3-episode run).
     """
     sets = MR.episode_milestone_sets(run)
     if not sets:
@@ -169,20 +169,19 @@ def run_metrics(run: dict) -> dict:
                 cc += MR.coop_count(ms)
         compl.append(c)
         coop_compl.append(cc)
-    out = {
-        "milestone_pct": sum(ms_pct) / len(ms_pct),
-        "coop_pct": sum(coop_pct) / len(coop_pct),
-        "completions": sum(compl) / len(compl),
-        "coop_completions": sum(coop_compl) / len(coop_compl),
-    }
+    # PER-EPISODE lists, not per-run means: callers pool episodes across
+    # seeds, which is the paper's convention (mean +- population SD over the
+    # pooled episodes of all seeds, n = seeds x 3; tab:final_comparison).
+    out = {"milestone_pct": ms_pct, "coop_pct": coop_pct,
+           "completions": compl, "coop_completions": coop_compl}
     if returns:
-        out["reward"] = sum(returns) / len(returns)
+        out["reward"] = list(returns)
     return out
 
 
 def collect(roots, flops_args):
     """{(size, arm): {"flops": [...], "perf": {metric: [...]}, "proto": [...]}}."""
-    out = defaultdict(lambda: {"flops": [], "proto": [],
+    out = defaultdict(lambda: {"flops": [], "proto": [], "n_runs": 0,
                                "perf": {m: [] for m in METRIC_LABEL}})
     for root in roots:
         if not root.is_dir():
@@ -211,8 +210,9 @@ def collect(roots, flops_args):
                           "never answered; excluded".format(run_dir))
                     continue
                 out[(size, arm)]["flops"].append(row["flops"])
-                for metric, val in perf.items():
-                    out[(size, arm)]["perf"][metric].append(val)
+                out[(size, arm)]["n_runs"] += 1
+                for metric, vals in perf.items():   # pool the episodes
+                    out[(size, arm)]["perf"][metric].extend(vals)
                 out[(size, arm)]["proto"].append(protocol(run_dir))
     return out
 
@@ -228,10 +228,15 @@ def protocol(run_dir: Path):
 
 
 def mean_sd(xs):
+    """Mean and POPULATION standard deviation (divide by n, not n-1).
+
+    Matches make_results.mean_std / statistics.pstdev, i.e. the paper's
+    "mean +- std over the pooled episodes of all seeds".
+    """
     m = sum(xs) / len(xs)
     if len(xs) < 2:
         return m, 0.0
-    return m, (sum((x - m) ** 2 for x in xs) / (len(xs) - 1)) ** 0.5
+    return m, (sum((x - m) ** 2 for x in xs) / len(xs)) ** 0.5
 
 
 def fmt_flops_tex(x):
@@ -260,7 +265,7 @@ def write_tables(data, out_dir, stem="pareto_results"):
                 vals = d["perf"][m]
                 cells[m] = mean_sd(vals) if vals else None
             rows.append((meta["family"], meta["label"], meta["n_eff"], arm,
-                         len(d["perf"]["milestone_pct"]), fx, cells))
+                         d["n_runs"], fx, cells))
     rows.sort(key=lambda r: (r[0] != "gemma", r[2], r[3] != "base"))
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -337,7 +342,7 @@ def draw(data, families, out_path, metric, theme):
                 if not vals:
                     continue
                 py, ps = mean_sd(vals)
-                pts.append((fx, py, ps, meta["label"], len(vals)))
+                pts.append((fx, py, ps, meta["label"], d["n_runs"]))
             if not pts:
                 continue
             pts.sort(key=lambda p: p[0])
@@ -439,8 +444,8 @@ def main():
         fx, _ = mean_sd(d["flops"])
         vals = d["perf"][args.metric]
         py, ps = mean_sd(vals)
-        print("  {:<8} {:<8} n={}  FLOPs={:.2e}  {}={:.2f}±{:.2f}".format(
-            size, arm, len(vals), fx, args.metric, py, ps))
+        print("  {:<8} {:<8} seeds={} eps={}  FLOPs={:.2e}  {}={:.2f}±{:.2f}".format(
+            size, arm, d["n_runs"], len(vals), fx, args.metric, py, ps))
     missing = [s for s in SIZES if not any(k[0] == s for k in data)]
     if missing:
         print("  (no finished runs yet for: {})".format(", ".join(missing)))
@@ -483,7 +488,7 @@ def main():
             for (size, arm), d in sorted(data.items()):
                 fx, _ = mean_sd(d["flops"])
                 row = [size, SIZES[size]["family"], arm,
-                       len(d["perf"]["milestone_pct"]), SIZES[size]["n_eff"],
+                       d["n_runs"], SIZES[size]["n_eff"],
                        "{:.4e}".format(fx)]
                 for m in METRIC_LABEL:
                     vals = d["perf"][m]
