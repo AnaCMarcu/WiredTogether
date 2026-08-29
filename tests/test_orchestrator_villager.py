@@ -567,3 +567,83 @@ def test_prompts_carry_crewing_rules():
         milestone_catalog="M", env_state_text="E", task_table="T",
         dag_summary="D", open_slots=2, example_milestones=["m1_move_5"])
     assert "min_agents add up to more than the team" in out2
+
+
+# ── Unreachable milestones (regression: villager smoke v2) ──────────────
+# The decomposer kept proposing Ch1 dig tasks while the team was in Ch3/Ch4,
+# and Ch1 tasks assigned before a teleport ran on until the timeout. The
+# schedule only moves the team forward, so milestones of chambers behind the
+# least-advanced living agent are unreachable: labelled in the catalog,
+# rejected at ingestion, and failed immediately when already running.
+
+CH_TRACK = {"m1_move_5": "ch1_solo", "m4_dig_5_wood": "ch1_solo",
+            "m8_anvil_A1": "ch2_anvils", "m9_anvil_B1": "ch2_anvils",
+            "m17_switch_pressed": "ch3_switches"}
+
+
+def test_chamber_index_and_team_min():
+    assert ovillager.chamber_index("ch3_communal") == 3
+    assert ovillager.chamber_index("ch1") == 1
+    assert ovillager.chamber_index(None) is None
+    chambers = {"agent_0": "ch3_cell", "agent_1": "ch2", "agent_2": None}
+    assert ovillager.team_min_chamber(chambers, LIVING) == 2   # laggard rules
+    assert ovillager.team_min_chamber({}, LIVING) is None
+
+
+def test_unreachable_milestones_are_behind_the_laggard():
+    un = ovillager.unreachable_milestones(KNOWN, 3, CH_TRACK)
+    assert un == {"m1_move_5", "m4_dig_5_wood", "m8_anvil_A1", "m9_anvil_B1"}
+    assert ovillager.unreachable_milestones(KNOWN, 1, CH_TRACK) == set()
+    assert ovillager.unreachable_milestones(KNOWN, None, CH_TRACK) == set()
+
+
+def test_ingest_rejects_unreachable_tasks():
+    dag = TaskDAG()
+    r = _ingest(dag, decompose_response([
+        {"id": "stale", "description": "dig in ch1",
+         "milestones": ["m4_dig_5_wood"], "required": [],
+         "candidates": [], "min_agents": 1},
+        {"id": "mixed", "description": "d",
+         "milestones": ["m1_move_5", "m17_switch_pressed"],
+         "required": [], "candidates": [], "min_agents": 1}]),
+        unreachable={"m1_move_5", "m4_dig_5_wood"})
+    assert ("stale", "unreachable chamber") in r["rejected"]
+    assert dag.get("mixed").milestones == ["m17_switch_pressed"]
+
+
+def test_catalog_labels_unreachable():
+    cat = ovillager.build_milestone_catalog(
+        {}, FAKE_TRACK, FAKE_TRACKS, unreachable={"m1_move_5"})
+    assert "m1_move_5 (ch1_solo, +10): UNREACHABLE" in cat
+    assert "m4_dig_5_wood (ch1_solo, +10): OPEN" in cat
+    assert "never target it" in cat
+
+
+def test_tick_fails_running_and_open_tasks_left_behind(stub_autogen,
+                                                       tmp_path):
+    ctrl, logger = _controller(tmp_path=tmp_path)
+    ctrl._milestone_track = CH_TRACK
+    ctrl.dag.add_task(_task("ch1_dig", milestones=["m4_dig_5_wood"]))
+    ctrl.dag.add_task(_task("ch1_open", milestones=["m1_move_5"]))
+    ctrl.dag.add_task(_task("ch3_switch", milestones=["m17_switch_pressed"]))
+    ctrl.dag.assign("ch1_dig", ["agent_0"], {}, t=0)
+    ctrl.last_decompose_step = 0
+    state = OrchestratorState()
+    env = _env_state()
+    for a in LIVING:                                      # team teleported
+        env["agents"][a]["chamber"] = "ch3_cell"
+    tick = asyncio.run(ctrl.tick(
+        state=state, living_agents=LIVING, episode=1, t=3,
+        env_state=env, task_table="", agent_milestones={},
+        parse_json=json.loads))
+    assert ("ch1_dig", "unreachable") in tick.failed      # running -> failed
+    assert ("ch1_open", "unreachable") in tick.failed     # open -> failed
+    rows = [json.loads(l) for l in open(logger.assignments_path)]
+    assert rows[0]["reason"] == "freed_unreachable"
+    # The chamber-ahead task was untouched by the sweep, became the only
+    # ready task, and — with no usable allocator response (empty fake) —
+    # the deterministic fallback crewed it in the same tick.
+    assert ctrl.dag.get("ch3_switch").status == "running"
+    assert ctrl.dag.get("ch3_switch").failure_reason == ""
+    assert any(r["reason"] == "allocate_fallback"
+               and r["task_id"] == "ch3_switch" for r in rows)

@@ -30,6 +30,7 @@ kept symmetric) are lazy, so this module stays light-importable for tests.
 from __future__ import annotations
 
 import logging as _stdlog
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -51,6 +52,40 @@ logger = _stdlog.getLogger(__name__)
 #: milestones are shaping chatter, not objectives a task can target.
 GAME_TRACKS = ("ch1_solo", "ch2_anvils", "ch3_switches", "ch4_combat",
                "ch5_boss")
+TRACK_CHAMBER = {"ch1_solo": 1, "ch2_anvils": 2, "ch3_switches": 3,
+                 "ch4_combat": 4, "ch5_boss": 5}
+_CHAMBER_IDX_RE = re.compile(r"ch(\d)")
+
+
+def chamber_index(label) -> Optional[int]:
+    """'ch3_communal' -> 3, 'ch1' -> 1, None/'?' -> None."""
+    m = _CHAMBER_IDX_RE.search(str(label or ""))
+    return int(m.group(1)) if m else None
+
+
+def team_min_chamber(chambers: dict, living: list) -> Optional[int]:
+    """Least-advanced living agent's chamber index. The chamber schedule
+    only ever moves the team FORWARD, so milestones of chambers strictly
+    behind this are unreachable for everyone."""
+    idxs = [chamber_index(chambers.get(a)) for a in living]
+    idxs = [i for i in idxs if i is not None]
+    return min(idxs) if idxs else None
+
+
+def unreachable_milestones(known: set, min_chamber: Optional[int],
+                           milestone_track: Optional[dict] = None) -> set:
+    """Milestone ids whose chamber lies behind the whole team."""
+    if min_chamber is None:
+        return set()
+    if milestone_track is None:
+        from agent_modules.craftium_metric import MILESTONE_TRACK
+        milestone_track = MILESTONE_TRACK
+    out = set()
+    for mid in known:
+        ch = TRACK_CHAMBER.get(milestone_track.get(mid, ""))
+        if ch is not None and ch < min_chamber:
+            out.add(mid)
+    return out
 
 
 class VillagerDecomposeResponse(BaseModel):
@@ -78,27 +113,40 @@ def known_milestone_ids(milestone_track: Optional[dict] = None) -> set:
 
 def build_milestone_catalog(agent_milestones: dict,
                             milestone_track: Optional[dict] = None,
-                            tracks: Optional[dict] = None) -> str:
+                            tracks: Optional[dict] = None,
+                            unreachable: Optional[set] = None) -> str:
     """Per-track catalog lines with rewards and completion state.
 
     ``agent_milestones`` is metric._agent_milestones ("agent_N" -> set of
-    fired ids). NOTE: completion is the coarse team-level union — a few
-    per-agent milestones (e.g. m14_sword_equipped) can validly re-fire for
-    another agent but are shown completed; the timeout/re-decompose loop
-    absorbs that (documented trade-off)."""
+    fired ids). ``unreachable`` marks milestones of chambers the whole team
+    has already left (the schedule only moves forward) — labelled so the
+    decomposer stops proposing them; ingestion rejects them regardless.
+    NOTE: completion is the coarse team-level union — a few per-agent
+    milestones (e.g. m14_sword_equipped) can validly re-fire for another
+    agent but are shown completed; the timeout/re-decompose loop absorbs
+    that (documented trade-off)."""
     if milestone_track is None or tracks is None:
         from agent_modules.craftium_metric import MILESTONE_TRACK, TRACKS
         milestone_track = milestone_track or MILESTONE_TRACK
         tracks = tracks or TRACKS
+    unreachable = unreachable or set()
     fired_by: dict = {}
     for agent, ids in (agent_milestones or {}).items():
         for mid in ids:
             fired_by.setdefault(mid, []).append(str(agent))
     lines = []
+    if unreachable:
+        lines.append("  (UNREACHABLE = that chamber is behind the whole team "
+                     "and cannot be revisited; never target it)")
     for track in GAME_TRACKS:
         for mid, reward in tracks.get(track, []):
             who = sorted(fired_by.get(mid, []))
-            state = f"completed by {', '.join(who)}" if who else "OPEN"
+            if who:
+                state = f"completed by {', '.join(who)}"
+            elif mid in unreachable:
+                state = "UNREACHABLE (chamber behind the team)"
+            else:
+                state = "OPEN"
             lines.append(f"  {mid} ({track}, +{reward:g}): {state}")
     return "\n".join(lines) or "  (no milestone catalog available)"
 
@@ -412,6 +460,34 @@ class VillagerController:
             self._changes_since_decompose += 1
             self._log_freed(episode, t, task, freed, "freed_timeout")
 
+        # 2b. Unreachable: the chamber schedule only moves the team forward,
+        # so a running task whose every milestone belongs to a chamber behind
+        # the least-advanced living agent can never complete — fail it NOW
+        # rather than burning its assignees until the timeout (smoke: Ch1
+        # dig tasks ran on for 60 steps after the Ch1->Ch2 teleport).
+        chambers = self._current_chambers(living, environment, env_state)
+        min_ch = team_min_chamber(chambers, living)
+        unreachable = unreachable_milestones(
+            known_milestone_ids(self._milestone_track), min_ch,
+            self._milestone_track)
+        if unreachable:
+            for task in self.dag.running_tasks():
+                if task.milestones and set(task.milestones) <= unreachable:
+                    freed = self.dag.mark_failure(task.id, "unreachable", t)
+                    result.failed.append((task.id, "unreachable"))
+                    self._changes_since_decompose += 1
+                    self._log_freed(episode, t, task, freed,
+                                    "freed_unreachable")
+            # Open (not yet assigned) tasks that became unreachable are
+            # dead weight for the allocator: fail them too so ready_tasks
+            # never offers them.
+            for task in list(self.dag.tasks.values()):
+                if (task.status == "open" and task.milestones
+                        and set(task.milestones) <= unreachable):
+                    self.dag.mark_failure(task.id, "unreachable", t)
+                    result.failed.append((task.id, "unreachable"))
+                    self._changes_since_decompose += 1
+
         # 3. Team wipe: fail running work, no LLM calls.
         if not living:
             for task in self.dag.running_tasks():
@@ -442,7 +518,8 @@ class VillagerController:
                                   metric=metric, env_state=env_state,
                                   task_table=task_table,
                                   agent_milestones=agent_milestones,
-                                  parse_json=parse_json, result=result)
+                                  parse_json=parse_json, result=result,
+                                  unreachable=unreachable)
 
         # 5. Allocate when there is work and workers.
         ready = self.dag.ready_tasks()
@@ -464,9 +541,29 @@ class VillagerController:
                          or result.decomposed or result.allocated))
         return result
 
+    @staticmethod
+    def _current_chambers(living, environment, env_state) -> dict:
+        """agent -> chamber label, from the injected env_state (tests) or a
+        cheap per-agent get_chamber() read (runtime; no state files)."""
+        if env_state is not None:
+            return {a: (env_state.get("agents") or {}).get(a, {}).get("chamber")
+                    for a in living}
+        out = {}
+        if environment is None:
+            return out
+        for a in living:
+            try:
+                idx = int(str(a).rsplit("_", 1)[-1])
+                out[a] = environment.get_chamber(idx)
+            except Exception:
+                out[a] = None
+        return out
+
     async def _decompose(self, state, living, episode, t, *, environment,
                          agents, metric, env_state, task_table,
-                         agent_milestones, parse_json, result) -> None:
+                         agent_milestones, parse_json, result,
+                         unreachable=None) -> None:
+        unreachable = set(unreachable or ())
         if env_state is None:
             env_state = collect_env_state(environment, self.num_agents, t)
         if task_table is None:
@@ -482,7 +579,8 @@ class VillagerController:
         for ids in (agent_milestones or {}).values():
             team_completed.update(ids)
         open_slots = max(1, self.max_open - self.dag.open_count())
-        example_ms = sorted(known - team_completed) or sorted(known)
+        example_ms = (sorted(known - team_completed - unreachable)
+                      or sorted(known - unreachable) or sorted(known))
         filled = _prompt.format_decompose_prompt(
             n_agents=len(living),
             agent_names=living,
@@ -490,7 +588,8 @@ class VillagerController:
             chamber_facts=build_chamber_facts(
                 self.num_agents, describe=self._chamber_describe),
             milestone_catalog=build_milestone_catalog(
-                agent_milestones, self._milestone_track, self._tracks),
+                agent_milestones, self._milestone_track, self._tracks,
+                unreachable=unreachable),
             env_state_text=env_text,
             task_table=task_table,
             dag_summary=self.dag.summary_text(),
@@ -510,7 +609,7 @@ class VillagerController:
             ingest = ingest_decomposition(
                 self.dag, call["parsed"], t=t, known_milestones=known,
                 team_completed=team_completed, living_agents=living,
-                max_open=self.max_open,
+                max_open=self.max_open, unreachable=unreachable,
             )
             if ingest["ok"]:
                 break

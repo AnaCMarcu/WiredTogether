@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Optional
 
 VALID_STATUSES = ("open", "running", "success", "failure")
 
@@ -227,7 +228,8 @@ def _sanitize_id(raw, fallback: str) -> str:
 
 def ingest_decomposition(dag: TaskDAG, parsed: dict, *, t: int,
                          known_milestones: set, team_completed: set,
-                         living_agents: list, max_open: int) -> dict:
+                         living_agents: list, max_open: int,
+                         unreachable: Optional[set] = None) -> dict:
     """Deterministically fold one decomposer response into the DAG.
 
     ``ok=False`` (the retry trigger) ONLY for a structurally unusable
@@ -251,6 +253,7 @@ def ingest_decomposition(dag: TaskDAG, parsed: dict, *, t: int,
         return result
 
     result["ok"] = True
+    unreachable_set = set(unreachable or ())
     alias = {}   # raw id string -> final sanitized id, for intra-batch refs
     for i, item in enumerate(raw_tasks):
         if not isinstance(item, dict):
@@ -274,15 +277,23 @@ def ingest_decomposition(dag: TaskDAG, parsed: dict, *, t: int,
         raw_ms = item.get("milestones")
         raw_ms = raw_ms if isinstance(raw_ms, list) else []
         milestones = []
+        n_unreachable = 0
         for m in raw_ms:
             ms = str(m).strip()
-            if ms in known_milestones:
+            if ms in unreachable_set:
+                n_unreachable += 1
+                result["warnings"].append(
+                    f"task {tid}: dropped unreachable milestone {ms!r} "
+                    f"(chamber behind the team)")
+            elif ms in known_milestones:
                 milestones.append(ms)
             else:
                 result["warnings"].append(
                     f"task {tid}: dropped unknown milestone {ms!r}")
         if not milestones:
-            result["rejected"].append((tid, "no verifiable milestone"))
+            reason = ("unreachable chamber" if n_unreachable
+                      else "no verifiable milestone")
+            result["rejected"].append((tid, reason))
             continue
         if set(milestones) <= set(team_completed):
             result["rejected"].append((tid, "already satisfied"))
