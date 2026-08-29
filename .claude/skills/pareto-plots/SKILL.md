@@ -43,6 +43,17 @@ Subset flags: `--families gemma`, `--ys coop_pct,reward`, `--xs flops`,
   / `NONCOMM_MAX` (25) × 100, per episode.
 - **coop_pct**: distinct team milestones in Ch2–Ch5 / `COOP_MAX` (17) × 100 —
   the paper's "Coop. milestones".
+- **completions / coop_completions** (ATTAINMENT, vs the COVERAGE above):
+  per-agent milestone completions summed over agents, per episode. Legitimate
+  because `five_chambers.fire_milestone` credits only the agents who earned or
+  took part in a milestone (`{name}` for solo/gear/entry, participant lists for
+  m22/m25–m28), so this counts agents that got there, not one event ×3.
+  Coverage = how far the team got; attainment = how many agents got there.
+- NEVER use `final_metrics.mean_milestone_count_per_agent` as a performance
+  axis: it INCLUDES the communication milestones (m_comm_ch1–5, ~12–13
+  per-agent completions/episode in every arm). The apparent 12B Hebbian
+  advantage in the first pareto figure was entirely that comm term — task
+  completions were a 9.00 vs 9.00 tie.
 - **flops**: `2·N_eff·(prefill+decode tokens)` over all agents/modules/retries
   (`scripts/compute_flops.py`); linear axis in units of 1e17. `N_eff` per size
   lives in `make_pareto_fig.SIZES` — effective params for the Gemma E-series

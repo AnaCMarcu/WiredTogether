@@ -73,9 +73,11 @@ FAMILIES = {
     "both":  ["gemma", "qwen"],
 }
 Y_METRICS = {
-    "reward":        "Task return (team, per episode)",
-    "milestone_pct": "Milestones completed [%]",
-    "coop_pct":      "Cooperative milestones [%]",
+    "reward":           "Task return (team, per episode)",
+    "milestone_pct":    "Milestone coverage (team-distinct) [%]",
+    "coop_pct":         "Coop. milestone coverage (team-distinct) [%]",
+    "completions":      "Milestone completions (all agents, per episode)",
+    "coop_completions": "Coop. milestone completions (all agents, per episode)",
 }
 X_AXES = {
     "flops":      "Inference compute  [$10^{17}$ FLOPs]",
@@ -103,9 +105,31 @@ def run_metrics(run: dict) -> dict:
                           if MR.MILESTONE_TRACK.get(m) not in MR.SOCIAL_ACT_TRACKS)
               / MR.NONCOMM_MAX for s in sets]
     coop_pct = [100.0 * MR.coop_count(s) / MR.COOP_MAX for s in sets]
+
+    # ATTAINMENT, as opposed to the COVERAGE above. The env credits each
+    # milestone only to the agents who actually earned or took part in it
+    # (five_chambers.fire_milestone: {name} for solo/gear/entry milestones,
+    # participant lists for m22/m25/m26/m27/m28, all-present for m19), so
+    # summing per-agent completions counts agents that attained it, not one
+    # achievement three times. Coverage says how far the team got; attainment
+    # says how many agents got there. Both exclude the social-act tracks.
+    per_agent = run.get("milestones_per_episode", [])
+    compl, coop_compl = [], []
+    for e in range(len(sets)):
+        c = cc = 0
+        for a in per_agent:
+            if e < len(a):
+                ms = set(a[e])
+                c += sum(1 for m in ms
+                         if MR.MILESTONE_TRACK.get(m) not in MR.SOCIAL_ACT_TRACKS)
+                cc += MR.coop_count(ms)
+        compl.append(c)
+        coop_compl.append(cc)
     out = {
         "milestone_pct": sum(ms_pct) / len(ms_pct),
         "coop_pct": sum(coop_pct) / len(coop_pct),
+        "completions": sum(compl) / len(compl),
+        "coop_completions": sum(coop_compl) / len(coop_compl),
     }
     if returns:
         out["reward"] = sum(returns) / len(returns)
@@ -312,11 +336,11 @@ def main():
               "perception x-axis".format(args.perception))
         xs = [x for x in xs if x != "perception"]
 
-    print("\npoints (size, arm): n | FLOPs/1e17 | reward | milestone% | coop%")
+    print("\npoints (size, arm): n | FLOPs/1e17 | " + " | ".join(Y_METRICS))
     for (size, arm), d in sorted(data.items()):
         fx, _ = mean_sd(d["flops"])
         cells = []
-        for k in ("reward", "milestone_pct", "coop_pct"):
+        for k in Y_METRICS:
             if d.get(k):
                 m, s = mean_sd(d[k])
                 cells.append("{:6.1f}±{:4.1f}".format(m, s))
@@ -332,15 +356,14 @@ def main():
     with open(args.out_dir / "points.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["size", "family", "arm", "n", "n_eff", "flops_mean",
-                    "perception_mmmu_pro",
-                    "reward_mean", "reward_sd", "milestone_pct_mean",
-                    "milestone_pct_sd", "coop_pct_mean", "coop_pct_sd"])
+                    "perception_mmmu_pro"]
+                   + [c for k in Y_METRICS for c in (k + "_mean", k + "_sd")])
         for (size, arm), d in sorted(data.items()):
             fx, _ = mean_sd(d["flops"])
             row = [size, SIZES[size]["family"], arm, len(d["flops"]),
                    SIZES[size]["n_eff"], "{:.4e}".format(fx),
                    perception.get(size, "")]
-            for k in ("reward", "milestone_pct", "coop_pct"):
+            for k in Y_METRICS:
                 if d.get(k):
                     m, s = mean_sd(d[k])
                     row += ["{:.4f}".format(m), "{:.4f}".format(s)]
