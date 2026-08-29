@@ -9,9 +9,9 @@
 | Gemma-E4B | Gemma-4-E4B | none (frozen LLM) | — | 6 |
 | Gemma-E4B+Heb | Gemma-4-E4B | none (frozen LLM) | Hebbian + prompt | 6 |
 | IPPO | Qwen3.5-2B | IPPO (LoRA) | — | 4 |
-| IPPO+Heb | Qwen3.5-2B | IPPO (LoRA) | Hebbian graph | 6 |
+| IPPO+Heb | Qwen3.5-2B | IPPO (LoRA) | Hebbian graph + replay | 3 |
 | MAPPO | Qwen3.5-2B | MAPPO (shared critic) | — | 6 |
-| MAPPO+Heb | Qwen3.5-2B | MAPPO (shared critic) | Hebbian graph | 5 |
+| MAPPO+Heb | Qwen3.5-2B | MAPPO (shared critic) | Hebbian graph + replay | 3 |
 
 All conditions: 3 agents, 3 episodes × 1000 steps, communication enabled.
 
@@ -28,6 +28,6 @@ Milestone figures are percentage completion per episode (team union; denominator
 | Gemma-E4B | 521 ± 117 | 16.4 ± 4.8 | 8.5 ± 4.9 | — | 199 (1) | 406 (7) | 670 (10) | 0.845 | 0.799 |
 | Gemma-E4B+Heb | 570 ± 125 | 22.0 ± 5.5 | 12.1 ± 5.0 | — | — | 407 (12) | 662 (13) | 0.843 | 0.790 |
 | IPPO | 425 ± 99 | 18.3 ± 4.5 | 6.9 ± 5.8 | — | — | 488 (7) | — | 0.448 | 0.451 |
-| IPPO+Heb | 418 ± 102 | 18.4 ± 4.8 | 6.2 ± 6.0 | — | — | 454 (8) | 736 (3) | 0.431 | 0.410 |
+| IPPO+Heb | 427 ± 108 | 18.2 ± 4.7 | 5.2 ± 5.8 | — | — | 456 (4) | — | 0.133 | 0.638 |
 | MAPPO | 390 ± 86 | 17.8 ± 4.5 | 4.6 ± 5.7 | — | — | 486 (7) | — | 0.392 | 0.565 |
-| MAPPO+Heb | 424 ± 92 | 17.9 ± 4.8 | 3.9 ± 5.1 | — | — | 509 (4) | 789 (2) | 0.413 | 0.543 |
+| MAPPO+Heb | 470 ± 110 | 20.4 ± 4.4 | 7.8 ± 5.5 | — | — | 490 (6) | — | 0.164 | 0.636 |

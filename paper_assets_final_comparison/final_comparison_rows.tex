@@ -6,9 +6,9 @@ LLM-9B+Heb & Qwen3.5-9B & none (frozen LLM) & Hebbian + prompt & 6 \\
 Gemma-E4B & Gemma-4-E4B & none (frozen LLM) & — & 6 \\
 Gemma-E4B+Heb & Gemma-4-E4B & none (frozen LLM) & Hebbian + prompt & 6 \\
 IPPO & Qwen3.5-2B & IPPO (LoRA) & — & 4 \\
-IPPO+Heb & Qwen3.5-2B & IPPO (LoRA) & Hebbian graph & 6 \\
+IPPO+Heb & Qwen3.5-2B & IPPO (LoRA) & Hebbian graph + replay & 3 \\
 MAPPO & Qwen3.5-2B & MAPPO (shared critic) & — & 6 \\
-MAPPO+Heb & Qwen3.5-2B & MAPPO (shared critic) & Hebbian graph & 5 \\
+MAPPO+Heb & Qwen3.5-2B & MAPPO (shared critic) & Hebbian graph + replay & 3 \\
 
 % ── Table 2: task performance + perception ──────────────────
 % cols: return, milestone \%, coop \%, steps(A,B,switch,mob), grounding, partner-loc
@@ -19,6 +19,6 @@ LLM-9B+Heb & 574 $\pm$ 123 & 27.3 $\pm$ 5.2 & 14.1 $\pm$ 5.6 & 301 (1) & -- & 40
 Gemma-E4B & 521 $\pm$ 117 & 16.4 $\pm$ 4.8 & 8.5 $\pm$ 4.9 & -- & 199 (1) & 406 (7) & 670 (10) & 0.845 & 0.799 \\
 Gemma-E4B+Heb & 570 $\pm$ 125 & 22.0 $\pm$ 5.5 & 12.1 $\pm$ 5.0 & -- & -- & 407 (12) & 662 (13) & 0.843 & 0.790 \\
 IPPO & 425 $\pm$ 99 & 18.3 $\pm$ 4.5 & 6.9 $\pm$ 5.8 & -- & -- & 488 (7) & -- & 0.448 & 0.451 \\
-IPPO+Heb & 418 $\pm$ 102 & 18.4 $\pm$ 4.8 & 6.2 $\pm$ 6.0 & -- & -- & 454 (8) & 736 (3) & 0.431 & 0.410 \\
+IPPO+Heb & 427 $\pm$ 108 & 18.2 $\pm$ 4.7 & 5.2 $\pm$ 5.8 & -- & -- & 456 (4) & -- & 0.133 & 0.638 \\
 MAPPO & 390 $\pm$ 86 & 17.8 $\pm$ 4.5 & 4.6 $\pm$ 5.7 & -- & -- & 486 (7) & -- & 0.392 & 0.565 \\
-MAPPO+Heb & 424 $\pm$ 92 & 17.9 $\pm$ 4.8 & 3.9 $\pm$ 5.1 & -- & -- & 509 (4) & 789 (2) & 0.413 & 0.543 \\
+MAPPO+Heb & 470 $\pm$ 110 & 20.4 $\pm$ 4.4 & 7.8 $\pm$ 5.5 & -- & -- & 490 (6) & -- & 0.164 & 0.636 \\

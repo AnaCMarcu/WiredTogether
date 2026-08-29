@@ -37,13 +37,47 @@ import statistics as st
 from collections import defaultdict
 from pathlib import Path
 
-from make_results import (COOP_TRACKS, MILESTONE_TRACK, aggregate, load_runs)
+from make_results import (  # noqa: F401 (COOP_TRACKS/MILESTONE_TRACK re-exported)
+    COOP_MAX, COOP_TRACKS, MILESTONE_TRACK, NONCOMM_MAX, aggregate, load_runs)
 
-NONCOMM_MAX = sum(1 for v in MILESTONE_TRACK.values() if v != "communication")
-COOP_MAX = sum(1 for v in MILESTONE_TRACK.values() if v in COOP_TRACKS)
+# Denominators are imported, NOT recomputed here. This file used to derive
+# NONCOMM_MAX as "every track except communication", which was 25 when the
+# published table was generated. Commit e47f286 then added the observation /
+# imitation act-reward tracks (10 entries) to MILESTONE_TRACK, and
+# make_results.NONCOMM_MAX was updated to exclude all of SOCIAL_ACT_TRACKS —
+# but the local recomputation here silently drifted to 35, which would have
+# scaled every "Milest. %" by 25/35 and printed "35" in the caption on the
+# next regeneration. Single source of truth: make_results.
+assert NONCOMM_MAX == 25 and COOP_MAX == 17, (NONCOMM_MAX, COOP_MAX)
 
 MEDIUM = Path("runs_from_daic/medium_runs")
 GEMMA = Path("runs_from_daic/new_exp_0_gemma")
+SOCIAL_REPLAY = Path("runs_from_daic/social_replay_qwen")
+
+# Which arms stand for "+Heb" in the RL rows of the paper table:
+#   "replay"    — exp30/exp31: reward diffusion + weight-gated experience
+#                 sharing (Eq. 7, rho=0.3), runs_from_daic/social_replay_qwen
+#   "diffusion" — exp05/exp06: reward diffusion only (the original rows)
+# Both use the same medium config (3 agents, 3 eps x 1000 steps, Qwen3.5-2B),
+# so the baselines (exp03/exp04) are shared.
+RL_HEB_ARMS = "replay"
+_RL_HEB = {
+    "replay": {
+        "IPPO+Heb":  ("exp31_ippo_hebbian_replay",  SOCIAL_REPLAY,
+                      "Hebbian graph + replay", "learned + diff. + replay"),
+        "MAPPO+Heb": ("exp30_mappo_hebbian_replay", SOCIAL_REPLAY,
+                      "Hebbian graph + replay", "learned + diff. + replay"),
+    },
+    "diffusion": {
+        "IPPO+Heb":  ("exp06_ippo_hebbian",  MEDIUM, "Hebbian graph", "learned + diff."),
+        "MAPPO+Heb": ("exp05_mappo_hebbian", MEDIUM, "Hebbian graph", "learned + diff."),
+    },
+}[RL_HEB_ARMS]
+
+# The qualitative pipeline labels runs by make_results.CONDITIONS, where the
+# replay arms are "IPPO+Heb+SR" / "MAPPO+Heb+SR"; map table names to those.
+QUAL_LABEL = ({"IPPO+Heb": "IPPO+Heb+SR", "MAPPO+Heb": "MAPPO+Heb+SR"}
+              if RL_HEB_ARMS == "replay" else {})
 
 # name, dir, runs-root, base model, learning, social coupling
 ROWS = [
@@ -61,12 +95,12 @@ ROWS = [
      "Gemma-4-E4B", "none (frozen LLM)", "Hebbian + prompt"),
     ("IPPO",          "exp04_ippo",                 MEDIUM,
      "Qwen3.5-2B",  "IPPO (LoRA)",       "—"),
-    ("IPPO+Heb",      "exp06_ippo_hebbian",         MEDIUM,
-     "Qwen3.5-2B",  "IPPO (LoRA)",       "Hebbian graph"),
+    ("IPPO+Heb",      _RL_HEB["IPPO+Heb"][0],       _RL_HEB["IPPO+Heb"][1],
+     "Qwen3.5-2B",  "IPPO (LoRA)",       _RL_HEB["IPPO+Heb"][2]),
     ("MAPPO",         "exp03_mappo",                MEDIUM,
      "Qwen3.5-2B",  "MAPPO (shared critic)", "—"),
-    ("MAPPO+Heb",     "exp05_mappo_hebbian",        MEDIUM,
-     "Qwen3.5-2B",  "MAPPO (shared critic)", "Hebbian graph"),
+    ("MAPPO+Heb",     _RL_HEB["MAPPO+Heb"][0],      _RL_HEB["MAPPO+Heb"][1],
+     "Qwen3.5-2B",  "MAPPO (shared critic)", _RL_HEB["MAPPO+Heb"][2]),
 ]
 
 # Design-table cells in the paper's tab:conditions vocabulary:
@@ -80,9 +114,9 @@ DESIGN_TEX = {
     "Gemma-E4B":     ("E4B",  "--",    "--",              "--"),
     "Gemma-E4B+Heb": ("E4B",  "--",    "learned",         "prompt"),
     "IPPO":          ("2B",   "IPPO",  "--",              "--"),
-    "IPPO+Heb":      ("2B",   "IPPO",  "learned + diff.", "--"),
+    "IPPO+Heb":      ("2B",   "IPPO",  _RL_HEB["IPPO+Heb"][3],  "--"),
     "MAPPO":         ("2B",   "MAPPO", "--",              "--"),
-    "MAPPO+Heb":     ("2B",   "MAPPO", "learned + diff.", "--"),
+    "MAPPO+Heb":     ("2B",   "MAPPO", _RL_HEB["MAPPO+Heb"][3], "--"),
 }
 # Row order groups for the \midrule breaks in both LaTeX tables.
 TEX_GROUPS = [["LLM-2B", "LLM-2B+Heb", "LLM-9B", "LLM-9B+Heb",
@@ -98,7 +132,8 @@ STEP_COLS = [
 ]
 
 BELIEF_TABLES = [Path("analysis_qualitative/out/tables/beliefs.csv"),
-                 Path("analysis_qualitative/out_gemma/tables/beliefs.csv")]
+                 Path("analysis_qualitative/out_gemma/tables/beliefs.csv"),
+                 Path("analysis_qualitative/out_social_replay/tables/beliefs.csv")]
 
 
 def belief_metrics() -> dict:
@@ -133,7 +168,7 @@ def collect():
             print(f"[skip] {name}: no runs under {root / dirname}")
             continue
         a = aggregate(runs)
-        b = beliefs.get(name, {})
+        b = beliefs.get(QUAL_LABEL.get(name, name), {})
         out.append({
             "name": name, "model": model, "learning": learning,
             "social": social, "n_runs": a["n_runs"], "n_eps": a["n_eps"],
