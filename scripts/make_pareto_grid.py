@@ -80,15 +80,17 @@ FAMILIES = {
     "qwen":  ["qwen"],
     "both":  ["gemma", "qwen"],
 }
+# Axis labels are terse like the reference ("Compute", "(Normalized) Reward");
+# the full definitions live in the caption / tab:final_comparison.
 Y_METRICS = {
-    "reward":           "Task return (team, per episode)",
-    "milestone_pct":    "Milestone coverage (team-distinct) [%]",
-    "coop_pct":         "Coop. milestone coverage (team-distinct) [%]",
-    "completions":      "Milestone completions (all agents, per episode)",
-    "coop_completions": "Coop. milestone completions (all agents, per episode)",
+    "reward":           "Task return",
+    "milestone_pct":    "Milestones [%]",
+    "coop_pct":         "Coop. milestones [%]",
+    "completions":      "Milestone completions",
+    "coop_completions": "Coop. milestone completions",
 }
 X_AXES = {
-    "flops":       "Inference compute  [$10^{17}$ FLOPs]",
+    "flops":       "Compute  [$10^{17}$ FLOPs]",
     "grounding":   "Perception grounding rate",
     "partner_loc": "Partner-location accuracy",
 }
@@ -99,8 +101,19 @@ X_AXES = {
 # benchmark score, which would be a property of the backbone only.
 BELIEF_COLS = {"grounding": "perception_grounding_rate",
                "partner_loc": "partner_loc_accuracy"}
-ARM_COLOR = {"base": "#2a78d6", "hebbian": "#eb6834"}
-FAMILY_MARKER = {"gemma": "o", "qwen": "s"}
+# Aesthetics: a 1:1 match of the CoDe Fig. 10 reference (matplotlib defaults:
+# white canvas, full black box, no grid, tab10 colours, dashed/solid lines
+# with per-series markers, framed legend lower-right, no error bars). The
+# base arm mirrors "CoDe" (green, dashed, circles) and the Hebbian arm mirrors
+# its "[eta]" variant (blue, solid, triangles) -- the same base-vs-variant
+# pairing the reference uses. Marker shape + line style carry the arm, so
+# identity is never colour-alone.
+ARM_STYLE = {
+    "base":    dict(color="#2ca02c", ls="--", marker="o", label="Base"),
+    "hebbian": dict(color="#1f77b4", ls="-",  marker="^", label="Hebbian"),
+}
+# Families: Gemma filled markers, Qwen hollow (only relevant with --families).
+FAMILY_FILL = {"gemma": True, "qwen": False}
 FAMILY_LABEL = {"gemma": "Gemma 4", "qwen": "Qwen3.5"}
 # Point labels: the family is already carried by marker shape + legend, so
 # the label only needs the size. Gemma keeps E2B/E4B/12B; Qwen gets a short
@@ -226,69 +239,74 @@ def series_points(data, family, arm, y, x, perception):
     return pts
 
 
-def draw_panel(ax, data, families, y, x, perception, label_points=True):
-    """One CoDe-style panel. Returns the number of series drawn."""
+def draw_panel(ax, data, families, y, x, perception, label_points=True,
+               errorbars=False, normalize=False, legend_loc="lower right"):
+    """One panel in the CoDe Fig. 10 look. Returns the number of series drawn.
+
+    normalize: divide every series by the BASE arm's value at its smallest-x
+    point (the cheapest configuration), so that point reads 1.0 -- the
+    reference's "(Normalized) Reward" convention. Per family.
+    """
     n = 0
     tops = {}
     for family in families:
+        ref = None
+        if normalize:
+            base_pts = series_points(data, family, "base", y, x, perception)
+            if base_pts and base_pts[0][1]:
+                ref = base_pts[0][1]
         for arm in ("base", "hebbian"):
             pts = series_points(data, family, arm, y, x, perception)
             if not pts:
                 continue
+            scale = ref if ref else 1.0
             xs = [p[0] for p in pts]
-            ys = [p[1] for p in pts]
-            es = [p[2] for p in pts]
-            xes = [p[5] for p in pts]
-            ax.errorbar(xs, ys, yerr=es, xerr=xes if x != "flops" else None,
-                        fmt="none", ecolor=ARM_COLOR[arm],
-                        elinewidth=0.9, capsize=2.5, alpha=0.55, zorder=2)
-            ax.plot(xs, ys, linestyle="--", linewidth=1.6,
-                    color=ARM_COLOR[arm], marker=FAMILY_MARKER[family],
-                    markersize=7, markerfacecolor=ARM_COLOR[arm],
-                    markeredgecolor=INK["surface"], markeredgewidth=1.0,
-                    label="{} — {}".format(FAMILY_LABEL[family], arm), zorder=3)
+            ys = [p[1] / scale for p in pts]
+            es = [p[2] / scale for p in pts]
+            st = ARM_STYLE[arm]
+            filled = FAMILY_FILL.get(family, True)
+            label = st["label"] if len(families) == 1 else \
+                "{} — {}".format(FAMILY_LABEL[family], st["label"])
+            if errorbars:
+                ax.errorbar(xs, ys, yerr=es, fmt="none", ecolor=st["color"],
+                            elinewidth=0.8, capsize=2, alpha=0.6, zorder=2)
+            ax.plot(xs, ys, linestyle=st["ls"], linewidth=1.2,
+                    color=st["color"], marker=st["marker"], markersize=5.5,
+                    markerfacecolor=st["color"] if filled else "white",
+                    markeredgecolor=st["color"], markeredgewidth=1.0,
+                    label=label, zorder=3)
             n += 1
             if label_points:
                 for xv, ym, ys_, lab, _, _ in pts:
                     key = (family, lab)
-                    top, bot = ym + ys_, ym - ys_
-                    if key not in tops:
-                        tops[key] = [xv, top, bot]
-                    else:
-                        tops[key][1] = max(tops[key][1], top)
-                        tops[key][2] = min(tops[key][2], bot)
+                    top = (ym + (ys_ if errorbars else 0.0)) / scale
+                    if key not in tops or top > tops[key][1]:
+                        tops[key] = [xv, top]
     if label_points:
-        # One label per size, above the taller arm's error bar. Labels are
-        # SHORT ("Q-2B", not "Qwen3.5-2B"): on the shared canvas the families
-        # interleave in x, and the long form collided with the E4B markers.
-        # (Placing Qwen labels below instead was tried and collided with the
-        # other family's line -- below-placement is data-dependent, short
-        # text is not.)
-        for (_, lab), (xv, top, _) in tops.items():
+        # One label per size, above the taller arm. Labels are SHORT
+        # ("Q-2B", not "Qwen3.5-2B") so interleaved families cannot collide.
+        for (_, lab), (xv, top) in tops.items():
             ax.annotate(lab, (xv, top), textcoords="offset points",
-                        xytext=(0, 6), ha="center", va="bottom",
-                        fontsize=7, color=INK["secondary"], zorder=4)
-    ax.set_xlabel(X_AXES[x], fontsize=9.5, color=INK["primary"])
-    ax.set_ylabel(Y_METRICS[y], fontsize=9.5, color=INK["primary"])
-    ax.tick_params(colors=INK["secondary"], labelsize=8.5)
-    for s in ("top", "right"):
-        ax.spines[s].set_visible(False)
-    for s in ("left", "bottom"):
-        ax.spines[s].set_color(INK["grid"])
-    ax.grid(True, color=INK["grid"], linewidth=0.7, zorder=0)
-    ax.set_axisbelow(True)
-    ax.margins(x=0.12, y=0.18)
+                        xytext=(0, 7), ha="center", va="bottom",
+                        fontsize=7, color="0.35", zorder=4)
+    ax.set_xlabel(X_AXES[x])
+    ylabel = Y_METRICS[y]
+    if normalize:
+        ylabel = "(Normalized) " + ylabel[0].lower() + ylabel[1:]
+    ax.set_ylabel(ylabel)
+    # Reference look: full box, no grid, default ticks, a little headroom
+    # for the point labels.
+    ax.grid(False)
+    ax.margins(x=0.08, y=0.15)
     if n:
-        leg = ax.legend(frameon=True, fontsize=8, loc="best",
-                        edgecolor=INK["grid"], framealpha=0.95)
-        for t in leg.get_texts():
-            t.set_color(INK["primary"])
+        ax.legend(loc=legend_loc, fontsize=8, frameon=True, framealpha=1.0,
+                  edgecolor="0.8")
     return n
 
 
 def save(fig, path_stem: Path):
     path_stem.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(str(path_stem) + ".png", dpi=200, facecolor=INK["surface"])
+    fig.savefig(str(path_stem) + ".png", dpi=200, facecolor="white")
 
 
 def main():
@@ -305,8 +323,21 @@ def main():
                          "excluded from the paper's plots by decision, so the "
                          "default is gemma only")
     ap.add_argument("--ys", default=",".join(Y_METRICS))
-    ap.add_argument("--xs", default=",".join(X_AXES))
+    ap.add_argument("--xs", default="flops",
+                    help="comma-separated subset of {}; the perception axes "
+                         "are available but off by default (dropped from the "
+                         "paper: a precision-style rate that rewards terseness "
+                         "and is non-monotonic in size)".format(",".join(X_AXES)))
     ap.add_argument("--no-point-labels", action="store_true")
+    ap.add_argument("--errorbars", action="store_true",
+                    help="draw +-1 sd over pooled episodes (off by default to "
+                         "match the reference figure; the table carries the sd)")
+    ap.add_argument("--normalize", action="store_true",
+                    help="divide each series by the base arm's cheapest point, "
+                         "the reference's '(Normalized) Reward' convention")
+    ap.add_argument("--paper", action="store_true",
+                    help="also emit pareto_<family>_paper.png: task return and "
+                         "cooperative coverage vs compute, side by side")
     ap.add_argument("--image-tokens", type=int, default=280)
     ap.add_argument("--overhead-tokens", type=int, default=60)
     ap.add_argument("--chars-per-token", type=float, default=None)
@@ -314,6 +345,7 @@ def main():
 
     import matplotlib
     matplotlib.use("Agg")
+    matplotlib.rcdefaults()   # the reference figure IS the matplotlib default look
     import matplotlib.pyplot as plt
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -387,11 +419,11 @@ def main():
     for fam in families:
         for y in ys:
             for x in xs:
-                fig, ax = plt.subplots(figsize=(5.2, 3.9), dpi=200)
-                fig.patch.set_facecolor(INK["surface"])
-                ax.set_facecolor(INK["surface"])
+                fig, ax = plt.subplots(figsize=(4.6, 3.4), dpi=200)
                 n = draw_panel(ax, data, FAMILIES[fam], y, x, perception,
-                               label_points=not args.no_point_labels)
+                               label_points=not args.no_point_labels,
+                               errorbars=args.errorbars,
+                               normalize=args.normalize)
                 if n == 0:
                     plt.close(fig)
                     continue
@@ -402,20 +434,38 @@ def main():
         # composite: rows = y metrics, cols = x axes
         if len(ys) > 1 or len(xs) > 1:
             fig, axes = plt.subplots(len(ys), len(xs),
-                                     figsize=(5.0 * len(xs), 3.6 * len(ys)),
+                                     figsize=(4.6 * len(xs), 3.4 * len(ys)),
                                      dpi=200, squeeze=False)
-            fig.patch.set_facecolor(INK["surface"])
             any_drawn = False
             for i, y in enumerate(ys):
                 for j, x in enumerate(xs):
                     ax = axes[i][j]
-                    ax.set_facecolor(INK["surface"])
                     if draw_panel(ax, data, FAMILIES[fam], y, x, perception,
-                                  label_points=not args.no_point_labels):
+                                  label_points=not args.no_point_labels,
+                                  errorbars=args.errorbars,
+                                  normalize=args.normalize):
                         any_drawn = True
             if any_drawn:
                 fig.tight_layout()
                 save(fig, args.out_dir / "pareto_{}_grid".format(fam))
+                n_written += 1
+            plt.close(fig)
+        # The paper figure: the two columns of tab:final_comparison that carry
+        # RQ1 -- task return and cooperative coverage -- against compute, side
+        # by side, one legend (right panel).
+        if args.paper and "flops" in xs:
+            fig, axes = plt.subplots(1, 2, figsize=(8.6, 3.3), dpi=200)
+            drawn = 0
+            for ax, y in zip(axes, ("reward", "coop_pct")):
+                drawn += draw_panel(ax, data, FAMILIES[fam], y, "flops",
+                                    perception,
+                                    label_points=not args.no_point_labels,
+                                    errorbars=args.errorbars,
+                                    normalize=args.normalize)
+            if drawn:
+                axes[0].get_legend().remove()
+                fig.tight_layout(w_pad=2.0)
+                save(fig, args.out_dir / "pareto_{}_paper".format(fam))
                 n_written += 1
             plt.close(fig)
     print("\nwrote {} figures (png) + points.csv to {}".format(

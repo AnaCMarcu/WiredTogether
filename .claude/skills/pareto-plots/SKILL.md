@@ -83,19 +83,32 @@ Verified 2026-08-28: the pareto table reproduces
   (MMMU-Pro from the model cards was used in an earlier version and dropped:
   a backbone property, identical for both arms.)
 
-## Style rules (from the dataviz skill + CoDe Fig. 10)
+## Style rules — a 1:1 match of CoDe Fig. 10 (Singh et al., TMLR 2025)
 
-- Colour = arm: base `#2a78d6`, hebbian `#eb6834` (the two palette slots that
-  validate all-pairs CVD in both modes). Marker = family: circle Gemma, square
-  Qwen. Identity is never colour-alone.
-- Dashed lines connect points WITHIN a (family, arm) series only. Families are
-  never joined or fitted into one frontier — across families size is confounded
-  with architecture and training data. Two series on one canvas is legitimate
-  only because the FLOPs axis is cross-model-valid.
-- Boxed legend inside the axes, thin ±1 sd error bars over seeds, every size
-  direct-labelled once (above the taller arm).
-- After generating, OPEN the PNGs and look: the validator checks colour, not
-  label collisions or clipping.
+- `matplotlib.rcdefaults()`: white canvas, full black box, NO grid, default
+  ticks and fonts, terse axis labels ("Compute [10^17 FLOPs]", "Task return").
+- Base arm = tab green, dashed, filled circles (the reference's "CoDe");
+  Hebbian arm = tab blue, solid, filled triangles (its "[eta]" variant).
+  Marker + line style carry the arm, so identity is never colour-alone.
+  Qwen (if ever plotted) = hollow markers.
+- Framed legend lower-right; NO error bars by default (`--errorbars` adds
+  ±1 sd over pooled episodes; the table carries the sd). `--normalize`
+  divides by the base arm's cheapest point (the "(Normalized) Reward" look).
+- Each size direct-labelled once (E2B/E4B/12B), small grey, above the taller arm.
+- Dashed/solid lines connect points WITHIN an arm only; families are never
+  joined into one frontier.
+- After generating, OPEN the PNGs: the validator checks colour, not clipping.
+
+## The paper figure
+
+`--paper` emits `pareto_gemma_paper.png`: task return (left) and cooperative
+milestone coverage (right) vs compute — the two RQ1 columns of
+tab:final_comparison, so the figure and the table say the same thing. Use the
+RAW version (natural units, matches the table); `grid/normalized/` holds the
+normalized variant. Perception axes (`--xs grounding,partner_loc`) are
+available but DROPPED from the paper: grounding is a precision-style rate that
+rewards terseness (E2B 0.92 > 12B 0.87 > E4B 0.85) and is non-monotonic in
+size.
 
 ## Adding a size or family
 

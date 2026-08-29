@@ -1,0 +1,218 @@
+{
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_base\\seed_1011": {
+  "mtime": 1787604979.0913591,
+  "n_eff": 12000000000.0,
+  "flops": 9.47130552e+17,
+  "decode": 1549074
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_base\\seed_1213": {
+  "mtime": 1787605088.5375743,
+  "n_eff": 12000000000.0,
+  "flops": 1.009298472e+18,
+  "decode": 1576944
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_base\\seed_123": {
+  "mtime": 1787604703.0244749,
+  "n_eff": 12000000000.0,
+  "flops": 1.144183488e+18,
+  "decode": 1789269
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_base\\seed_42": {
+  "mtime": 1787604603.689949,
+  "n_eff": 12000000000.0,
+  "flops": 9.61247232e+17,
+  "decode": 1515764
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_base\\seed_456": {
+  "mtime": 1787604793.565903,
+  "n_eff": 12000000000.0,
+  "flops": 9.53499648e+17,
+  "decode": 1509346
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_base\\seed_789": {
+  "mtime": 1787604895.2035549,
+  "n_eff": 12000000000.0,
+  "flops": 9.65555376e+17,
+  "decode": 1536146
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_hebbian\\seed_1011": {
+  "mtime": 1787605606.953292,
+  "n_eff": 12000000000.0,
+  "flops": 9.78864384e+17,
+  "decode": 1655237
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_hebbian\\seed_1213": {
+  "mtime": 1787686506.9495423,
+  "n_eff": 12000000000.0,
+  "flops": 1.120829232e+18,
+  "decode": 1860436
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_hebbian\\seed_123": {
+  "mtime": 1787605313.2631865,
+  "n_eff": 12000000000.0,
+  "flops": 1.263759384e+18,
+  "decode": 2051096
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_hebbian\\seed_42": {
+  "mtime": 1787605192.5537438,
+  "n_eff": 12000000000.0,
+  "flops": 1.027861008e+18,
+  "decode": 1650982
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_hebbian\\seed_456": {
+  "mtime": 1787605418.2525506,
+  "n_eff": 12000000000.0,
+  "flops": 9.96634056e+17,
+  "decode": 1634764
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_12b_hebbian\\seed_789": {
+  "mtime": 1787605517.7493992,
+  "n_eff": 12000000000.0,
+  "flops": 1.028819712e+18,
+  "decode": 1683701
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_base\\seed_1011": {
+  "mtime": 1787603951.6742446,
+  "n_eff": 2300000000.0,
+  "flops": 1.846285946e+17,
+  "decode": 1571285
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_base\\seed_1213": {
+  "mtime": 1787604019.4763,
+  "n_eff": 2300000000.0,
+  "flops": 1.776149516e+17,
+  "decode": 1496554
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_base\\seed_123": {
+  "mtime": 1787603732.4799736,
+  "n_eff": 2300000000.0,
+  "flops": 2.17573169e+17,
+  "decode": 1843689
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_base\\seed_42": {
+  "mtime": 1787603673.1723201,
+  "n_eff": 2300000000.0,
+  "flops": 1.783960316e+17,
+  "decode": 1507496
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_base\\seed_456": {
+  "mtime": 1787603786.9041078,
+  "n_eff": 2300000000.0,
+  "flops": 1.903863272e+17,
+  "decode": 1600048
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_base\\seed_789": {
+  "mtime": 1787603853.7078204,
+  "n_eff": 2300000000.0,
+  "flops": 1.788028004e+17,
+  "decode": 1527694
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_hebbian\\seed_1011": {
+  "mtime": 1787604454.24287,
+  "n_eff": 2300000000.0,
+  "flops": 1.861281072e+17,
+  "decode": 1638868
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_hebbian\\seed_1213": {
+  "mtime": 1787604520.7538798,
+  "n_eff": 2300000000.0,
+  "flops": 1.848105384e+17,
+  "decode": 1636517
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_hebbian\\seed_123": {
+  "mtime": 1787604222.4385054,
+  "n_eff": 2300000000.0,
+  "flops": 2.243327724e+17,
+  "decode": 1956572
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_hebbian\\seed_42": {
+  "mtime": 1787604122.325194,
+  "n_eff": 2300000000.0,
+  "flops": 1.86548676e+17,
+  "decode": 1659482
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_hebbian\\seed_456": {
+  "mtime": 1787604299.357967,
+  "n_eff": 2300000000.0,
+  "flops": 1.875312866e+17,
+  "decode": 1641722
+ },
+ "runs_from_daic\\pareto_gemma4\\pareto_e2b_hebbian\\seed_789": {
+  "mtime": 1787604385.5027366,
+  "n_eff": 2300000000.0,
+  "flops": 1.852411306e+17,
+  "decode": 1633031
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_base\\seed_1011": {
+  "mtime": 1786364454.4931238,
+  "n_eff": 4500000000.0,
+  "flops": 3.01473225e+17,
+  "decode": 1532177
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_base\\seed_1213": {
+  "mtime": 1786364497.0584712,
+  "n_eff": 4500000000.0,
+  "flops": 3.2419557e+17,
+  "decode": 1596675
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_base\\seed_123": {
+  "mtime": 1786961275.6305337,
+  "n_eff": 4500000000.0,
+  "flops": 3.80527461e+17,
+  "decode": 1903777
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_base\\seed_42": {
+  "mtime": 1786364256.045485,
+  "n_eff": 4500000000.0,
+  "flops": 3.13901244e+17,
+  "decode": 1551388
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_base\\seed_456": {
+  "mtime": 1786364340.7920506,
+  "n_eff": 4500000000.0,
+  "flops": 3.31754823e+17,
+  "decode": 1715348
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_base\\seed_789": {
+  "mtime": 1786364416.7857347,
+  "n_eff": 4500000000.0,
+  "flops": 3.09136176e+17,
+  "decode": 1557668
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_hebbian\\seed_1011": {
+  "mtime": 1786364720.92683,
+  "n_eff": 4500000000.0,
+  "flops": 3.35882061e+17,
+  "decode": 1647606
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_hebbian\\seed_1213": {
+  "mtime": 1786364805.1015668,
+  "n_eff": 4500000000.0,
+  "flops": 3.32619309e+17,
+  "decode": 1656421
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_hebbian\\seed_123": {
+  "mtime": 1786364592.9049792,
+  "n_eff": 4500000000.0,
+  "flops": 4.05387495e+17,
+  "decode": 1999662
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_hebbian\\seed_42": {
+  "mtime": 1786364537.0241952,
+  "n_eff": 4500000000.0,
+  "flops": 3.36060837e+17,
+  "decode": 1651159
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_hebbian\\seed_456": {
+  "mtime": 1786364634.7107549,
+  "n_eff": 4500000000.0,
+  "flops": 3.31836174e+17,
+  "decode": 1656974
+ },
+ "runs_from_daic\\new_exp_0_gemma\\new_exp_0_gemma_hebbian\\seed_789": {
+  "mtime": 1786364762.70425,
+  "n_eff": 4500000000.0,
+  "flops": 3.52138563e+17,
+  "decode": 1750011
+ }
+}
