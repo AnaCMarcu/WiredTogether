@@ -21,9 +21,14 @@
 #   DRY_RUN=1 bash submit_social_replay.sh  # print without submitting
 #   bash submit_social_replay.sh            # both lanes, both arms, 3 seeds
 #   LANES=gemma4 bash submit_social_replay.sh   # one lane only (qwen|gemma4)
+#   SEEDS="789 1011 1213" bash submit_social_replay.sh   # seed extension
 #
 # Idempotent: an exp/seed whose final_metrics.json already exists is skipped.
 # GPU: Gemma 4 E4B needs a big card — GPU=gpu:a40:1 is the default there.
+# Gemma lane also sets RL_UPDATE_STAGGER=1 and --mem=64GB: unstaggered Gemma
+# RL runs hang the Minetest bridge after their ~40-min update rounds (see
+# RLConfig.update_stagger). The Qwen lane stays unstaggered on purpose — its
+# completed seeds ran that way and the extension seeds must match them.
 # ────────────────────────────────────────────────────────────────────────────
 set -u
 cd "$(dirname "$0")"
@@ -33,7 +38,7 @@ WORKSPACE=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu
 REPO="$WORKSPACE/WiredTogether"
 
 EXPS=(exp30_mappo_hebbian_replay exp31_ippo_hebbian_replay)
-SEEDS=(42 123 456)
+SEEDS=(${SEEDS:-42 123 456})
 LANES="${LANES:-qwen gemma4}"
 
 : "${EPISODES:=3}"
@@ -60,6 +65,8 @@ for lane in $LANES; do
             LANE_VISION="text"
             LANE_GROUP="social_replay_qwen"
             LANE_GPU="${GPU:-}"
+            LANE_MEM="${MEM:-48GB}"      # Qwen RL seeds have OOM'd at 32GB before
+            LANE_STAGGER=0
             ;;
         gemma4)
             LANE_MODEL="$WORKSPACE/models/gemma-4-E4B-it"
@@ -67,6 +74,8 @@ for lane in $LANES; do
             LANE_VISION="vision"
             LANE_GROUP="social_replay_gemma4"
             LANE_GPU="${GPU:-gpu:a40:1}"
+            LANE_MEM="${MEM:-64GB}"      # hang leaks RAM; 32GB died at 1.5 d
+            LANE_STAGGER=1               # env-idle hang fix (RLConfig.update_stagger)
             ;;
         *)
             echo "ERROR: unknown lane '$lane' (qwen|gemma4)" >&2; exit 1
@@ -87,7 +96,7 @@ for lane in $LANES; do
     [ -n "${QOS:-}" ]     && SBATCH_OVERRIDES+=(--qos="$QOS")
     [ -n "${TIME:-}" ]    && SBATCH_OVERRIDES+=(--time="$TIME")
     [ -n "$LANE_GPU" ]    && SBATCH_OVERRIDES+=(--gres="$LANE_GPU")
-    [ -n "${MEM:-}" ]     && SBATCH_OVERRIDES+=(--mem="$MEM")
+    [ -n "$LANE_MEM" ]    && SBATCH_OVERRIDES+=(--mem="$LANE_MEM")
 
     echo "== lane $lane: model=$LANE_MODEL group=$LANE_GROUP =="
     for exp in "${EXPS[@]}"; do
@@ -104,6 +113,7 @@ for lane in $LANES; do
                     WANDB_PROJECT=$WANDB_PROJECT \
                     MODEL_LLM=$LANE_MODEL MODEL_2B=$LANE_MODEL \
                     WT_IMAGE=$LANE_IMAGE LLM_VISION_MODE=$LANE_VISION \
+                    RL_UPDATE_STAGGER=$LANE_STAGGER \
                     sbatch --parsable \
                     ${SBATCH_OVERRIDES[@]:+"${SBATCH_OVERRIDES[@]}"} \
                     "$exp.sbatch")
