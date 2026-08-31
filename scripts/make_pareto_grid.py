@@ -493,10 +493,13 @@ def main():
     # CSV of everything plotted
     with open(args.out_dir / "points.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["size", "family", "arm", "n", "n_eff", "flops_mean",
-                    "grounding_mean", "grounding_sd",
-                    "partner_loc_mean", "partner_loc_sd"]
-                   + [c for k in Y_METRICS for c in (k + "_mean", k + "_sd")])
+        # Header MUST be derived from BELIEF_COLS: hardcoding it once shifted
+        # every Y column four places when BELIEF_COLS grew (silent corruption
+        # of any analysis reading points.csv; the figures were unaffected).
+        w.writerow(["size", "family", "arm", "n", "n_eff", "flops_mean"]
+                   + [c for k in BELIEF_COLS for c in (k + "_mean", k + "_sd")]
+                   + [c for k in Y_METRICS if k not in BELIEF_COLS
+                      for c in (k + "_mean", k + "_sd")])
         for (size, arm), d in sorted(data.items()):
             fx, _ = mean_sd(d["flops"])
             row = [size, SIZES[size]["family"], arm, len(d["flops"]),
@@ -509,6 +512,8 @@ def main():
                 else:
                     row += ["", ""]
             for k in Y_METRICS:
+                if k in BELIEF_COLS:
+                    continue   # already written from the beliefs block above
                 if d.get(k):
                     m, s = mean_sd(d[k])
                     row += ["{:.4f}".format(m), "{:.4f}".format(s)]

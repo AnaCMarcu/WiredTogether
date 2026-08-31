@@ -111,6 +111,12 @@ Verified 2026-08-28: the pareto table reproduces
   pareto_both_milestone_pct_vs_grounding_strict.png — milestones vs strict
   grounding, Gemma-2B/4B/12B + Qwen-9B on one line per arm, family kept
   visible via open (Gemma) vs filled (Qwen) markers.
+- `scripts/make_pareto_delta.py` -> pareto_hebbian_delta_vs_grounding.png:
+  Hebbian delta (heb-base) on milestones/return vs the BASE arm's strict
+  grounding, one point per model, zero line. DIRECTION: benefit sits at
+  LOW perception (Gemma-2B/4B, <=0.103) and every model >=0.133 loses
+  milestones — i.e. 'Hebbian helps weak-perceiving models', NOT
+  'non-benefiting models perceive worse' (that phrasing is backwards).
 - With-Qwen set (labels "Name-<N>B", e.g. Gemma-4B / Qwen-9B via SHORT_LABEL):
   `--out-dir .../grid_with_qwen --families both --sizes e2b,e4b,12b,qwen9b
   --ys milestone_pct,reward --paper` (needs medium_runs root). `--sizes`
