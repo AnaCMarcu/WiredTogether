@@ -87,8 +87,11 @@ FAMILIES = {
 # the full definitions live in the caption / tab:final_comparison.
 Y_METRICS = {
     "reward":           "Task return",
-    "milestone_pct":    "Milestones [%]",
-    "coop_pct":         "Coop. milestones [%]",
+    # Same quantity AND same label as make_pareto_social_fig's frontier
+    # (its total_pct = 100 * task_milestone_count / (n_eps * TASK_MAX=25)),
+    # so the two Pareto figures in the paper are directly comparable.
+    "milestone_pct":    "Task milestones (% of 25)",
+    "coop_pct":         "Coop. milestone completion [%]",
     "completions":      "Milestone completions",
     "coop_completions": "Coop. milestone completions",
     # Per-agent framing. "Milestones per agent" is TASK milestones / N -- it is
@@ -343,7 +346,7 @@ def main():
                     help="comma-separated subset of gemma,qwen,both — Qwen is "
                          "excluded from the paper's plots by decision, so the "
                          "default is gemma only")
-    ap.add_argument("--ys", default="coop_pct,milestone_pct,reward",
+    ap.add_argument("--ys", default="milestone_pct,reward,coop_pct",
                     help="comma-separated subset of {}".format(",".join(Y_METRICS)))
     ap.add_argument("--xs", default="flops",
                     help="comma-separated subset of {}; the perception axes "
@@ -472,13 +475,13 @@ def main():
                 save(fig, args.out_dir / "pareto_{}_grid".format(fam))
                 n_written += 1
             plt.close(fig)
-        # The paper figure: the two columns of tab:final_comparison that carry
-        # RQ1 -- task return and cooperative coverage -- against compute, side
-        # by side, one legend (right panel).
+        # The paper figure: task milestones (the SAME metric and label as the
+        # social-interval frontier, so the two Pareto figures are directly
+        # comparable) beside task return, one legend on the right panel.
         if args.paper and "flops" in xs:
             fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.5), dpi=200)
             drawn = 0
-            for ax, y in zip(axes, ("reward", "coop_pct")):
+            for ax, y in zip(axes, ("milestone_pct", "reward")):
                 drawn += draw_panel(ax, data, FAMILIES[fam], y, "flops",
                                     perception,
                                     label_points=not args.no_point_labels,

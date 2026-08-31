@@ -103,27 +103,40 @@ frontier), so every compute figure in the paper reads as one family:
 
 ## The paper figures
 
-A bare run emits the three the paper uses, all vs compute:
+**Consistency rule:** the model-size Pareto and the social-interval Pareto
+(`make_pareto_social_fig.py`) plot the SAME headline metric with the SAME
+label — "Task milestones (% of 25)". Verified identical computations:
+its `total_pct` = `100 * task_milestone_count(ep) / (n_eps * TASK_MAX=25)`
+is exactly this script's `milestone_pct`. Do not diverge them.
+
+A bare run emits, all vs compute:
 
 | file | y-axis |
 |---|---|
-| `pareto_gemma_coop_pct_vs_flops.png` | Coop. milestones [%] — **the headline** |
-| `pareto_gemma_milestone_pct_vs_flops.png` | Milestones [%] |
+| `pareto_gemma_milestone_pct_vs_flops.png` | Task milestones (% of 25) — **headline, matches the social frontier** |
 | `pareto_gemma_reward_vs_flops.png` | Task return |
+| `pareto_gemma_coop_pct_vs_flops.png` | Coop. milestone completion [%] |
 
-plus `pareto_gemma_grid.png` (all three stacked) and, with `--paper`,
-`pareto_gemma_paper.png` (return + coop side by side, one legend).
-`grid/normalized/` holds the `--normalize` variants.
+plus `pareto_gemma_grid.png` (stacked) and, with `--paper`,
+`pareto_gemma_paper.png` = task milestones + task return side by side, one
+legend. `grid/normalized/` holds the `--normalize` variants.
 
-Use COVERAGE (`coop_pct`, `milestone_pct`), not the attainment metrics
-(`completions`, `coop_completions`) — coverage is the paper's own definition,
-so figure and table cross-check. Attainment earns its place only for the
-redundancy point: at 12B, Hebbian reaches fewer distinct milestones
-(5.61 vs 6.06) with more agents each (1.60 vs 1.49 per milestone), so
-completions tie 9.00 while coverage favours base.
+Use COVERAGE (`milestone_pct`, `coop_pct`), not attainment (`completions*`,
+`*_pa`) — coverage is the paper's own definition, so figure and table
+cross-check. Attainment earns its place only for the redundancy point: at
+12B, Hebbian reaches fewer distinct milestones (5.61 vs 6.06) with more
+agents each (1.60 vs 1.49), so completions tie 9.00 while coverage favours
+base. Per-agent axes exist (`completions_pa`) and are honest, but note 12B
+saturates at 3.00/3 agents in both arms.
 
-Perception axes (`--xs grounding,partner_loc`) still work but are DROPPED from
-the paper: grounding is a precision-style rate that rewards terseness
+NEVER label any per-agent axis "cooperative": true coop/agent is 0.31–1.06,
+whereas `final_metrics.mean_milestone_count_per_agent` is 6.4–7.2 because
+~2/3 of it is the communication track — that would contradict
+tab:final_comparison (1.44 distinct coop milestones for the whole team at
+E4B) on the same page.
+
+Perception axes (`--xs grounding,partner_loc`) still work but are DROPPED
+from the paper: grounding is a precision-style rate that rewards terseness
 (E2B 0.92 > 12B 0.87 > E4B 0.85) — a verbosity axis, not a capability one.
 
 ## Adding a size or family
