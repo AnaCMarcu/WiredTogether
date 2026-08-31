@@ -130,6 +130,8 @@ METRIC_LABEL = {
     "coop_pct":         "Coop. milestone coverage (team-distinct) [%]",
     "completions":      "Milestone completions (all agents, per episode)",
     "coop_completions": "Coop. milestone completions (all agents, per episode)",
+    "completions_pa":      "Milestones per agent",
+    "coop_completions_pa": "Coop. milestones per agent",
 }
 
 
@@ -172,8 +174,15 @@ def run_metrics(run: dict) -> dict:
     # PER-EPISODE lists, not per-run means: callers pool episodes across
     # seeds, which is the paper's convention (mean +- population SD over the
     # pooled episodes of all seeds, n = seeds x 3; tab:final_comparison).
+    # Per-agent variants: the same attainment counts divided by the team size.
+    # NOTE these are TASK milestones only (social-act tracks excluded), unlike
+    # final_metrics.mean_milestone_count_per_agent, which folds in the
+    # communication track and is ~2/3 comm -- see the module docstring.
+    n_ag = (run.get("config") or {}).get("num_agents") or len(per_agent) or 3
     out = {"milestone_pct": ms_pct, "coop_pct": coop_pct,
-           "completions": compl, "coop_completions": coop_compl}
+           "completions": compl, "coop_completions": coop_compl,
+           "completions_pa": [c / n_ag for c in compl],
+           "coop_completions_pa": [c / n_ag for c in coop_compl]}
     if returns:
         out["reward"] = list(returns)
     return out

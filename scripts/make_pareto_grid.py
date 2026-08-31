@@ -91,6 +91,13 @@ Y_METRICS = {
     "coop_pct":         "Coop. milestones [%]",
     "completions":      "Milestone completions",
     "coop_completions": "Coop. milestone completions",
+    # Per-agent framing. "Milestones per agent" is TASK milestones / N -- it is
+    # NOT final_metrics.mean_milestone_count_per_agent, which is ~2/3
+    # communication milestones and would contradict tab:final_comparison if
+    # labelled "cooperative" (6.78/agent vs the table's 1.44 distinct for the
+    # whole team).
+    "completions_pa":      "Milestones per agent",
+    "coop_completions_pa": "Coop. milestones per agent",
 }
 X_AXES = {
     "flops":       "Compute  [$10^{17}$ FLOPs]",
