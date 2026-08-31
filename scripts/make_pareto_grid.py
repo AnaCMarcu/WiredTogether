@@ -101,6 +101,13 @@ Y_METRICS = {
     # whole team).
     "completions_pa":      "Milestones per agent",
     "coop_completions_pa": "Coop. milestones per agent",
+    # Perception as an OUTCOME (y-axis), from the qualitative pipeline's
+    # beliefs.csv (one value per run; sd across seeds). grounding_strict is
+    # the tightened rate: nothing impossible AND >=1 chamber-diagnostic
+    # object named, so vague/empty statements no longer pass for free.
+    "grounding":        "Perception grounding rate",
+    "grounding_strict": "Strict perception grounding rate",
+    "specificity":      "Chamber-diagnostic mention rate",
 }
 X_AXES = {
     "flops":       "Compute  [$10^{17}$ FLOPs]",
@@ -113,6 +120,8 @@ X_AXES = {
 # values (the Hebbian arm has its own grounding rate), unlike an external
 # benchmark score, which would be a property of the backbone only.
 BELIEF_COLS = {"grounding": "perception_grounding_rate",
+               "grounding_strict": "perception_grounding_strict",
+               "specificity": "perception_specificity",
                "partner_loc": "partner_loc_accuracy"}
 # Aesthetics: identical to make_pareto_social_fig.fig_pareto_paper (the
 # social-interval frontier), which is itself styled after the compute-vs-reward
@@ -132,10 +141,14 @@ ARM_STYLE = {
 # when --families is used to bring Qwen back.
 FAMILY_OPEN = {"gemma": True, "qwen": False}
 FAMILY_LABEL = {"gemma": "Gemma 4", "qwen": "Qwen3.5"}
-# Point labels: the family is already carried by marker shape + legend, so
-# the label only needs the size. Gemma keeps E2B/E4B/12B; Qwen gets a short
-# prefix so "2B" is not confused with "E2B".
-SHORT_LABEL = {"qwen2b": "Q-2B", "qwen9b": "Q-9B"}
+# Point labels: "Name-<params>B" (user decision 2026-08-31). Gemma E-series
+# uses EFFECTIVE params (the same N the FLOPs axis uses), so E4B -> Gemma-4B.
+SHORT_LABEL = {"e2b": "Gemma-2B", "e4b": "Gemma-4B", "12b": "Gemma-12B",
+               "26b": "Gemma-26B", "31b": "Gemma-31B",
+               "qwen2b": "Qwen-2B", "qwen9b": "Qwen-9B"}
+# --sizes filter (None = all). Lets a figure set include a single foreign
+# point, e.g. the Gemma curve plus Qwen-9B, without dragging in Qwen-2B.
+ACTIVE_SIZES = None
 INK = dict(surface="#ffffff", primary="#1a1a19", secondary="#55554e",
            grid="#e4e4e0")
 
@@ -233,15 +246,19 @@ def load_beliefs(paths) -> dict:
 
 # ─── drawing ────────────────────────────────────────────────────────────
 def series_points(data, family, arm, y, x, perception):
-    """Sorted [(x, y_mean, y_sd, label, n)] for one (family, arm) series."""
+    """Sorted [(x, y_mean, y_sd, label, n, x_sd)] for one (family, arm) series."""
     pts = []
     for size, meta in SIZES.items():
         if meta["family"] != family:
             continue
+        if ACTIVE_SIZES is not None and size not in ACTIVE_SIZES:
+            continue
         d = data.get((size, arm))
-        if not d or not d.get(y):
+        if not d:
             continue
         if x == "flops":
+            if not d.get("flops"):
+                continue
             xv, xe = mean_sd(d["flops"])
             xv, xe = xv / 1e17, xe / 1e17
         else:
@@ -249,7 +266,11 @@ def series_points(data, family, arm, y, x, perception):
             if not vals:
                 continue
             xv, xe = mean_sd(vals)          # mean +- sd across runs (seeds)
-        ym, ys = mean_sd(d[y])
+        # y: run_metrics pools episodes; belief metrics are one value per run.
+        yvals = d.get(y) or perception.get((size, arm), {}).get(y) or []
+        if not yvals:
+            continue
+        ym, ys = mean_sd(yvals)
         pts.append((xv, ym, ys, SHORT_LABEL.get(size, meta["label"].split()[-1]),
                     len(d["_runs"]), xe))
     pts.sort(key=lambda p: p[0])
@@ -353,6 +374,10 @@ def main():
                          "are available but off by default (dropped from the "
                          "paper: a precision-style rate that rewards terseness "
                          "and is non-monotonic in size)".format(",".join(X_AXES)))
+    ap.add_argument("--sizes", default=None,
+                    help="comma-separated subset of {} — e.g. "
+                         "e2b,e4b,12b,qwen9b to add one Qwen point to the "
+                         "Gemma curve".format(",".join(SIZES)))
     ap.add_argument("--no-point-labels", action="store_true")
     ap.add_argument("--errorbars", action="store_true",
                     help="draw +-1 sd over pooled episodes (off by default to "
@@ -379,6 +404,13 @@ def main():
     flops_args = dict(image_tokens=args.image_tokens,
                       overhead_tokens=args.overhead_tokens,
                       chars_per_token=args.chars_per_token)
+
+    global ACTIVE_SIZES
+    if args.sizes:
+        ACTIVE_SIZES = {s.strip() for s in args.sizes.split(",") if s.strip()}
+        bad = ACTIVE_SIZES - set(SIZES)
+        if bad:
+            sys.exit("unknown --sizes: {}".format(sorted(bad)))
 
     data = collect(args.roots, flops_args, cache)
     cache_path.write_text(json.dumps(cache, indent=1))

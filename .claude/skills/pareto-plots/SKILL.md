@@ -83,6 +83,25 @@ Verified 2026-08-28: the pareto table reproduces
   (MMMU-Pro from the model cards was used in an earlier version and dropped:
   a backbone property, identical for both arms.)
 
+## Strict perception metric + extra figure sets (2026-08-31)
+
+- `perception_grounding_strict` (beliefs_metrics.py): nothing impossible AND
+  >=1 CHAMBER-DIAGNOSTIC object named (`lexicons.diagnostic_mentions` — the
+  IMPOSSIBLE_OBJECTS table read positively). Fixes the permissive rate's
+  degenerate optimum where vague/empty statements pass, which made terse
+  Gemma-2B look best. Strict is MONOTONIC in size (base): 2B 0.056 < 4B 0.103
+  < 12B 0.232; `perception_specificity` is the diagnostic-mention rate alone.
+  These are per-RUN values (n=6, sd across seeds), usable as x AND y axes.
+- Perception-as-outcome set: `--out-dir .../grid_perception
+  --ys grounding_strict,specificity,grounding --xs flops`.
+- With-Qwen set (labels "Name-<N>B", e.g. Gemma-4B / Qwen-9B via SHORT_LABEL):
+  `--out-dir .../grid_with_qwen --families both --sizes e2b,e4b,12b,qwen9b
+  --ys milestone_pct,reward --paper` (needs medium_runs root). `--sizes`
+  filters points; the "qwen 8B" the user names is Qwen3.5-9B (9B params).
+- After touching beliefs_metrics.py, re-run ONLY the metrics stage per out
+  dir (parse is cached): `python analysis_qualitative/run.py metrics
+  --runs-root <root> --out analysis_qualitative/out_<name>`.
+
 ## Style rules — the house compute-figure look
 
 Identical to `make_pareto_social_fig.fig_pareto_paper` (the social-interval

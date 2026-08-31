@@ -1,33 +1,33 @@
 label,n_texts,cluster,size,share,representative
-Gemma-E4B,23042,11,890,0.2225,cell door still locked?
-Gemma-E4B,23042,9,770,0.1925,"still moving forward, looking for the anvils now."
-Gemma-E4B,23042,0,433,0.1082,i am moving forward to meet you at the anvils.
-Gemma-E4B,23042,4,402,0.1005,pressing switch now.
-Gemma-E4B,23042,2,304,0.076,"i'm moving forward now, looking for the anvils."
-Gemma-E4B,23042,5,251,0.0628,"moving forward now, checking for the door status change mentioned."
-Gemma-E4B,23042,13,229,0.0573,"door is open, moving north now."
-Gemma-E4B,23042,15,187,0.0467,still turning right to face north. let me know when you see the switch.
-Gemma-E4B,23042,6,102,0.0255,"switch is centered, pressing now."
-Gemma-E4B,23042,10,97,0.0243,door status?
-Gemma-E4B,23042,14,94,0.0235,focusing on boss now. ready to hit.
-Gemma-E4B,23042,7,94,0.0235,waiting for switch press confirmation.
-Gemma-E4B,23042,1,43,0.0107,"zombie centered, starting attack."
-Gemma-E4B,23042,12,39,0.0097,"scanning for zombies, i'll join the dps on the nearest one."
-Gemma-E4B,23042,3,35,0.0088,"c2 path is clear from my side, moving forward now."
-Gemma-E4B,23042,8,30,0.0075,testing dirt dig now. watch for drop.
-Gemma-E4B+Heb,22698,11,765,0.1913,i'm moving forward towards the center to find the anvils.
-Gemma-E4B+Heb,22698,9,749,0.1872,still moving forward to find the next area.
-Gemma-E4B+Heb,22698,4,478,0.1195,moving toward center anvils now.
-Gemma-E4B+Heb,22698,0,422,0.1055,i am moving into ch2 now to check on the anvils.
-Gemma-E4B+Heb,22698,2,363,0.0907,i'm moving forward to help find the anvils.
-Gemma-E4B+Heb,22698,13,257,0.0643,"door is open, moving north now."
-Gemma-E4B+Heb,22698,5,225,0.0563,moving forward now to find the anvils for the gear production task.
-Gemma-E4B+Heb,22698,15,152,0.038,still moving forward to locate the boss arena in ch5.
-Gemma-E4B+Heb,22698,10,136,0.034,door still locked?
-Gemma-E4B+Heb,22698,14,122,0.0305,"zombie centered, ready to attack."
-Gemma-E4B+Heb,22698,6,103,0.0257,"switch is centered, pressing now."
-Gemma-E4B+Heb,22698,7,77,0.0192,"scanning right now, looking for anvils"
-Gemma-E4B+Heb,22698,1,54,0.0135,"zombie centered, attacking now."
-Gemma-E4B+Heb,22698,12,39,0.0097,heading to ch2 to help with anvils for agent_1.
-Gemma-E4B+Heb,22698,3,34,0.0085,moving north now.
-Gemma-E4B+Heb,22698,8,24,0.006,focusing on the left zombie first; i'll keep chipping away.
+Gemma-E4B,23042,3,640,0.16,door status?
+Gemma-E4B,23042,11,581,0.1452,i'm moving forward now to find the anvils in ch2.
+Gemma-E4B,23042,13,426,0.1065,focusing on boss now. ready to hit.
+Gemma-E4B,23042,0,397,0.0993,"door 1 is open, i am moving into c2 now."
+Gemma-E4B,23042,10,372,0.093,still turning right to face north. let me know when you see the switch.
+Gemma-E4B,23042,6,305,0.0762,"door is open, moving north now."
+Gemma-E4B,23042,9,281,0.0703,ready to coordinate attack on the zombie near the door.
+Gemma-E4B,23042,1,220,0.055,"still moving forward, looking for the anvils now."
+Gemma-E4B,23042,4,213,0.0532,"zombie centered, starting attack."
+Gemma-E4B,23042,5,202,0.0505,cell door still locked?
+Gemma-E4B,23042,7,154,0.0385,scanning walls for switch location.
+Gemma-E4B,23042,8,67,0.0168,"switch is centered, pressing now."
+Gemma-E4B,23042,12,48,0.012,switch pressed?
+Gemma-E4B,23042,2,35,0.0088,approaching center anvils now.
+Gemma-E4B,23042,14,30,0.0075,waiting for switch press confirmation.
+Gemma-E4B,23042,15,29,0.0073,cell door still locked. need switch press.
+Gemma-E4B+Heb,22698,3,730,0.1825,door still locked?
+Gemma-E4B+Heb,22698,11,591,0.1477,i'm moving forward towards the center to find the anvils.
+Gemma-E4B+Heb,22698,1,366,0.0915,still moving forward to find the next area.
+Gemma-E4B+Heb,22698,13,341,0.0853,i'm moving forward in ch2 to help locate the anvils; let me know when you see them!
+Gemma-E4B+Heb,22698,9,341,0.0853,moving toward center anvils now.
+Gemma-E4B+Heb,22698,0,339,0.0848,turning 180 to check distance traveled
+Gemma-E4B+Heb,22698,10,315,0.0788,waiting for switch press
+Gemma-E4B+Heb,22698,6,312,0.078,"door is open, moving north now."
+Gemma-E4B+Heb,22698,4,176,0.044,"zombie centered, attacking now."
+Gemma-E4B+Heb,22698,5,172,0.043,i am moving forward now to find the anvils.
+Gemma-E4B+Heb,22698,7,95,0.0238,"zombies are here, need to face them all to clear the door."
+Gemma-E4B+Heb,22698,12,57,0.0143,keep scanning walls for c4 door
+Gemma-E4B+Heb,22698,8,48,0.012,"switch is centered, pressing now."
+Gemma-E4B+Heb,22698,2,41,0.0103,"path seems clear ahead, moving forward to check for the next structure."
+Gemma-E4B+Heb,22698,15,39,0.0097,wall centered. checking door now.
+Gemma-E4B+Heb,22698,14,37,0.0092,still locked here.

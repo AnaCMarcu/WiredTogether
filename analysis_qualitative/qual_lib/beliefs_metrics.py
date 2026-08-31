@@ -44,6 +44,7 @@ def analyze_run(ctx) -> dict:
     truth = {(r["ep"], r["t"], r["agent"]): r for r in rows}
 
     n_percep = grounded = 0
+    strict_grounded = diagnostic = 0
     halluc_rows = []
     loc_claims = loc_correct = 0
     resp_checked = resp_hit = 0
@@ -61,10 +62,19 @@ def analyze_run(ctx) -> dict:
         if pv:
             n_percep += 1
             bad = lexicons.impossible_mentions(pv, r.get("chamber"))
+            diag = lexicons.diagnostic_mentions(pv, r.get("chamber"))
+            if diag:
+                diagnostic += 1
             if bad:
                 halluc_rows.append(r)
             else:
                 grounded += 1
+                # STRICT grounding: nothing impossible AND at least one
+                # chamber-diagnostic object named. The permissive rate above
+                # has a degenerate optimum (an empty/vague statement passes);
+                # this one requires positive, checkable evidence.
+                if diag:
+                    strict_grounded += 1
         # partner-location claims
         for part in (b.get("partner") or []):
             text = _belief_text(part)
@@ -130,6 +140,8 @@ def analyze_run(ctx) -> dict:
     return {
         "n_perception_updates": n_percep,
         "perception_grounding_rate": _rate(grounded, n_percep),
+        "perception_grounding_strict": _rate(strict_grounded, n_percep),
+        "perception_specificity": _rate(diagnostic, n_percep),
         "partner_loc_claims": loc_claims,
         "partner_loc_accuracy": _rate(loc_correct, loc_claims),
         "belief_responsiveness": _rate(resp_hit, resp_checked),

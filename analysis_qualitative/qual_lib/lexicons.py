@@ -61,6 +61,28 @@ def impossible_mentions(text: str, chamber: str) -> list:
     return out
 
 
+def diagnostic_mentions(text: str, chamber: str) -> list:
+    """Object groups mentioned in text that are DIAGNOSTIC of this chamber.
+
+    The same table as impossible_mentions, read in the positive direction: a
+    mention counts when the current chamber IS in the group's allowed set
+    (tree/animal in Ch1, anvil in Ch2, switch/cell in Ch3, zombie in Ch4/5,
+    boss in Ch5). Universal objects (stone, door, block ...) are deliberately
+    NOT diagnostic — naming them proves nothing about where the agent is.
+
+    Used by the STRICT perception-grounding rate: the permissive rate counts a
+    statement as grounded when it names nothing impossible, which a vague or
+    empty statement satisfies for free — a degenerate optimum that rewards
+    terseness. Requiring a diagnostic mention makes the statement carry
+    positive, checkable evidence of chamber-correct perception.
+    """
+    if not text or not chamber:
+        return []
+    ch = str(chamber).lower()
+    return [name for name, (rx, allowed) in IMPOSSIBLE_OBJECTS.items()
+            if ch in allowed and rx.search(text)]
+
+
 # ── Ch3-specific coordination lexicon ────────────────────────────────────
 SWITCH_TALK = re.compile(
     r"\b(switch|press|cell|locked|unlock|open( the|s)? door|free (me|you)|"

@@ -1,59 +1,62 @@
 label,n_texts,cluster,size,share,representative
-Gemma-12B,22112,3,757,0.1893,i am pressing my switch now to open your door.
-Gemma-12B,22112,11,584,0.146,entering ch2 now.
-Gemma-12B,22112,8,532,0.133,heading into ch2 now.
-Gemma-12B,22112,6,360,0.09,i'm starting on the wood milestone now.
-Gemma-12B,22112,7,311,0.0777,"door 1 is open, heading to ch2 now."
-Gemma-12B,22112,9,282,0.0705,moving into ch2 now.
-Gemma-12B,22112,5,275,0.0688,moving into communal room now.
-Gemma-12B,22112,0,169,0.0423,"still scanning for zombies, haven't seen any yet."
-Gemma-12B,22112,1,168,0.042,"door 1 is open, heading north to join you in ch2."
-Gemma-12B,22112,15,145,0.0362,heading to communal room now.
-Gemma-12B,22112,13,136,0.034,scanning left for zombies now.
-Gemma-12B,22112,2,106,0.0265,attacking the center zombie now.
-Gemma-12B,22112,14,97,0.0243,ready to sync dig on row a anvil now.
-Gemma-12B,22112,10,43,0.0107,digging the sword now.
-Gemma-12B,22112,12,20,0.005,"switch pressed, heading to communal room."
-Gemma-12B,22112,4,15,0.0037,"there are no trees here, only purple anvils. let's coordinate on the anvils at z19 and z22."
-Gemma-12B+Heb,22500,3,753,0.1883,i am pressing my switch now to open your door.
-Gemma-12B+Heb,22500,11,682,0.1705,entering ch2 now.
-Gemma-12B+Heb,22500,8,614,0.1535,heading into ch2 now.
-Gemma-12B+Heb,22500,6,496,0.124,i'm attacking the zombie in front of me now.
-Gemma-12B+Heb,22500,5,314,0.0785,moving into communal room now.
-Gemma-12B+Heb,22500,7,202,0.0505,"door 1 is open, heading to ch2 now."
-Gemma-12B+Heb,22500,9,202,0.0505,moving into ch2 now.
-Gemma-12B+Heb,22500,15,182,0.0455,heading to communal room now.
-Gemma-12B+Heb,22500,0,144,0.036,still turning to center the wall.
-Gemma-12B+Heb,22500,2,124,0.031,attacking the center zombie now.
-Gemma-12B+Heb,22500,13,101,0.0253,scanning right for zombies now.
-Gemma-12B+Heb,22500,1,89,0.0222,"door 1 is open, i am heading into ch2 now."
-Gemma-12B+Heb,22500,14,49,0.0123,scanning for zombies. i'll let you know when i spot one.
-Gemma-12B+Heb,22500,10,35,0.0088,digging row a anvil now. sync with me!
-Gemma-12B+Heb,22500,4,10,0.0025,turning to find anvils.
-Gemma-12B+Heb,22500,12,3,0.0008,"switch pressed, moving to communal room."
-Gemma-E2B,22772,10,1266,0.3165,"agent_1, i am moving forward into this passage. let me know if you see anything interesting ahead."
-Gemma-E2B,22772,11,1001,0.2502,"agent_1, i am turning left to face north as instructed. let me know if you see anything near door 1."
-Gemma-E2B,22772,3,584,0.146,"agent_0, i am moving forward. let me know if you see anything interesting ahead."
-Gemma-E2B,22772,4,412,0.103,"agent_1, i am digging the block directly in front of me as instructed."
-Gemma-E2B,22772,9,301,0.0752,"agent_0, i am moving forward to explore the area ahead. let me know if you see anything interesting."
-Gemma-E2B,22772,2,162,0.0405,"agent_0, i am turning left to see if this passage opens up or reveals anything. let me know if you see anything."
-Gemma-E2B,22772,5,161,0.0403,"agent_2, i am turning left as suggested to look for stone blocks."
-Gemma-E2B,22772,6,61,0.0152,"agent_1, i am continuing to turn left to try and align my yaw with north. let me know if you see anything useful near the north wall."
-Gemma-E2B,22772,7,33,0.0083,"agent_2, i am turning right to check the right side of the room where the anvils should be. let me know if you see anything near the door."
-Gemma-E2B,22772,15,12,0.003,"agent 1, i am digging into the central structure now. let me know if you see anything near door 1."
-Gemma-E2B,22772,13,5,0.0013,"agent_1, i am moving forward. keep scanning for zombies."
-Gemma-E2B,22772,14,2,0.0005,"agent2, are you seeing anything near the center or on the ceiling?"
-Gemma-E2B+Heb,22368,10,976,0.244,"agent_1, i am moving forward to survey the area ahead. let me know if you see anything useful."
-Gemma-E2B+Heb,22368,3,813,0.2032,"agent_2, i am continuing to scan the left wall for the red door as requested."
-Gemma-E2B+Heb,22368,11,793,0.1983,"agent_1, i am digging the blue switch cube now. let me know if you see anything change on your end."
-Gemma-E2B+Heb,22368,4,472,0.118,"agent_1, i am continuing to move forward towards the north wall entrance."
-Gemma-E2B+Heb,22368,9,376,0.094,"agent_0, i am moving forward now. let me know if you see any stone blocks to dig."
-Gemma-E2B+Heb,22368,5,247,0.0617,"agent_2, i am moving forward. let me know if you see anything interesting ahead."
-Gemma-E2B+Heb,22368,2,196,0.049,"agent 2, i am turning left now to check the left wall as requested."
-Gemma-E2B+Heb,22368,15,60,0.015,"agent 0, let me know what you see when you dig the center block. i am moving towards the center-left."
-Gemma-E2B+Heb,22368,7,32,0.008,"agent 2, i am turning left to face the wall where the red door is located. let me know if you see anything interesting there."
-Gemma-E2B+Heb,22368,13,17,0.0043,"agent_1, i am moving forward. keep scanning for zombies."
-Gemma-E2B+Heb,22368,6,15,0.0037,"agent_1, i am turning left to check the area for the north wall as you mentioned. let me know if you see anything on your side."
-Gemma-E2B+Heb,22368,14,1,0.0003,"agent2, i am turning left to check the area for a path."
-Gemma-E2B+Heb,22368,8,1,0.0003,i'm moving forward. let me know if you see anything on your side.
-Gemma-E2B+Heb,22368,0,1,0.0003,turning right now to check for the chamber 2 entrance as requested.
+Gemma-12B,22112,2,725,0.1812,"still scanning for zombies, haven't seen any yet."
+Gemma-12B,22112,11,695,0.1737,i am pressing my switch now to open your door.
+Gemma-12B,22112,9,619,0.1547,scanning for zombies now.
+Gemma-12B,22112,0,433,0.1082,"door 1 is open, heading to ch2 now."
+Gemma-12B,22112,14,357,0.0892,syncing dig on anvil a now.
+Gemma-12B,22112,3,350,0.0875,moving into communal room now.
+Gemma-12B,22112,13,229,0.0573,scanning left for zombies now.
+Gemma-12B,22112,7,229,0.0573,entering ch2 now.
+Gemma-12B,22112,6,153,0.0382,heading into ch2 now.
+Gemma-12B,22112,1,67,0.0168,moving into ch2 now.
+Gemma-12B,22112,5,39,0.0097,pressing my switch now to open your door.
+Gemma-12B,22112,10,30,0.0075,"switch pressed, heading to communal room."
+Gemma-12B,22112,15,28,0.007,"no animals in ch2, focusing on anvils."
+Gemma-12B,22112,4,19,0.0047,centering the opening now.
+Gemma-12B,22112,8,19,0.0047,switching to sword to hit the zombie in front of me.
+Gemma-12B,22112,12,8,0.002,"door is open, i am turning to align with the exit to enter the communal room."
+Gemma-12B+Heb,22500,2,802,0.2005,i'm switching to my sword to help clear the zombies.
+Gemma-12B+Heb,22500,9,760,0.19,scanning for zombies now.
+Gemma-12B+Heb,22500,11,664,0.166,i am pressing my switch now to open your door.
+Gemma-12B+Heb,22500,3,386,0.0965,moving into communal room now.
+Gemma-12B+Heb,22500,0,363,0.0907,heading to communal room now.
+Gemma-12B+Heb,22500,14,357,0.0892,i am moving into the communal room now.
+Gemma-12B+Heb,22500,7,242,0.0605,entering ch2 now.
+Gemma-12B+Heb,22500,13,152,0.038,scanning right for zombies now.
+Gemma-12B+Heb,22500,6,136,0.034,heading into ch2 now.
+Gemma-12B+Heb,22500,1,64,0.016,moving into ch2 now.
+Gemma-12B+Heb,22500,5,29,0.0073,pressing my switch now to open your door.
+Gemma-12B+Heb,22500,10,15,0.0037,"switch pressed, moving to communal room."
+Gemma-12B+Heb,22500,8,12,0.003,aligning with opening now.
+Gemma-12B+Heb,22500,4,8,0.002,turning to find anvils.
+Gemma-12B+Heb,22500,15,8,0.002,"no trees in ch2, looking for anvils."
+Gemma-12B+Heb,22500,12,2,0.0005,"anvil is almost centered, getting ready to dig."
+Gemma-E2B,22772,0,1526,0.3815,"agent_1, i am moving forward into this passage. let me know if you see anything interesting ahead."
+Gemma-E2B,22772,3,833,0.2082,"agent_1, i am turning left to face north as instructed. let me know if you see anything near door 1."
+Gemma-E2B,22772,12,453,0.1133,"agent_2, i am moving forward through this passage. let me know what you see ahead."
+Gemma-E2B,22772,2,424,0.106,"agent_1, i am digging the block directly in front of me as instructed."
+Gemma-E2B,22772,6,292,0.073,"agent_0, i am moving forward to explore the area ahead. let me know if you see anything interesting."
+Gemma-E2B,22772,1,180,0.045,"agent_2, i am turning left as suggested to look for stone blocks."
+Gemma-E2B,22772,13,156,0.039,"agent_0, i am turning left to see if this passage opens up or reveals anything. let me know if you see anything."
+Gemma-E2B,22772,10,62,0.0155,"agent_1, i am continuing to turn left to try and align my yaw with north. let me know if you see anything useful near the north wall."
+Gemma-E2B,22772,7,31,0.0077,"agent_2, i am turning right to check the right side of the room where the anvils should be. let me know if you see anything near the door."
+Gemma-E2B,22772,5,14,0.0035,"agent 1, i am digging into the central structure now. let me know if you see anything near door 1."
+Gemma-E2B,22772,11,12,0.003,"agent_1, i am moving forward. keep scanning for zombies."
+Gemma-E2B,22772,8,10,0.0025,"agent 0, i'm moving forward to see if the boss is in this direction."
+Gemma-E2B,22772,4,5,0.0013,"agent1, i am moving forward. let me know if you see anything interesting ahead."
+Gemma-E2B,22772,14,2,0.0005,"agent1, i am moving forward. let me know if you see anything interesting near the door."
+Gemma-E2B+Heb,22368,0,1236,0.309,"agent_1, i am moving forward to survey the area ahead. let me know if you see anything useful."
+Gemma-E2B+Heb,22368,3,680,0.17,"agent_0, i am moving forward. let me know if you see anything interesting ahead."
+Gemma-E2B+Heb,22368,12,561,0.1403,"agent_2, i am continuing to scan the left wall for the red door as requested."
+Gemma-E2B+Heb,22368,2,491,0.1227,"agent_1, i am continuing to move forward towards the north wall entrance."
+Gemma-E2B+Heb,22368,6,371,0.0927,"agent_0, i am moving forward now. let me know if you see any stone blocks to dig."
+Gemma-E2B+Heb,22368,1,326,0.0815,"agent_2, i am moving forward. let me know if you see anything interesting ahead."
+Gemma-E2B+Heb,22368,13,167,0.0418,"agent_0, i am turning right to look for the brown block you mentioned. let me know if you need help with the red block."
+Gemma-E2B+Heb,22368,5,58,0.0145,"agent 0, let me know what you see when you dig the center block. i am moving towards the center-left."
+Gemma-E2B+Heb,22368,8,31,0.0077,"agent 2, i am turning left now to check the left wall as requested."
+Gemma-E2B+Heb,22368,11,22,0.0055,"agent_1, i am moving forward. keep scanning for zombies."
+Gemma-E2B+Heb,22368,7,21,0.0053,"agent_2, i am turning left to face the wall where the red door is located. let me know if you see anything interesting on your side."
+Gemma-E2B+Heb,22368,10,15,0.0037,"agent_1, i am turning left to check the area for the north wall as you mentioned. let me know if you see anything on your side."
+Gemma-E2B+Heb,22368,14,15,0.0037,"agent 2, i am turning left to face the wall where the red door is located. let me know if you see anything interesting there."
+Gemma-E2B+Heb,22368,4,5,0.0013,"agent2, i am turning left to check the area for a path."
+Gemma-E2B+Heb,22368,9,1,0.0003,turning right now to check for the chamber 2 entrance as requested.
