@@ -1,177 +1,177 @@
 label,n_texts,cluster,size,share,representative
-Allied-all,21112,7,1146,0.2865,"i am pressing the switch to open your door, agent_0."
-Allied-all,21112,11,1044,0.261,i have centered the stone block and am mining it now. i will collect the drop after digging.
-Allied-all,21112,0,446,0.1115,"my door is open, moving out now."
-Allied-all,21112,6,390,0.0975,i am breaking a block to open the path to the red door. i will keep moving forward once this is clear.
-Allied-all,21112,8,290,0.0725,i am pressing the switch now.
-Allied-all,21112,13,231,0.0578,"i'm seeing a stone block centered, will dig it to help with the team's stone milestone."
-Allied-all,21112,10,131,0.0328,i'm attacking the zombie now.
-Allied-all,21112,5,108,0.027,turning around to find open space. i will meet at the anvils once i'm reoriented.
-Allied-all,21112,1,46,0.0115,"my door is open, i am exiting the cell now."
-Allied-all,21112,9,40,0.01,agent_2: i am turning left to face the corridor. please press your switch to open my door when you are ready.
-Allied-all,21112,3,26,0.0065,digging the front anvil with agent_1 now. let's keep hitting it together to break it quickly!
-Allied-all,21112,14,26,0.0065,i am facing the wall and turning to find the exit. i will locate the passage and then moveforward. i will let you know when i am free to converge.
-Allied-all,21112,12,25,0.0063,"agent_1, i am activating the switch now."
-Allied-all,21112,15,22,0.0055,digging the chestplate anvil now with you.
-Allied-all,21112,2,18,0.0045,"agent_2, i am moving forward towards the open door, please follow me."
-Allied-all,21112,4,11,0.0027,i've pressed my switch. my door is open. proceed to the communal room.
-Allied-pair,20730,7,1188,0.297,i am pressing my switch now to open your door.
-Allied-pair,20730,11,958,0.2395,i am turning right to find the open door. let me know if you see it.
-Allied-pair,20730,6,427,0.1067,i am turning around to face the communal room door. let me know if you see any zombies in ch4.
-Allied-pair,20730,0,422,0.1055,keep digging the anvil with me!
-Allied-pair,20730,8,331,0.0828,i am pressing the switch now.
-Allied-pair,20730,13,192,0.048,"i'm facing a wall here, need to turn right to find the open path to the zombies."
-Allied-pair,20730,10,127,0.0318,i'm attacking the zombie now.
-Allied-pair,20730,5,112,0.028,"i am digging a stone block here. if it breaks, i will collect the cobblestone drop. agent_2, are you still looking for a stone block in ch1?"
-Allied-pair,20730,9,57,0.0143,"switch pressed, door opening. i will exit my cell and head to the communal room to join you."
-Allied-pair,20730,1,41,0.0103,"agent_1, your door should unlock soon; please press your switch once you're ready."
-Allied-pair,20730,12,30,0.0075,agent_2: i'm clearing a stone block to advance. keep breaking anvils in ch2!
-Allied-pair,20730,15,27,0.0067,digging the anvil with you!
-Allied-pair,20730,14,27,0.0067,"i am in ch1 and need to dig the stone block here to get cobblestone. once i collect it, i will move to ch2 to help you break the anvils."
-Allied-pair,20730,3,27,0.0067,keep digging the anvil with me to break it faster.
-Allied-pair,20730,2,22,0.0055,your door opened! i am looking down to find it and exit now.
-Allied-pair,20730,4,12,0.003,"agent_1, i am still facing a wall, continuing to turn to find the exit to the communal room."
-IPPO,14968,11,858,0.2145,"agent 1, we are centered on the greenstone block and ready to pair-dig. please proceed."
-IPPO,14968,7,594,0.1485,i am breaking the cobblestone block to drop the diamond sword.
-IPPO,14968,10,339,0.0848,"agent 1, we are centered on the teleporter and ready to pair-dig. please proceed."
-IPPO,14968,6,329,0.0823,"agent 1, gear is centered and ready to break."
-IPPO,14968,8,317,0.0793,"switch is centered, please press it."
-IPPO,14968,9,290,0.0725,switch is broken and visible. please press it to open the door.
-IPPO,14968,2,209,0.0522,"turn left to center the purple anvil, then move forward to approach it."
-IPPO,14968,15,164,0.041,"turn left to center the anvil, then move forward to approach it for the pair-dig."
-IPPO,14968,4,158,0.0395,"turn left to center the tree, then dig."
-IPPO,14968,3,146,0.0365,dig the cobblestone block to drop the diamond sword.
-IPPO,14968,14,134,0.0335,i am centered on the lever anchor. the lever is already aligned and active. i will break it with the diamond sword to drop the glowstone item and allow the team
-IPPO,14968,12,116,0.029,agent_0: dig the purple anvil. we are both centered and ready.
-IPPO,14968,1,111,0.0278,"hold the diamond sword in your hand, then press interact on the diamond gear in your inventory to break it."
-IPPO,14968,5,102,0.0255,i have collected the cobblestone drop. i will move forward to approach the teleport marker and communicate with agent_1 to confirm readiness for the next pair-d
-IPPO,14968,0,82,0.0205,i'm breaking the cobblestone block to drop the diamond sword.
-IPPO,14968,13,51,0.0127,"i'm aiming for the stone block to the left, so i'll turn left to center it."
-IPPO+Heb,10899,11,622,0.1555,"i will turn left to center the diamond block, then move forward to mine it."
-IPPO+Heb,10899,9,462,0.1155,switch is centered. please turn left and press attack key to break the switch and drop the handle.
-IPPO+Heb,10899,7,455,0.1138,i am breaking the lever to drop the stone block.
-IPPO+Heb,10899,8,353,0.0882,switch is centered and ready. please wait for activation.
-IPPO+Heb,10899,6,337,0.0843,"agent_1, i'll turn left to center the lever head against the wall, then move forward to approach it, and finally turn left again to align precisely before break"
-IPPO+Heb,10899,2,275,0.0688,turn left to center the lever base against the wall.
-IPPO+Heb,10899,15,234,0.0585,"turn left to center the sword on the switch, then move forward to break it."
-IPPO+Heb,10899,4,215,0.0537,"turn left to center the anvil, then dig."
-IPPO+Heb,10899,10,194,0.0485,"agent 1, the handle is centered and ready to break."
-IPPO+Heb,10899,14,186,0.0465,"i will turn left to center the lever base against the wall, then move forward to approach it, and finally turn left again to align the base precisely before bre"
-IPPO+Heb,10899,12,161,0.0403,"agent_1, gear block is centered and ready for digforward."
-IPPO+Heb,10899,3,130,0.0325,dig the stone block above the lever.
-IPPO+Heb,10899,5,120,0.03,"i will turn left to center the lever base against the wall, then move forward to approach it, and finally turn left again to align precisely before breaking."
-IPPO+Heb,10899,1,119,0.0297,"i'll turn left to center the lever base against the wall, then move forward to approach it, and finally turn left again to align precisely before breaking. team"
-IPPO+Heb,10899,0,94,0.0235,digforward 3 times to break the stone block; expect the handle to drop and the diamond sword to be held in hand.
-IPPO+Heb,10899,13,43,0.0107,"agent_0: the lever head is centered and aligned; i will turn left to center the lever base, then move forward to approach it, and finally turn left again to ali"
-LLM-2B,22309,7,1150,0.2875,dig the stone block.
-LLM-2B,22309,3,561,0.1403,dig on the stone block.
-LLM-2B,22309,8,433,0.1082,"switch is centered, ready to press."
-LLM-2B,22309,11,413,0.1032,dig the lever again to confirm it breaks the anvil.
-LLM-2B,22309,9,296,0.074,digging the stone block
-LLM-2B,22309,6,247,0.0617,"align the block, then dig."
-LLM-2B,22309,10,189,0.0473,agent_2: dig the stone block!
-LLM-2B,22309,15,175,0.0437,press the switch to open the door.
-LLM-2B,22309,12,100,0.025,"agent_1, dig the stone block."
-LLM-2B,22309,5,88,0.022,switch is centered. press!
-LLM-2B,22309,4,72,0.018,press the switch!
-LLM-2B,22309,2,62,0.0155,turn right to center the raw_mutton drop before moving forward.
-LLM-2B,22309,0,62,0.0155,i'm moving forward to align the stone block for the next dig attempt.
-LLM-2B,22309,14,60,0.015,lever is centered and ready to grind.
-LLM-2B,22309,13,48,0.012,"turnright to center the switch, then moveforward to approach it."
-LLM-2B,22309,1,44,0.011,align the lever vertically.
-LLM-2B+Heb,20377,7,1203,0.3008,dig the stone block!
-LLM-2B+Heb,20377,3,671,0.1678,dig the diamond sword base.
-LLM-2B+Heb,20377,8,390,0.0975,"switch is centered, ready to press."
-LLM-2B+Heb,20377,11,275,0.0688,"good, sword is centered. dig."
-LLM-2B+Heb,20377,9,257,0.0643,digging the stone block.
-LLM-2B+Heb,20377,15,213,0.0532,press the switch to open the door.
-LLM-2B+Heb,20377,6,196,0.049,got the stone block.
-LLM-2B+Heb,20377,10,194,0.0485,"agent 2, check the pedestal status and confirm it is active."
-LLM-2B+Heb,20377,12,114,0.0285,ready to dig.
-LLM-2B+Heb,20377,2,113,0.0283,anvil is centered. dig.
-LLM-2B+Heb,20377,1,81,0.0203,moving forward to exit the cell.
-LLM-2B+Heb,20377,4,79,0.0198,press the switch.
-LLM-2B+Heb,20377,0,58,0.0145,agent_1: digging the tree.
-LLM-2B+Heb,20377,5,55,0.0138,switch is centered. dig.
-LLM-2B+Heb,20377,14,55,0.0138,ready to dig on the anvil top with agent 1.
-LLM-2B+Heb,20377,13,46,0.0115,"dirt block is centered left, ready for dig."
-LLM-9B,23759,11,1182,0.2955,"i am turning right to face the corridor, zombies are behind the wall i'm facing."
-LLM-9B,23759,7,921,0.2303,i am pressing the switch now to open your door.
-LLM-9B,23759,6,545,0.1363,"door 1 is open, moving north to exit."
-LLM-9B,23759,0,393,0.0983,keep digging the anvil with me!
-LLM-9B,23759,13,253,0.0633,keep hitting the boss!
-LLM-9B,23759,8,171,0.0428,i am pressing the switch to open your door.
-LLM-9B,23759,5,136,0.034,"switch pressed, door opening."
-LLM-9B,23759,10,89,0.0222,"i'm facing a wall, turning to find the zombies."
-LLM-9B,23759,9,69,0.0173,"my door is open, i am exiting now to join you in the communal room."
-LLM-9B,23759,14,57,0.0143,i am still facing a wall in my cell. i need to turn further to find the door to the communal room. keep pressing your switch to open your door.
-LLM-9B,23759,1,56,0.014,"my door is open, exiting now to join you in the communal room."
-LLM-9B,23759,3,39,0.0097,"keep digging the anvil, we need two hits to break it!"
-LLM-9B,23759,2,31,0.0077,i am looking for the gray stone block to dig. i see the blue switch but need to find the stone block. please check your area for the stone block and let me know
-LLM-9B,23759,12,26,0.0065,agent_0: i see the open door to ch2. moving through it now.
-LLM-9B,23759,4,19,0.0047,"agent_1, i see the stone block centered and will dig it to open the communal door."
-LLM-9B,23759,15,13,0.0032,digging the anvil now to help break it together.
-LLM-9B+Heb,21978,7,1142,0.2855,i am pressing the switch now to open your door.
-LLM-9B+Heb,21978,11,907,0.2268,i am scanning the room for the zombies to defeat them and open the door.
-LLM-9B+Heb,21978,0,540,0.135,keep digging the anvil with me!
-LLM-9B+Heb,21978,6,426,0.1065,"door is open, exiting now."
-LLM-9B+Heb,21978,8,285,0.0712,i am pressing the switch now.
-LLM-9B+Heb,21978,13,207,0.0517,"i'm turning right to find the exit path. i see you to my left, keep looking for the zombies."
-LLM-9B+Heb,21978,10,153,0.0382,i'm attacking the zombie in front of me.
-LLM-9B+Heb,21978,5,104,0.026,"switch pressed, door opening."
-LLM-9B+Heb,21978,1,63,0.0158,"my door is open, heading to communal room to help open door to ch4."
-LLM-9B+Heb,21978,9,58,0.0145,digging this anvil with you now to break it together.
-LLM-9B+Heb,21978,14,32,0.008,switching to pickaxe to maximize dig damage on the anvil.
-LLM-9B+Heb,21978,15,25,0.0063,"digging the anvil now, agent_2!"
-LLM-9B+Heb,21978,12,22,0.0055,"agent_1, i am turning to press your switch."
-LLM-9B+Heb,21978,3,17,0.0043,keep digging the anvil with me to break it faster!
-LLM-9B+Heb,21978,2,12,0.003,i need to switch to the stone pickaxe (slot 2) to break the stone block. i will dig it once i am aimed correctly. please join me at the front anvil to help brea
-LLM-9B+Heb,21978,4,7,0.0018,i've centered on a tree trunk and am ready to dig for wood.
-MAPPO,22560,11,755,0.1888,"agent 1, gear is centered and ready for dig. please confirm we are both aligned and ready to break."
-MAPPO,22560,7,674,0.1685,i am aiming at the cobblestone block and ready to break it.
-MAPPO,22560,8,367,0.0917,switch is centered and ready to break.
-MAPPO,22560,9,353,0.0882,switch is centered and ready to break. proceed with dig to receive 50 xp.
-MAPPO,22560,6,345,0.0862,i am aiming at the cobblestone block ahead to break it. please move forward to attack the chicken after collecting the drop.
-MAPPO,22560,10,316,0.079,"look down to center the gear, then move forward to break it."
-MAPPO,22560,4,164,0.041,"turn left to center the tree, then dig."
-MAPPO,22560,2,156,0.039,turn left to center the zombie in front of the sword before attacking.
-MAPPO,22560,14,153,0.0382,"i have found a solid block with a diamond sword tip, but i have not killed a zombie. i will also inform agent_1 that i have collected the wood drop from the dir"
-MAPPO,22560,15,137,0.0343,press the switch to open the door.
-MAPPO,22560,5,135,0.0338,i am aiming at the sword in my hand and ready to break the switch cube. i will enter the communal room to find the anvils.
-MAPPO,22560,12,118,0.0295,"agent 1, i am looking down at a stone wall blocking my view. i am facing south-east. i need to turnleft to face more south and moveforward to break through the "
-MAPPO,22560,3,109,0.0272,dig the gear to activate the switch.
-MAPPO,22560,1,103,0.0257,the switch is centered and ready to break. please confirm.
-MAPPO,22560,0,67,0.0168,i'm waiting for agent 0 to swing the diamond sword to damage the zombie.
-MAPPO,22560,13,48,0.012,i'm looking left to find the zombie. please wait for me to center it before i attack.
-MAPPO+Heb,18625,11,611,0.1527,i am centered and ready to dig together. i will turn left to face the diamond.
-MAPPO+Heb,18625,6,449,0.1123,"agent_1, the diamond block is centered and ready for cooperative dig with you. i am turning left to center the diamond and prepare to initiate dig with you."
-MAPPO+Heb,18625,7,444,0.111,move forward to check the next area or explore the surroundings.
-MAPPO+Heb,18625,8,349,0.0872,i am centered and ready to dig with agent_0.
-MAPPO+Heb,18625,9,325,0.0813,"switch is active and tree is centered, please confirm and proceed with the dig."
-MAPPO+Heb,18625,2,281,0.0703,"turn left to center the zombie, then move forward to break it."
-MAPPO+Heb,18625,15,256,0.064,move forward to check the next area.
-MAPPO+Heb,18625,14,210,0.0525,the sword is centered on the block. turnleft to center it and initiate cooperative dig with agent_1.
-MAPPO+Heb,18625,10,201,0.0503,tell agent_0 that i am centered and ready to dig together. i will turn left to center the diamond and initiate cooperative dig with agent_0.
-MAPPO+Heb,18625,4,180,0.045,"turn left to center the tree, then dig."
-MAPPO+Heb,18625,5,178,0.0445,i am centered and ready to initiate cooperative dig with agent_1. i will turn left to center the diamond and initiate cooperative dig with agent_1.
-MAPPO+Heb,18625,12,152,0.038,agent_0: please initiate simultaneous attacks on the zombies with the diamond sword and chestplate.
-MAPPO+Heb,18625,3,135,0.0338,dig the lever to drop the diamond sword.
-MAPPO+Heb,18625,1,105,0.0262,"agent_1, i am centered and ready to initiate cooperative dig with you."
-MAPPO+Heb,18625,0,85,0.0213,switch is centered and ready. please confirm the press to open the door and allow me to proceed with the tree dig.
-MAPPO+Heb,18625,13,39,0.0097,"hold shift+1 to break the lever, then hold shift+2 to drop the diamond sword and heal hp."
-No-bonds,18460,7,1166,0.2915,i am pressing the switch now to open your door.
-No-bonds,18460,11,1003,0.2507,i'm looking for the exit door in my cell. keep moving towards the communal room when you see the stone texture background.
-No-bonds,18460,0,419,0.1047,"my door is open, i am exiting now."
-No-bonds,18460,6,398,0.0995,"door is open, moving out now."
-No-bonds,18460,8,296,0.074,i am exiting my cell now.
-No-bonds,18460,13,191,0.0478,i'm turning to find the zombies and the red door. keep looking for the exit.
-No-bonds,18460,5,130,0.0325,i am in ch2 breaking the anvil to get the sword. you guys still in ch1? keep working on the stone milestone to open door 1.
-No-bonds,18460,10,121,0.0302,i'm turning right to find the exit door.
-No-bonds,18460,1,65,0.0163,"my door is open, i am exiting the cell now."
-No-bonds,18460,9,47,0.0118,"agent_2: i am breaking a dirt block for m3, please collect the drop when i am done."
-No-bonds,18460,14,44,0.011,i am in ch2 looking for the anvils. i see a stone block but the facts say only anvils exist here. i'm turning to find them. come to ch2 to help break them.
-No-bonds,18460,12,32,0.008,"agent_2: i'm facing a wall here, turning right to find an exit."
-No-bonds,18460,15,28,0.007,digging the chestplate anvil now. keep hitting it!
-No-bonds,18460,3,26,0.0065,keep digging the anvil with me to break it faster.
-No-bonds,18460,2,20,0.005,"agent_2, please keep pressing the switch to open my door."
-No-bonds,18460,4,14,0.0035,"agent_1, i'm attacking the zombie in front of me. keep your distance and focus on the other zombies."
+Allied-all,21112,15,1166,0.2915,"i am pressing the switch to open your door, agent_0."
+Allied-all,21112,14,991,0.2477,i have centered the stone block and am mining it now. i will collect the drop after digging.
+Allied-all,21112,4,541,0.1353,i'm attacking the zombie now.
+Allied-all,21112,0,420,0.105,"my door is open, moving out now."
+Allied-all,21112,7,287,0.0717,i am pressing the switch now.
+Allied-all,21112,6,234,0.0585,"i'm seeing a stone block centered, will dig it to help with the team's stone milestone."
+Allied-all,21112,13,109,0.0272,switch pressed! waiting for door to open.
+Allied-all,21112,9,107,0.0267,"i see a blue switch here. agent 0, are you sure you're not in cell 0? if this switch opens my door, i'll be out."
+Allied-all,21112,11,33,0.0083,keep punching the chestplate anvil with me to break it!
+Allied-all,21112,8,26,0.0065,keep digging the anvil together to break it faster.
+Allied-all,21112,2,24,0.006,turning around to find open space. i will meet at the anvils once i'm reoriented.
+Allied-all,21112,1,23,0.0057,"my door is open, i am exiting now to join you in the communal room."
+Allied-all,21112,12,14,0.0035,"agent_1, i am activating the switch now."
+Allied-all,21112,5,13,0.0032,waiting for agent_2 to join the anvil at the same time to break it.
+Allied-all,21112,10,10,0.0025,"agent_2, i am trying to dig the grey stone block in front of me to see if it opens the door."
+Allied-all,21112,3,2,0.0005,"switching to sword, i will attack the boss now."
+Allied-pair,20730,15,1219,0.3048,i am pressing my switch now to open your door.
+Allied-pair,20730,14,916,0.229,i am turning right to find the open door. let me know if you see it.
+Allied-pair,20730,4,506,0.1265,"i'm attacking the zombie, focusing on clearing it to open the door."
+Allied-pair,20730,0,450,0.1125,"my door is open, i am exiting now."
+Allied-pair,20730,7,326,0.0815,i am pressing the switch now.
+Allied-pair,20730,6,193,0.0483,"i'm facing a wall here, need to turn right to find the open path to the zombies."
+Allied-pair,20730,9,116,0.029,"i am digging a stone block here. if it breaks, i will collect the cobblestone drop. agent_2, are you still looking for a stone block in ch1?"
+Allied-pair,20730,13,96,0.024,"switch pressed, door opening now."
+Allied-pair,20730,11,61,0.0152,keep digging the anvil with me to break it faster.
+Allied-pair,20730,8,34,0.0085,keep digging the anvil with me!
+Allied-pair,20730,1,21,0.0053,looking down now to find the ground and anvils. i need to align with the center to start the pair-dig.
+Allied-pair,20730,12,20,0.005,agent_1: i am facing a wall and turning right to find a path. keep fighting the zombies.
+Allied-pair,20730,2,18,0.0045,"agent 1, i am pressing my switch to open agent 0's door. please check if it opens for him."
+Allied-pair,20730,10,12,0.003,"switch pressed, door opening. i will exit my cell and head to the communal room to join you."
+Allied-pair,20730,5,8,0.002,i have exited my cell and am in the communal room. i can see the blue switch on the south wall. i will check if it's already pressed or if i need to press it.
+Allied-pair,20730,3,4,0.001,switching to diamond sword now to start attacking.
+IPPO,18388,15,778,0.1945,i am breaking the cobblestone block to drop the diamond sword.
+IPPO,18388,14,566,0.1415,"agent 2, gear is centered and ready to break."
+IPPO,18388,2,494,0.1235,"agent 2, we are centered on the greenstone block and ready to pair-dig. please proceed."
+IPPO,18388,11,422,0.1055,"turn left to center the tree, then dig."
+IPPO,18388,4,366,0.0915,dig the cobblestone block to drop the diamond sword.
+IPPO,18388,0,266,0.0665,agent_2: ready to pair-dig for ch5.
+IPPO,18388,12,220,0.055,"agent_1, pair-dig with me to raise the lock's hp."
+IPPO,18388,7,163,0.0408,press t with agent_1 to raise hp and equip gear.
+IPPO,18388,9,126,0.0315,break the cobblestone block to drop the diamond sword.
+IPPO,18388,1,113,0.0283,"agent_1, i am centered on the stone block. i'll pair-dig with you to raise the hp of the red locked cell door."
+IPPO,18388,10,110,0.0275,switch a is centered and ready to press. i need you to press it to open your door.
+IPPO,18388,13,101,0.0253,switch is centered and ready to press.
+IPPO,18388,6,80,0.02,"agent_2, pair-dig with me to raise the zombie's hp."
+IPPO,18388,5,73,0.0182,please pair-dig with me to raise the anvil's hp and unlock the door.
+IPPO,18388,8,66,0.0165,"agent_1, i am aiming at the stone block. the sword tip is slightly left of center. i will turn left to center the sword, then pair-dig with you to break it."
+IPPO,18388,3,56,0.014,"stone block is centered and ready to be broken. turn left to re-verify position, then dig."
+IPPO+Heb,18089,15,765,0.1913,dig the lever base.
+IPPO+Heb,18089,14,513,0.1283,"agent_1, gear is centered and ready for pair-dig. please confirm readiness to execute digforward command."
+IPPO+Heb,18089,11,491,0.1227,switch is centered and ready. please press it to open the door.
+IPPO+Heb,18089,4,425,0.1062,"turn left to center the tree, then move forward to dig."
+IPPO+Heb,18089,2,308,0.077,press the switch to open the door.
+IPPO+Heb,18089,0,262,0.0655,i am aligned and ready for the simultaneous attack sequence. i am holding the diamond sword and prepared to break the gear block.
+IPPO+Heb,18089,12,227,0.0568,"agent_1, align left and confirm readiness to pair-dig."
+IPPO+Heb,18089,7,186,0.0465,press the switch on the red glow block to open the door to ch5.
+IPPO+Heb,18089,9,181,0.0452,"press the switch to break the red glow block and start the dig action on it together, then we will dig the block to drop the sword."
+IPPO+Heb,18089,10,166,0.0415,"i'll turn left to center the lever base against the wall, then move forward to approach it, and finally turn left again to align precisely before breaking."
+IPPO+Heb,18089,13,128,0.032,"switch is centered, ready to press."
+IPPO+Heb,18089,5,80,0.02,i see the sword centered and the chestplate to the right. i need you to turn right to center the chestplate in the view so both agents can see it clearly for th
+IPPO+Heb,18089,1,78,0.0195,"agent_1, i am centering the switch block with my sword, then dig. expect the sword to equip to the team."
+IPPO+Heb,18089,6,73,0.0182,"agent 1, i am centered on the locked door. i need you to turn left to center the zombie on your left side, then dig to break it. i am ready to pair-dig with you"
+IPPO+Heb,18089,8,62,0.0155,confirm the lever is broken and ask them to dig the stone block above the lever.
+IPPO+Heb,18089,3,55,0.0138,press the switch!
+LLM-2B,22309,15,1167,0.2918,dig the stone block.
+LLM-2B,22309,4,663,0.1658,dig on the stone block.
+LLM-2B,22309,14,388,0.097,"align with the diamond sword on the right, then i will coordinate with agent 1 to break it."
+LLM-2B,22309,7,311,0.0777,ready to dig the stone block.
+LLM-2B,22309,11,236,0.059,turnright to center the stone block.
+LLM-2B,22309,2,212,0.053,press the switch to open the door.
+LLM-2B,22309,13,209,0.0522,"switch is centered, ready to press."
+LLM-2B,22309,3,153,0.0382,dig the lever again to confirm it breaks the anvil.
+LLM-2B,22309,0,146,0.0365,agent_2: dig the stone block!
+LLM-2B,22309,10,120,0.03,switch is centered on the wall in ch3 — pressing it should open the door to exit.
+LLM-2B,22309,12,111,0.0278,switch is centered. press!
+LLM-2B,22309,1,82,0.0205,"turnleft to center the lever, then i expect to be aimed to dig."
+LLM-2B,22309,6,73,0.0182,align the lever vertically by moving 5 blocks once regrouped.
+LLM-2B,22309,9,73,0.0182,lever is centered and ready to grind. we are ready to activate the gear.
+LLM-2B,22309,5,36,0.009,"partner, dig the tree block."
+LLM-2B,22309,8,20,0.005,"dig the lever. the gold block is gone, so it will drop a wood block."
+LLM-2B+Heb,20377,15,945,0.2362,dig the stone block!
+LLM-2B+Heb,20377,4,636,0.159,dig the diamond sword base.
+LLM-2B+Heb,20377,7,400,0.1,ready to break the anvil.
+LLM-2B+Heb,20377,14,335,0.0838,"stone block is centered, ready to break."
+LLM-2B+Heb,20377,11,310,0.0775,"agent 2, check the pedestal status and confirm it is active."
+LLM-2B+Heb,20377,13,303,0.0757,"switch is centered, ready to press."
+LLM-2B+Heb,20377,2,198,0.0495,press the switch to open the door.
+LLM-2B+Heb,20377,5,163,0.0408,can you check for gear upgrades? i need help with my current equipment.
+LLM-2B+Heb,20377,8,154,0.0385,can you help me dig the stone block?
+LLM-2B+Heb,20377,3,114,0.0285,press the switch.
+LLM-2B+Heb,20377,10,106,0.0265,turnleft to center the anvil.
+LLM-2B+Heb,20377,0,92,0.023,"i expect to see the diamond sword floating above the stone block ahead, then turnleft to center it for dig."
+LLM-2B+Heb,20377,12,77,0.0192,switch is centered. dig.
+LLM-2B+Heb,20377,6,65,0.0163,"re-center the dirt block to the left, then dig."
+LLM-2B+Heb,20377,1,52,0.013,"turnleft to center the tree, then i expect to be aimed to dig."
+LLM-2B+Heb,20377,9,50,0.0125,anvil is centered. ready to break.
+LLM-9B,23759,14,1112,0.278,"i am turning right to face the corridor, zombies are behind the wall i'm facing."
+LLM-9B,23759,15,965,0.2412,i am pressing the switch now to open your door.
+LLM-9B,23759,0,577,0.1442,"my door is open, i am exiting now."
+LLM-9B,23759,4,431,0.1077,"i'm facing a wall, turning right to find the zombies."
+LLM-9B,23759,6,252,0.063,"i'm checking the block in front of me, i'll tell you if it's breakable or a wall."
+LLM-9B,23759,7,179,0.0447,i am pressing the switch to open your door.
+LLM-9B,23759,9,142,0.0355,i see the anvil in the center. i will start digging it now. please dig the same anvil at the same time so it breaks.
+LLM-9B,23759,13,121,0.0302,switch pressed here! your door should open.
+LLM-9B,23759,11,67,0.0168,"keep digging the anvil, we need two hits to break it!"
+LLM-9B,23759,12,39,0.0097,"switch pressed, door opening."
+LLM-9B,23759,8,36,0.009,keep digging the anvil with me!
+LLM-9B,23759,1,28,0.007,"my door is open, i am exiting now to join you in the communal room."
+LLM-9B,23759,2,25,0.0063,"turning left to find the stone block as per task, will dig once centered"
+LLM-9B,23759,10,11,0.0027,"agent_2, i see the anvil centered and am ready to dig. let's both hit it at the same time to break it!"
+LLM-9B,23759,5,10,0.0025,i am looking for the gray stone block to dig. i see the blue switch but need to find the stone block. please check your area for the stone block and let me know
+LLM-9B,23759,3,5,0.0013,switching to sword now to attack the zombie.
+LLM-9B+Heb,21978,15,1187,0.2968,i am pressing the switch now to open your door.
+LLM-9B+Heb,21978,14,845,0.2112,i am scanning the room for the zombies to defeat them and open the door.
+LLM-9B+Heb,21978,4,628,0.157,i'm attacking the zombie in front of me.
+LLM-9B+Heb,21978,0,449,0.1123,"door is open, exiting now."
+LLM-9B+Heb,21978,7,293,0.0732,i am pressing the switch now.
+LLM-9B+Heb,21978,6,203,0.0508,"i'm turning right to find the exit path. i see you to my left, keep looking for the zombies."
+LLM-9B+Heb,21978,13,111,0.0278,"switch pressed, waiting for door to open."
+LLM-9B+Heb,21978,9,109,0.0272,i am in ch3 and facing a wall. i need to find the exit or the blue switch. can you confirm if you are in ch2 or ch3?
+LLM-9B+Heb,21978,8,45,0.0112,keep digging the anvil with me!
+LLM-9B+Heb,21978,11,37,0.0092,keep digging the anvil with me to break it faster!
+LLM-9B+Heb,21978,1,26,0.0065,digging this anvil with you now to break it together.
+LLM-9B+Heb,21978,2,25,0.0063,turning to face the wall as instructed. i'll move forward to clear the path.
+LLM-9B+Heb,21978,12,22,0.0055,"switch pressed, door opening."
+LLM-9B+Heb,21978,10,9,0.0022,switching to pickaxe to maximize dig damage on the anvil.
+LLM-9B+Heb,21978,5,8,0.002,waiting for you to arrive so we can break the anvils.
+LLM-9B+Heb,21978,3,3,0.0008,"thanks for opening my door, agent_0. i'm turning around to check the exit."
+MAPPO,22560,15,895,0.2238,i am aiming at the cobblestone block and ready to break it.
+MAPPO,22560,11,545,0.1363,"turn left to center the tree, then dig."
+MAPPO,22560,14,506,0.1265,i am breaking the cobblestone block. please confirm if you have also prepared to break the anvil.
+MAPPO,22560,2,465,0.1163,press the switch to open the door.
+MAPPO,22560,0,279,0.0698,i am aiming at the cobblestone block ahead to break it. please move forward to attack the chicken after collecting the drop.
+MAPPO,22560,4,275,0.0688,dig the gear to activate the switch.
+MAPPO,22560,12,185,0.0462,agent_1: you are about to dig the zombie; please confirm it is dead after the hit.
+MAPPO,22560,7,161,0.0403,i have collected the wood drop.
+MAPPO,22560,9,160,0.04,the switch is centered and ready to break. please confirm.
+MAPPO,22560,10,124,0.031,"look down to center the gear, then move forward to break it."
+MAPPO,22560,13,113,0.0283,switch is centered and ready to break.
+MAPPO,22560,5,76,0.019,"turn right to align the tree trunk to the right of center, then move forward to approach it for cooperative breaking. i will wait for agent 1 to confirm i am ai"
+MAPPO,22560,1,74,0.0185,"agent_1, the iron ore block is centered and ready to break. please confirm the switch cube activation scheme and the anvil placement."
+MAPPO,22560,6,61,0.0152,i'm looking left to find the zombie. please wait for me to center it before i attack.
+MAPPO,22560,3,47,0.0118,dig the switch to activate the mechanism and drop the diamond gear.
+MAPPO,22560,8,34,0.0085,"the diamond gear is centered on the ground and ready to be broken. i am looking down to align the tip with the stone block, then move forward to break it. i exp"
+MAPPO+Heb,19096,15,756,0.189,dig the lever.
+MAPPO+Heb,19096,14,541,0.1353,i am centered and ready to dig. i will turn left to face the diamond block.
+MAPPO+Heb,19096,4,425,0.1062,dig the lever to drop the diamond sword.
+MAPPO+Heb,19096,11,373,0.0932,"turn left to center the tree, then dig."
+MAPPO+Heb,19096,0,340,0.085,i am centered and ready to dig. i will turn left to face the diamond so we can dig together.
+MAPPO+Heb,19096,2,277,0.0693,move forward to check the next area.
+MAPPO+Heb,19096,9,216,0.054,i am centered and ready to initiate cooperative dig with agent_1. i will turn left to center the diamond and initiate cooperative dig with agent_1.
+MAPPO+Heb,19096,7,204,0.051,i am centered and ready to dig together.
+MAPPO+Heb,19096,12,183,0.0457,"agent_1, please initiate cooperative dig [agent_2]"
+MAPPO+Heb,19096,1,143,0.0357,"agent_1, please turn left to center the diamond sword on the red sandstone block so i can initiate the cooperative dig."
+MAPPO+Heb,19096,10,125,0.0312,tell agent_0 that i am centered and ready to dig together. i will turn left to center the diamond and initiate cooperative dig with agent_0.
+MAPPO+Heb,19096,13,118,0.0295,"agent_2: [in ch3] agent_1: turn right to center the tree, then move forward and dig. confirming the tree is centered and ready to break."
+MAPPO+Heb,19096,5,104,0.026,"looking up at a glowing ceiling block, now looking down to check the ground below."
+MAPPO+Heb,19096,6,79,0.0198,move forward to check the next area or explore the surroundings.
+MAPPO+Heb,19096,8,61,0.0152,dig the cobblestone block on the ground to drop the diamond sword and trigger the cooperative dig scheme.
+MAPPO+Heb,19096,3,55,0.0138,dig on the cobblestone block to trigger the ch5 door unlock.
+No-bonds,18460,15,1207,0.3018,i am pressing the switch now to open your door.
+No-bonds,18460,14,966,0.2415,i am turning to find the anvils. please continue digging if you have them centered.
+No-bonds,18460,4,507,0.1268,i'm turning away from the wall to find the zombies.
+No-bonds,18460,0,418,0.1045,"my door is open, i am exiting now."
+No-bonds,18460,7,325,0.0813,i am exiting my cell now.
+No-bonds,18460,6,196,0.049,i'm turning to find the zombies and the red door. keep looking for the exit.
+No-bonds,18460,9,131,0.0328,i am in ch2 breaking the anvil to get the sword. you guys still in ch1? keep working on the stone milestone to open door 1.
+No-bonds,18460,13,94,0.0235,"switch pressed, waiting for door to open."
+No-bonds,18460,11,44,0.011,keep digging the anvil with me to break it faster.
+No-bonds,18460,8,29,0.0073,"boss is at the entrance, i'm turning to face it now!"
+No-bonds,18460,12,28,0.007,"agent_2: i am breaking a dirt block for m3, please collect the drop when i am done."
+No-bonds,18460,2,22,0.0055,turning around to face the open path so i can assist with the pair-dig.
+No-bonds,18460,1,10,0.0025,digging the anvil now! keep it up so we can break it together.
+No-bonds,18460,5,10,0.0025,waiting for my door to open after agent_2 pressed their switch.
+No-bonds,18460,3,7,0.0018,switching to diamond sword to attack zombie now.
+No-bonds,18460,10,6,0.0015,"agent_2, i'm still facing a wall turning right. keep checking the zombies and door while i find the exit path."

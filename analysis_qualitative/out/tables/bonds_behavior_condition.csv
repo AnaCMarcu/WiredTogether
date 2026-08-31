@@ -1,8 +1,8 @@
 label,n_ch5_damage_overlap,n_joint_dig,n_joint_kill,n_messages,n_proximity,rho_ch5_damage_overlap,rho_joint_dig,rho_joint_kill,rho_messages,rho_proximity
 Allied-all,108,108,108,108,108,,,,,
 Allied-pair,108,108,108,108,108,,0.1236,,0.5755,0.0681
-IPPO+Heb,90,90,90,90,90,,0.4196,,0.915,-0.1581
+IPPO+Heb,90,90,90,90,90,,-0.164,,0.7452,0.2387
 LLM-2B+Heb,108,108,108,108,108,,-0.0849,,0.5768,0.0933
 LLM-9B+Heb,108,108,108,108,108,,0.2103,,0.6665,0.2766
-MAPPO+Heb,108,108,108,108,108,,0.2547,,0.8369,-0.0394
+MAPPO+Heb,90,90,90,90,90,,0.0381,,0.7202,0.2058
 No-bonds,90,90,90,90,90,,,,,

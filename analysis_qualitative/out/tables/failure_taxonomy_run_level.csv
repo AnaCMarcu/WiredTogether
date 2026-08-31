@@ -23,8 +23,8 @@ action_stuck_loop,critic_false_positive,degenerate_comm,door_confusion,hallucina
 3.72,2.07,,2.89,103.8,136.48,306.87,,LLM-9B+Heb,False,,exp08_llm_9b_social_prompt/seed_42,42,0.41
 7.42,1.65,,5.77,82.41,56.04,173.88,,LLM-9B+Heb,False,,exp08_llm_9b_social_prompt/seed_456,456,
 4.15,1.25,0.83,5.81,95.1,61.05,207.64,,LLM-9B+Heb,False,,exp08_llm_9b_social_prompt/seed_789,789,
-,2.37,,0.79,251.38,0.4,946.25,3.56,IPPO,False,14.23,exp04_ippo/seed_1011,1011,
-,2.69,,,233.4,1.15,904.8,3.45,IPPO,False,14.97,exp04_ippo/seed_1213,1213,
+,2.37,,0.79,251.68,0.4,947.37,3.56,IPPO,False,14.25,exp04_ippo/seed_1011,1011,
+,2.69,,,233.58,1.15,905.49,3.46,IPPO,False,14.98,exp04_ippo/seed_1213,1213,
 ,8.5,1.93,,250.77,402.24,858.96,,IPPO,False,,exp04_ippo/seed_123,123,0.39
 ,10.4,0.42,1.25,248.02,432.79,601.33,,IPPO,False,,exp04_ippo/seed_42,42,0.42
 ,6.66,,,251.35,765.71,963.8,,IPPO,False,,exp04_ippo/seed_456,456,
@@ -35,12 +35,12 @@ action_stuck_loop,critic_false_positive,degenerate_comm,door_confusion,hallucina
 ,9.45,1.64,,247.64,500.62,829.57,,MAPPO,False,,exp03_mappo/seed_42,42,
 ,9.16,3.75,0.83,249.69,645.44,856.01,,MAPPO,False,,exp03_mappo/seed_456,456,0.42
 ,14.27,1.22,0.41,275.69,1059.95,1403.75,,MAPPO,False,,exp03_mappo/seed_789,789,0.41
-,4.61,,1.54,240.58,0.38,774.79,3.46,IPPO+Heb,False,14.99,exp06_ippo_hebbian/seed_1011,1011,
+,4.93,,1.64,257.08,0.41,827.93,3.7,IPPO+Heb,False,16.02,exp06_ippo_hebbian/seed_1011,1011,
 ,16.65,1.25,0.42,220.14,44.94,84.89,,IPPO+Heb,False,,exp06_ippo_hebbian/seed_123,123,1.66
 ,9.94,2.49,1.24,258.91,688.07,1013.67,,IPPO+Heb,False,,exp06_ippo_hebbian/seed_42,42,
 ,10.68,1.64,,315.4,582.75,1037.78,,IPPO+Heb,False,,exp06_ippo_hebbian/seed_456,456,
-,4.57,,1.66,307.85,2.08,851.68,3.74,IPPO+Heb,False,14.96,exp06_ippo_hebbian/seed_789,789,0.42
-,4.61,,0.77,303.11,1.54,1164.43,3.46,MAPPO+Heb,False,14.98,exp05_mappo_hebbian/seed_1011,1011,0.38
+,4.54,,1.65,305.57,2.06,845.36,3.71,IPPO+Heb,False,14.85,exp06_ippo_hebbian/seed_789,789,0.41
+,4.61,,0.77,303.34,1.54,1165.32,3.46,MAPPO+Heb,False,14.99,exp05_mappo_hebbian/seed_1011,1011,0.38
 ,15.4,0.83,,253.02,381.61,690.8,,MAPPO+Heb,False,,exp05_mappo_hebbian/seed_1213,1213,
 ,12.07,,0.69,260.43,529.15,737.84,,MAPPO+Heb,False,,exp05_mappo_hebbian/seed_123,123,
 ,14.38,1.23,2.88,252.26,193.51,434.26,,MAPPO+Heb,False,,exp05_mappo_hebbian/seed_42,42,1.23

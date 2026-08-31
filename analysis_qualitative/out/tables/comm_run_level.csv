@@ -23,8 +23,8 @@ ch3_chain_latency_median,ch3_chains,ch3_msgs,ch3_silent_presses,ch3_switch_talk,
 8,76,897,6,759,0.0442,LLM-9B+Heb,149.71,7241,3620,0.208,0.8633,False,exp08_llm_9b_social_prompt/seed_42,42,0.1075
 6,101,896,6,787,0.0479,LLM-9B+Heb,149.53,7269,3629,0.2028,0.806,False,exp08_llm_9b_social_prompt/seed_456,456,0.0758
 7,145,898,7,740,0.0459,LLM-9B+Heb,149.29,7210,3595,0.1502,0.815,False,exp08_llm_9b_social_prompt/seed_789,789,0.0718
-,0,0,0,0,0.0,IPPO,0.36,14,9,0.6667,1.0,False,exp04_ippo/seed_1011,1011,0.6667
-,0,0,0,0,0.0,IPPO,0.19,9,5,0.6,0.8,False,exp04_ippo/seed_1213,1213,0.6
+9,9,898,3,458,0.0591,IPPO,131.97,6709,3335,0.7022,0.9604,False,exp04_ippo/seed_1011,1011,0.6894
+,0,0,0,0,0.0,IPPO,3.8,195,99,0.6162,0.9394,False,exp04_ippo/seed_1213,1213,0.6061
 9,29,721,2,304,0.0802,IPPO,164.34,8609,4253,0.5855,0.8509,False,exp04_ippo/seed_123,123,0.5568
 17,4,888,2,104,0.1038,IPPO,147.9,7190,3554,0.7873,0.9012,False,exp04_ippo/seed_42,42,0.7589
 8,53,894,3,332,0.0713,IPPO,148.77,7191,3575,0.5662,0.9835,False,exp04_ippo/seed_456,456,0.4825
@@ -35,12 +35,12 @@ ch3_chain_latency_median,ch3_chains,ch3_msgs,ch3_silent_presses,ch3_switch_talk,
 12,19,797,1,441,0.0968,MAPPO,169.69,8344,4132,0.5499,0.8233,False,exp03_mappo/seed_42,42,0.4942
 10,32,860,2,313,0.1338,MAPPO,146.77,7196,3527,0.5361,0.9756,False,exp03_mappo/seed_456,456,0.5038
 8,40,863,2,603,0.0826,MAPPO,147.55,7339,3618,0.5987,0.9831,False,exp03_mappo/seed_789,789,0.5561
-,0,0,0,0,0.0,IPPO+Heb,0.35,15,9,0.7778,0.7778,False,exp06_ippo_hebbian/seed_1011,1011,0.7778
+10,32,883,2,515,0.0722,IPPO+Heb,148.5,7289,3616,0.5636,0.9646,False,exp06_ippo_hebbian/seed_1011,1011,0.5166
 5,4,867,1,119,0.1468,IPPO+Heb,147.15,7198,3536,0.4581,0.5393,False,exp06_ippo_hebbian/seed_123,123,0.4129
 9,4,880,1,512,0.0871,IPPO+Heb,147.97,7226,3572,0.5535,0.9614,False,exp06_ippo_hebbian/seed_42,42,0.5316
 8,18,878,3,397,0.0814,IPPO+Heb,154.95,7654,3773,0.5656,0.9369,False,exp06_ippo_hebbian/seed_456,456,0.5205
-,0,0,0,0,0.0,IPPO+Heb,0.37,15,9,0.7778,0.8889,False,exp06_ippo_hebbian/seed_789,789,0.7778
-,0,0,0,0,0.0,MAPPO+Heb,0.38,15,10,0.8,1.0,False,exp05_mappo_hebbian/seed_1011,1011,0.7
+9,29,878,1,464,0.0894,IPPO+Heb,148.12,7256,3592,0.5568,0.973,False,exp06_ippo_hebbian/seed_789,789,0.5242
+,0,0,0,0,0.0208,MAPPO+Heb,18.49,963,481,0.5593,0.9688,False,exp05_mappo_hebbian/seed_1011,1011,0.5364
 15,6,894,1,195,0.1775,MAPPO+Heb,148.44,7193,3567,0.7124,0.7241,False,exp05_mappo_hebbian/seed_1213,1213,0.6986
 10,11,902,1,232,0.0611,MAPPO+Heb,148.95,8687,4318,0.6825,0.9613,False,exp05_mappo_hebbian/seed_123,123,0.6487
 14,10,882,1,353,0.1363,MAPPO+Heb,148.03,7283,3603,0.5135,0.7458,False,exp05_mappo_hebbian/seed_42,42,0.4252
