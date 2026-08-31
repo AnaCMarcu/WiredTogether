@@ -94,6 +94,15 @@ Verified 2026-08-28: the pareto table reproduces
   These are per-RUN values (n=6, sd across seeds), usable as x AND y axes.
 - Perception-as-outcome set: `--out-dir .../grid_perception
   --ys grounding_strict,specificity,grounding --xs flops`.
+- Perception-as-X pareto (the thesis's original framing, x=perception,
+  y=performance): `--out-dir .../grid_perception_x --ys milestone_pct,reward
+  --xs grounding_strict,specificity,grounding,partner_loc`. THE pareto is
+  `milestone_pct vs grounding_strict` (both arms rise left-to-right;
+  specificity is its robustness twin). The permissive-grounding and
+  partner_loc x-axes produce inverted/garbled frontiers — the earlier
+  "perception axes dropped from the paper" verdict applied to THOSE; the
+  strict metric rehabilitates the axis. Return as y stays non-monotone on any
+  perception axis (it peaks at 4B) — use milestones.
 - With-Qwen set (labels "Name-<N>B", e.g. Gemma-4B / Qwen-9B via SHORT_LABEL):
   `--out-dir .../grid_with_qwen --families both --sizes e2b,e4b,12b,qwen9b
   --ys milestone_pct,reward --paper` (needs medium_runs root). `--sizes`

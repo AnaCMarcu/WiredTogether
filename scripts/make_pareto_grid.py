@@ -110,9 +110,11 @@ Y_METRICS = {
     "specificity":      "Chamber-diagnostic mention rate",
 }
 X_AXES = {
-    "flops":       "Compute  [$10^{17}$ FLOPs]",
-    "grounding":   "Perception grounding rate",
-    "partner_loc": "Partner-location accuracy",
+    "flops":            "Compute  [$10^{17}$ FLOPs]",
+    "grounding":        "Perception grounding rate",
+    "grounding_strict": "Strict perception grounding rate",
+    "specificity":      "Chamber-diagnostic mention rate",
+    "partner_loc":      "Partner-location accuracy",
 }
 # Perception axes come from the QUALITATIVE pipeline's beliefs.csv (one row
 # per run): the paper's tab:belief_quality metrics, computed IN the
