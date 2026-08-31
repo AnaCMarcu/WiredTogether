@@ -280,13 +280,37 @@ def series_points(data, family, arm, y, x, perception):
 
 
 def draw_panel(ax, data, families, y, x, perception, label_points=True,
-               errorbars=False, normalize=False, legend_loc="lower right"):
+               errorbars=False, normalize=False, legend_loc="lower right",
+               join_families=False):
     """One panel in the CoDe Fig. 10 look. Returns the number of series drawn.
 
     normalize: divide every series by the BASE arm's value at its smallest-x
     point (the cheapest configuration), so that point reads 1.0 -- the
     reference's "(Normalized) Reward" convention. Per family.
+
+    join_families: ONE connecting line per arm through the points of every
+    family, sorted by x. Only legitimate on a MEASURED-capability x-axis
+    (strict grounding etc.), where the claim is the cross-model correlation
+    "models that perceive better perform better"; on the compute axis a
+    joined line would fake a scaling law across architectures, so the flag is
+    refused there. Family identity stays on the markers (open Gemma / filled
+    Qwen). Ignores normalize.
     """
+    join = join_families and len(families) > 1
+    if join and x == "flops":
+        raise SystemExit("--join-families is not valid on the compute axis: "
+                         "across families, size is confounded with "
+                         "architecture; use a perception x-axis")
+    if join:
+        for arm in ("base", "hebbian"):
+            allp = []
+            for family in families:
+                allp += series_points(data, family, arm, y, x, perception)
+            if len(allp) > 1:
+                allp.sort(key=lambda p: p[0])
+                ax.plot([p[0] for p in allp], [p[1] for p in allp],
+                        ls="-", lw=1.6, color=ARM_STYLE[arm]["color"],
+                        zorder=2)
     n = 0
     tops = {}
     all_y = []
@@ -314,7 +338,8 @@ def draw_panel(ax, data, families, y, x, perception, label_points=True,
                 all_y += [v + e for v, e in zip(ys, es)]
                 all_y += [v - e for v, e in zip(ys, es)]
             all_y += ys
-            ax.plot(xs, ys, ls="-", lw=1.6, color=st["color"],
+            ax.plot(xs, ys, ls="none" if join else "-", lw=1.6,
+                    color=st["color"],
                     marker=st["marker"], ms=st["ms"],
                     mfc="none" if open_marker else st["color"],
                     mec=st["color"], mew=st["mew"],
@@ -381,6 +406,11 @@ def main():
                          "e2b,e4b,12b,qwen9b to add one Qwen point to the "
                          "Gemma curve".format(",".join(SIZES)))
     ap.add_argument("--no-point-labels", action="store_true")
+    ap.add_argument("--join-families", action="store_true",
+                    help="one line per arm through all families' points, "
+                         "sorted by x — perception axes only (refused on the "
+                         "compute axis, where it would fake a cross-"
+                         "architecture scaling law)")
     ap.add_argument("--errorbars", action="store_true",
                     help="draw +-1 sd over pooled episodes (off by default to "
                          "match the reference figure; the table carries the sd)")
@@ -482,7 +512,8 @@ def main():
                 n = draw_panel(ax, data, FAMILIES[fam], y, x, perception,
                                label_points=not args.no_point_labels,
                                errorbars=args.errorbars,
-                               normalize=args.normalize)
+                               normalize=args.normalize,
+                               join_families=args.join_families)
                 if n == 0:
                     plt.close(fig)
                     continue
@@ -502,7 +533,8 @@ def main():
                     if draw_panel(ax, data, FAMILIES[fam], y, x, perception,
                                   label_points=not args.no_point_labels,
                                   errorbars=args.errorbars,
-                                  normalize=args.normalize):
+                                  normalize=args.normalize,
+                                  join_families=args.join_families):
                         any_drawn = True
             if any_drawn:
                 fig.tight_layout()

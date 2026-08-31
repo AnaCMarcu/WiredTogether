@@ -103,6 +103,14 @@ Verified 2026-08-28: the pareto table reproduces
   "perception axes dropped from the paper" verdict applied to THOSE; the
   strict metric rehabilitates the axis. Return as y stays non-monotone on any
   perception axis (it peaks at 4B) — use milestones.
+- `--join-families`: ONE line per arm through every family's points —
+  perception axes only (the flag hard-refuses the compute axis, where a
+  joined line would fake a cross-architecture scaling law). On a measured-
+  capability x the joined line is the legitimate cross-model correlation.
+  THE story figure: grid_perception_x_qwen/
+  pareto_both_milestone_pct_vs_grounding_strict.png — milestones vs strict
+  grounding, Gemma-2B/4B/12B + Qwen-9B on one line per arm, family kept
+  visible via open (Gemma) vs filled (Qwen) markers.
 - With-Qwen set (labels "Name-<N>B", e.g. Gemma-4B / Qwen-9B via SHORT_LABEL):
   `--out-dir .../grid_with_qwen --families both --sizes e2b,e4b,12b,qwen9b
   --ys milestone_pct,reward --paper` (needs medium_runs root). `--sizes`
