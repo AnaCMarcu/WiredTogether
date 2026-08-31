@@ -16,7 +16,8 @@
 #   cd $REPO/hpc/daic/experiments
 #   SMOKE=1   bash submit_agent_scaling.sh   # N=2 and N=9, seed 42, 1 ep × 150
 #   DRY_RUN=1 bash submit_agent_scaling.sh   # print what would be submitted
-#   bash submit_agent_scaling.sh             # full sweep: 6 N × 3 seeds × BOTH arms
+#   bash submit_agent_scaling.sh             # full sweep: 6 N × 6 seeds × BOTH arms (72 jobs)
+#   SEEDS="789 1011 1213" bash submit_agent_scaling.sh   # only the 3-seed extension (36 jobs)
 #   ARMS="0" bash submit_agent_scaling.sh    # base (non-Hebbian) arm only
 #   NS="2 9" SEEDS="42" bash submit_agent_scaling.sh   # subset override
 #
@@ -53,7 +54,11 @@ _EXPLICIT_SEEDS="${SEEDS:+1}"
 export MODEL_LLM WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT
 
 NS_LIST=(${NS:-2 3 4 5 6 9})
-SEEDS_LIST=(${SEEDS:-42 123 456})
+# Six seeds: the original three plus the extension trio pre-registered for
+# the medium suite (789 1011 1213, submit_seed_extension.sh), so pooled
+# episodes per point go 9 -> 18. Idempotent: seeds whose final_metrics.json
+# exists are skipped, so the full list is safe to resubmit at any time.
+SEEDS_LIST=(${SEEDS:-42 123 456 789 1011 1213})
 # Both arms by default: the base-vs-Hebbian scaling-curve comparison is the
 # point of the figure. ARMS="0" for base only, ARMS="1" for Hebbian only.
 ARMS_LIST=(${ARMS:-0 1})        # 0 = base, 1 = hebbian
