@@ -357,7 +357,7 @@ def draw_panel(ax, data, families, y, x, perception, label_points=True,
         for (_, lab), (xv, top) in tops.items():
             ax.annotate(lab, (xv, top), textcoords="offset points",
                         xytext=(0, 11), ha="center", va="bottom",
-                        fontsize=8.5, color="#555555", zorder=4)
+                        fontsize=11, color="#555555", zorder=4)
     ax.set_xlabel(X_AXES[x])
     ylabel = Y_METRICS[y]
     if normalize:
@@ -377,10 +377,10 @@ def draw_panel(ax, data, families, y, x, perception, label_points=True,
             # (matplotlib's "best" avoids data but not the size annotations),
             # so multi-family panels put the legend BELOW the axes, one row.
             ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.17),
-                      ncol=min(n, 4), fontsize=8.5, framealpha=0.95,
+                      ncol=min(n, 4), fontsize=10.5, framealpha=0.95,
                       columnspacing=1.0, handletextpad=0.5)
         else:
-            ax.legend(loc=legend_loc, fontsize=8.5, framealpha=0.95)
+            ax.legend(loc=legend_loc, fontsize=10.5, framealpha=0.95)
     return n
 
 
@@ -441,6 +441,9 @@ def main():
     import matplotlib
     matplotlib.use("Agg")
     matplotlib.rcdefaults()   # start from a clean sheet; styling is explicit below
+    matplotlib.rcParams.update({"font.size": 12, "axes.labelsize": 13,
+                                "xtick.labelsize": 11.5,
+                                "ytick.labelsize": 11.5})
     import matplotlib.pyplot as plt
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -526,7 +529,7 @@ def main():
     for fam in families:
         for y in ys:
             for x in xs:
-                fig, ax = plt.subplots(figsize=(5.0, 3.5), dpi=200)
+                fig, ax = plt.subplots(figsize=(6.6, 4.6), dpi=200)
                 n = draw_panel(ax, data, FAMILIES[fam], y, x, perception,
                                label_points=not args.no_point_labels,
                                errorbars=args.errorbars,
@@ -543,7 +546,7 @@ def main():
         # composite: rows = y metrics, cols = x axes
         if len(ys) > 1 or len(xs) > 1:
             fig, axes = plt.subplots(len(ys), len(xs),
-                                     figsize=(5.0 * len(xs), 3.5 * len(ys)),
+                                     figsize=(6.6 * len(xs), 4.6 * len(ys)),
                                      dpi=200, squeeze=False)
             any_drawn = False
             for i, y in enumerate(ys):
@@ -566,7 +569,7 @@ def main():
         # social-interval frontier, so the two Pareto figures are directly
         # comparable) beside task return, one legend on the right panel.
         if args.paper and "flops" in xs:
-            fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.5), dpi=200)
+            fig, axes = plt.subplots(1, 2, figsize=(12.2, 4.4), dpi=200)
             drawn = 0
             for ax, y in zip(axes, ("milestone_pct", "reward")):
                 drawn += draw_panel(ax, data, FAMILIES[fam], y, "flops",

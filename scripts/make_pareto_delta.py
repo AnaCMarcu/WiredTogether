@@ -65,6 +65,9 @@ def main():
     import matplotlib
     matplotlib.use("Agg")
     matplotlib.rcdefaults()
+    matplotlib.rcParams.update({"font.size": 12, "axes.labelsize": 13,
+                                "xtick.labelsize": 11.5,
+                                "ytick.labelsize": 11.5})
     import matplotlib.pyplot as plt
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -97,7 +100,7 @@ def main():
             r["size"], r["x"], r.get("milestone_pct", float("nan")),
             r.get("reward", float("nan"))))
 
-    fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.4), dpi=200)
+    fig, axes = plt.subplots(1, 2, figsize=(12.2, 4.4), dpi=200)
     for ax, (metric, ylabel) in zip(axes, PANELS):
         ax.axhline(0.0, color="#999999", ls="--", lw=1.0, zorder=1)
         xs = [r["x"] for r in rows]
@@ -112,7 +115,7 @@ def main():
                         (r["x"], r[metric]), textcoords="offset points",
                         xytext=(0, 10 if above else -10), ha="center",
                         va="bottom" if above else "top",
-                        fontsize=8.5, color="#555555", zorder=4)
+                        fontsize=11, color="#555555", zorder=4)
         ax.set_xlabel("Strict perception grounding rate (base)")
         ax.set_ylabel(ylabel)
         ax.grid(False)
