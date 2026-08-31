@@ -83,22 +83,50 @@ fi
 # the constraint -- the smokes measured 15.88 GB at N=9, identical to N=3,
 # because the model is shared rather than per-agent.
 #
-# Wall time is the real constraint and grows with N (more LLM calls per env
-# step). Measured on the 2026-08-20 smokes (base arm, 121 steps):
+# Wall time is the real constraint. It grows with N (more LLM calls per env
+# step) AND with the step budget, so it is DERIVED rather than tabulated —
+# a fixed table silently under-requests the moment MAX_STEPS changes. At
+# 3 ep x 1000 steps the old N<=3 tier (medium/36h) would have given N=3 a
+# 35.5h job against a 36h cap: a ~1.01x margin, i.e. a near-certain loss of
+# the whole run at the wall.
+#
+# Measured on the 2026-08-20 smokes (base arm, 121 steps):
 #     N=2 -> 0.52 min/step, N=9 -> 1.86 min/step
 #     fit:  min/step ~= 0.14 + 0.19*N   (near-linear in N)
-# Projected for the full 3 ep x 500 steps = 1500 steps:
-#     N=2 13h   N=3 18h   N=4 23h   N=5 27h   N=6 32h   N=9 47h
-# N=4/5 sit on qos=long rather than medium: at 23-27h against medium's 36h
-# cap the margin was only 1.3-1.6x, and a job that hits the wall loses the
-# whole run. All overridable: MEM=… TIME=… QOS=… CPUS=….
+# Requested wall time = 2x that projection, rounded up to a SLURM ladder
+# rung and capped at long-qos's 168h. Worked examples:
+#     3 ep x  500 -> N=2 13h(->36) N=4 23h(->72)  N=6 32h(->72)  N=9 47h(->96)
+#     3 ep x 1000 -> N=2 26h(->72) N=4 46h(->96)  N=6 64h(->144)
+# Memory/CPU depend only on the client count, so they stay tabulated. GPU is
+# NOT the constraint -- the smokes measured 15.88 GB at N=9, identical to
+# N=3, because the model is shared rather than per-agent.
+# All overridable: MEM=… TIME=… QOS=… CPUS=….
 resources_for_n() {
     local n="$1"
-    if   [ "$n" -le 3 ]; then R_MEM=32GB;  R_CPUS=8;  R_QOS=medium; R_TIME=36:00:00
-    elif [ "$n" -le 5 ]; then R_MEM=48GB;  R_CPUS=8;  R_QOS=long;   R_TIME=72:00:00
-    elif [ "$n" -le 6 ]; then R_MEM=64GB;  R_CPUS=10; R_QOS=long;   R_TIME=72:00:00
-    else                      R_MEM=96GB;  R_CPUS=12; R_QOS=long;   R_TIME=96:00:00
+    if   [ "$n" -le 3 ]; then R_MEM=32GB;  R_CPUS=8
+    elif [ "$n" -le 5 ]; then R_MEM=48GB;  R_CPUS=8
+    elif [ "$n" -le 6 ]; then R_MEM=64GB;  R_CPUS=10
+    else                      R_MEM=96GB;  R_CPUS=12
     fi
+
+    # Integer arithmetic in centi-minutes per step (bash has no floats).
+    local steps=$(( EPISODES * MAX_STEPS ))
+    local centi=$(( 14 + 19 * n ))
+    R_EST_H=$(( centi * steps / 6000 ))          # projected hours
+    local req_h=$(( R_EST_H * 2 ))               # 2x safety margin
+    [ "$req_h" -lt 12 ] && req_h=12
+    local tier
+    for tier in 36 72 96 120 144 168; do
+        [ "$req_h" -le "$tier" ] && break
+    done
+    if [ "$req_h" -gt 168 ]; then
+        echo "WARNING: N=$n projected ${R_EST_H}h; 2x margin (${req_h}h) exceeds" \
+             "long-qos 168h cap — requesting 168h, margin only" \
+             "$(( 168 * 10 / (R_EST_H > 0 ? R_EST_H : 1) ))/10x" >&2
+    fi
+    R_TIME="${tier}:00:00"
+    if [ "$tier" -le 36 ]; then R_QOS=medium; else R_QOS=long; fi
+
     R_MEM="${MEM:-$R_MEM}"; R_CPUS="${CPUS:-$R_CPUS}"
     R_QOS="${QOS:-$R_QOS}"; R_TIME="${TIME:-$R_TIME}"
 }
@@ -151,7 +179,7 @@ for n in "${NS_LIST[@]}"; do
                 continue
             fi
             if [ "${DRY_RUN:-0}" = "1" ]; then
-                echo "would queue  $exp  seed_$seed  (mem=$R_MEM cpus=$R_CPUS qos=$R_QOS time=$R_TIME)"
+                echo "would queue  $exp  seed_$seed  (mem=$R_MEM cpus=$R_CPUS qos=$R_QOS time=$R_TIME, est ${R_EST_H}h)"
             else
                 jobid=$(NUM_AGENTS=$n HEBBIAN=$arm SEED=$seed sbatch --parsable \
                     --job-name="$jobname" \
