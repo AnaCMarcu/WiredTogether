@@ -135,6 +135,12 @@ frontier), so every compute figure in the paper reads as one family:
   base arm's cheapest point.
 - Each size direct-labelled once (E2B/E4B/12B) in `#555555`, fontsize 8.5,
   11 pt above the higher arm — the same treatment as the frontier's Δ labels.
+- Legends: 2-entry (single-family) panels keep the framed inside legend
+  (`--legend-loc`, default best). >2 entries go BELOW the axes in one row
+  — inside placement has no guaranteed free spot (matplotlib's 'best'
+  avoids data but NOT the size annotations; lower-right clipped rising
+  frontiers). save() uses bbox_inches='tight' so the below-axes legend
+  stays on the canvas.
 - After generating, OPEN the PNGs: nothing checks label collisions but you.
 
 ## The paper figures

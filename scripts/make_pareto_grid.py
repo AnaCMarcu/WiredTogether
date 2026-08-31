@@ -280,7 +280,7 @@ def series_points(data, family, arm, y, x, perception):
 
 
 def draw_panel(ax, data, families, y, x, perception, label_points=True,
-               errorbars=False, normalize=False, legend_loc="lower right",
+               errorbars=False, normalize=False, legend_loc="best",
                join_families=False):
     """One panel in the CoDe Fig. 10 look. Returns the number of series drawn.
 
@@ -372,13 +372,23 @@ def draw_panel(ax, data, families, y, x, perception, label_points=True,
         ax.set_ylim(lo - pad, hi + 2.0 * pad)
     ax.margins(x=0.10)
     if n:
-        ax.legend(loc=legend_loc, fontsize=8.5, framealpha=0.95)
+        if n > 2:
+            # Four series never have a guaranteed-free spot inside the axes
+            # (matplotlib's "best" avoids data but not the size annotations),
+            # so multi-family panels put the legend BELOW the axes, one row.
+            ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.17),
+                      ncol=min(n, 4), fontsize=8.5, framealpha=0.95,
+                      columnspacing=1.0, handletextpad=0.5)
+        else:
+            ax.legend(loc=legend_loc, fontsize=8.5, framealpha=0.95)
     return n
 
 
 def save(fig, path_stem: Path):
     path_stem.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(str(path_stem) + ".png", dpi=200, facecolor="white")
+    # bbox_inches="tight" keeps a below-axes legend inside the canvas.
+    fig.savefig(str(path_stem) + ".png", dpi=200, facecolor="white",
+                bbox_inches="tight")
 
 
 def main():
@@ -406,6 +416,9 @@ def main():
                          "e2b,e4b,12b,qwen9b to add one Qwen point to the "
                          "Gemma curve".format(",".join(SIZES)))
     ap.add_argument("--no-point-labels", action="store_true")
+    ap.add_argument("--legend-loc", default="best",
+                    help="matplotlib legend loc (e.g. 'upper left', 'best') "
+                         "for panels where lower-right collides with data")
     ap.add_argument("--join-families", action="store_true",
                     help="one line per arm through all families' points, "
                          "sorted by x — perception axes only (refused on the "
@@ -513,7 +526,8 @@ def main():
                                label_points=not args.no_point_labels,
                                errorbars=args.errorbars,
                                normalize=args.normalize,
-                               join_families=args.join_families)
+                               join_families=args.join_families,
+                               legend_loc=args.legend_loc)
                 if n == 0:
                     plt.close(fig)
                     continue
@@ -534,10 +548,12 @@ def main():
                                   label_points=not args.no_point_labels,
                                   errorbars=args.errorbars,
                                   normalize=args.normalize,
-                                  join_families=args.join_families):
+                                  join_families=args.join_families,
+                               legend_loc=args.legend_loc):
                         any_drawn = True
             if any_drawn:
-                fig.tight_layout()
+                # Extra row gap so below-axes legends clear the next row.
+                fig.tight_layout(h_pad=3.5)
                 save(fig, args.out_dir / "pareto_{}_grid".format(fam))
                 n_written += 1
             plt.close(fig)
