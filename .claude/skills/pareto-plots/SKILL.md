@@ -234,9 +234,10 @@ legend, the social y-headroom rule). Axis names as in the paper:
 "Perception grounding rate" (the word "strict" is dropped; the definition
 lives in sections/pareto_perception.tex) and "Milestone completion [%]".
 Also writes pareto_perception_rows.tex (the tab:pareto_perception rows).
-The paper version is `--errorbars xy` (±1 std: milestones over pooled
-episodes, grounding over seeds; thin bars in the arm colour, labels
-lifted to the bar tops). `--errorbars y` / none for slides.
+The paper version is `--errorbars y` (±1 std of milestones over pooled
+episodes; NO x bars — user decision 2026-09-01; thin bars in the arm
+colour, labels lifted to the bar tops). `xy` adds the grounding std
+over seeds; `none` for slides.
 LABEL_BELOW hangs the leftmost model's label under its lower arm — the
 segment climbing to Gemma-4B crosses an above-label. Paper side: the new
 section is \input in results.tex before the RQ2 heading; tab:final_comparison
