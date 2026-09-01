@@ -224,3 +224,18 @@ from the paper: grounding is a precision-style rate that rewards terseness
 - 26b / 31b are absent: no DAIC card exceeds 44.3 GiB and multi-GPU Gemma-4
   vision inference is broken upstream (transformers #45823 fixed only the
   text path). See memory `pareto-flops-accounting` for the full probe ladder.
+
+## Paper figure: milestones vs perception grounding (2026-09-01)
+`scripts/make_pareto_perception_fig.py <3 roots> --out-dir paper_assets_pareto/paper
+--copy-to <paper>/figures` — the strict-grounding frontier for all five
+models in the social-interval figure's layout 1:1 (5.0x3.5 in, default
+fonts, 8.5 pt grey labels with the crowd-flip rule, framed lower-right
+legend, the social y-headroom rule). Axis names as in the paper:
+"Perception grounding rate" (the word "strict" is dropped; the definition
+lives in sections/pareto_perception.tex) and "Milestone completion [%]".
+Also writes pareto_perception_rows.tex (the tab:pareto_perception rows).
+LABEL_BELOW hangs the leftmost model's label under its lower arm — the
+segment climbing to Gemma-4B crosses an above-label. Paper side: the new
+section is \input in results.tex before the RQ2 heading; tab:final_comparison
+"Ground." and tab:belief_quality still use the PERMISSIVE rate under the
+same name (flagged in a comment at the top of the section file).
