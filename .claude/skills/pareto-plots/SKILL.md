@@ -96,7 +96,17 @@ Verified 2026-08-28: the pareto table reproduces
   --ys grounding_strict,specificity,grounding --xs flops`.
 - Perception-as-X pareto (the thesis's original framing, x=perception,
   y=performance): `--out-dir .../grid_perception_x --ys milestone_pct,reward
-  --xs grounding_strict,specificity,grounding,partner_loc`. THE pareto is
+  --xs grounding_strict,specificity,grounding,partner_loc,net_grounding`.
+  `net_grounding` = strict − hallucination (perception_net_grounding in
+  beliefs.csv): the parameter-free (λ=1) member of `strict − λ·wrong`, the
+  ONLY family any weighting of the wrong/strict/vague shares can produce
+  (they sum to 1). Report it as a robustness check beside strict, never a
+  tuned λ: Qwen-9B > 12B and Qwen-2B-last hold for every λ, but Gemma-2B vs
+  4B flips at λ≈0.63 (4B is both more grounded and more hallucinating) and
+  is within noise at λ=1 — a chosen λ would decide exactly that comparison.
+  `--beliefs` MUST list all three CSVs (out_gemma, out_pareto, out) — the
+  default now does; with the medium-runs one missing the Qwen points vanish
+  from every perception axis with no warning. THE pareto is
   `milestone_pct vs grounding_strict` (both arms rise left-to-right;
   specificity is its robustness twin). The permissive-grounding and
   partner_loc x-axes produce inverted/garbled frontiers — the earlier

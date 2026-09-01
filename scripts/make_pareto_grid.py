@@ -108,12 +108,14 @@ Y_METRICS = {
     "grounding":        "Perception grounding rate",
     "grounding_strict": "Strict perception grounding rate",
     "specificity":      "Chamber-diagnostic mention rate",
+    "net_grounding":    "Net perception grounding (grounded − hallucinated)",
 }
 X_AXES = {
     "flops":            "Compute  [$10^{17}$ FLOPs]",
     "grounding":        "Perception grounding rate",
     "grounding_strict": "Strict perception grounding rate",
     "specificity":      "Chamber-diagnostic mention rate",
+    "net_grounding":    "Net perception grounding (grounded − hallucinated)",
     "partner_loc":      "Partner-location accuracy",
 }
 # Perception axes come from the QUALITATIVE pipeline's beliefs.csv (one row
@@ -124,6 +126,7 @@ X_AXES = {
 BELIEF_COLS = {"grounding": "perception_grounding_rate",
                "grounding_strict": "perception_grounding_strict",
                "specificity": "perception_specificity",
+               "net_grounding": "perception_net_grounding",
                "partner_loc": "partner_loc_accuracy"}
 # Aesthetics: identical to make_pareto_social_fig.fig_pareto_paper (the
 # social-interval frontier), which is itself styled after the compute-vs-reward
@@ -397,7 +400,11 @@ def main():
     ap.add_argument("--out-dir", type=Path, default=Path("paper_assets_pareto/grid"))
     ap.add_argument("--beliefs", type=Path, nargs="+",
                     default=[Path("analysis_qualitative/out_gemma/tables/beliefs.csv"),
-                             Path("analysis_qualitative/out_pareto/tables/beliefs.csv")],
+                             Path("analysis_qualitative/out_pareto/tables/beliefs.csv"),
+                             # medium runs: the Qwen belief values. Without
+                             # this the Qwen points silently vanish from every
+                             # perception axis (empty belief columns).
+                             Path("analysis_qualitative/out/tables/beliefs.csv")],
                     help="qualitative-pipeline beliefs.csv files (one row per "
                          "run) supplying the perception axes")
     ap.add_argument("--families", default="gemma",

@@ -142,6 +142,12 @@ def analyze_run(ctx) -> dict:
         "perception_grounding_rate": _rate(grounded, n_percep),
         "perception_grounding_strict": _rate(strict_grounded, n_percep),
         "perception_specificity": _rate(diagnostic, n_percep),
+        # NET grounding = strict - hallucination: +1 per grounded-and-diagnostic
+        # statement, -1 per statement naming an impossible object, 0 for vague.
+        # The parameter-free (lambda = 1) member of the family
+        # strict - lambda * wrong; reported as a robustness check beside strict
+        # (lambda = 0), never blended with a tuned lambda.
+        "perception_net_grounding": _rate(strict_grounded - len(halluc_rows), n_percep),
         "partner_loc_claims": loc_claims,
         "partner_loc_accuracy": _rate(loc_correct, loc_claims),
         "belief_responsiveness": _rate(resp_hit, resp_checked),
