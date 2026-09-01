@@ -68,7 +68,10 @@ def gather(data, beliefs, sizes):
     return out
 
 
-def draw(rows, out_png: Path):
+def draw(rows, out_png: Path, errorbars: str = "none"):
+    """errorbars: "none", "y" (milestone std over pooled episodes) or "xy"
+    (also the grounding std over seeds). Thin bars in the arm colour behind
+    the markers, no legend entry; labels clear the bar tops."""
     import matplotlib
     matplotlib.use("Agg")
     matplotlib.rcdefaults()          # the social figure runs on the defaults
@@ -79,10 +82,18 @@ def draw(rows, out_png: Path):
     # One line per arm through every model, sorted by x; family on the fill.
     for arm in ("base", "hebbian"):
         st = ARM_STYLE[arm]
-        pts = sorted(((r[arm]["x"][0], r[arm]["y"][0], r["family"])
+        pts = sorted(((r[arm]["x"][0], r[arm]["y"][0], r["family"],
+                       r[arm]["x"][1], r[arm]["y"][1])
                       for r in rows.values()), key=lambda t: t[0])
         ax.plot([p[0] for p in pts], [p[1] for p in pts], color=st["color"],
                 ls="-", lw=1.6, zorder=2)
+        if errorbars != "none":
+            ax.errorbar([p[0] for p in pts], [p[1] for p in pts],
+                        yerr=[p[4] for p in pts],
+                        xerr=[p[3] for p in pts] if errorbars == "xy" else None,
+                        fmt="none", ecolor=st["color"], elinewidth=0.9,
+                        capsize=2.5, alpha=0.6, zorder=1)
+            all_y += [p[1] + p[4] for p in pts] + [p[1] - p[4] for p in pts]
         for family in dict.fromkeys(p[2] for p in pts):
             fp = [p for p in pts if p[2] == family]
             open_marker = FAMILY_OPEN.get(family, True)
@@ -105,22 +116,25 @@ def draw(rows, out_png: Path):
         xv = r["base"]["x"][0]          # both arms share the model's x scale
         hi_arm = max(("base", "hebbian"), key=lambda a: r[a]["y"][0])
         lo_arm = min(("base", "hebbian"), key=lambda a: r[a]["y"][0])
+        e = 1.0 if errorbars != "none" else 0.0
+        y_hi = r[hi_arm]["y"][0] + e * r[hi_arm]["y"][1]
+        y_lo = r[lo_arm]["y"][0] - e * r[lo_arm]["y"][1]
         crowded = prev_x is not None and (xv - prev_x) < 0.10 * span
         if size in LABEL_BELOW:
             # The leftmost model's label would sit on the segment climbing
             # to its right neighbour; hang it under the lower arm instead.
             ax.annotate(SHORT_LABEL.get(size, size),
-                        (r[lo_arm]["x"][0], r[lo_arm]["y"][0]),
+                        (r[lo_arm]["x"][0], y_lo),
                         textcoords="offset points", xytext=(0, -16),
                         ha="center", fontsize=8.5, color="#555555", zorder=4)
         elif crowded:
             ax.annotate(SHORT_LABEL.get(size, size),
-                        (r[lo_arm]["x"][0], r[lo_arm]["y"][0]),
+                        (r[lo_arm]["x"][0], y_lo),
                         textcoords="offset points", xytext=(7, -16),
                         ha="left", fontsize=8.5, color="#555555", zorder=4)
         else:
             ax.annotate(SHORT_LABEL.get(size, size),
-                        (r[hi_arm]["x"][0], r[hi_arm]["y"][0]),
+                        (r[hi_arm]["x"][0], y_hi),
                         textcoords="offset points", xytext=(0, 9),
                         ha="center", fontsize=8.5, color="#555555", zorder=4)
         prev_x = xv
@@ -168,6 +182,9 @@ def main():
                              Path("analysis_qualitative/out_pareto/tables/beliefs.csv"),
                              Path("analysis_qualitative/out/tables/beliefs.csv")])
     ap.add_argument("--sizes", default="e2b,e4b,qwen2b,12b,qwen9b")
+    ap.add_argument("--errorbars", choices=("none", "y", "xy"), default="none",
+                    help="draw +-1 std: y = milestones over pooled episodes, "
+                         "xy = also grounding over seeds")
     ap.add_argument("--copy-to", type=Path, default=None,
                     help="also copy the PNG into this directory (paper/figures)")
     ap.add_argument("--image-tokens", type=int, default=280)
@@ -196,7 +213,7 @@ def main():
             r["hebbian"]["y"][1], r["hebbian"]["y"][0] - r["base"]["y"][0]))
 
     png = args.out_dir / "pareto_perception.png"
-    draw(rows, png)
+    draw(rows, png, args.errorbars)
     tex = args.out_dir / "pareto_perception_rows.tex"
     tex.write_text(tex_rows(rows), encoding="utf-8")
     print("wrote {}".format(tex))
