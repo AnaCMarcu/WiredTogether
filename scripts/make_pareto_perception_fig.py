@@ -88,8 +88,13 @@ def draw(rows, out_png: Path, xlabel: str, errorbars: str = "none",
     # One line per arm through every model, sorted by x; family on the fill.
     for arm in ("base", "hebbian"):
         st = ARM_STYLE[arm]
-        pts = sorted(((r[arm]["x"][0], r[arm]["y"][0], r["family"],
-                       r[arm]["x"][1], r[arm]["y"][1])
+        # BOTH arms sit at the BASE arm's x: the axis is a backbone property
+        # (couplings shift it by <= 2 pp), and per-arm x scattered a model's
+        # two markers so far apart on the partner axis that neighbouring
+        # models interleaved and the point labels became unattributable.
+        # Each model is one vertical base/+Hebbian pair under its label.
+        pts = sorted(((r["base"]["x"][0], r[arm]["y"][0], r["family"],
+                       r["base"]["x"][1], r[arm]["y"][1])
                       for r in rows.values()), key=lambda t: t[0])
         ax.plot([p[0] for p in pts], [p[1] for p in pts], color=st["color"],
                 ls="-", lw=1.6, zorder=2)
@@ -129,17 +134,17 @@ def draw(rows, out_png: Path, xlabel: str, errorbars: str = "none",
             # The leftmost model's label would sit on the segment climbing
             # to its right neighbour; hang it under the lower arm instead.
             ax.annotate(SHORT_LABEL.get(size, size),
-                        (r[lo_arm]["x"][0], y_lo),
+                        (xv, y_lo),
                         textcoords="offset points", xytext=(0, -16),
                         ha="center", fontsize=8.5, color="#555555", zorder=4)
         elif crowded:
             ax.annotate(SHORT_LABEL.get(size, size),
-                        (r[lo_arm]["x"][0], y_lo),
+                        (xv, y_lo),
                         textcoords="offset points", xytext=(7, -16),
                         ha="left", fontsize=8.5, color="#555555", zorder=4)
         else:
             ax.annotate(SHORT_LABEL.get(size, size),
-                        (r[hi_arm]["x"][0], y_hi),
+                        (xv, y_hi),
                         textcoords="offset points", xytext=(0, 9),
                         ha="center", fontsize=8.5, color="#555555", zorder=4)
         prev_x = xv

@@ -249,6 +249,10 @@ open circle, the social figure's style); family lives on marker FILL and
 must be stated in the caption (open Gemma / filled Qwen). A four-entry
 legend collided with the data on the partner axis. `--legend-loc`:
 lower right (grounding default) / lower left (partner).
+Both arms are plotted at the BASE arm's x (backbone property, couplings
+shift it <=2pp): per-arm x interleaved neighbouring models on the
+partner axis and made the labels unattributable. Captions must say
+"x is the base arm's <rate>".
 LABEL_BELOW hangs the leftmost model's label under its lower arm — the
 segment climbing to Gemma-4B crosses an above-label. Paper side: the new
 section is \input in results.tex before the RQ2 heading; tab:final_comparison
