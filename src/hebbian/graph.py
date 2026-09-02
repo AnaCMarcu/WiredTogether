@@ -111,6 +111,9 @@ class HebbianSocialGraph:
         self._coact_window: deque = deque(maxlen=max(1, config.coop_window))
         self._reward_window: deque = deque(maxlen=max(1, config.coop_window))
         self._max_bond_reward_seen: float = 0.0
+        # Three-factor eligibility trace e_ij (mode == "three_factor" only;
+        # stays at zeros in every other mode).
+        self._eligibility = np.zeros((N, N), dtype=np.float32)
         # Realized per-branch deltas from the last gated step (analysis/tests).
         self._last_growth: Optional[np.ndarray] = None
         self._last_decay: Optional[np.ndarray] = None
@@ -456,7 +459,14 @@ class HebbianSocialGraph:
         spatial_gate = close.astype(np.float32)
         np.fill_diagonal(spatial_gate, 0.0)
 
-        c_spat = spatial_gate * np.outer(engagement, engagement)
+        if cfg.mode == "three_factor" and cfg.coact_floor > 0.0:
+            # Monotone "togetherness": co-location counts even for a silent
+            # pair (at the floor), instead of requiring engagement on both
+            # sides — a co-located silent pair otherwise has c_spat = 0.
+            c_spat = spatial_gate * np.maximum(
+                np.outer(engagement, engagement), cfg.coact_floor)
+        else:
+            c_spat = spatial_gate * np.outer(engagement, engagement)
 
         delta_comm = cfg.communication_coactivity_bonus
         delta_soc = (cfg.social_coactivity_bonus
@@ -475,7 +485,9 @@ class HebbianSocialGraph:
                     # comm_distance_free: a message co-fires at any distance,
                     # same form as obs/imit; the c_ij clip bounds stacking.
                     for a, b in ((s, r), (r, s)):  # symmetric exchange
-                        if cfg.comm_distance_free:
+                        # three_factor drops the (1−spatial) gate too, so a
+                        # message co-fires at any distance (monotone c_ij).
+                        if cfg.comm_distance_free or cfg.mode == "three_factor":
                             c_comm[a, b] = delta_comm
                         else:
                             c_comm[a, b] = (
@@ -525,6 +537,10 @@ class HebbianSocialGraph:
         if cfg.mode == "reward_modulated":
             salience = cfg.eta_plus * np.abs(bond_rewards_gated) / float(cfg.reward_norm_R)
             return (cfg.eta_0 + salience).astype(np.float32)
+        if cfg.mode == "three_factor":
+            # Baseline floor only: reward acts through the eligibility trace
+            # in _update_gated, not as a gain on the current step's c_ij.
+            return np.full(N, cfg.eta_0, dtype=np.float32)
         raise ValueError(f"unknown gated mode {cfg.mode!r}")
 
     def _windowed_stats(
@@ -626,6 +642,18 @@ class HebbianSocialGraph:
         coeff = self._growth_coeff(bond_g)                       # (N,)
         growth = coeff[:, None] * cij * (1.0 - self.W)           # (N,N)
 
+        if cfg.mode == "three_factor":
+            # Synaptic-tagging three-factor rule: co-activity leaves a trace
+            # e ← ρ_e·e + c (current step included), and reward converts the
+            # ACCUMULATED trace into weight — a milestone credits the stretch
+            # of joint work that preceded it, whether or not the pair happens
+            # to be co-active on the step the reward lands.
+            self._eligibility = (cfg.eligibility_rho * self._eligibility
+                                 + cij).astype(np.float32)
+            salience = (cfg.eta_plus * np.abs(bond_g)
+                        / float(cfg.reward_norm_R)).astype(np.float32)
+            growth = growth + salience[:, None] * self._eligibility * (1.0 - self.W)
+
         decay_mask = (coop < cfg.coop_eps) & neg[:, None]        # (N,N) bool
         decay = cfg.eta_minus * self.W                           # (N,N)
 
@@ -695,10 +723,13 @@ class HebbianSocialGraph:
 
         - ``"legacy"`` — the accreted advantage-modulator + failure-window +
           grace rule (uses ``step_rewards`` / ``advantages``). Unchanged.
-        - ``"coactivity"`` / ``"reward_modulated"`` — the gated-Hebbian
-          variants (see :meth:`_update_gated`). These read ``chambers``,
-          ``total_rewards`` and (Variant B) ``bond_rewards``; the legacy
-          ``step_rewards`` / ``advantages`` args are accepted but ignored.
+        - ``"coactivity"`` / ``"reward_modulated"`` / ``"three_factor"`` —
+          the gated-Hebbian variants (see :meth:`_update_gated`). These read
+          ``chambers``, ``total_rewards`` and (B / three-factor)
+          ``bond_rewards``; the legacy ``step_rewards`` / ``advantages`` args
+          are accepted but ignored. ``three_factor`` additionally keeps an
+          eligibility trace so reward credits recent joint work, not only
+          the current step's co-activity.
 
         Parameters
         ----------
@@ -1133,7 +1164,7 @@ class HebbianSocialGraph:
         if not self.config.enabled:
             return {"enabled": False}
 
-        return {
+        d = {
             "enabled": True,
             "frozen": bool(self.config.freeze_weights),
             "mode": self.config.mode,
@@ -1146,6 +1177,11 @@ class HebbianSocialGraph:
             "init_weight": self.config.init_weight,
             "_last_coactivity": self._last_coactivity.tolist() if self._last_coactivity is not None else None,
         }
+        if self.config.mode == "three_factor":
+            # Only this mode carries a trace; keeping the key out elsewhere
+            # leaves every other arm's serialised output byte-identical.
+            d["_eligibility"] = self._eligibility.tolist()
+        return d
 
     def snapshot(self) -> dict:
         """Compact per-episode snapshot for hebbian_snapshots.jsonl."""
@@ -1179,6 +1215,9 @@ class HebbianSocialGraph:
         self._coact_window.clear()
         self._reward_window.clear()
         self._max_bond_reward_seen = float(d.get("_max_bond_reward_seen", 0.0))
+        el = d.get("_eligibility")
+        if el is not None:
+            self._eligibility = np.array(el, dtype=np.float32)
 
     def reset(self) -> None:
         """Reinitialise W to init_weight, clear all history.
@@ -1196,6 +1235,7 @@ class HebbianSocialGraph:
         self._max_reward_seen = 0.0
         self._last_coactivity = None
         self._step_count = 0
+        self._eligibility[:] = 0.0
         # Gated-variant window state
         self._coact_window.clear()
         self._reward_window.clear()

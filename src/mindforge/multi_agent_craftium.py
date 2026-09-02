@@ -192,12 +192,17 @@ def parse_args():
     parser.add_argument("--hebbian", action="store_true",
                         help="Enable Hebbian social plasticity graph")
     parser.add_argument("--hebbian-mode", type=str, default="reward_modulated",
-                        choices=["legacy", "coactivity", "reward_modulated"],
+                        choices=["legacy", "coactivity", "reward_modulated",
+                                 "three_factor"],
                         help="Graph-update rule. 'reward_modulated' (default, "
                              "Variant B): growth (η0 + η+·|r_bond|/R)·c·(1−W). "
                              "'coactivity' (Variant A): flat η+·c·(1−W). "
-                             "'legacy': old advantage-modulator + failure-window "
-                             "rule. A/B the two variants for the ablation.")
+                             "'three_factor': eligibility trace e←ρe+c with "
+                             "growth η0·c·(1−W) + η+·(|r_bond|/R)·e·(1−W) and "
+                             "monotone co-activity — reward credits recent "
+                             "joint work and persists (pair with a lower "
+                             "--hebbian-decay). 'legacy': old advantage-"
+                             "modulator + failure-window rule.")
     # ── Gated-variant knobs (mode = coactivity | reward_modulated) ──
     parser.add_argument("--hebbian-eta-plus", type=float, default=0.05,
                         help="η+ growth rate (Variant A flat rate / Variant B "
@@ -213,6 +218,13 @@ def parse_args():
     parser.add_argument("--hebbian-neg-theta", type=float, default=5.0,
                         help="θ negative-reward threshold (between |futile|=1 "
                              "and the death-class penalties |would-die|=10 / |death|=50)")
+    parser.add_argument("--hebbian-eligibility-rho", type=float, default=0.9,
+                        help="three_factor mode: eligibility-trace decay ρ_e "
+                             "(e ← ρ_e·e + c; memory ≈ 1/(1−ρ_e) steps)")
+    parser.add_argument("--hebbian-coact-floor", type=float, default=0.25,
+                        help="three_factor mode: co-location counts at least "
+                             "this much co-activity even for a silent pair; "
+                             "0 restores the engagement-gated spatial term")
     parser.add_argument("--hebbian-reward-norm", type=float, default=300.0,
                         help="R fixed bondable-reward normalizer (Variant B); "
                              "default = largest milestone reward (m27=300)")
@@ -1466,6 +1478,9 @@ async def run(args):
         coop_window=args.hebbian_coop_window,
         neg_theta=args.hebbian_neg_theta,
         reward_norm_R=args.hebbian_reward_norm,
+        # Three-factor variant knobs (mode = three_factor)
+        eligibility_rho=args.hebbian_eligibility_rho,
+        coact_floor=args.hebbian_coact_floor,
         # Hardcoded / frozen graph (LLM-only social-bias ablation)
         freeze_weights=args.hebbian_freeze,
         social_bidirectional=args.social_bidirectional,

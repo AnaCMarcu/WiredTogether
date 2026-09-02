@@ -104,6 +104,23 @@ class HebbianConfig:
 
     reward_norm_R: float = 300.0
 
+    # ── Three-factor variant (mode = "three_factor") ────────────────────
+    # Eligibility-trace decay ρ_e: e_ij ← ρ_e·e_ij + c_ij, so co-activity
+    # leaves a tag with a ~1/(1−ρ_e)-step memory that a later reward
+    # converts into a lasting weight change (the synaptic-tagging form of
+    # the three-factor rule). Growth becomes
+    #     η0·c_ij·(1−W) + η+·(|r_bond_i|/R)·e_ij·(1−W),
+    # replacing reward_modulated's one-step gain on the CURRENT c_ij only.
+    # Because reward is sparse the trace term cannot saturate the weights,
+    # which is what lets λ (decay) be set lower in this mode so that
+    # reward-earned credit persists.
+    eligibility_rho: float = 0.9
+    # Monotone co-activity for three_factor: co-location counts at least
+    # this much even for a silent pair (c_spat = S·max(g_i·g_j, floor)),
+    # and the comm term drops its (1−spatial) gate, so
+    # near+messaging > far+messaging > near+silent > apart+silent.
+    # 0.0 restores the engagement-gated spatial term of the other modes.
+    coact_floor: float = 0.25
 
     freeze_weights: bool = False
 
