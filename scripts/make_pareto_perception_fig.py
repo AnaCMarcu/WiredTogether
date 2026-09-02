@@ -118,22 +118,30 @@ def draw(rows, out_png: Path, xlabel: str, errorbars: str = "none",
                     mec=st["color"], mew=st["mew"], zorder=3)
         all_y += [p[1] for p in pts]
 
-    # Point labels: one per model above its higher arm; when a model sits
-    # within 10 % of the x-span of its left neighbour the label flips to
-    # below-right of the LOWER arm (the social figure's crowd rule).
+    # Point labels: one per model above its higher arm. A label flips to
+    # below-right of the LOWER arm (the social figure's crowd rule) when the
+    # previous ABOVE-label is close in BOTH x (< 12 % of the span) and y
+    # (< 10 % of the label-anchor range) -- two labels only collide when
+    # near in both.
     order = sorted(rows, key=lambda s: rows[s]["x"][0])
-    xs_all = [rows[s]["x"][0] for s in order]
-    span = (max(xs_all) - min(xs_all)) or 1.0
-    prev_x = None
-    for size in order:
-        r = rows[size]
-        xv = r["x"][0]                  # both arms share the model's pooled x
+    e = 1.0 if errorbars != "none" else 0.0
+    anchors = {}
+    for size, r in rows.items():
         hi_arm = max(("base", "hebbian"), key=lambda a: r[a]["y"][0])
         lo_arm = min(("base", "hebbian"), key=lambda a: r[a]["y"][0])
-        e = 1.0 if errorbars != "none" else 0.0
-        y_hi = r[hi_arm]["y"][0] + e * r[hi_arm]["y"][1]
-        y_lo = r[lo_arm]["y"][0] - e * r[lo_arm]["y"][1]
-        crowded = prev_x is not None and (xv - prev_x) < 0.10 * span
+        anchors[size] = (r["x"][0],
+                         r[hi_arm]["y"][0] + e * r[hi_arm]["y"][1],
+                         r[lo_arm]["y"][0] - e * r[lo_arm]["y"][1])
+    span = (max(a[0] for a in anchors.values())
+            - min(a[0] for a in anchors.values())) or 1.0
+    yr = (max(a[1] for a in anchors.values())
+          - min(a[2] for a in anchors.values())) or 1.0
+    prev_above = None
+    for size in order:
+        xv, y_hi, y_lo = anchors[size]
+        crowded = (prev_above is not None
+                   and (xv - prev_above[0]) < 0.12 * span
+                   and abs(y_hi - prev_above[1]) < 0.10 * yr)
         if size in label_below:
             # The leftmost model's label would sit on the segment climbing
             # to its right neighbour; hang it under the lower arm instead.
@@ -151,7 +159,7 @@ def draw(rows, out_png: Path, xlabel: str, errorbars: str = "none",
                         (xv, y_hi),
                         textcoords="offset points", xytext=(0, 9),
                         ha="center", fontsize=8.5, color="#555555", zorder=4)
-        prev_x = xv
+            prev_above = (xv, y_hi)
 
     lo, hi = min(all_y), max(all_y)
     pad = max(0.02 * (abs(hi) or 1.0), 0.25 * (hi - lo))
