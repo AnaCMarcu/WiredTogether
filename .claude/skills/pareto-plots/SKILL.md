@@ -238,6 +238,12 @@ The paper version is `--errorbars y` (±1 std of milestones over pooled
 episodes; NO x bars — user decision 2026-09-01; thin bars in the arm
 colour, labels lifted to the bar tops). `xy` adds the grounding std
 over seeds; `none` for slides.
+`--x partner_loc` -> pareto_partner.png, same layout on the partner-
+location axis (all five models incl. Qwen-2B): an inverted-U — rises to
+Qwen-9B (0.72) then FALLS for Gemma-4B/2B (0.80/0.83), the two weakest
+performers, because accuracy-over-claims rewards not committing.
+Robustness/appendix figure, not a replacement for the grounding axis;
+LABEL_BELOW applies only on the grounding axis.
 LABEL_BELOW hangs the leftmost model's label under its lower arm — the
 segment climbing to Gemma-4B crosses an above-label. Paper side: the new
 section is \input in results.tex before the RQ2 heading; tab:final_comparison

@@ -38,14 +38,19 @@ from make_pareto_grid import (                                 # noqa: E402
     collect, load_beliefs, ARM_STYLE, FAMILY_LABEL, FAMILY_OPEN, SHORT_LABEL,
 )
 
-X_KEY, Y_KEY = "grounding_strict", "milestone_pct"
-XLABEL = "Perception grounding rate"
+Y_KEY = "milestone_pct"
+AXES = {  # --x choice: (beliefs column key, axis label, output filename)
+    "grounding":   ("grounding_strict", "Perception grounding rate",
+                    "pareto_perception.png"),
+    "partner_loc": ("partner_loc", "Partner-location accuracy",
+                    "pareto_partner.png"),
+}
 YLABEL = "Milestone completion [%]"
 ARM_NAME = {"base": "base", "hebbian": "+Hebbian"}
 LABEL_BELOW = {"e2b"}   # models whose label hangs below the lower arm
 
 
-def gather(data, beliefs, sizes):
+def gather(data, beliefs, sizes, x_key):
     """{size: {"x": (m, sd), "hal": (m, sd), arm: {"y": (m, sd), "n": n}}}."""
     out = {}
     for size in sizes:
@@ -54,7 +59,7 @@ def gather(data, beliefs, sizes):
         for arm in ("base", "hebbian"):
             d = data.get((size, arm))
             b = beliefs.get((size, arm), {})
-            gx, gp = b.get(X_KEY) or [], b.get("grounding") or []
+            gx, gp = b.get(x_key) or [], b.get("grounding") or []
             if not d or not d.get(Y_KEY) or not gx:
                 ok = False
                 break
@@ -68,7 +73,8 @@ def gather(data, beliefs, sizes):
     return out
 
 
-def draw(rows, out_png: Path, errorbars: str = "none"):
+def draw(rows, out_png: Path, xlabel: str, errorbars: str = "none",
+         label_below=frozenset()):
     """errorbars: "none", "y" (milestone std over pooled episodes) or "xy"
     (also the grounding std over seeds). Thin bars in the arm colour behind
     the markers, no legend entry; labels clear the bar tops."""
@@ -120,7 +126,7 @@ def draw(rows, out_png: Path, errorbars: str = "none"):
         y_hi = r[hi_arm]["y"][0] + e * r[hi_arm]["y"][1]
         y_lo = r[lo_arm]["y"][0] - e * r[lo_arm]["y"][1]
         crowded = prev_x is not None and (xv - prev_x) < 0.10 * span
-        if size in LABEL_BELOW:
+        if size in label_below:
             # The leftmost model's label would sit on the segment climbing
             # to its right neighbour; hang it under the lower arm instead.
             ax.annotate(SHORT_LABEL.get(size, size),
@@ -143,7 +149,7 @@ def draw(rows, out_png: Path, errorbars: str = "none"):
     pad = max(0.02 * (abs(hi) or 1.0), 0.25 * (hi - lo))
     ax.set_ylim(lo - pad, hi + 1.8 * pad)
     ax.margins(x=0.10)
-    ax.set_xlabel(XLABEL)
+    ax.set_xlabel(xlabel)
     ax.set_ylabel(YLABEL)
     ax.legend(loc="lower right", fontsize=8.5, framealpha=0.95)
     fig.tight_layout()
@@ -182,6 +188,8 @@ def main():
                              Path("analysis_qualitative/out_pareto/tables/beliefs.csv"),
                              Path("analysis_qualitative/out/tables/beliefs.csv")])
     ap.add_argument("--sizes", default="e2b,e4b,qwen2b,12b,qwen9b")
+    ap.add_argument("--x", choices=tuple(AXES), default="grounding",
+                    help="x-axis: strict grounding (paper) or partner-location accuracy")
     ap.add_argument("--errorbars", choices=("none", "y", "xy"), default="none",
                     help="draw +-1 std: y = milestones over pooled episodes, "
                          "xy = also grounding over seeds")
@@ -201,7 +209,8 @@ def main():
     cache_path.write_text(json.dumps(cache, indent=1))
     beliefs = load_beliefs(args.beliefs)
     sizes = [s.strip() for s in args.sizes.split(",") if s.strip()]
-    rows = gather(data, beliefs, sizes)
+    x_key, xlabel, png_name = AXES[args.x]
+    rows = gather(data, beliefs, sizes, x_key)
 
     print("  {:<10} {:>7} {:>7} {:>12} {:>12} {:>7}".format(
         "model", "ground", "halluc", "milest base", "milest +Heb", "delta"))
@@ -212,11 +221,13 @@ def main():
             r["base"]["y"][0], r["base"]["y"][1], r["hebbian"]["y"][0],
             r["hebbian"]["y"][1], r["hebbian"]["y"][0] - r["base"]["y"][0]))
 
-    png = args.out_dir / "pareto_perception.png"
-    draw(rows, png, args.errorbars)
-    tex = args.out_dir / "pareto_perception_rows.tex"
-    tex.write_text(tex_rows(rows), encoding="utf-8")
-    print("wrote {}".format(tex))
+    png = args.out_dir / png_name
+    draw(rows, png, xlabel, args.errorbars,
+         label_below=LABEL_BELOW if args.x == "grounding" else frozenset())
+    if args.x == "grounding":
+        tex = args.out_dir / "pareto_perception_rows.tex"
+        tex.write_text(tex_rows(rows), encoding="utf-8")
+        print("wrote {}".format(tex))
     if args.copy_to:
         args.copy_to.mkdir(parents=True, exist_ok=True)
         shutil.copy2(png, args.copy_to / png.name)
