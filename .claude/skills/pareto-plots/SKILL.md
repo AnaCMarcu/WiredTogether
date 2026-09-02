@@ -244,6 +244,11 @@ Qwen-9B (0.72) then FALLS for Gemma-4B/2B (0.80/0.83), the two weakest
 performers, because accuracy-over-claims rewards not committing.
 Robustness/appendix figure, not a replacement for the grounding axis;
 LABEL_BELOW applies only on the grounding axis.
+Legend = TWO arm entries only (Base blue open square / +Hebbian orange
+open circle, the social figure's style); family lives on marker FILL and
+must be stated in the caption (open Gemma / filled Qwen). A four-entry
+legend collided with the data on the partner axis. `--legend-loc`:
+lower right (grounding default) / lower left (partner).
 LABEL_BELOW hangs the leftmost model's label under its lower arm — the
 segment climbing to Gemma-4B crosses an above-label. Paper side: the new
 section is \input in results.tex before the RQ2 heading; tab:final_comparison

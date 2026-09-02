@@ -74,7 +74,7 @@ def gather(data, beliefs, sizes, x_key):
 
 
 def draw(rows, out_png: Path, xlabel: str, errorbars: str = "none",
-         label_below=frozenset()):
+         label_below=frozenset(), legend_loc="lower right"):
     """errorbars: "none", "y" (milestone std over pooled episodes) or "xy"
     (also the grounding std over seeds). Thin bars in the arm colour behind
     the markers, no legend entry; labels clear the bar tops."""
@@ -106,8 +106,7 @@ def draw(rows, out_png: Path, xlabel: str, errorbars: str = "none",
             ax.plot([p[0] for p in fp], [p[1] for p in fp], color=st["color"],
                     ls="none", marker=st["marker"], ms=st["ms"],
                     mfc="none" if open_marker else st["color"],
-                    mec=st["color"], mew=st["mew"], zorder=3,
-                    label="{}, {}".format(FAMILY_LABEL[family], ARM_NAME[arm]))
+                    mec=st["color"], mew=st["mew"], zorder=3)
         all_y += [p[1] for p in pts]
 
     # Point labels: one per model above its higher arm; when a model sits
@@ -151,7 +150,16 @@ def draw(rows, out_png: Path, xlabel: str, errorbars: str = "none",
     ax.margins(x=0.10)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(YLABEL)
-    ax.legend(loc="lower right", fontsize=8.5, framealpha=0.95)
+    # Two-entry legend in the social-interval figure's style: the arms only
+    # (open markers, as there). Family lives on the marker FILL (open Gemma,
+    # filled Qwen) and is stated in the caption -- a four-entry box was large
+    # enough to collide with the data on the partner axis.
+    from matplotlib.lines import Line2D
+    handles = [Line2D([], [], ls="none", color=ARM_STYLE[a]["color"],
+                      marker=ARM_STYLE[a]["marker"], ms=ARM_STYLE[a]["ms"],
+                      mfc="none", mew=ARM_STYLE[a]["mew"], label=ARM_STYLE[a]["label"])
+               for a in ("base", "hebbian")]
+    ax.legend(handles=handles, loc=legend_loc, fontsize=8.5, framealpha=0.95)
     fig.tight_layout()
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=200)
@@ -190,6 +198,8 @@ def main():
     ap.add_argument("--sizes", default="e2b,e4b,qwen2b,12b,qwen9b")
     ap.add_argument("--x", choices=tuple(AXES), default="grounding",
                     help="x-axis: strict grounding (paper) or partner-location accuracy")
+    ap.add_argument("--legend-loc", default="lower right",
+                    help="matplotlib legend location (partner axis: lower left)")
     ap.add_argument("--errorbars", choices=("none", "y", "xy"), default="none",
                     help="draw +-1 std: y = milestones over pooled episodes, "
                          "xy = also grounding over seeds")
@@ -223,7 +233,8 @@ def main():
 
     png = args.out_dir / png_name
     draw(rows, png, xlabel, args.errorbars,
-         label_below=LABEL_BELOW if args.x == "grounding" else frozenset())
+         label_below=LABEL_BELOW if args.x == "grounding" else frozenset(),
+         legend_loc=args.legend_loc)
     if args.x == "grounding":
         tex = args.out_dir / "pareto_perception_rows.tex"
         tex.write_text(tex_rows(rows), encoding="utf-8")
