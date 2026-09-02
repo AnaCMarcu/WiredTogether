@@ -251,8 +251,11 @@ legend collided with the data on the partner axis. `--legend-loc`:
 lower right (grounding default) / lower left (partner).
 Both arms are plotted at the BASE arm's x (backbone property, couplings
 shift it <=2pp): per-arm x interleaved neighbouring models on the
-partner axis and made the labels unattributable. Captions must say
-"x is the base arm's <rate>".
+partner axis and made the labels unattributable. Since 2026-09-02 the shared x is POOLED over both
+arms' runs (n=12), not the base arm's: one perception value per model,
+matching tab:perception_by_model's backbone-property claim. tex rows'
+Ground./Halluc. columns are pooled too. Captions must say "x is the
+backbone's <rate>, pooled over both arms".
 LABEL_BELOW hangs the leftmost model's label under its lower arm — the
 segment climbing to Gemma-4B crosses an above-label. Paper side: the new
 section is \input in results.tex before the RQ2 heading; tab:final_comparison

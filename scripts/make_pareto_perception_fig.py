@@ -51,11 +51,16 @@ LABEL_BELOW = {"e2b"}   # models whose label hangs below the lower arm
 
 
 def gather(data, beliefs, sizes, x_key):
-    """{size: {"x": (m, sd), "hal": (m, sd), arm: {"y": (m, sd), "n": n}}}."""
+    """{size: {"x": (m, sd), "hal": (m, sd), arm: {"y": (m, sd)}}}.
+
+    x and hal are ONE value per model, pooled over the runs of BOTH arms:
+    the perception axes are backbone properties (no coupling moves them by
+    more than ~2 pp), so base and +Hebbian share the model's x. y stays
+    per-arm."""
     out = {}
     for size in sizes:
         row = {"family": SIZES[size]["family"]}
-        ok = True
+        gx_all, gp_all, ok = [], [], True
         for arm in ("base", "hebbian"):
             d = data.get((size, arm))
             b = beliefs.get((size, arm), {})
@@ -63,10 +68,12 @@ def gather(data, beliefs, sizes, x_key):
             if not d or not d.get(Y_KEY) or not gx:
                 ok = False
                 break
-            row[arm] = {"x": mean_sd(gx), "y": mean_sd(d[Y_KEY]),
-                        "hal": mean_sd([1.0 - v for v in gp]) if gp else None,
-                        "n": len(gx)}
+            gx_all += gx
+            gp_all += gp
+            row[arm] = {"y": mean_sd(d[Y_KEY]), "n": len(gx)}
         if ok:
+            row["x"] = mean_sd(gx_all)
+            row["hal"] = mean_sd([1.0 - v for v in gp_all]) if gp_all else None
             out[size] = row
         else:
             print("  (skipping {}: incomplete data)".format(size))
@@ -88,13 +95,10 @@ def draw(rows, out_png: Path, xlabel: str, errorbars: str = "none",
     # One line per arm through every model, sorted by x; family on the fill.
     for arm in ("base", "hebbian"):
         st = ARM_STYLE[arm]
-        # BOTH arms sit at the BASE arm's x: the axis is a backbone property
-        # (couplings shift it by <= 2 pp), and per-arm x scattered a model's
-        # two markers so far apart on the partner axis that neighbouring
-        # models interleaved and the point labels became unattributable.
-        # Each model is one vertical base/+Hebbian pair under its label.
-        pts = sorted(((r["base"]["x"][0], r[arm]["y"][0], r["family"],
-                       r["base"]["x"][1], r[arm]["y"][1])
+        # Both arms share the model's pooled x (see gather); each model is
+        # one vertical base/+Hebbian pair under its label.
+        pts = sorted(((r["x"][0], r[arm]["y"][0], r["family"],
+                       r["x"][1], r[arm]["y"][1])
                       for r in rows.values()), key=lambda t: t[0])
         ax.plot([p[0] for p in pts], [p[1] for p in pts], color=st["color"],
                 ls="-", lw=1.6, zorder=2)
@@ -117,13 +121,13 @@ def draw(rows, out_png: Path, xlabel: str, errorbars: str = "none",
     # Point labels: one per model above its higher arm; when a model sits
     # within 10 % of the x-span of its left neighbour the label flips to
     # below-right of the LOWER arm (the social figure's crowd rule).
-    order = sorted(rows, key=lambda s: rows[s]["base"]["x"][0])
-    xs_all = [rows[s]["base"]["x"][0] for s in order]
+    order = sorted(rows, key=lambda s: rows[s]["x"][0])
+    xs_all = [rows[s]["x"][0] for s in order]
     span = (max(xs_all) - min(xs_all)) or 1.0
     prev_x = None
     for size in order:
         r = rows[size]
-        xv = r["base"]["x"][0]          # both arms share the model's x scale
+        xv = r["x"][0]                  # both arms share the model's pooled x
         hi_arm = max(("base", "hebbian"), key=lambda a: r[a]["y"][0])
         lo_arm = min(("base", "hebbian"), key=lambda a: r[a]["y"][0])
         e = 1.0 if errorbars != "none" else 0.0
@@ -175,7 +179,7 @@ def draw(rows, out_png: Path, xlabel: str, errorbars: str = "none",
 def tex_rows(rows) -> str:
     """Rows for tab:pareto_perception: model, grounding, hallucination,
     milestones base / +Heb, delta. Percent with one decimal, sd after \\pmm."""
-    order = sorted(rows, key=lambda s: rows[s]["base"]["x"][0])
+    order = sorted(rows, key=lambda s: rows[s]["x"][0])
     lines = []
     for size in order:
         r = rows[size]
@@ -186,8 +190,8 @@ def tex_rows(rows) -> str:
             " & ${by:.1f}$ \\pmm{{{bs:.1f}}} & ${hy:.1f}$ \\pmm{{{hhs:.1f}}}"
             " & ${d:+.1f}$ \\\\".format(
                 name=SHORT_LABEL.get(size, size),
-                gx=100 * b["x"][0], gs=100 * b["x"][1],
-                hx=100 * b["hal"][0], hs=100 * b["hal"][1],
+                gx=100 * r["x"][0], gs=100 * r["x"][1],
+                hx=100 * r["hal"][0], hs=100 * r["hal"][1],
                 by=b["y"][0], bs=b["y"][1], hy=h["y"][0], hhs=h["y"][1], d=d))
     return "\n".join(lines) + "\n"
 
@@ -229,10 +233,10 @@ def main():
 
     print("  {:<10} {:>7} {:>7} {:>12} {:>12} {:>7}".format(
         "model", "ground", "halluc", "milest base", "milest +Heb", "delta"))
-    for size in sorted(rows, key=lambda s: rows[s]["base"]["x"][0]):
+    for size in sorted(rows, key=lambda s: rows[s]["x"][0]):
         r = rows[size]
         print("  {:<10} {:7.3f} {:7.3f} {:6.1f}±{:<5.1f} {:6.1f}±{:<5.1f} {:+7.1f}".format(
-            SHORT_LABEL.get(size, size), r["base"]["x"][0], r["base"]["hal"][0],
+            SHORT_LABEL.get(size, size), r["x"][0], r["hal"][0],
             r["base"]["y"][0], r["base"]["y"][1], r["hebbian"]["y"][0],
             r["hebbian"]["y"][1], r["hebbian"]["y"][0] - r["base"]["y"][0]))
 
