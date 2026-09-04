@@ -225,6 +225,17 @@ def parse_args():
                         help="three_factor mode: co-location counts at least "
                              "this much co-activity even for a silent pair; "
                              "0 restores the engagement-gated spatial term")
+    parser.add_argument("--hebbian-death-ltd", type=float, default=0.0,
+                        help="three_factor mode: η₋ᵈ signed death LTD rate — "
+                             "a drained death/would-die penalty converts the "
+                             "eligibility trace into bond WEAKENING "
+                             "(ΔW⁻ = η₋ᵈ·(min(|death|,cap)/R)·e·W) on the "
+                             "dying agent's outgoing row. 0 (default) = off, "
+                             "byte-identical to the audited three_factor rule")
+    parser.add_argument("--hebbian-death-cap", type=float, default=10.0,
+                        help="cap on |death signal| before /R in the death-LTD "
+                             "term: would-die (−10) and real death (−50) "
+                             "blame equally")
     parser.add_argument("--hebbian-reward-norm", type=float, default=300.0,
                         help="R fixed bondable-reward normalizer (Variant B); "
                              "default = largest milestone reward (m27=300)")
@@ -1481,6 +1492,8 @@ async def run(args):
         # Three-factor variant knobs (mode = three_factor)
         eligibility_rho=args.hebbian_eligibility_rho,
         coact_floor=args.hebbian_coact_floor,
+        eta_minus_death=args.hebbian_death_ltd,
+        death_cap=args.hebbian_death_cap,
         # Hardcoded / frozen graph (LLM-only social-bias ablation)
         freeze_weights=args.hebbian_freeze,
         social_bidirectional=args.social_bidirectional,
@@ -3246,6 +3259,11 @@ async def run(args):
                 total_rewards=step_rewards_raw,
                 social_events=(social_events
                                if social_act_mode == "choice" else None),
+                # Signed death LTD (three_factor + --hebbian-death-ltd only):
+                # the drained penalties reach the rule as their own stream so
+                # a death can weaken bonds through the trace without ever
+                # entering the bondable/growth stream.
+                death_rewards=_step_death_drain,
             )
             diffused_rewards = hebbian_graph.diffuse_rewards(step_rewards_raw)
 

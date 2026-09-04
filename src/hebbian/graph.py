@@ -573,10 +573,11 @@ class HebbianSocialGraph:
         total_rewards: Optional[List[float]],
         bond_rewards: Optional[List[float]],
         social_events: Optional[List[Tuple[int, int, str]]] = None,
+        death_rewards: Optional[List[float]] = None,
     ) -> np.ndarray:
         """One gated-Hebbian step (Variant A or B). Vectorised over N×N.
 
-        ΔW_ij  = growth_ij − decay_ij − λ·W_ij
+        ΔW_ij  = growth_ij − decay_ij − λ·W_ij  [− η₋ᵈ·(d̃_i/R)·e_ij·W_ij]
         growth_ij = coeff_i · c_ij · (1 − W_ij)
         decay_ij  = η₋ · 1[coop_ij < ε  AND  neg_i] · W_ij
         λ·W_ij    = homeostatic weight decay (Oja-style; λ = cfg.decay),
@@ -642,6 +643,7 @@ class HebbianSocialGraph:
         coeff = self._growth_coeff(bond_g)                       # (N,)
         growth = coeff[:, None] * cij * (1.0 - self.W)           # (N,N)
 
+        death_ltd = np.zeros((N, N), dtype=np.float32)
         if cfg.mode == "three_factor":
             # Synaptic-tagging three-factor rule: co-activity leaves a trace
             # e ← ρ_e·e + c (current step included), and reward converts the
@@ -654,6 +656,23 @@ class HebbianSocialGraph:
                         / float(cfg.reward_norm_R)).astype(np.float32)
             growth = growth + salience[:, None] * self._eligibility * (1.0 - self.W)
 
+            if cfg.eta_minus_death > 0.0 and death_rewards is not None:
+                # Signed death LTD (audit V1): the drained death/would-die
+                # penalty converts the same trace into WEAKENING of the dying
+                # agent's outgoing row — blame the partners it was just
+                # co-active with. Deliberately NOT chamber-gated: a dead
+                # agent can have no position ⇒ chamber None ⇒ a gate would
+                # silently drop every real Ch5 death; the cap bounds the
+                # magnitude instead (would-die −10 and death −50 blame alike).
+                d = np.array(
+                    [min(abs(_sanitize_reward(death_rewards[i])), cfg.death_cap)
+                     if i < len(death_rewards) else 0.0
+                     for i in range(N)], dtype=np.float32,
+                )
+                death_ltd = (cfg.eta_minus_death
+                             * (d / float(cfg.reward_norm_R))[:, None]
+                             * self._eligibility * self.W)
+
         decay_mask = (coop < cfg.coop_eps) & neg[:, None]        # (N,N) bool
         decay = cfg.eta_minus * self.W                           # (N,N)
 
@@ -665,11 +684,11 @@ class HebbianSocialGraph:
         # (growth≈0) decay back toward 0 — so the graph differentiates instead of
         # uniformly saturating. λ = cfg.decay (set via --hebbian-decay).
         homeostatic = cfg.decay * self.W
-        delta = np.where(decay_mask, -decay, growth) - homeostatic
+        delta = np.where(decay_mask, -decay, growth) - homeostatic - death_ltd
         np.fill_diagonal(delta, 0.0)
         self._last_growth = np.where(decay_mask, 0.0, growth)
         np.fill_diagonal(self._last_growth, 0.0)
-        self._last_decay = np.where(decay_mask, decay, 0.0) + homeostatic
+        self._last_decay = np.where(decay_mask, decay, 0.0) + homeostatic + death_ltd
         np.fill_diagonal(self._last_decay, 0.0)
 
         # Per-channel growth attribution: split realized growth by each
@@ -716,6 +735,7 @@ class HebbianSocialGraph:
         bond_rewards: Optional[List[float]] = None,
         total_rewards: Optional[List[float]] = None,
         social_events: Optional[List[Tuple[int, int, str]]] = None,
+        death_rewards: Optional[List[float]] = None,
     ) -> Optional[np.ndarray]:
         """Execute one full social-graph plasticity step.
 
@@ -749,6 +769,10 @@ class HebbianSocialGraph:
             for the choice-mode social acts ("comm" | "obs" | "imit"). Gated
             modes only; merged with ``comm_events`` (which maps to "comm")
             and filtered by ``config.social_act_channels``. Ignored by legacy.
+        death_rewards : per-agent drained death/would-die penalty this step
+            (≤ 0; the Phase 1d death_events.jsonl drain). Read ONLY by
+            ``three_factor`` when ``eta_minus_death > 0`` — signed death LTD
+            through the eligibility trace. Ignored everywhere else.
 
         Returns
         -------
@@ -766,6 +790,7 @@ class HebbianSocialGraph:
                                else step_rewards),
                 bond_rewards=bond_rewards,
                 social_events=social_events,
+                death_rewards=death_rewards,
             )
 
         if step_rewards is None:

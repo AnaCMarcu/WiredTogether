@@ -115,6 +115,17 @@ class HebbianConfig:
     # which is what lets λ (decay) be set lower in this mode so that
     # reward-earned credit persists.
     eligibility_rho: float = 0.9
+    # Signed death LTD (three_factor only; audit V1 "death→blame via trace"):
+    #     ΔW⁻ = η₋ᵈ·(d̃_i/R)·e_ij·W_ij,   d̃_i = min(|death_i|, death_cap)
+    # routed through the SAME eligibility trace as growth, so a death blames
+    # the partners the dying agent was recently co-active with — the live
+    # replacement for the coop<ε ∧ neg_i branch, which the closed-loop audit
+    # showed never fires (comm keeps coop ≥ ε through failure episodes).
+    # 0.0 = off: every existing three_factor arm is byte-identical.
+    eta_minus_death: float = 0.0
+    # Cap on |death signal| before /R: would-die (−10) and real death (−50)
+    # carry equal blame, and one death cannot wipe a strong bond outright.
+    death_cap: float = 10.0
     # Monotone co-activity for three_factor: co-location counts at least
     # this much even for a silent pair (c_spat = S·max(g_i·g_j, floor)),
     # and the comm term drops its (1−spatial) gate, so
