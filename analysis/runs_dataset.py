@@ -95,7 +95,9 @@ DESTINATIONS = list(RQ_TITLE)
 RELEASED = [d for d in DESTINATIONS if d != "smoke"]
 
 # ─── Layers ─────────────────────────────────────────────────────────────
-CHECKPOINT_DIRS = {"checkpoints"}
+# rl_live/ is the in-flight adapter + optimiser state (rl_state.pt,
+# value_head.pt, a PEFT adapter) — a checkpoint under another name.
+CHECKPOINT_DIRS = {"checkpoints", "rl_live"}
 MEDIA_DIRS = {"gifs"}
 LOG_DIRS = {"llm_logs"}
 LOG_FILES = {"log.txt", "run.log"}

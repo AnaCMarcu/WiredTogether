@@ -46,7 +46,7 @@ The layers stack and none repeats another's files, so nobody downloads more than
 | `logs` | `llm_logs/*.log`, `log.txt`, SLURM `.out`/`.err` | 29 GB | 2.6 GB | `analysis/qualitative/`, and step-clock alignment for the RL arms |
 | `media` | the `.mp4` recordings | 7.5 GB | ~7.5 GB | the story-timeline figures only |
 
-`core` and `logs` together are 11 archives and 3.4 GB — `log.txt` compresses about 18×, so the
+`core` and `logs` together are 11 archives and about 3 GB — `log.txt` compresses about 18×, so the
 bulky layer packs down hardest. The recordings are already compressed and gain nothing, which is
 why they are their own layer. RL checkpoints (`checkpoints/`, 5.2 GB) are never bundled: nothing
 in `analysis/` reads them.
