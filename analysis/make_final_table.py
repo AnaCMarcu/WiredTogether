@@ -65,11 +65,11 @@ ORCHESTRATOR = group("orchestrator")
 # Both use the same medium config (3 agents, 3 eps x 1000 steps, Qwen3.5-2B),
 # so the baselines (exp03/exp04) are shared.
 #
-# Set to "replay" once the vision-ON exp30/exp31 Qwen runs have landed in
-# runs_from_daic/social_replay_qwen. The first batch (2026-08-23/24) ran with
-# LLM_VISION_MODE=text by launcher mistake — no frames, vision=False — while
-# every medium baseline ran vision=True; it is kept aside as
-# runs_from_daic/social_replay_qwen_textonly and must not feed this table.
+# Setting this to "replay" swaps the RL "+Heb" rows over to exp30/exp31. Note
+# what that compares: those runs ran with LLM_VISION_MODE=text (vision=False),
+# while exp03/exp04 — the baselines the rows are read against — ran vision=True,
+# so a perception difference sits inside the arm difference. Each run's log.txt
+# records its mode; see docs/dataset.md.
 RL_HEB_ARMS = "diffusion"
 _RL_HEB = {
     "replay": {

@@ -32,8 +32,9 @@ Two things the table cannot show:
 - `medium_runs` holds both the RQ1 baselines (`exp01`–`exp08`) and the RQ3 topology arms
   (`exp09`–`exp11`). They were one submission wave and `make_results.py` builds the main and
   topology tables from a single run root, so the group stays whole.
-- `social_replay_qwen_textonly` ran text-only while the rest of the pooled Qwen suite ran with
-  vision. It is not comparable to the other Qwen arms and is excluded from every pooled result.
+- `social_replay_qwen` supplies the `MAPPO+Heb` and `IPPO+Heb` experience-sharing rows of the
+  cross-model table. It ran with `LLM_VISION_MODE=text`; `exp05`/`exp06`, the Qwen arms it is
+  tabled against, ran with vision. Each run's `log.txt` records which it was.
 
 ## Layers
 

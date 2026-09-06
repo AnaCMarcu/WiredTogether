@@ -60,7 +60,7 @@ LAYOUT: dict[str, tuple[str, str]] = {
     "agent_scaling":     ("compute", "Team-size sweep, N ∈ {2..9}"),
     # Experience sharing (Eq. 7), opt-in arms.
     "social_replay_gemma4":       ("social_replay", "Weight-gated experience sharing, Gemma lane"),
-    "social_replay_qwen_textonly": ("social_replay", "VOID — ran text-only while the pooled Qwen suite ran with vision, so it is not comparable to the other Qwen arms"),
+    "social_replay_qwen":  ("social_replay", "Weight-gated experience sharing, Qwen lane. Ran with LLM_VISION_MODE=text while exp05/exp06, the Qwen arms it is tabled against, ran with vision"),
     # Cluster stdout/stderr, kept as provenance.
     "new_exp_0_gemma_slurm": ("cluster_logs", "SLURM stdout/stderr"),
     "social_replay_slurm":   ("cluster_logs", "SLURM stdout/stderr"),
