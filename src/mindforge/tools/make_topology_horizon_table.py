@@ -33,8 +33,8 @@ import make_results as mr  # noqa: E402
 OUT = Path("paper_assets/transplant/TOPOLOGY_HORIZON_TABLE.tex")
 
 SEEDS = {"seed_42", "seed_123"}   # the only seeds run at both budgets
-BUDGETS = [("$1{,}000$", Path("runs_from_daic/medium_runs")),
-           ("$2{,}000$", Path("runs_from_daic/medium_2k"))]
+BUDGETS = [("$1{,}000$", Path("runs_from_daic/rq1_social_plasticity/medium_runs")),
+           ("$2{,}000$", Path("runs_from_daic/rq3_topology_transfer/medium_2k"))]
 CONDITIONS = [
     ("No-bonds", "exp11_llm_9b_allied_none"),
     ("Allied-pair", "exp10_llm_9b_allied_pair"),

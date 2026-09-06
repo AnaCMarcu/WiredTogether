@@ -2,7 +2,7 @@
 
 One table for both RQ3 mechanisms:
   * Imposed structure — the frozen-topology conditions (Qwen3.5-9B, N=3,
-    social-bias coupling; runs_from_daic/medium_runs/exp09/10/11), where the
+    social-bias coupling; runs_from_daic/rq1_social_plasticity/medium_runs/exp09/10/11), where the
     graph is hand-set and never updated;
   * Earned structure — the transplant experiment (N=6), where bonds and
     memories were formed by real Phase A experience (Gemma; Qwen rows appear
@@ -44,7 +44,7 @@ from mindforge.tools.analyze_wiring import (  # noqa: E402
 
 OUT = Path("paper_assets/transplant/RQ3_STRUCTURE_TABLE.tex")
 
-MEDIUM = Path("runs_from_daic/medium_runs")
+MEDIUM = Path("runs_from_daic/rq1_social_plasticity/medium_runs")
 TOPOLOGY = [
     # (label, dir, partner map or None, excluded seeds)
     ("No-bonds ($\\mathbf{W}\\equiv 0$)", "exp11_llm_9b_allied_none",
@@ -56,8 +56,8 @@ TOPOLOGY = [
 ]
 
 TRANSPLANT = [
-    ("Gemma 4 E4B", Path("runs_from_daic/pair_bonding")),
-    ("Qwen3.5-9B", Path("runs_from_daic/pair_bonding_qwen")),
+    ("Gemma 4 E4B", Path("runs_from_daic/rq3_topology_transfer/pair_bonding")),
+    ("Qwen3.5-9B", Path("runs_from_daic/rq3_topology_transfer/pair_bonding_qwen")),
 ]
 ARMS = [("Transplant (real partners)", "expB_merged_transplant"),
         ("Shuffled (strangers)", "expB_merged_shuffled")]

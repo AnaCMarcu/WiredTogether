@@ -24,7 +24,7 @@ messages.jsonl; pooled the same way. Chance level at N=6 is 0.20.
 Usage:
     PYTHONPATH=src python src/mindforge/tools/make_transplant_table.py
 Writes paper_assets/transplant/TRANSPLANT_MAIN_TABLE.tex; Qwen rows appear
-automatically when runs_from_daic/pair_bonding_qwen/expB_* exists, and as
+automatically when runs_from_daic/rq3_topology_transfer/pair_bonding_qwen/expB_* exists, and as
 placeholders otherwise.
 """
 
@@ -49,8 +49,8 @@ N_AGENTS = 6
 PAIRS = [(0, 1), (2, 3), (4, 5)]
 
 MODELS = [
-    ("Gemma 4 E4B", Path("runs_from_daic/pair_bonding")),
-    ("Qwen3.5-9B", Path("runs_from_daic/pair_bonding_qwen")),
+    ("Gemma 4 E4B", Path("runs_from_daic/rq3_topology_transfer/pair_bonding")),
+    ("Qwen3.5-9B", Path("runs_from_daic/rq3_topology_transfer/pair_bonding_qwen")),
 ]
 ARMS = [("Transplant", "expB_merged_transplant"),
         ("Shuffled", "expB_merged_shuffled")]
