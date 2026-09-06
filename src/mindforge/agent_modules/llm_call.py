@@ -4,7 +4,7 @@ import os
 import re
 import time
 
-from agent_modules.util import load_json
+from mindforge.agent_modules.util import load_json
 from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
 
 

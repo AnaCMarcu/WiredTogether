@@ -9,8 +9,8 @@ from autogen_ext.memory.chromadb import (
     SentenceTransformerEmbeddingFunctionConfig,
 )
 
-from agent_modules.llm_call import llm_call
-from agent_modules.util import (
+from mindforge.agent_modules.llm_call import llm_call
+from mindforge.agent_modules.util import (
     SkillResponse,
     create_model_client,
     safe_format,

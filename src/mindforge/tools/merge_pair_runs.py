@@ -186,7 +186,7 @@ def cmd_merge(args):
         json.dump(manifest, f, indent=2)
 
     print(f"[{condition}] merged {len(run_dirs)} pair runs -> {out_dir}")
-    print(f"  seats: " + ", ".join(
+    print("  seats: " + ", ".join(
         f"seat{s}<-run{r}/agent_{a}" for s, (r, a) in enumerate(assignment)
     ))
     print("  seat pairs:")

@@ -25,7 +25,7 @@ qualitative-pipeline quarantine); the reduced n is footnoted.
 
 Usage:
     PYTHONPATH=src python src/mindforge/tools/make_rq3_table.py
-Writes paper_assets_transplant/RQ3_STRUCTURE_TABLE.tex.
+Writes paper_assets/transplant/RQ3_STRUCTURE_TABLE.tex.
 """
 
 import statistics as st
@@ -42,7 +42,7 @@ from mindforge.tools.analyze_wiring import (  # noqa: E402
     seatmate_preference,
 )
 
-OUT = Path("paper_assets_transplant/RQ3_STRUCTURE_TABLE.tex")
+OUT = Path("paper_assets/transplant/RQ3_STRUCTURE_TABLE.tex")
 
 MEDIUM = Path("runs_from_daic/medium_runs")
 TOPOLOGY = [

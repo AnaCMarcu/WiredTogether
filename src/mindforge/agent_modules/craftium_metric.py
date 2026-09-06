@@ -15,7 +15,6 @@ import statistics
 import subprocess
 from datetime import datetime
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -246,8 +245,8 @@ class _NumpyEncoder(json.JSONEncoder):
 
 # ─── Main class ────────────────────────────────────────────────────────
 
-from agent_modules._metric_plots import _PlotsMixin
-from agent_modules._metric_summary import _SummaryMixin
+from mindforge.agent_modules._metric_plots import _PlotsMixin
+from mindforge.agent_modules._metric_summary import _SummaryMixin
 
 
 class CraftiumMetric(_PlotsMixin, _SummaryMixin):
@@ -618,7 +617,7 @@ class CraftiumMetric(_PlotsMixin, _SummaryMixin):
         which the EpisodeLogger already wrote.
         """
         try:
-            from agent_modules.comm_eval import compute_comm_metrics
+            from mindforge.agent_modules.comm_eval import compute_comm_metrics
             self.comm_metrics = compute_comm_metrics(
                 run_root=self.target_folder, num_agents=self.num_agents
             )
@@ -627,7 +626,7 @@ class CraftiumMetric(_PlotsMixin, _SummaryMixin):
             self.comm_metrics = {}
 
         try:
-            from agent_modules.coop_eval import compute_coop_metrics
+            from mindforge.agent_modules.coop_eval import compute_coop_metrics
             self.coop_metrics = compute_coop_metrics(
                 run_root=self.target_folder, num_agents=self.num_agents
             )

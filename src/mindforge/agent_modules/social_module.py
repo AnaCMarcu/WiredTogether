@@ -24,8 +24,8 @@ import logging
 import os
 from typing import Dict, List, Optional
 
-from agent_modules.llm_call import llm_call
-from agent_modules.util import SocialThought, create_model_client
+from mindforge.agent_modules.llm_call import llm_call
+from mindforge.agent_modules.util import SocialThought, create_model_client
 
 logger = logging.getLogger(__name__)
 

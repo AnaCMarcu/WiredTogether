@@ -78,7 +78,7 @@ def unreachable_milestones(known: set, min_chamber: Optional[int],
     if min_chamber is None:
         return set()
     if milestone_track is None:
-        from agent_modules.craftium_metric import MILESTONE_TRACK
+        from mindforge.agent_modules.craftium_metric import MILESTONE_TRACK
         milestone_track = MILESTONE_TRACK
     out = set()
     for mid in known:
@@ -105,7 +105,7 @@ class VillagerAllocateResponse(BaseModel):
 def known_milestone_ids(milestone_track: Optional[dict] = None) -> set:
     """Game-progress milestone ids (the valid completion signals)."""
     if milestone_track is None:
-        from agent_modules.craftium_metric import MILESTONE_TRACK
+        from mindforge.agent_modules.craftium_metric import MILESTONE_TRACK
         milestone_track = MILESTONE_TRACK
     return {mid for mid, track in milestone_track.items()
             if track in GAME_TRACKS}
@@ -126,7 +126,7 @@ def build_milestone_catalog(agent_milestones: dict,
     agent but are shown completed; the timeout/re-decompose loop absorbs
     that (documented trade-off)."""
     if milestone_track is None or tracks is None:
-        from agent_modules.craftium_metric import MILESTONE_TRACK, TRACKS
+        from mindforge.agent_modules.craftium_metric import MILESTONE_TRACK, TRACKS
         milestone_track = milestone_track or MILESTONE_TRACK
         tracks = tracks or TRACKS
     unreachable = unreachable or set()
@@ -153,7 +153,7 @@ def build_milestone_catalog(agent_milestones: dict,
 
 def build_chamber_facts(num_agents: int, describe=None) -> str:
     if describe is None:
-        from agent_modules.chamber_facts import describe_chamber as describe
+        from mindforge.agent_modules.chamber_facts import describe_chamber as describe
     parts = []
     for ch in ("ch1", "ch2", "ch3", "ch3_communal", "ch4", "ch5"):
         try:

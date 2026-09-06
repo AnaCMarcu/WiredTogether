@@ -7,7 +7,7 @@ and run as bound methods of CraftiumMetric.
 import os
 import statistics
 
-from agent_modules.craftium_metric import TRACKS, TRACK_ORDER
+from mindforge.agent_modules.craftium_metric import TRACKS, TRACK_ORDER
 
 
 class _SummaryMixin:

@@ -1,16 +1,13 @@
 import logging
 import os
 import shutil
-from pathlib import Path
-from agent_modules.llm_call import llm_call
-from agent_modules.util import EpisodeResponse, create_model_client, safe_format, ST_MODEL_NAME
+from mindforge.agent_modules.llm_call import llm_call
+from mindforge.agent_modules.util import EpisodeResponse, create_model_client, safe_format, ST_MODEL_NAME
 from autogen_ext.memory.chromadb import (
     ChromaDBVectorMemory,
     PersistentChromaDBVectorMemoryConfig,
-    ChromaDBVectorMemoryConfig,
     SentenceTransformerEmbeddingFunctionConfig,
 )
-from autogen_core.models import UserMessage, SystemMessage
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
@@ -31,7 +28,7 @@ class EpisodicMemoryManager:
             if episode_model_client
             else create_model_client(response_format=EpisodeResponse)
         )
-        from agent_modules.skill_manager import _chromadb_base_dir
+        from mindforge.agent_modules.skill_manager import _chromadb_base_dir
         db_path = os.path.join(_chromadb_base_dir(), f"episodes_vectodb_{agent_name}")
 
         # Wipe stale/corrupted SQLite files from previous runs

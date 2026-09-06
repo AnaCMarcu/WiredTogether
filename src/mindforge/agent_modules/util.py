@@ -353,7 +353,7 @@ def create_model_client(response_format, key_path="api.key"):
     - Otherwise an OpenAI-compatible HTTP client (vLLM, SGLang, OpenRouter…).
     """
     if local_model_path:
-        from agent_modules.local_model_client import LocalModelClient
+        from mindforge.agent_modules.local_model_client import LocalModelClient
         return LocalModelClient(
             model_path=local_model_path,
             response_format=response_format,

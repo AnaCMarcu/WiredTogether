@@ -556,7 +556,6 @@ class HebbianSocialGraph:
         which is why decay implies zero growth — the mutual-exclusivity claim.
         """
         cfg = self.config
-        N = cfg.num_agents
         self._coact_window.append(cij.copy())
         self._reward_window.append(total_rewards_gated.copy())
 

@@ -133,21 +133,21 @@ class FakeSentenceTransformer:
 
 @pytest.fixture
 def fake_sentence_transformers(monkeypatch):
-    """Install a fake `sentence_transformers` module and a fake top-level
-    `agent_modules.util` (CentralizedCritic.__init__ imports both lazily;
-    note it imports `agent_modules.util`, not `mindforge.agent_modules.util`,
-    because the runtime adds src/mindforge to sys.path).
+    """Install a fake ``sentence_transformers`` and a fake
+    ``mindforge.agent_modules.util`` — CentralizedCritic imports both lazily,
+    and the real module pulls in autogen/pydantic, which the critic tests do
+    not need.
     """
     st_mod = types.ModuleType("sentence_transformers")
     st_mod.SentenceTransformer = FakeSentenceTransformer
     monkeypatch.setitem(sys.modules, "sentence_transformers", st_mod)
 
-    am_pkg = types.ModuleType("agent_modules")
+    am_pkg = types.ModuleType("mindforge.agent_modules")
     am_pkg.__path__ = []  # mark as package
-    am_util = types.ModuleType("agent_modules.util")
+    am_util = types.ModuleType("mindforge.agent_modules.util")
     am_util.ST_MODEL_NAME = "fake-model"
-    monkeypatch.setitem(sys.modules, "agent_modules", am_pkg)
-    monkeypatch.setitem(sys.modules, "agent_modules.util", am_util)
+    monkeypatch.setitem(sys.modules, "mindforge.agent_modules", am_pkg)
+    monkeypatch.setitem(sys.modules, "mindforge.agent_modules.util", am_util)
 
     return FakeSentenceTransformer
 

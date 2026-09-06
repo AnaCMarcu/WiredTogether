@@ -10,13 +10,13 @@ untouched.
 
 import social_stubs  # noqa: F401  (sys.path bootstrap for src/mindforge)
 
-from env.communication_rewards import (
+from mindforge.env.communication_rewards import (
     BASE_MSG_CAP,
     BASE_MSG_REWARD,
     CHAMBER_COMM_THRESHOLDS,
     RATE_LIMIT_STEPS,
 )
-from env.social_act_rewards import CHAMBER_ACT_THRESHOLDS, SocialActRewardTracker
+from mindforge.env.social_act_rewards import CHAMBER_ACT_THRESHOLDS, SocialActRewardTracker
 
 CH2_POS = (0.0, 0.0, 20.0)   # inside ch2 bounds
 NOWHERE = (0.0, 0.0, 999.0)  # outside every chamber

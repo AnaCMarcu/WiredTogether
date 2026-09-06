@@ -48,7 +48,7 @@
 # Per-call audit artifacts land in the run dir under orchestrator/
 # (calls.jsonl, compliance.jsonl, maps/*.png); token counts appear in
 # log.txt both as the standard [LocalModel usage] lines (already counted by
-# scripts/compute_flops.py) and as tagged [Orchestrator usage] lines so the
+# analysis/compute_flops.py) and as tagged [Orchestrator usage] lines so the
 # orchestrator's share is separable.
 # ───────────────────────────────────────────────────────────────────────────
 

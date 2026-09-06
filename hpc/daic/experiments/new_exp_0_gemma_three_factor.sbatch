@@ -25,7 +25,7 @@
 #     silent pair; the comm term is not gated to far-apart pairs).
 #
 # Parameters follow the open-loop prototype's panel C
-# (paper_assets_hebbian_terms/three_factor_prototype_seed456.*):
+# (paper_assets/hebbian_terms/three_factor_prototype_seed456.*):
 #     η0 0.001 (vs 0.005 in the reward_modulated arm — reward, not
 #               co-presence, is the driver)
 #     λ  0.001 (vs 0.005 — reward is sparse so it cannot saturate W,

@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=qwen-3f-fdecay
 #SBATCH --partition=general
-#SBATCH --qos=long
-#SBATCH --time=72:00:00
+#SBATCH --qos=medium
+#SBATCH --time=36:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
@@ -30,6 +30,11 @@
 # Same medium-suite shape as exp32/exp33 (3 eps × 1000 steps, vision auto,
 # prompt social module, RUN_GROUP=medium_runs); three-factor parameters
 # unchanged: η0 0.001, λ 0.001, ρ 0.9, coact floor 0.25, R 50, η+ 0.05.
+#
+# qos=medium at its 36 h max (vs exp32/33's long/72 h): schedules much
+# faster, but a 9B vision run that exceeds the wall is TIMEOUT-killed with
+# no resumable state — if a 9B seed dies at the wall, resubmit that seed
+# with QOS overridden back to long via a copy or sbatch --qos/--time flags.
 #
 # Both backbones, three seeds (6 jobs):
 #   cd $REPO/hpc/daic/experiments

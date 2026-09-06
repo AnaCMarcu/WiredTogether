@@ -18,7 +18,7 @@
 #SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
-# probe_nan.sbatch — run scripts/probe_nan_logits.py on a GPU node.
+# probe_nan.sbatch — run hpc/diagnostics/probe_nan_logits.py on a GPU node.
 #
 # Diagnoses the NaN-logits failure that killed every LLM call in the 26b/31b
 # pareto smoke runs, WITHOUT the Craftium/Minetest stack around it (a full
@@ -78,7 +78,7 @@ apptainer exec --nv \
     --env CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-1}" \
     --env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
     "$IMG" \
-    python -u "$REPO/scripts/probe_nan_logits.py" \
+    python -u "$REPO/hpc/diagnostics/probe_nan_logits.py" \
         --model "$MODEL_PATH" \
         --configs "$CONFIGS" \
         $EXTRA_ARGS

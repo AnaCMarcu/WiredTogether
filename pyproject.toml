@@ -1,10 +1,17 @@
 [tool.poetry]
-name = "WiredTogether"
-version = "0.1.0"
-description = "Multi-agent reinforcement learning in Craftium"
+name = "wiredtogether"
+version = "1.0.0"
+description = "Reward-modulated Hebbian social plasticity for multi-agent systems, and the WIRE environment"
 authors = ["Ana Cristiana Marcu"]
+license = "MIT"
 readme = "README.md"
-packages = [{include = "src"}]
+packages = [
+    {include = "hebbian", from = "src"},
+    {include = "rl_layer", from = "src"},
+    {include = "mindforge", from = "src"},
+    {include = "marl_craftium", from = "src"},
+    {include = "orchestrator", from = "src"},
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"

@@ -32,7 +32,7 @@
 # Lands in its OWN namespace: runs/pareto_social/new_exp_0_gemma_si<N>/
 # seed_<S>/ + wandb project pareto_social_wired_together. The anchors stay in
 # runs/new_exp_0_gemma/; the analysis reads both roots, e.g.
-#   python scripts/compute_flops.py runs_from_daic/new_exp_0_gemma \
+#   python analysis/compute_flops.py runs_from_daic/new_exp_0_gemma \
 #                                   runs_from_daic/pareto_social
 # cli_args.social_interval is recorded in final_metrics.json, and runs made
 # with the [LocalModel usage] line get exact prefill token counts.

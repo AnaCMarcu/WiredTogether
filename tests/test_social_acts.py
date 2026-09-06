@@ -18,8 +18,8 @@ import social_stubs  # noqa: F401  (installs autogen/chromadb stand-ins)
 
 import pytest
 
-from agent_modules import social_acts as sa
-from agent_modules.util import (
+from mindforge.agent_modules import social_acts as sa
+from mindforge.agent_modules.util import (
     AgentResponse,
     SocialAgentResponse,
     SocialThought,

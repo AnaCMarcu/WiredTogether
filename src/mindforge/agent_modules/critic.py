@@ -1,9 +1,6 @@
-import json
-import logging
 import os
-from agent_modules.llm_call import llm_call
-from agent_modules.util import CriticResponse, create_model_client, safe_format
-from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
+from mindforge.agent_modules.llm_call import llm_call
+from mindforge.agent_modules.util import CriticResponse, create_model_client, safe_format
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 

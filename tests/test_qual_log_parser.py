@@ -1,4 +1,4 @@
-"""Unit tests for analysis_qualitative log parsing + alignment."""
+"""Unit tests for analysis/qualitative log parsing + alignment."""
 
 import json
 

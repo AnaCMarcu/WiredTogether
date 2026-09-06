@@ -11,7 +11,7 @@ import statistics
 import matplotlib.pyplot as plt
 import numpy as np
 
-from agent_modules.craftium_metric import (
+from mindforge.agent_modules.craftium_metric import (
     TRACKS,
     TRACK_ORDER,
     _agent_id_from_name,

@@ -152,7 +152,7 @@ SEEDS=(${SEEDS:-42 123 456})
 #   anchor : legacy mode on the NEW code (live non-regression: no choice
 #            sidecars, empty social_act_metrics, messages still flow)
 # After they finish, validate ALL gates in one shot:
-#   python scripts/check_cofiring_smoke.py --runs-root runs/cofiring_final_smoke
+#   python hpc/diagnostics/check_cofiring_smoke.py --runs-root runs/cofiring_final_smoke
 if [ "${SMOKE:-0}" = "1" ]; then
     EXPS=(exp23_cofire_prcoi exp22_cofire_pri exp27_cofire_anchor)
     SEEDS=(42)

@@ -11,9 +11,9 @@ from autogen_ext.memory.chromadb import (
     SentenceTransformerEmbeddingFunctionConfig,
 )
 
-from agent_modules.llm_call import llm_call
-from agent_modules.skill_manager import _chromadb_base_dir
-from agent_modules.util import (
+from mindforge.agent_modules.llm_call import llm_call
+from mindforge.agent_modules.skill_manager import _chromadb_base_dir
+from mindforge.agent_modules.util import (
     CurriculumAnswerResponse,
     CurriculumQuestionResponse,
     CurruliculumResponse,

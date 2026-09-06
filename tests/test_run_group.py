@@ -14,8 +14,8 @@ SRC_MINDFORGE = Path(__file__).resolve().parents[1] / "src" / "mindforge"
 if str(SRC_MINDFORGE) not in sys.path:
     sys.path.insert(0, str(SRC_MINDFORGE))
 
-from run_layout import DEFAULT_RUN_GROUP, RunPaths, resolve_run_group  # noqa: E402
-import wandb_logger  # noqa: E402
+from mindforge.run_layout import DEFAULT_RUN_GROUP, RunPaths, resolve_run_group  # noqa: E402
+from mindforge import wandb_logger  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

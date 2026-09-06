@@ -26,8 +26,6 @@ from typing import Dict, List, Optional
 
 import torch
 
-import torch.nn.functional as F
-
 from rl_layer.config import RLConfig
 from rl_layer.heads import RunningMeanStd, ValueHead
 from rl_layer.peft_compat import resolve_lora_targets

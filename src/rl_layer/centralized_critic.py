@@ -16,6 +16,7 @@ tuples and runs an MSE update once per round, independent of any agent's update.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Dict, List, Optional, Sequence
 
 import numpy as np
@@ -185,7 +186,7 @@ class CentralizedCritic:
         )
 
         from sentence_transformers import SentenceTransformer
-        from agent_modules.util import ST_MODEL_NAME
+        from mindforge.agent_modules.util import ST_MODEL_NAME
         self._sentence_model = SentenceTransformer(
             ST_MODEL_NAME, device=str(self._device)
         )
@@ -344,8 +345,7 @@ class CentralizedCritic:
 
     # ─── Persistence ──────────────────────────────────────────────────
 
-    def save(self, path: "os.PathLike | str") -> None:
-        import os
+    def save(self, path: os.PathLike | str) -> None:
         os.makedirs(path, exist_ok=True)
         torch.save(self.net.state_dict(), f"{path}/critic_net.pt")
         torch.save({
@@ -353,8 +353,7 @@ class CentralizedCritic:
             "update_count": self._update_count,
         }, f"{path}/critic_state.pt")
 
-    def load(self, path: "os.PathLike | str") -> None:
-        import os
+    def load(self, path: os.PathLike | str) -> None:
         net_path = f"{path}/critic_net.pt"
         state_path = f"{path}/critic_state.pt"
         if os.path.exists(net_path):

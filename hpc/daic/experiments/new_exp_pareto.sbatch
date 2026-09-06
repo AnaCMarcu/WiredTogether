@@ -13,7 +13,7 @@
 
 # ───────────────────────────────────────────────────────────────────────────
 # new_exp_pareto — Gemma 4 size sweep for the Pareto plots (perception ×
-# performance, points = model size; compute axis via scripts/compute_flops.py).
+# performance, points = model size; compute axis via analysis/compute_flops.py).
 # Same shape as new_exp_0_gemma (3 episodes × 1000 steps, vision on, base vs
 # hebbian arms) so the existing E4B runs slot in as the 4.5B point.
 #

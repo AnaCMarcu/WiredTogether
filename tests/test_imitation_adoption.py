@@ -10,7 +10,7 @@ the delivered sequence. ``PendingImitation`` is the matcher the router uses;
 
 import social_stubs  # noqa: F401  (installs autogen/chromadb stand-ins)
 
-from agent_modules.social_acts import (
+from mindforge.agent_modules.social_acts import (
     ADOPTION_WINDOW_FACTOR,
     PendingImitation,
     render_imitation_payload,

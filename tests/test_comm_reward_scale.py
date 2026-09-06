@@ -11,7 +11,7 @@ that is the flag contract: without it, behavior is unchanged.
 
 import social_stubs  # noqa: F401  (sys.path bootstrap for src/mindforge)
 
-from env.communication_rewards import (
+from mindforge.env.communication_rewards import (
     BASE_MSG_REWARD,
     CHAMBER_COMM_THRESHOLDS,
     CommunicationTracker,

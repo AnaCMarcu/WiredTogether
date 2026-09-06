@@ -1,9 +1,6 @@
-import logging
 import os
-from autogen_core.models import ChatCompletionClient, UserMessage, SystemMessage
-
-from agent_modules.llm_call import llm_call
-from agent_modules.util import (
+from mindforge.agent_modules.llm_call import llm_call
+from mindforge.agent_modules.util import (
     BeliefResponse,
     create_model_client,
     load_belief,

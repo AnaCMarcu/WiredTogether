@@ -18,7 +18,7 @@ response (only triggered by the agent's learning-belief mechanism).
 """
 
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import torch
 import torch.nn as nn

@@ -1,6 +1,6 @@
 import os
-from agent_modules.llm_call import llm_call
-from agent_modules.util import (
+from mindforge.agent_modules.llm_call import llm_call
+from mindforge.agent_modules.util import (
     AgentResponse,
     TargetedCommunicationResponse,
     create_model_client,

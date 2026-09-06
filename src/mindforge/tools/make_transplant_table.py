@@ -23,7 +23,7 @@ messages.jsonl; pooled the same way. Chance level at N=6 is 0.20.
 
 Usage:
     PYTHONPATH=src python src/mindforge/tools/make_transplant_table.py
-Writes paper_assets_transplant/TRANSPLANT_MAIN_TABLE.tex; Qwen rows appear
+Writes paper_assets/transplant/TRANSPLANT_MAIN_TABLE.tex; Qwen rows appear
 automatically when runs_from_daic/pair_bonding_qwen/expB_* exists, and as
 placeholders otherwise.
 """
@@ -55,7 +55,7 @@ MODELS = [
 ARMS = [("Transplant", "expB_merged_transplant"),
         ("Shuffled", "expB_merged_shuffled")]
 
-OUT = Path("paper_assets_transplant/TRANSPLANT_MAIN_TABLE.tex")
+OUT = Path("paper_assets/transplant/TRANSPLANT_MAIN_TABLE.tex")
 
 
 def pooled(vals, nd):
@@ -296,7 +296,7 @@ def build():
     return "\n".join(lines) + "\n"
 
 
-PAIR_OUT = Path("paper_assets_transplant/TRANSPLANT_PAIR_TABLE.tex")
+PAIR_OUT = Path("paper_assets/transplant/TRANSPLANT_PAIR_TABLE.tex")
 
 PAIR_LABELS = {
     "Transplant": ["Pair 1 (co-fired)", "Pair 2 (co-fired)",

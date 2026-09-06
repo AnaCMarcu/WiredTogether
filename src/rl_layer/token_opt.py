@@ -195,8 +195,8 @@ def _build_bond_context(rl: "RLLayer", hebbian_graph) -> str:
 # ─── Decision LLM call ─────────────────────────────────────────────────
 
 async def _ask_agent(rl: "RLLayer", prompt: str, cancellation_token):
-    from agent_modules.llm_call import llm_call
-    from agent_modules.util import create_model_client
+    from mindforge.agent_modules.llm_call import llm_call
+    from mindforge.agent_modules.util import create_model_client
     from pydantic import BaseModel
 
     class LearningBeliefResponse(BaseModel):

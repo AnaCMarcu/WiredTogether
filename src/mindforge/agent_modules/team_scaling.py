@@ -29,12 +29,7 @@ Imports chamber_facts (stdlib-only) + os — safe to import anywhere.
 
 import os
 
-try:
-    # Runtime path: multi_agent_craftium.py runs as a script from
-    # src/mindforge, so agent_modules is a top-level package.
-    from agent_modules.chamber_facts import ch4_zombie_count
-except ImportError:  # pragma: no cover — test-suite path (PYTHONPATH=src)
-    from mindforge.agent_modules.chamber_facts import ch4_zombie_count
+from mindforge.agent_modules.chamber_facts import ch4_zombie_count
 
 # Frozen pre-placeholder text (the original 3-agent wording, byte-exact —
 # note switch_rotation carries the original line wrap of the role files).

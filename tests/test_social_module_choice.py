@@ -7,7 +7,7 @@ thoughts add exactly one suggestion line.
 
 import social_stubs  # noqa: F401  (installs autogen/chromadb stand-ins)
 
-from agent_modules.social_module import SocialModule
+from mindforge.agent_modules.social_module import SocialModule
 
 
 def _module():

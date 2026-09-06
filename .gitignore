@@ -188,7 +188,8 @@ marimo/_lsp/
 __marimo__/
 
 
-# Runs
+# Run artifacts. runs/ is written locally; runs_from_daic/ holds the runs
+# synced off the cluster and is what the analysis/ scripts read.
 runs/
 runs_from_hpc/
 runs_from_daic/
@@ -198,17 +199,6 @@ slurm_logs/
 hpc/daic/slurm_*.out
 hpc/daic/slurm_*.err
 
-# Vendored hebbian-marl sub-project — per-run artifacts only.
-# The source (epymarl/, scripts/, tests/, configs/, pyproject.toml) IS tracked;
-# only training outputs and local environments are excluded.
-hebbian-marl/.venv/
-hebbian-marl/results/
-hebbian-marl/runs/
-hebbian-marl/hebbian_marl.egg-info/
-hebbian-marl/epymarl/results/
-hebbian-marl/**/__pycache__/
-hebbian-marl/**/.pytest_cache/
-
 craftium/
 
 # Claude Code local settings
@@ -217,3 +207,16 @@ craftium/
 *.stackdump
 
 hpc/delft_blue/analysis/out/
+
+# LaTeX paper sources synced into the repo; not part of the code release.
+wired_together_iclr2027*/
+paper/
+
+# Generated tables and figures. Every one is reproducible from analysis/.
+paper_assets/
+
+# Qualitative pipeline outputs: derived from the run logs, except the
+# annotation labels, which are produced by an LLM annotator and kept.
+analysis/qualitative/out/*
+!analysis/qualitative/out/annotations/
+analysis/qualitative/out_*/

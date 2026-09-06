@@ -357,7 +357,7 @@ def test_craftium_metric_milestones_match_lua(lua_root):
 
 def test_make_results_milestones_match_lua(lua_root):
     """make_results.py mirrors craftium_metric's table; key-milestone ids exist in Lua."""
-    mr = (REPO / "make_results.py").read_text(encoding="utf-8")
+    mr = (REPO / "analysis" / "make_results.py").read_text(encoding="utf-8")
     cm = (REPO / "src" / "mindforge" / "agent_modules"
           / "craftium_metric.py").read_text(encoding="utf-8")
 

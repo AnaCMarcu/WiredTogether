@@ -600,7 +600,7 @@ def main(argv=None):
                     default="runs_from_daic/pair_bonding_qwen/expA_pair_bonding/seed_*")
     ap.add_argument("--seeds", type=int, nargs="+", default=[42, 123, 456])
     ap.add_argument("--out",
-                    default="paper_assets_transplant/TRANSPLANT_REPORT.md")
+                    default="paper_assets/transplant/TRANSPLANT_REPORT.md")
     args = ap.parse_args(argv)
     report = build(args)
     Path(args.out).write_text(report, encoding="utf-8")

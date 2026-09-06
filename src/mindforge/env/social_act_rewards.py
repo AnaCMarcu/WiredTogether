@@ -20,7 +20,7 @@ existing suite's reward stream byte-identical.
 
 from collections import defaultdict
 
-from env.communication_rewards import (
+from mindforge.env.communication_rewards import (
     BASE_MSG_CAP,
     BASE_MSG_REWARD,
     CHAMBER_BOUNDS,

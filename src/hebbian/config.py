@@ -86,23 +86,22 @@ class HebbianConfig:
     # rl_layer.ppo_update._collect_social_replay for the full argument.
     social_replay_rho: float = 0.0
 
-    # ── Reward diffusion (Eq. 8) ── (shared by ALL modes)
-    reward_diffusion_gamma: float = 0.2  # γ
+    # ── Reward diffusion (Eq. 9) ── (shared by ALL modes)
+    reward_diffusion_gamma: float = 0.2  # γ_d
 
-
-    eta_plus: float = 0.05
-
-    eta_0: float = 0.01
-
-    eta_minus: float = 0.025
-
-    coop_eps: float = 0.05
-
-    coop_window: int = 50
-
-    neg_theta: float = 5.0
-
-    reward_norm_R: float = 300.0
+    # ── Reward-modulated update (Eq. 7; mode = "reward_modulated") ──────
+    # ΔW = (η₀ + η₊·|r_bond|/R)·c_ij·(1−W) − η₋·φ_ij·W − λ·W
+    eta_plus: float = 0.05      # η₊  reward-modulated growth rate
+    eta_0: float = 0.01         # η₀  association floor: growth on a zero-reward
+                                #     step, so repeated co-firing alone wires
+    eta_minus: float = 0.025    # η₋  failure-gated decay rate
+    coop_eps: float = 0.05      # ε   co-activity floor; below it a pair counts
+                                #     as quiet and the failure gate can open
+    coop_window: int = 50       # n   steps of co-activity / reward history the
+                                #     gate looks back over
+    neg_theta: float = 5.0      # θ   windowed loss below −θ marks agent i as
+                                #     having a negative outcome
+    reward_norm_R: float = 300.0  # R  salience normaliser for |r_bond|
 
     # ── Three-factor variant (mode = "three_factor") ────────────────────
     # Eligibility-trace decay ρ_e: e_ij ← ρ_e·e_ij + c_ij, so co-activity

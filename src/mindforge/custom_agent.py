@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from collections import deque
 from typing import Sequence
 
@@ -8,15 +7,15 @@ from autogen_agentchat.messages import BaseChatMessage, TextMessage
 from autogen_core import CancellationToken
 from autogen_agentchat.messages import MultiModalMessage
 
-from agent_modules.action_selection import ActionSelection
-from agent_modules.auto_curriculum import AutoCurriculum
-from agent_modules.belief_system import BeliefSystem
-from agent_modules.chamber_facts import describe_chamber as _describe_chamber
-from agent_modules.critic import Critic
-from agent_modules.episodic_memory_manager import EpisodicMemoryManager
-from agent_modules.craftium_metric import CraftiumMetric as Metric
-from agent_modules.skill_manager import SkillManager
-from agent_modules.social_module import SocialModule
+from mindforge.agent_modules.action_selection import ActionSelection
+from mindforge.agent_modules.auto_curriculum import AutoCurriculum
+from mindforge.agent_modules.belief_system import BeliefSystem
+from mindforge.agent_modules.chamber_facts import describe_chamber as _describe_chamber
+from mindforge.agent_modules.critic import Critic
+from mindforge.agent_modules.episodic_memory_manager import EpisodicMemoryManager
+from mindforge.agent_modules.craftium_metric import CraftiumMetric as Metric
+from mindforge.agent_modules.skill_manager import SkillManager
+from mindforge.agent_modules.social_module import SocialModule
 
 
 MILESTONE_REWARD_THRESHOLD = 10.0
@@ -67,7 +66,6 @@ def _render_step_log(step_log):
 
 class CustomAgent(BaseChatAgent):
 
-    # Initialize the agent with a name, description, and model client
     def __init__(
         self,
         name: str,

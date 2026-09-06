@@ -194,7 +194,7 @@ def analyze_run(run_dir, manifest_path=None, per_episode=False, out=sys.stdout):
 
     chance = 1.0 / (num_agents - 1) if num_agents > 1 else None
     print(f"run: {run_dir}", file=out)
-    print(_fmt_matrix(total, f"messages i->j (all episodes):"), file=out)
+    print(_fmt_matrix(total, "messages i->j (all episodes):"), file=out)
     if per_episode:
         for ep, mat in episodes.items():
             print(_fmt_matrix(mat, f"messages i->j ({ep}):"), file=out)

@@ -173,7 +173,7 @@ def create_orchestrator_client(cfg: OrchestratorConfig,
     """
     import os
 
-    from agent_modules.util import create_model_client
+    from mindforge.agent_modules.util import create_model_client
 
     if cfg.model is None:
         return create_model_client(response_format=response_format)
@@ -188,7 +188,7 @@ def create_orchestrator_client(cfg: OrchestratorConfig,
 
     from autogen_ext.models.openai import OpenAIChatCompletionClient
 
-    from agent_modules.util import _resolve_api_key, base_url
+    from mindforge.agent_modules.util import _resolve_api_key, base_url
 
     return OpenAIChatCompletionClient(
         model=cfg.model,
@@ -464,10 +464,8 @@ def _default_parse_json():
         parsed = parse_orchestrator_json(raw)
         if isinstance(parsed, dict) and "ledger" in parsed:
             return parsed
-        try:
-            from agent_modules.util import load_json
-        except ImportError:
-            from mindforge.agent_modules.util import load_json
+        from mindforge.agent_modules.util import load_json
+
         fallback = load_json(raw)
         return fallback if fallback else parsed
 

@@ -1,15 +1,15 @@
 # WiredTogether test suite
 
-Verification suite for the `src/` implementation, written as part of the pre-submission
-audit (see `docs/PAPER_INCONSISTENCIES.md` for the paper-consistency record this suite
-underpins). 194 tests, all runnable locally on Windows/CPU with no game binary, no LLM
-weights, and no network.
+Verification suite for `src/`: 600 tests, all runnable locally on CPU with no game binary,
+no model weights and no network. They pin the hyperparameter defaults against the paper's
+tables, the Hebbian update arithmetic against hand computations, the reward ledger, and the
+Lua and Python milestone tables against each other.
 
 ## Running
 
 ```powershell
 # from the repo root — conftest handles sys.path; PYTHONPATH not required
-python -m pytest tests -q          # full suite, ~5 s
+python -m pytest tests -q          # full suite, ~25 s
 python -m pytest tests -q -x       # stop at first failure
 python -m pytest tests/test_hebbian_update.py -q -k decay   # focused
 ```
@@ -27,7 +27,7 @@ Markers (registered in `pyproject.toml`; the default `addopts` excludes the heav
 | File | Covers |
 |---|---|
 | `conftest.py` | offline env guards, `sys.path`, stubs for `pettingzoo`/`craftium` (not importable on Windows), `seed_all`, `hcfg` HebbianConfig factory, `fake_sentence_transformers`, `lua_root` |
-| `test_paper_defaults.py` | RLConfig == paper Table 6; HebbianConfig == paper Table 7; comm-reward constants (pins inconsistency #1) |
+| `test_paper_defaults.py` | RLConfig and HebbianConfig against the paper's hyperparameter tables; comm-reward constants |
 | `test_hebbian_coactivity.py` | engagement g_i, spatial gate (radius d, inclusive boundary), comm bonus δ_comm, ε-floor, chamber gate |
 | `test_hebbian_update.py` | hand-computed growth/decay, `_growth_coeff` variants, directed asymmetry, failure-gated decay windows, homeostatic λ decay + fixed point, death exclusion, clip/diag invariants |
 | `test_hebbian_graph_api.py` | presets, init matrices, reward-diffusion hand cases, replay sampling, metrics, to_dict/from_dict, reset, bond deltas, legacy mode, disabled no-ops |
@@ -43,35 +43,16 @@ Markers (registered in `pyproject.toml`; the default `addopts` excludes the heav
 
 ## Conventions
 
-- Tests pin **actual code behaviour** with hand-computed expected values; where code and the
-  thesis paper diverge, the test asserts the code and the divergence is recorded in
-  `docs/PAPER_INCONSISTENCIES.md` — never silently reconciled.
+- Tests pin **actual code behaviour** with hand-computed expected values. Where the code and
+  the paper diverge, the test asserts the code — never the other way round.
 - The Lua game logic is not executed; `test_lua_spec.py` parses the `.lua` sources and pins
-  constants/ids, which doubles as a cross-language drift guard (it caught two of the bugs
-  below).
+  constants/ids, which doubles as a cross-language drift guard.
 - Heavy dependencies are faked at the `sys.modules` level (`pettingzoo`, `craftium`) or via
   fixture (`sentence_transformers`); `autogen_*`/`chromadb`/`wandb` are deliberately NOT
   stubbed globally so accidental heavy imports fail loudly.
 
-## Source fixes that came out of this suite
+## Known divergences
 
-All six are in the metrics/analysis layer or numerical guards — none changes the reward
-stream delivered during any collected run (full entries: `docs/PAPER_INCONSISTENCIES.md` #14):
-
-1. `src/mindforge/env/cooperation_metric.py` — `_CH2_ANVIL_PREFIXES` `("m8_", "m11_")` →
-   `("m8_", "m9_")`: the Lua mod renamed the second anvil to `m9_anvil_B1`, so Ch2
-   cooperation performance could never exceed 0.5.
-2. `src/rl_layer/trajectory_buffer.py` — GAE advantage standardisation NaN'd a
-   single-transition buffer (torch unbiased std); now skipped below 2 transitions.
-3. `src/hebbian/graph.py` — `reset()` now clears and re-seeds `_W_history`; previously
-   post-reset bond deltas were computed against stale pre-reset snapshots.
-4. `src/mindforge/agent_modules/coop_eval.py` — damage-share credit ids normalised
-   (`_agent_key`): '0'/'1' damage keys never matched 'agent0'/'agent_0' contributors, so
-   damage-share always silently degraded to an equal split.
-5. `src/mindforge/agent_modules/craftium_metric.py` — `m_door1_open` (reward 50) added to
-   `MILESTONE_TRACK`/`TRACKS`; it was silently dropped from every ch1_solo aggregate.
-6. `make_results.py` — same `m_door1_open` gap closed in the mirrored table.
-
-Known issues found but deliberately **not** fixed (they change environment/reward behaviour
-relative to collected runs): stale Ch4 zombie spawn positions and stale Python chamber
-z-bands — see `docs/PAPER_INCONSISTENCIES.md` #16.
+Two issues are deliberately left unfixed, because changing either would alter the environment
+relative to every run already collected: stale Ch4 zombie spawn positions, and Python-side chamber
+z-bands that lag the Lua geometry.

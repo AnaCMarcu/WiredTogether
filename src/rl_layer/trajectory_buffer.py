@@ -6,7 +6,7 @@ the buffer is consumed by ``mappo.ppo_update`` and then cleared.
 
 import logging
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 import numpy as np

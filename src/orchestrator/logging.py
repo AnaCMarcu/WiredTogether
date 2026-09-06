@@ -13,7 +13,7 @@ Everything lands under ``<run_dir>/<orchestrator.log_dir_name>/``:
 
 Token counts also go to the run log as a tagged line
 ``[Orchestrator usage] prompt_tokens=... completion_tokens=...`` so the
-run's FLOPs accounting (FLOPs = 2 * N_eff * tokens; scripts/compute_flops.py
+run's FLOPs accounting (FLOPs = 2 * N_eff * tokens; analysis/compute_flops.py
 parses log.txt) can attribute orchestrator calls separately. Note the calls
 themselves still emit the standard ``[LocalModel usage]`` line inside the
 shared client, so they are already included in the run-level aggregate —

@@ -1,4 +1,4 @@
-"""Synthetic run-dir + llm_logs builders for analysis_qualitative tests.
+"""Synthetic run-dir + llm_logs builders for analysis/qualitative tests.
 
 Extends the on-disk-layout approach of ``test_coop_comm_eval._write_episode``
 with a writer for llm_logs files that emits the EXACT line grammar of
@@ -15,7 +15,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-for _p in (str(REPO / "analysis_qualitative"), str(REPO / "src"), str(REPO)):
+for _p in (str(REPO / "analysis" / "qualitative"), str(REPO / "analysis"),
+          str(REPO / "src"), str(REPO)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 

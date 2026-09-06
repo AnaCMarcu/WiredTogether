@@ -1,14 +1,32 @@
-import argparse
+"""Entry point: the WIRE episode loop.
+
+Runs ``--num-agents`` MindForge agents through the five chambers for
+``--episodes`` episodes, and drives the three couplings the paper studies:
+the Hebbian social graph (reward diffusion + social module), the LoRA-PPO
+RL layer (MAPPO or IPPO), and the centralised orchestrator baselines.
+
+Everything else lives beside it: the flags in :mod:`mindforge.cli`, agent
+construction in :mod:`mindforge.agent_factory`, checkpoint save/restore in
+:mod:`mindforge.checkpointing`, run-directory layout in
+:mod:`mindforge.run_layout`.
+
+    PYTHONPATH=src python src/mindforge/multi_agent_craftium.py --help
+"""
+
 import asyncio
+import json
+import logging
 import os
 import random
 import sys
 import time
-import logging
+from datetime import datetime
 from pathlib import Path
 
 sys.setrecursionlimit(10000)
-from datetime import datetime
+
+if __package__ in (None, ""):  # launched as a script: put src/ on sys.path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 import PIL
@@ -16,830 +34,25 @@ from autogen_agentchat.messages import TextMessage, MultiModalMessage
 from autogen_core import CancellationToken, Image
 from autogen_core import EVENT_LOGGER_NAME
 
-from custom_agent import CustomAgent
-from custom_environment_craftium import CraftiumEnvironmentInterface, VALID_ACTIONS
-from agent_modules.action_selection import ActionSelection
-from agent_modules.auto_curriculum import AutoCurriculum
-from agent_modules.belief_system import BeliefSystem
-from agent_modules.critic import Critic
-from agent_modules.skill_manager import SkillManager
-from agent_modules.episodic_memory_manager import EpisodicMemoryManager
-from agent_modules.craftium_metric import CraftiumMetric, format_milestone_progress
-from agent_modules.social_module import SocialModule
+from mindforge import wandb_logger as _wb
+from mindforge.agent_factory import (
+    ROLE_NAMES,
+    _resume_run_paths,
+    build_agents,
+    build_role_configs,
+    load_prompts,
+)
+from mindforge.agent_modules.craftium_metric import CraftiumMetric, format_milestone_progress
+from mindforge.chamber_schedule import compute_chamber_schedule
+from mindforge.checkpointing import load_checkpoint, save_checkpoint
+from mindforge.cli import parse_args, validate_args
+from mindforge.custom_environment_craftium import CraftiumEnvironmentInterface
 from mindforge.env.communication_rewards import CommunicationTracker
 from mindforge.env.cooperation_metric import CooperationMetric
 from mindforge.env.episode_logger import EpisodeLogger
+from mindforge.recording import _frames_to_mp4
 from mindforge.run_layout import RunPaths
-import json as _json
-
-from rl_layer import RLConfig, RLLayer, HebbianConfig, HebbianSocialGraph
-
-from mindforge.chamber_schedule import compute_chamber_schedule
-
-ROLE_NAMES = ["agent", "hunter", "harvester", "scouter"]
-
-# Macro actions removed — agents use only primitives. The macro
-# reward-deferral / macro-skip scaffolding (kept around as a no-op for a
-# while after the macro removal) was deleted in the T1.6 cleanup.
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Run Mindforge agents in Craftium OpenWorld")
-    parser.add_argument("--num-agents", type=int, default=3,
-                        help="Number of agents in five-chambers (all share the agent role)")
-    parser.add_argument("--team-scaling", action="store_true",
-                        help="Master switch for the agent-count scaling suite. "
-                             "ON: prompt text is rendered truthfully for the "
-                             "actual --num-agents (team size, cell letters, "
-                             "switch ring) and Lua uses the collision-free "
-                             "generic Ch1 spawn row (WT_TEAM_SCALING=1 is "
-                             "exported for the Lua side). OFF (default): every "
-                             "prompt renders the historical 3-agent wording "
-                             "byte-identically and the env behaves exactly as "
-                             "all pre-scaling suites — leave this off for "
-                             "legacy/medium/cofiring/transplant runs.")
-    parser.add_argument("--ch4-mob-count", type=int, default=None,
-                        help="Pin the Ch4 zombie count to this value regardless of "
-                             "--num-agents (exported as FC_CH4_MOB_COUNT to the Lua "
-                             "server AND used for the prompt text, so agents are "
-                             "told the true count). Default: unset — legacy "
-                             "one-zombie-per-agent, min(num_agents, 6). The "
-                             "agent-count scaling suite pins 3 so the environment "
-                             "is identical for every team size.")
-    parser.add_argument("--episodes", type=int, default=1,
-                        help="Number of episodes to run")
-    parser.add_argument("--max-steps", type=int, default=1500,
-                        help="Maximum steps per episode (default 1500 — fits the "
-                             "DAIC 36h SLURM budget). Each chamber timeout fires at "
-                             "20%% of this budget (Ch1->Ch2 at step ~300 of 1500), "
-                             "so the five chambers get a 20%% window apiece. "
-                             "Override with a larger value (e.g. 2500) when "
-                             "running on qos=long / --time=72:00:00 to give "
-                             "agents more headroom for organic Ch2-Ch3 "
-                             "coordination.")
-    parser.add_argument("--obs-width", type=int, default=320,
-                        help="Observation width in pixels")
-    parser.add_argument("--obs-height", type=int, default=180,
-                        help="Observation height in pixels")
-    parser.add_argument("--no-communication", action="store_true",
-                        help="Disable inter-agent communication entirely.")
-    parser.add_argument("--simultaneous", action=argparse.BooleanOptionalAction,
-                        default=True,
-                        help="Simultaneous-move stepping (DEFAULT ON): all agents "
-                             "choose actions concurrently on the shared state s_t "
-                             "and the env advances once via step_all(). Pass "
-                             "--no-simultaneous for the legacy turn-based "
-                             "round-robin (e.g. parity testing). Works with both "
-                             "LLM and --rl agents (macro actions were removed).")
-    parser.add_argument("--sleep-time", type=float, default=0.0,
-                        help="Seconds to sleep between LLM calls (rate-limit protection)")
-    parser.add_argument("--belief-interval", type=int, default=5,
-                        help="Refresh beliefs every N steps (default 5). Between refreshes "
-                             "cached beliefs are reused, saving 4 LLM calls per skipped step.")
-    parser.add_argument("--critic-interval", type=int, default=20,
-                        help="Run critic every N steps (default 20). Between evaluations "
-                             "cached success/critique are reused, saving 1 LLM call per skipped step.")
-    parser.add_argument("--no-gif", action="store_true",
-                        help="Disable GIF saving")
-    parser.add_argument("--gif-dir", type=str, default="auto",
-                        help="Directory to save GIFs. Default 'auto' resolves "
-                             "to <run_dir>/gifs/ so each run's media stays "
-                             "bundled with its other artifacts. Pass an "
-                             "explicit path (e.g. /scratch/$USER/gifs) to "
-                             "override.")
-    parser.add_argument("--gif-interval", type=int, default=300,
-                        help="Save a checkpoint GIF every N steps (default 300). 0 = only save at episode end. "
-                             "Raised from 100 after exp3_mappo crashed mid-ep3 (job 12616286): the GIF+MP4 dump "
-                             "every 100 steps × 3 agents × 320×180 frames spiked memory enough to OOM-kill one of "
-                             "the luanti client processes via SLURM cgroup. 300 cuts the dump rate by 3× and "
-                             "leaves more headroom in the per-job memory cap.")
-    parser.add_argument("--warmup-time", type=int, default=60,
-                        help="Minimum seconds before checking if media loaded (default 60). "
-                             "Smart detection exits early once all clients show game world.")
-    parser.add_argument("--ch1-timeout-steps", type=int, default=400,
-                        help="Lua-side Ch1-timeout fallback budget, in env steps. "
-                             "The Python primary now fires unconditionally at "
-                             "20%% of --max-steps (each chamber gets 20%% of the "
-                             "episode; Ch1→Ch2, Ch2→Ch3, Ch3→Ch4, Ch4→Ch5 are "
-                             "all on the same 20%% timer). "
-                             "This flag only sizes the Lua-side backstop in case "
-                             "Python's force-flag never reaches the world (mod "
-                             "I/O error, etc.). Default 400 → 60000 Lua ticks.")
-    # ── Weights & Biases ──
-    parser.add_argument("--wandb", action="store_true",
-                        help="Enable Weights & Biases logging. Requires WANDB_API_KEY "
-                             "in the environment. Failures during init/log are "
-                             "tolerated and do not kill training.")
-    parser.add_argument("--wandb-project", type=str, default="wired-together",
-                        help="W&B project name (default 'wired-together').")
-    parser.add_argument("--wandb-entity", type=str, default=None,
-                        help="W&B entity (team or user). Defaults to your "
-                             "wandb-configured default entity.")
-    parser.add_argument("--wandb-tags", type=str, default="",
-                        help="Comma-separated list of tags applied to the W&B "
-                             "run (e.g. 'llm,hebbian,seed_42').")
-    parser.add_argument("--wandb-id", type=str, default=None,
-                        help="Explicit W&B run id. Defaults to the sanitised "
-                             "run_id, which makes chunked SLURM jobs resume "
-                             "into the same W&B run (resume='allow').")
-    parser.add_argument("--wandb-upload-artifacts", action="store_true",
-                        help="Also upload final_metrics.json (and summary.txt) "
-                             "as W&B artifacts at run end. Off by default to "
-                             "save bandwidth on chunked runs.")
-    # ── Reproducibility ──
-    parser.add_argument("--seed", type=int, default=None,
-                        help="Random seed for reproducibility. Seeds torch, numpy, random, "
-                             "and the Minetest world. LLM sampling remains stochastic — "
-                             "run multiple trials and report mean/std.")
-    # ── RL layer ──
-    parser.add_argument("--rl", action="store_true",
-                        help="Enable the modular RL layer (action-level MAPPO)")
-    parser.add_argument("--rl-model-path", type=str, default=None,
-                        help="Path to base model for RL (e.g. /scratch/.../Qwen3.5-2B)")
-    parser.add_argument("--rl-lora-rank", type=int, default=8,
-                        help="LoRA rank for RL adapter")
-    parser.add_argument("--rl-update-interval", type=int, default=256,
-                        help="Steps between MAPPO updates")
-    parser.add_argument("--rl-update-stagger", action="store_true",
-                        default=os.environ.get("RL_UPDATE_STAGGER", "0") == "1",
-                        help="Stagger per-agent PPO updates by agent_id steps "
-                             "so the env steps between them instead of idling "
-                             "for the whole update round (default off; also "
-                             "via RL_UPDATE_STAGGER=1). Needed for Gemma E4B, "
-                             "whose ~40-min update rounds hang the Minetest "
-                             "bridge; Qwen's ~20-min rounds are safe without.")
-    parser.add_argument("--rl-lr", type=float, default=1e-4,
-                        help="Learning rate for RL optimiser")
-    parser.add_argument("--rl-auto-token-opt", action="store_true",
-                        help="Let agents self-trigger token-level optimisation")
-    parser.add_argument("--rl-mode", type=str, default="action",
-                        choices=["action", "token"],
-                        help="RL mode: 'action' = MAPPO action head, "
-                             "'token' = token-opt only (LLM picks actions)")
-    parser.add_argument("--rl-critic-mode", type=str, default="centralized",
-                        choices=["centralized", "independent"],
-                        help="Critic architecture for action-mode RL. "
-                             "'centralized' (default) = shared V(joint_state) critic across "
-                             "all agents (true MAPPO). "
-                             "'independent' = legacy per-agent value head on per-agent LLM "
-                             "hidden state (IPPO).")
-    parser.add_argument("--rl-prompt-max-tokens", type=int, default=512,
-                        help="Max tokens for RL prompt encoding. Capping this is critical "
-                             "for VRAM: at model_max_length=32768 a mini-batch of 8 prompts "
-                             "needs ~21 GB just for hidden states. 512 is sufficient for "
-                             "discrete action policy learning.")
-    # ── Hebbian social plasticity ──
-    parser.add_argument("--hebbian", action="store_true",
-                        help="Enable Hebbian social plasticity graph")
-    parser.add_argument("--hebbian-mode", type=str, default="reward_modulated",
-                        choices=["legacy", "coactivity", "reward_modulated",
-                                 "three_factor"],
-                        help="Graph-update rule. 'reward_modulated' (default, "
-                             "Variant B): growth (η0 + η+·|r_bond|/R)·c·(1−W). "
-                             "'coactivity' (Variant A): flat η+·c·(1−W). "
-                             "'three_factor': eligibility trace e←ρe+c with "
-                             "growth η0·c·(1−W) + η+·(|r_bond|/R)·e·(1−W) and "
-                             "monotone co-activity — reward credits recent "
-                             "joint work and persists (pair with a lower "
-                             "--hebbian-decay). 'legacy': old advantage-"
-                             "modulator + failure-window rule.")
-    # ── Gated-variant knobs (mode = coactivity | reward_modulated) ──
-    parser.add_argument("--hebbian-eta-plus", type=float, default=0.05,
-                        help="η+ growth rate (Variant A flat rate / Variant B "
-                             "salience scale)")
-    parser.add_argument("--hebbian-eta-0", type=float, default=0.01,
-                        help="η0 association floor (Variant B only)")
-    parser.add_argument("--hebbian-eta-minus", type=float, default=0.025,
-                        help="η- failure-gated decay rate")
-    parser.add_argument("--hebbian-coop-eps", type=float, default=0.05,
-                        help="ε 'no co-activity' / activity-floor threshold")
-    parser.add_argument("--hebbian-coop-window", type=int, default=50,
-                        help="n rolling-window length (steps) for coop/neg")
-    parser.add_argument("--hebbian-neg-theta", type=float, default=5.0,
-                        help="θ negative-reward threshold (between |futile|=1 "
-                             "and the death-class penalties |would-die|=10 / |death|=50)")
-    parser.add_argument("--hebbian-eligibility-rho", type=float, default=0.9,
-                        help="three_factor mode: eligibility-trace decay ρ_e "
-                             "(e ← ρ_e·e + c; memory ≈ 1/(1−ρ_e) steps)")
-    parser.add_argument("--hebbian-coact-floor", type=float, default=0.25,
-                        help="three_factor mode: co-location counts at least "
-                             "this much co-activity even for a silent pair; "
-                             "0 restores the engagement-gated spatial term")
-    parser.add_argument("--hebbian-death-ltd", type=float, default=0.0,
-                        help="three_factor mode: η₋ᵈ signed death LTD rate — "
-                             "a drained death/would-die penalty converts the "
-                             "eligibility trace into bond WEAKENING "
-                             "(ΔW⁻ = η₋ᵈ·(min(|death|,cap)/R)·e·W) on the "
-                             "dying agent's outgoing row. 0 (default) = off, "
-                             "byte-identical to the audited three_factor rule")
-    parser.add_argument("--hebbian-death-cap", type=float, default=10.0,
-                        help="cap on |death signal| before /R in the death-LTD "
-                             "term: would-die (−10) and real death (−50) "
-                             "blame equally")
-    parser.add_argument("--hebbian-reward-norm", type=float, default=300.0,
-                        help="R fixed bondable-reward normalizer (Variant B); "
-                             "default = largest milestone reward (m27=300)")
-    parser.add_argument("--hebbian-alpha", type=float, default=0.5,
-                        help="α engagement reward/comm mix in g_i")
-    parser.add_argument("--hebbian-radius", type=float, default=5.0,
-                        help="Interaction radius d (Minetest world units)")
-    parser.add_argument("--hebbian-ltp", type=float, default=0.01,
-                        help="η_+ LTP learning rate")
-    parser.add_argument("--hebbian-ltd", type=float, default=0.005,
-                        help="η_- LTD learning rate")
-    parser.add_argument("--hebbian-decay", type=float, default=0.005,
-                        help="λ passive decay rate")
-    parser.add_argument("--hebbian-beta", type=float, default=1.0,
-                        help="β modulation sensitivity")
-    parser.add_argument("--hebbian-rho", type=float, default=0.0,
-                        help="ρ social replay blend factor (Eq. 7 weight-gated "
-                             "experience sharing). 0 = off (paper default; "
-                             "matches HebbianConfig). Requires --rl and "
-                             "--hebbian; e.g. 0.3 makes ~30%% of each PPO "
-                             "pool bond-weighted neighbour transitions.")
-    parser.add_argument("--hebbian-gamma", type=float, default=0.2,
-                        help="γ reward diffusion strength")
-    parser.add_argument("--hebbian-init-weight", type=float, default=0.1,
-                        help="Initial bond weight W_0 (default 0.1 = warm start)")
-    parser.add_argument("--hebbian-no-comm-bond", action="store_true",
-                        help="Set δ_comm=0 (spatial-only, for RQ4 ablation)")
-    # ── Hardcoded / frozen graph (LLM-only social-bias ablation) ──
-    parser.add_argument("--hebbian-freeze", action="store_true",
-                        help="Freeze W for the whole run (no plasticity). Use "
-                             "with --hebbian-preset + --social-module bias to "
-                             "test an IMPOSED social topology. Pair with "
-                             "--hebbian-gamma 0.")
-    parser.add_argument("--hebbian-preset", type=str, default="none",
-                        choices=["none", "uniform", "star", "ring", "pair"],
-                        help="Hardcoded starting topology for W. 'uniform' = "
-                             "flat control; 'star' = all bond to the hub; "
-                             "'ring' = directed help chain; 'pair' = 0↔1 dyad "
-                             "+ loner.")
-    parser.add_argument("--hebbian-bond-strong", type=float, default=0.8,
-                        help="Value of a 'strong' hardcoded bond (preset)")
-    parser.add_argument("--hebbian-bond-weak", type=float, default=0.1,
-                        help="Value of a 'weak' hardcoded bond (preset)")
-    parser.add_argument("--hebbian-hub", type=int, default=0,
-                        help="Hub agent index for the 'star' preset")
-    # ── Pair-bonding transplant experiment (all default None = no-op) ──
-    parser.add_argument("--max-chamber", type=int, default=None,
-                        choices=[1, 2, 3, 4],
-                        help="Highest chamber the Python force-teleport timers "
-                             "will push agents into. E.g. 2 = the Ch1 timer "
-                             "still fires but agents are never force-moved "
-                             "past Ch2 (organic progression stays possible). "
-                             "Default: no cap (current behavior).")
-    parser.add_argument("--start-chamber", type=int, default=None,
-                        choices=[2, 3, 4, 5],
-                        help="Force-teleport all agents into this chamber at "
-                             "the start of every episode (after warmup) and "
-                             "suppress the timers for earlier chambers; the "
-                             "remaining chambers split the episode evenly. "
-                             "3 = start in the Ch3 cells. Default: normal "
-                             "Ch1 start.")
-    parser.add_argument("--hebbian-init-file", type=str, default=None,
-                        help="JSON file holding a full N×N starting W matrix "
-                             "(either {\"W\": [[...]]} or a raw nested list), "
-                             "e.g. merged_W.json from "
-                             "mindforge/tools/merge_pair_runs.py. Requires "
-                             "--hebbian; mutually exclusive with "
-                             "--hebbian-preset and --resume.")
-    parser.add_argument("--agent-state-init", type=str, default=None,
-                        help="Merged agent-state manifest JSON (skills, "
-                             "episodic memory, curriculum per agent slot) "
-                             "produced by merge_pair_runs.py. Imported into "
-                             "the fresh per-agent vector DBs after agent "
-                             "construction. Mutually exclusive with --resume.")
-    # ── Phase B+ thesis comparison: interpretability sidecar ──
-    # (`--reward-propagation` was removed alongside the deleted rlvr module
-    #  that provided per_teammate_contributions / attribute_source_events /
-    #  format_propagation_prompt. Reintroduce here if a local replacement
-    #  for those helpers is added.)
-    parser.add_argument("--interpretability", action="store_true",
-                        help="Emit interpretability.jsonl with per-step "
-                             "(agent, bond_row, action, comm_target, "
-                             "propagated_deltas) records. Auto-enabled when "
-                             "--hebbian is on; off otherwise.")
-    # ── Social module (Hebbian-driven social-reasoning layer) ──
-    parser.add_argument("--social-module", type=str, default="none",
-                        choices=["none", "prompt", "bias"],
-                        help="Social-reasoning module coupling: 'none' = "
-                             "disabled (legacy raw bond text in action "
-                             "prompt), 'prompt' = deliberation rendered as "
-                             "directive text in the action prompt, 'bias' = "
-                             "directive's ask_target also overwrites the "
-                             "agent's communication_target at the routing "
-                             "site. Requires --hebbian.")
-    parser.add_argument("--social-interval", type=int, default=8,
-                        help="Run the social-module deliberation every N "
-                             "steps (cached in between). 1 = every step. "
-                             "Default 8: bonds/directives change slowly, so "
-                             "deliberating every step burned ~200 LLM calls/"
-                             "room/agent for no behavioral gain.")
-    # ── Choice-mode social acts (Experiment 2) ──
-    parser.add_argument("--social-act-mode", type=str, default="legacy",
-                        choices=["legacy", "choice"],
-                        help="'legacy' (default): communication is a mandatory "
-                             "per-step field, exactly the historical behavior. "
-                             "'choice': each step the agent picks AT MOST ONE "
-                             "social act from --social-acts (communicate / "
-                             "observe / imitate / none); co-firing credits the "
-                             "channels in --cofiring-channels. LLM-only "
-                             "(incompatible with --rl).")
-    parser.add_argument("--social-acts", type=str, default="comm,obs,imit",
-                        help="Choice mode's affordance MENU: comma-separated "
-                             "subset of comm,obs,imit — or 'none' for a mute "
-                             "arm (proximity+reward floor). Ignored in legacy "
-                             "mode.")
-    parser.add_argument("--cofiring-channels", type=str, default=None,
-                        help="Choice mode's co-firing CREDIT mask: subset of "
-                             "comm,obs,imit or 'none'. Defaults to the value "
-                             "of --social-acts (credit what is afforded). "
-                             "Ignored in legacy mode (legacy credits comm).")
-    parser.add_argument("--social-bidirectional", action="store_true",
-                        help="Delivery-symmetric obs/imit ('agents that "
-                             "co-fire wire together'): one observation/"
-                             "imitation event credits BOTH directions of the "
-                             "pair (as comm already does), and the target is "
-                             "notified next step who observed/imitated it. "
-                             "Choice mode only. Default off: directed "
-                             "obs/imit terms, no notice — byte-identical to "
-                             "the historical behavior.")
-    parser.add_argument("--comm-distance-free", action="store_true",
-                        help="Drop the (1 - spatial) factor from the comm "
-                             "co-firing term: a message co-fires at ANY "
-                             "distance, unifying comm with obs/imit "
-                             "(c_k = delta*1[event]; the c_ij clip bounds "
-                             "stacking with the spatial term). Default off: "
-                             "legacy long-range-only comm.")
-    parser.add_argument("--social-act-rewards", action="store_true",
-                        help="Pay observation and imitation acts EXACTLY "
-                             "like communication (same 0.5 base reward, cap, "
-                             "rate limit, and per-chamber act milestones "
-                             "m_obs_chN/m_imit_chN at the comm-track "
-                             "values) — the act-reward symmetry suite. "
-                             "Choice mode only. Default off: reward streams "
-                             "byte-identical to the historical behavior.")
-    parser.add_argument("--comm-reward-scale", type=float, default=1.0,
-                        help="Scale on every communication PAYOUT (base msg "
-                             "reward + chamber comm milestones). 0.0 = the "
-                             "Experiment-2 noreward suite: messages still "
-                             "route and comm milestones still fire as "
-                             "events, but talking pays nothing — so it can "
-                             "neither manufacture bondable reward nor trip "
-                             "the milestone-success banner. Default 1.0 = "
-                             "historical behavior.")
-    parser.add_argument("--hebbian-delta", type=float, default=None,
-                        help="δ: the co-activity value of ONE social act "
-                             "(comm/obs/imit channel terms alike). Default "
-                             "None keeps the historical 0.5. Set 1.0 with "
-                             "--comm-reward-scale 0 so act-driven bonds "
-                             "(growing at the η0 floor, without comm-reward "
-                             "salience) still equilibrate in the analyzable "
-                             "band against the homeostatic decay.")
-    # ── Centralized task-ledger orchestrator (O2 baseline) ──────────────
-    # Mutually exclusive with the Hebbian condition (validated in __main__).
-    # All flags default to the disabled/no-op values so legacy runs are
-    # byte-identical.
-    parser.add_argument("--orchestrator", action="store_true",
-                        help="Enable the O2 centralized orchestrator: a "
-                             "non-embodied coordinator called every "
-                             "--orchestrator-cadence steps (and on events) "
-                             "that keeps a within-episode task ledger and "
-                             "issues per-agent comm_target/help directives. "
-                             "Runs INSTEAD of the Hebbian coupling.")
-    parser.add_argument("--orchestrator-variant", type=str, default="task",
-                        choices=["task", "social", "plan", "villager"],
-                        help="'task' (default) = the O2 task-ledger "
-                             "orchestrator (map + event digest in, "
-                             "comm_target/help out, relational content "
-                             "filtered, ledger reset per episode). 'social' "
-                             "= centralized social deliberation, information-"
-                             "matched to the Hebbian rule: pair co-presence/"
-                             "message-count/co-reward digest in, a per-agent "
-                             "SocialThought (ask_target/ask_message/"
-                             "respond_to) out, rendered in the SocialModule's "
-                             "exact directive format; relational notes "
-                             "allowed; ledger persists across episodes like "
-                             "W(t). 'plan' = social + each agent's auto-"
-                             "curriculum task in view + a per-agent plan_note "
-                             "delivered to that agent's curriculum at its "
-                             "next task generation (upper baseline). "
-                             "'villager' = VillagerAgent-style centralized "
-                             "DAG orchestration: a decomposer LLM proposes "
-                             "milestone-verified subtasks into a dependency "
-                             "graph, an allocator LLM HARD-assigns ready "
-                             "tasks to free agents (curriculum constrained "
-                             "to the objective; replans on reassignment); "
-                             "no communication routing.")
-    parser.add_argument("--orchestrator-node-timeout-steps", type=int,
-                        default=60,
-                        help="Villager only: a running DAG task fails after "
-                             "this many steps without one of its milestones "
-                             "firing (default 60)")
-    parser.add_argument("--orchestrator-max-open-tasks", type=int, default=0,
-                        help="Villager only: cap on open+running DAG tasks; "
-                             "0 = auto (2 x num agents)")
-    parser.add_argument("--orchestrator-decompose-min-interval", type=int,
-                        default=8,
-                        help="Villager only: minimum steps between "
-                             "decomposer calls, and the cooldown after a "
-                             "failed allocator call (default 8)")
-    parser.add_argument("--orchestrator-mode", type=str, default="advisory",
-                        choices=["advisory", "bias"],
-                        help="'advisory' = directives rendered into the same "
-                             "{social_directive} action-prompt slot the "
-                             "social module uses; 'bias' = additionally "
-                             "override the emitted communication_target at "
-                             "the routing site (mirrors --social-module "
-                             "bias exactly)")
-    parser.add_argument("--orchestrator-cadence", type=int, default=8,
-                        help="Steps between scheduled orchestrator calls "
-                             "(default 8 = the social module's T_soc "
-                             "default, --social-interval)")
-    parser.add_argument("--orchestrator-event-triggers",
-                        action=argparse.BooleanOptionalAction, default=True,
-                        help="Also call the orchestrator when a milestone / "
-                             "chamber change / death occurred since its "
-                             "last call (default on)")
-    parser.add_argument("--orchestrator-stall-threshold", type=int, default=2,
-                        help="The orchestrator is told to replan when its "
-                             "ledger stall_counter exceeds this (default 2)")
-    parser.add_argument("--orchestrator-max-task-facts", type=int, default=15,
-                        help="Ledger task-facts cap; FIFO eviction keeps the "
-                             "most recent (default 15)")
-    parser.add_argument("--orchestrator-max-digest-events", type=int,
-                        default=30,
-                        help="Events included in the since-last-call digest "
-                             "(default 30; older events are dropped with a "
-                             "'(showing last K of M)' banner)")
-    parser.add_argument("--orchestrator-use-map-image",
-                        action=argparse.BooleanOptionalAction, default=True,
-                        help="Attach the schematic top-down map PNG to the "
-                             "orchestrator call (default on; falls back to "
-                             "a text world-state block when off or when the "
-                             "client lacks vision)")
-    parser.add_argument("--orchestrator-model", type=str, default=None,
-                        help="LLM for the orchestrator (default None = reuse "
-                             "the agents' backbone/client). Only supported "
-                             "on the HTTP-client path — rejected when "
-                             "LLM_MODEL_PATH pins a local in-process model.")
-    parser.add_argument("--orchestrator-log-dir-name", type=str,
-                        default="orchestrator",
-                        help="Subdirectory of the run dir for orchestrator "
-                             "calls.jsonl / compliance.jsonl / maps/")
-    # ── Experiment tracking ──
-    parser.add_argument("--experiment-id", type=str, default=None,
-                        help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
-    parser.add_argument("--run-group", type=str, default=None,
-                        help="Suite subtree for --tag runs: output lands at "
-                             "runs/<group>/<tag>/seed_<seed>/ and the W&B run "
-                             "id is namespaced by <group> so re-running an "
-                             "exp+seed under a new group starts a new W&B run "
-                             "instead of resuming the old suite's. Defaults to "
-                             "$WIREDTOGETHER_RUN_GROUP, then 'legacy' (which "
-                             "keeps the pre-grouping paths and ids).")
-    parser.add_argument("--tag", type=str, default=None,
-                        help="Phase B++ tagged-run layout: when set, output "
-                             "lands at runs/<group>/<tag>/seed_<seed>/ instead "
-                             "of the default runs/<timestamp>_<experiment_id>/. "
-                             "Lines up with the GRPO runs/grpo/<tag>/seed_<N>/ "
-                             "pattern so build_results.py and the legacy "
-                             "schema bridge discover both stacks uniformly.")
-    parser.add_argument("--log-interval", type=int, default=10,
-                        help="Print a reward/metric summary every N steps (default 10)")
-    # ── Team composition ─────────────────────────────────────────────
-    # homogeneous-agent : all agents share --homogeneous-role (default).
-    # heterogeneous     : agents take distinct roles from --roles
-    #                     (comma-separated list, len must == --num-agents).
-    parser.add_argument(
-        "--team-mode",
-        type=str,
-        default="homogeneous-agent",
-        choices=["homogeneous-agent", "heterogeneous"],
-        help="homogeneous-agent: all agents share --homogeneous-role. "
-             "heterogeneous: each agent gets a distinct role from --roles.",
-    )
-    parser.add_argument(
-        "--homogeneous-role",
-        type=str,
-        default="agent",
-        choices=["agent", "hunter", "harvester", "scouter"],
-        help="Role for all agents in homogeneous-agent mode (default: agent).",
-    )
-    parser.add_argument(
-        "--roles",
-        type=str,
-        default=None,
-        help="Comma-separated role list for heterogeneous mode "
-             "(e.g. 'hunter,harvester,scouter'). Length must equal --num-agents. "
-             "Each role must be one of: agent, hunter, harvester, scouter. "
-             "Order maps to agent_0, agent_1, ... so changing the order changes "
-             "which physical spawn gets which role — keep it stable across runs.",
-    )
-    # (Survival-mode CLI was removed — the env is permanently in
-    # exploration mode: mobs passive in Ch1, hunger drain disabled. The
-    # five-chamber curriculum supplied its own difficulty progression via
-    # chamber-entry milestones, so the phased difficulty layer was redundant.)
-    # ── Checkpoint / resume ──
-    parser.add_argument("--checkpoint-dir", type=str, default=None,
-                        help="Directory to write checkpoints into. "
-                             "Default: ./checkpoints/<run_id>")
-    parser.add_argument("--checkpoint-interval", type=int, default=500,
-                        help="Save a checkpoint every N steps within an episode (default 500)")
-    parser.add_argument("--resume", type=str, default=None,
-                        help="Path to a checkpoint directory from a previous job. "
-                             "Restores cognitive/RL/Hebbian state and continues from saved ep/step.")
-    parser.add_argument("--resume-skip-warmup", action="store_true",
-                        help="Skip the media-load warmup detection on resume "
-                             "(use when VoxeLibre media cache is already populated)")
-    parser.add_argument("--checkpoint-frames", action="store_true",
-                        help="Include raw frames in the checkpoint for GIF continuity. "
-                             "Off by default as frame arrays can be large.")
-    parser.add_argument("--voxel-obs", action="store_true",
-                        help="Enable Craftium's per-agent voxel observations "
-                             "(node-id + light + param2 grid around each agent). "
-                             "When set, the per-step prompt gains a "
-                             "'Nearby voxels: ...' line summarising the most "
-                             "common blocks within ~10 blocks. Intended as a "
-                             "hallucination-resistant grounding signal: the LLM "
-                             "cannot perceive a zombie that isn't in the voxel "
-                             "readout. Adds ~50 KB per agent per env step to the "
-                             "TCP payload; OFF by default.")
-    return parser.parse_args()
-
-
-def load_prompts():
-    """Load all prompt files and return them as a dict."""
-    prompt_dir = os.path.join(os.path.dirname(__file__), "prompts")
-    belief_dir = os.path.join(prompt_dir, "belief_system")
-
-    def _read(path):
-        with open(path, "r") as f:
-            return f.read()
-
-    prompts = {
-        "environment": _read(os.path.join(prompt_dir, "environment_prompt.txt")),
-        "system_template": _read(os.path.join(prompt_dir, "system_prompt.txt")),
-        "critic": _read(os.path.join(prompt_dir, "critic_prompt.txt")),
-        "curriculum_questions": _read(os.path.join(prompt_dir, "curriculum_questions.txt")),
-        "skill_description": _read(os.path.join(prompt_dir, "skill_description_prompt.txt")),
-        "skill_info": _read(os.path.join(prompt_dir, "skill_description_info.txt")),
-        "perception": _read(os.path.join(belief_dir, "perception_beliefs.txt")),
-        "partner": _read(os.path.join(belief_dir, "partner_beliefs.txt")),
-        "interaction": _read(os.path.join(belief_dir, "interaction_belief.txt")),
-        "context": _read(os.path.join(belief_dir, "update_context.txt")),
-    }
-
-    # Role prompts
-    prompts["roles"] = {}
-    for role in ROLE_NAMES:
-        prompts["roles"][role] = _read(os.path.join(prompt_dir, f"role_{role}.txt"))
-
-    return prompts
-
-
-def build_role_configs(
-    num_agents,
-    role_prompts,
-    team_mode="homogeneous-agent",
-    homogeneous_role="agent",
-    roles=None,
-):
-    """Build ROLE_CONFIGS for num_agents.
-
-    Two modes:
-      * homogeneous-agent: every agent gets ``homogeneous_role`` (default
-        "agent" — matches all prior runs).
-      * heterogeneous: ``roles`` is a list of role names of length
-        ``num_agents``; agent_i is assigned roles[i]. This is what makes
-        the Hebbian bonds meaningful — symmetric teams give symmetric W.
-
-    ``roles`` may also be a comma-separated string for CLI convenience.
-    """
-    if team_mode == "heterogeneous":
-        if roles is None:
-            raise ValueError(
-                "team_mode='heterogeneous' requires --roles "
-                "(comma-separated list, length == num_agents)."
-            )
-        if isinstance(roles, str):
-            roles = [r.strip() for r in roles.split(",") if r.strip()]
-        if len(roles) != num_agents:
-            raise ValueError(
-                f"--roles has {len(roles)} entries but num_agents is "
-                f"{num_agents}. They must match."
-            )
-        for r in roles:
-            if r not in role_prompts:
-                raise ValueError(
-                    f"Unknown role: {r!r}. Available roles: "
-                    f"{sorted(role_prompts.keys())}."
-                )
-        assigned_roles = list(roles)
-    else:
-        if homogeneous_role not in role_prompts:
-            raise ValueError(
-                f"Unknown homogeneous_role: {homogeneous_role!r}. "
-                f"Available roles: {sorted(role_prompts.keys())}."
-            )
-        assigned_roles = [homogeneous_role] * num_agents
-
-    return [
-        {
-            "name": assigned_roles[i],
-            "agent_name": f"agent_{i}",
-            "curriculum_prompt": role_prompts[assigned_roles[i]].format(
-                num_agents=num_agents
-            ),
-        }
-        for i in range(num_agents)
-    ]
-
-
-def build_agents(role_configs, system_prompt, prompts, num_agents, communication, metric,
-                 rl_config=None, belief_interval=5, critic_interval=20,
-                 centralized_critic=None, is_resume: bool = False,
-                 social_module_mode: str = "none", social_interval: int = 8,
-                 social_act_mode: str = "legacy",
-                 social_act_channels: tuple = (),
-                 orchestrator_plan: bool = False,
-                 orchestrator_villager: bool = False):
-    """Initialize all Mindforge agents.
-
-    ``centralized_critic`` (when not None) is shared by all agents' RLLayers
-    and turns the value-loss off in their PPO updates.
-
-    ``is_resume`` controls whether per-agent persistent stores (skill DB) are
-    wiped at construction. Fresh runs reset; chained-checkpoint resumes
-    preserve previously-learned skills.
-
-    ``social_act_mode`` / ``social_act_channels`` (Experiment 2): in
-    "choice" mode agents are built with the PARALLEL choice-mode prompt
-    templates + the SocialAgentResponse schema; "legacy" (default) keeps the
-    original templates and AgentResponse byte-for-byte.
-    """
-    # O-plan orchestrator variant: curriculum USER template with the
-    # {team_plan_note} placeholder appended. None in every other
-    # configuration → AutoCurriculum falls back to its module-level default,
-    # byte-identical to the historical prompt.
-    _task_info_override = None
-    if orchestrator_plan:
-        from agent_modules.auto_curriculum import curriculum_info as _cur_info
-        from orchestrator.curriculum_hook import apply_plan_suffix
-        _task_info_override = apply_plan_suffix(_cur_info, True)
-    elif orchestrator_villager:
-        # Villager: HARD assignment block ({assigned_objective}) instead of
-        # the advisory plan-note block.
-        from agent_modules.auto_curriculum import curriculum_info as _cur_info
-        from orchestrator.curriculum_hook import apply_villager_suffix
-        _task_info_override = apply_villager_suffix(_cur_info, True)
-
-    # Choice-mode template/client setup — built once, shared by all agents.
-    _choice_action_kwargs = {}
-    _choice_sm_prompt = None
-    if social_act_mode == "choice":
-        from agent_modules import social_acts as _sacts
-        from agent_modules.util import (
-            SocialAgentResponse, SocialThoughtChoice, create_model_client,
-            safe_format as _safe_format,
-        )
-        _choice_system_txt, _choice_instruction = _sacts.load_choice_templates(
-            social_act_channels
-        )
-        _choice_action_kwargs = {
-            "system_prompt": _safe_format(
-                _choice_system_txt, environment_prompt=prompts["environment"]
-            ),
-            "user_prompt_template": _choice_instruction,
-        }
-        if social_module_mode != "none":
-            _choice_sm_prompt = _sacts.load_social_module_choice_prompt(
-                social_act_channels
-            )
-
-    agents = []
-    for i, role_cfg in enumerate(role_configs):
-        # Build per-agent RL layer (no-op when rl_config.enabled is False)
-        rl_layer = None
-        if rl_config and rl_config.enabled:
-            rl_layer = RLLayer(
-                config=rl_config, role=role_cfg["name"], agent_id=i,
-                centralized_critic=centralized_critic,
-            )
-
-        # Targeted communication policy lives in the static prompts. The LLM
-        # uses its own agent name (passed in via the user message) to exclude
-        # itself from the recipient list.
-        agent_system_prompt = system_prompt
-
-        # Optional Hebbian-driven social-reasoning module. Stays None when
-        # --social-module=none so the agent loop falls back to the legacy
-        # raw bond text in the action prompt.
-        agent_social_module = None
-        if social_module_mode != "none":
-            if social_act_mode == "choice":
-                from agent_modules.util import (
-                    SocialThoughtChoice as _STC,
-                    create_model_client as _cmc,
-                )
-                agent_social_module = SocialModule(
-                    agent_name=role_cfg["agent_name"],
-                    num_agents=num_agents,
-                    social_interval=social_interval,
-                    social_model_client=_cmc(response_format=_STC),
-                    override_prompt=_choice_sm_prompt,
-                )
-            else:
-                agent_social_module = SocialModule(
-                    agent_name=role_cfg["agent_name"],
-                    num_agents=num_agents,
-                    social_interval=social_interval,
-                )
-
-        if social_act_mode == "choice":
-            from agent_modules.util import (
-                SocialAgentResponse as _SAR,
-                create_model_client as _cmc2,
-            )
-            _action_selection = ActionSelection(
-                action_model_client=_cmc2(response_format=_SAR),
-                **_choice_action_kwargs,
-            )
-        else:
-            _action_selection = ActionSelection(system_prompt=agent_system_prompt)
-
-        agent = CustomAgent(
-            name=role_cfg["agent_name"],
-            description=f"{role_cfg['name']} agent in Craftium open world",
-            action_selection=_action_selection,
-            auto_curriculum=AutoCurriculum(
-                override_curriculum_prompt=role_cfg["curriculum_prompt"],
-                override_questions_prompt=prompts["curriculum_questions"],
-                override_task_info_prompt=_task_info_override,
-                agent_name=role_cfg["agent_name"],
-            ),
-            critic=Critic(override_critic_prompt=prompts["critic"]),
-            skill_manager=SkillManager(
-                override_skill_prompt=prompts["skill_description"],
-                override_skill_info_prompt=prompts["skill_info"],
-                agent_name=role_cfg["agent_name"],
-                # On resume from a checkpoint, preserve the per-agent
-                # skill DB so skills learned in earlier chained runs
-                # remain available. Fresh runs wipe (default).
-                reset=not is_resume,
-            ),
-            episode_manager=EpisodicMemoryManager(
-                agent_name=role_cfg["agent_name"],
-            ),
-            belief_system=BeliefSystem(
-                number_of_agents=num_agents,
-                override_perception_prompt=prompts["perception"],
-                override_partner_prompt=prompts["partner"],
-                override_interaction_prompt=prompts["interaction"],
-                override_context_prompt=prompts["context"],
-            ),
-            number_of_agents=num_agents,
-            metric=metric,
-            voyager=False,
-            rl_layer=rl_layer,
-            belief_interval=belief_interval,
-            critic_interval=critic_interval,
-            num_agents=num_agents,
-            social_module=agent_social_module,
-        )
-        agents.append(agent)
-        rl_status = " [RL enabled]" if rl_layer else ""
-        print(f"Initialized agent {i}: {role_cfg['agent_name']} ({role_cfg['name']}){rl_status}")
-    return agents
-
-
-def _resume_run_paths(run_id: str, group: str | None = None) -> RunPaths:
-    """Reconstruct a ``RunPaths`` from a saved ``run_id`` regardless of layout.
-
-    Two cases:
-      * ``"<tag>/seed_<N>"`` (Phase B++ tagged layout) → lives under
-        ``runs/<group>/<tag>/seed_<N>/``.
-      * Anything else (legacy timestamp-based id) → lives under
-        ``runs/<run_id>/``.
-
-    Detected by the presence of ``/seed_`` in the run_id, which can only
-    come from ``RunPaths.create_tagged``. The dataclass stores both
-    forms identically — only the on-disk root differs.
-
-    ``group`` must match the run being resumed (the run_id does not carry
-    it); passing ``None`` resolves it from the environment exactly as the
-    original run did.
-    """
-    if "/seed_" in run_id and run_id.count("/") == 1:
-        tag, seed_part = run_id.split("/", 1)
-        try:
-            seed = int(seed_part.removeprefix("seed_"))
-        except ValueError:
-            # Malformed id — fall back to the untagged factory.
-            return RunPaths.create(run_id=run_id, root="runs")
-        return RunPaths.create_tagged(tag=tag, seed=seed, group=group)
-    return RunPaths.create(run_id=run_id, root="runs")
+from rl_layer import HebbianConfig, HebbianSocialGraph, RLConfig
 
 
 # ===========================
@@ -951,223 +164,6 @@ async def agent_do_action(
     return content, last_action, error_count
 
 
-def save_checkpoint(
-    checkpoint_dir: str,
-    episode: int,
-    step: int,
-    run_id: str,
-    args,
-    metric: "CraftiumMetric",
-    agents,
-    hebbian_graph: "HebbianSocialGraph",
-    frames_list=None,
-    save_frames: bool = False,
-    global_step: int = 0,
-) -> None:
-    """Serialize full run state to *checkpoint_dir* so a new SLURM job can resume.
-
-    Files written:
-      run_state.json         — scalar counters, CLI args, metric dicts
-      hebbian_graph.json     — Hebbian weight matrix + config
-      rl_agent_{i}/          — RL LoRA weights + optimizer (via rl_layer.save())
-      agent_{i}_curriculum.json — curriculum task lists + current task/context
-      frames_{i}.npy         — raw observation arrays (optional, --checkpoint-frames)
-
-    The function is wrapped in try/except so a serialization error never kills the run.
-    """
-    try:
-        os.makedirs(checkpoint_dir, exist_ok=True)
-
-        # --- run_state.json -------------------------------------------------
-        metric_dict = {
-            "num_agents": metric.num_agents,
-            "communication": metric.communication,
-            "run_id": metric.run_id,
-            "timestep": metric.timestep,
-            "cumulative_returns": [float(x) for x in metric.cumulative_returns],
-            "episode_returns": [float(x) for x in metric.episode_returns],
-            "per_episode_returns": [
-                [float(x) for x in ep_list]
-                for ep_list in metric.per_episode_returns
-            ],
-            "track_rewards_episode": {
-                str(i): dict(metric.track_rewards_episode[i])
-                for i in range(metric.num_agents)
-            },
-            "track_rewards_per_episode": [
-                [dict(d) for d in agent_eps]
-                for agent_eps in metric.track_rewards_per_episode
-            ],
-            "agent_milestones_episode": {
-                str(i): sorted(metric._agent_milestones_episode[i])
-                for i in range(metric.num_agents)
-            },
-            "milestones_per_episode": [
-                [list(ms) for ms in agent_eps]
-                for agent_eps in metric.milestones_per_episode
-            ],
-            "comm_count_episode": list(metric.comm_count_episode),
-            "comm_count_per_episode": [
-                list(c) for c in metric.comm_count_per_episode
-            ],
-            "episode_lengths": list(metric.episode_lengths),
-            "comm_counts_per_step": list(metric.comm_counts_per_step),
-            "communication_log": metric.communication_log,
-            "rl_updates": metric.rl_updates,
-            "rl_token_opts": metric.rl_token_opts,
-            "milestones_per_agent": {name: sorted(ms) for name, ms in metric._agent_milestones.items()},
-            "track_rewards": metric.track_rewards,
-            "_graph_snapshots": metric._graph_snapshots,
-            "ts_data": metric.ts_data,
-            "phase_transitions": getattr(metric, "phase_transitions", []),
-            "team_mode": getattr(metric, "team_mode", "heterogeneous"),
-            "homogeneous_role": getattr(metric, "homogeneous_role", "agent"),
-        }
-        run_state = {
-            "episode": episode,
-            "step": step,
-            "run_id": run_id,
-            "metric": metric_dict,
-            "cli_args": vars(args),
-            "global_step": global_step,
-            # Team composition
-            "team_mode": getattr(metric, "team_mode", "heterogeneous"),
-            "homogeneous_role": getattr(metric, "homogeneous_role", "agent"),
-        }
-        with open(os.path.join(checkpoint_dir, "run_state.json"), "w") as f:
-            _json.dump(run_state, f, indent=2, default=str)
-
-        # --- hebbian_graph.json ---------------------------------------------
-        with open(os.path.join(checkpoint_dir, "hebbian_graph.json"), "w") as f:
-            _json.dump(hebbian_graph.to_dict(), f, indent=2)
-
-        # --- per-agent RL weights + optimizer --------------------------------
-        for i, agent in enumerate(agents):
-            if agent.rl_layer and agent.rl_layer.enabled:
-                rl_save_dir = os.path.join(checkpoint_dir, f"rl_agent_{i}")
-                os.makedirs(rl_save_dir, exist_ok=True)
-                agent.rl_layer.save(path=rl_save_dir)
-
-        # --- per-agent curriculum state -------------------------------------
-        for i, agent in enumerate(agents):
-            cur = agent.auto_curriculum
-            curriculum_state = {
-                "current_task": cur.current_task,
-                "current_context": getattr(cur, "current_context", ""),
-                "completed_tasks": list(cur.completed_tasks),
-                "failed_tasks": list(cur.failed_tasks),
-            }
-            with open(os.path.join(checkpoint_dir, f"agent_{i}_curriculum.json"), "w") as f:
-                _json.dump(curriculum_state, f, indent=2)
-
-        # --- per-agent cognitive state (skills / episodic memory) -----------
-        # The vector DBs live on job-local /tmp under SLURM; this JSON copy in
-        # the checkpoint dir is the durable form (used by merge_pair_runs.py).
-        from agent_modules.agent_state_io import export_agent_state
-        export_agent_state(
-            agents, os.path.join(checkpoint_dir, "agent_state"),
-            episode=episode,
-        )
-
-        # --- optional frames ------------------------------------------------
-        if save_frames and frames_list:
-            for i in range(len(agents)):
-                agent_frames = [f[i] for f in frames_list if f[i] is not None]
-                if agent_frames:
-                    frames_path = os.path.join(checkpoint_dir, f"frames_{i}.npy")
-                    np.save(frames_path, np.stack(agent_frames, axis=0))
-
-        print(f"[CKPT] Saved checkpoint ep={episode} step={step} → {checkpoint_dir}")
-
-    except Exception as exc:
-        logging.warning(f"[CKPT] save_checkpoint failed (ep={episode} step={step}): {exc}")
-
-
-def load_checkpoint(
-    checkpoint_dir: str,
-    agents,
-    hebbian_graph: "HebbianSocialGraph",
-    metric_path: str = "./run_metrics",
-    run_paths=None,
-) -> dict:
-    """Restore run state from *checkpoint_dir*.
-
-    Returns a dict with keys:
-      episode  — last fully-checkpointed episode index
-      step     — last checkpointed step within that episode
-      run_id   — original run ID
-      metric   — restored CraftiumMetric instance
-
-    RL weights, optimizer, and Hebbian graph are restored in-place.
-    Curriculum state is restored into each agent's auto_curriculum.
-
-    When ``run_paths`` is supplied, the restored metric writes to that
-    consolidated tree (``runs/<run_id>/``). Otherwise ``metric_path`` is
-    used and the legacy ``./run_metrics/<run_id>/`` folder is created.
-    """
-    run_state_path = os.path.join(checkpoint_dir, "run_state.json")
-    if not os.path.exists(run_state_path):
-        raise FileNotFoundError(f"[CKPT] No run_state.json in {checkpoint_dir}")
-
-    with open(run_state_path, "r") as f:
-        run_state = _json.load(f)
-
-    episode = run_state["episode"]
-    step = run_state["step"]
-    run_id = run_state.get("run_id", "resumed")
-
-    # Restore metric — use run_paths when provided so resumed runs keep
-    # writing into the same `runs/<run_id>/` tree as the live process.
-    metric = CraftiumMetric.restore_from_dict(
-        run_state["metric"], path=metric_path, run_paths=run_paths,
-    )
-
-    # Restore Hebbian graph
-    hebbian_path = os.path.join(checkpoint_dir, "hebbian_graph.json")
-    if os.path.exists(hebbian_path):
-        with open(hebbian_path, "r") as f:
-            hebbian_dict = _json.load(f)
-        hebbian_graph.from_dict(hebbian_dict)
-        print(f"[CKPT] Restored Hebbian graph from {hebbian_path}")
-    else:
-        logging.warning(f"[CKPT] No hebbian_graph.json in {checkpoint_dir}, graph untouched")
-
-    # Restore per-agent RL state
-    for i, agent in enumerate(agents):
-        rl_save_dir = os.path.join(checkpoint_dir, f"rl_agent_{i}")
-        if agent.rl_layer and agent.rl_layer.enabled and os.path.isdir(rl_save_dir):
-            agent.rl_layer.load(path=rl_save_dir)
-            print(f"[CKPT] Restored RL state for agent_{i} from {rl_save_dir}")
-
-    # Restore per-agent curriculum state
-    for i, agent in enumerate(agents):
-        cur_path = os.path.join(checkpoint_dir, f"agent_{i}_curriculum.json")
-        if os.path.exists(cur_path):
-            with open(cur_path, "r") as f:
-                cur_state = _json.load(f)
-            cur = agent.auto_curriculum
-            cur.current_task = cur_state.get("current_task")
-            cur.current_context = cur_state.get("current_context", "")
-            cur.completed_tasks = list(cur_state.get("completed_tasks", []))
-            cur.failed_tasks = list(cur_state.get("failed_tasks", []))
-            print(f"[CKPT] Restored curriculum for agent_{i}: task={cur.current_task!r}")
-
-    metric._global_step_ckpt = run_state.get("global_step", 0)
-
-    print(f"[CKPT] Loaded checkpoint: ep={episode} step={step} run_id={run_id}")
-    return {"episode": episode, "step": step, "run_id": run_id, "metric": metric}
-
-
-def _frames_to_mp4(pil_frames: list, mp4_path: str, fps: int = 2) -> None:
-    """Write PIL frames directly to MP4 using imageio[ffmpeg] (bundled binary, no system ffmpeg)."""
-    try:
-        import imageio
-        with imageio.get_writer(mp4_path, fps=fps, macro_block_size=1) as writer:
-            for frame in pil_frames:
-                writer.append_data(np.array(frame))
-        print(f"  Saved MP4: {mp4_path}")
-    except Exception as exc:
-        logging.warning("MP4 save failed (%s): %s", mp4_path, exc)
 
 
 # ===========================
@@ -1190,7 +186,7 @@ async def run(args):
     _social_menu_channels: tuple = ()
     _cofire_channels: tuple = ("comm",)   # legacy credit = messages only
     if social_act_mode == "choice":
-        from agent_modules import social_acts as _sacts
+        from mindforge.agent_modules import social_acts as _sacts
         _social_menu_channels = _sacts.parse_channels_csv(args.social_acts)
         _cofire_channels = (
             _sacts.parse_channels_csv(args.cofiring_channels)
@@ -1233,7 +229,6 @@ async def run(args):
         run_paths = RunPaths.create(run_id=run_id, root="runs")
 
     # ── Weights & Biases init ─────────────────────────────────────────────
-    import wandb_logger as _wb
     _wb_tags = [t.strip() for t in (args.wandb_tags or "").split(",") if t.strip()]
     _wb.init(
         enabled=args.wandb,
@@ -1281,7 +276,7 @@ async def run(args):
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    from agent_modules.llm_call import setup_llm_logging as _setup_llm_logging
+    from mindforge.agent_modules.llm_call import setup_llm_logging as _setup_llm_logging
     _setup_llm_logging(run_paths.root / "llm_logs")
 
     log_interval = args.log_interval
@@ -1304,12 +299,12 @@ async def run(args):
     # regardless of N. Must happen before build_role_configs (whose .format
     # would otherwise trip on the placeholders) and before any template
     # reaches llm_call.
-    from agent_modules.team_scaling import apply_team_scaling_to_prompts
+    from mindforge.agent_modules.team_scaling import apply_team_scaling_to_prompts
     prompts = apply_team_scaling_to_prompts(
         load_prompts(), num_agents, enabled=team_scaling)
     environment_prompt = prompts["environment"]
 
-    from agent_modules.util import safe_format
+    from mindforge.agent_modules.util import safe_format
     system_prompt_template = prompts["system_template"]
     system_prompt = safe_format(system_prompt_template, environment_prompt=environment_prompt)
 
@@ -1377,7 +372,7 @@ async def run(args):
         _ckpt_state_path = os.path.join(args.resume, "run_state.json")
         if os.path.exists(_ckpt_state_path):
             with open(_ckpt_state_path) as _f:
-                _rl_run_id = _json.load(_f).get("run_id", run_id)
+                _rl_run_id = json.load(_f).get("run_id", run_id)
             print(f"[RL] Resume: using adapter dir from original run_id={_rl_run_id!r}")
             _rl_run_paths = RunPaths(
                 root=run_paths.root.parent / _rl_run_id,
@@ -1407,7 +402,7 @@ async def run(args):
     if rl_config.enabled and rl_config.mode == "action" \
             and rl_config.critic_mode == "centralized":
         from rl_layer.centralized_critic import CentralizedCritic
-        from agent_modules.craftium_metric import MILESTONE_TRACK
+        from mindforge.agent_modules.craftium_metric import MILESTONE_TRACK
         milestone_ids = list(MILESTONE_TRACK.keys())
         centralized_critic = CentralizedCritic(
             num_agents=num_agents,
@@ -1439,7 +434,7 @@ async def run(args):
         # after build_agents (construction wipes/recreates the per-agent
         # vector DBs) and before the episode loop (first on_messages call).
         # Raises on structural problems — fail at startup, not 24h in.
-        from agent_modules.agent_state_io import import_agent_state
+        from mindforge.agent_modules.agent_state_io import import_agent_state
         print(f"[TRANSPLANT] Importing agent state from {args.agent_state_init}")
         import_agent_state(agents, args.agent_state_init)
 
@@ -1447,7 +442,7 @@ async def run(args):
     _hebbian_init_matrix = None
     if args.hebbian_init_file:
         with open(args.hebbian_init_file) as _f:
-            _init_payload = _json.load(_f)
+            _init_payload = json.load(_f)
         _hebbian_init_matrix = (
             _init_payload["W"] if isinstance(_init_payload, dict)
             else _init_payload
@@ -1632,7 +627,7 @@ async def run(args):
                   f"radius={hebbian_config.interaction_radius}  "
                   f"gamma={hebbian_config.reward_diffusion_gamma}")
     else:
-        print(f"[FEATURES] Hebbian:          OFF")
+        print("[FEATURES] Hebbian:          OFF")
     print(f"{_feat_sep}\n")
     # ─────────────────────────────────────────────────────────────────────────
 
@@ -1649,7 +644,7 @@ async def run(args):
     except Exception:
         _git = None
     with open(run_paths.config_json, "w") as _f:
-        _json.dump({
+        json.dump({
             "run_id": run_id,
             "start_ts": datetime.now().isoformat(),
             "git_commit": _git,
@@ -1662,8 +657,6 @@ async def run(args):
     # ── Signal handler: gracefully save on SIGTERM / SIGINT ──
     import signal as _signal
     _shutdown_requested = False
-    _shutdown_episode = 0
-    _shutdown_step = 0
 
     def _handle_shutdown(signum, frame):
         nonlocal _shutdown_requested
@@ -1846,23 +839,12 @@ async def run(args):
         # Act-reward symmetry suite: obs/imit acts paid like messages.
         act_reward_tracker = None
         if social_act_mode == "choice" and args.social_act_rewards:
-            from env.social_act_rewards import SocialActRewardTracker
+            from mindforge.env.social_act_rewards import SocialActRewardTracker
             act_reward_tracker = SocialActRewardTracker(
                 agent_ids=list(range(num_agents)),
             )
         coop_metric = CooperationMetric(agent_ids=list(range(num_agents)))
         ep_logger = EpisodeLogger(run_dir=metric.target_folder, episode=episode + 1)
-        _last_propagation_contribs: dict[int, dict[int, float]] = {
-            i: {} for i in range(num_agents)
-        }
-        _last_milestone_sources: dict[int, str] = {}
-        _interpretability_enabled = bool(
-            args.interpretability or args.hebbian
-        )
-        _interp_path = (
-            Path(metric.target_folder) / "interpretability.jsonl"
-            if _interpretability_enabled else None
-        )
         # Experiment 2 sidecars (choice mode only, so legacy run dirs are
         # byte-identical): per-act log + per-pair co-firing event log.
         _social_acts_path = (
@@ -1879,7 +861,7 @@ async def run(args):
         def _append_jsonl(path, obj):
             try:
                 with open(path, "a", encoding="utf-8") as _jf:
-                    _jf.write(_json.dumps(obj) + "\n")
+                    _jf.write(json.dumps(obj) + "\n")
             except OSError as _jexc:
                 logging.warning("sidecar write failed (%s): %s", path, _jexc)
         _visited_chambers = [set() for _ in range(num_agents)]
@@ -3611,7 +2593,6 @@ async def run(args):
                 # already writes "[SRV] [MILESTONE] ..." into stderr (tailed
                 # by craftium), but parsing those lines is brittle — this is
                 # the authoritative Python-side line, one per polled event.
-                _contrib_str = ",".join(_contribs_ev) if _contribs_ev else "<none>"
                 # Per-contributor chamber at fire time, so the milestone line
                 # shows where each agent was when the event occurred.
                 _contrib_chambers = []
@@ -3799,7 +2780,7 @@ async def run(args):
         )
         _hebb_snapshot_path = os.path.join(metric.target_folder, "hebbian_snapshots.jsonl")
         with open(_hebb_snapshot_path, "a", encoding="utf-8") as _hf:
-            _hf.write(_json.dumps({
+            _hf.write(json.dumps({
                 "episode": episode + 1,
                 "final_step": _coop_summary["final_step"],
                 "W": _hebb_W_serialisable,
@@ -3900,7 +2881,7 @@ async def run(args):
     # Save per-agent cognitive state (skills / episodes / curriculum) — the
     # durable JSON form of the job-local vector DBs. Unconditional: also
     # useful for non-Hebbian runs.
-    from agent_modules.agent_state_io import export_agent_state as _export_as
+    from mindforge.agent_modules.agent_state_io import export_agent_state as _export_as
     _export_as(
         agents, os.path.join(metric.target_folder, "agent_state"),
         run_id=run_id,
@@ -3912,7 +2893,7 @@ async def run(args):
     if hebbian_config.enabled:
         graph_path = os.path.join(metric.target_folder, "hebbian_graph_final.json")
         with open(graph_path, "w") as f:
-            _json.dump(hebbian_graph.to_dict(), f, indent=2)
+            json.dump(hebbian_graph.to_dict(), f, indent=2)
         print(f"  Saved final Hebbian graph: {graph_path}")
 
         # Force one final snapshot and re-save metrics to include it
@@ -3988,81 +2969,5 @@ if __name__ == "__main__":
     import functools
     print = functools.partial(print, flush=True)
     args = parse_args()
-    if args.social_module != "none" and not args.hebbian:
-        # The social module reads from bond_weights / bond_deltas, which
-        # are only populated when the Hebbian graph is enabled. Without
-        # --hebbian, deliberation never runs and the directive falls back
-        # to "Social bonds: N/A" every step — a silent no-op. Fail loudly
-        # rather than letting an experiment run for 24h producing useless
-        # output.
-        raise SystemExit(
-            "--social-module requires --hebbian to be set (the social "
-            "module needs bond weights to reason over)"
-        )
-    if args.social_act_mode == "choice" and args.rl:
-        # Choice mode is LLM-only by design: the social-act choice, the
-        # observe/imitate payloads and the guided-imitation instructions
-        # all live in the LLM prompt/schema layer, which the RL policy's
-        # constrained decoding never sees. Fail loudly rather than running
-        # an arm whose manipulation the policy cannot perceive.
-        raise SystemExit(
-            "--social-act-mode choice is LLM-only and incompatible with "
-            "--rl (the social-act choice lives in the LLM prompt/schema "
-            "layer, which the RL policy never sees)"
-        )
-    if args.social_act_mode == "choice" and not args.hebbian:
-        raise SystemExit(
-            "--social-act-mode choice requires --hebbian (the co-firing "
-            "credit mask has no graph to act on otherwise)"
-        )
-    if args.social_act_rewards and args.social_act_mode != "choice":
-        raise SystemExit(
-            "--social-act-rewards requires --social-act-mode choice (there "
-            "are no observation/imitation acts to pay in legacy mode)"
-        )
-    if args.hebbian_init_file and not args.hebbian:
-        raise SystemExit(
-            "--hebbian-init-file requires --hebbian (there is no graph to "
-            "initialize otherwise)"
-        )
-    if args.hebbian_init_file and args.hebbian_preset != "none":
-        raise SystemExit(
-            "--hebbian-init-file and --hebbian-preset are mutually exclusive "
-            "(init_matrix would silently override the preset)"
-        )
-    if args.resume and (args.hebbian_init_file or args.agent_state_init):
-        raise SystemExit(
-            "--hebbian-init-file/--agent-state-init cannot be combined with "
-            "--resume: the checkpoint restores its own Hebbian graph and "
-            "curriculum state and would clobber/duplicate the transplant. "
-            "(Resuming a transplant run WITHOUT these flags is fine — the "
-            "checkpoint already carries the transplanted state forward.)"
-        )
-    if args.start_chamber and args.max_chamber:
-        raise SystemExit(
-            "--start-chamber and --max-chamber are mutually exclusive"
-        )
-    if args.orchestrator and args.hebbian:
-        # The orchestrator (O2) is a BASELINE against the Hebbian condition;
-        # enabling both would confound the comparison. Reward diffusion
-        # (--hebbian-gamma) belongs to the Hebbian condition and is only
-        # active under --hebbian, so this one check also excludes it. Fail
-        # loudly rather than silently disabling either.
-        raise SystemExit(
-            "orchestrator and Hebbian coupling are mutually exclusive "
-            "conditions; disable one (--orchestrator vs --hebbian; reward "
-            "diffusion is part of the Hebbian condition)"
-        )
-    if args.orchestrator and args.social_module != "none":
-        raise SystemExit(
-            "--orchestrator and --social-module both write the "
-            "{social_directive} action-prompt slot; disable one"
-        )
-    if (args.orchestrator and args.orchestrator_variant == "villager"
-            and args.orchestrator_mode == "bias"):
-        raise SystemExit(
-            "the villager variant issues task assignments, not comm "
-            "directives — there is no comm_target to bias; use "
-            "--orchestrator-mode advisory"
-        )
+    validate_args(args)
     asyncio.run(run(args))

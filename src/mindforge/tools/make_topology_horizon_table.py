@@ -17,7 +17,7 @@ n = 6 episodes per cell), because only those seeds were run at 2,000 steps.
 
 Usage:
     PYTHONPATH=src python src/mindforge/tools/make_topology_horizon_table.py
-Writes paper_assets_transplant/TOPOLOGY_HORIZON_TABLE.tex.
+Writes paper_assets/transplant/TOPOLOGY_HORIZON_TABLE.tex.
 """
 
 import statistics as st
@@ -30,7 +30,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 import make_results as mr  # noqa: E402
 
-OUT = Path("paper_assets_transplant/TOPOLOGY_HORIZON_TABLE.tex")
+OUT = Path("paper_assets/transplant/TOPOLOGY_HORIZON_TABLE.tex")
 
 SEEDS = {"seed_42", "seed_123"}   # the only seeds run at both budgets
 BUDGETS = [("$1{,}000$", Path("runs_from_daic/medium_runs")),
