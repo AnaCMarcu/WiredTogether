@@ -313,8 +313,7 @@ def main():
           f"{pm * 100:.4f}%, max |Δ| {p2.abs_delta.max():.2e}) — but that is "
           f"the *setup*, not the team size. The N = 2 arm of the scaling "
           f"family sits at {nm * 100:.2f}%, {nm / pm:.0f}x higher at the same "
-          f"N, and the Qwen pair runs at "
-          f"{pairs[(pairs.arm == 'expA_pair_bonding') & (pairs.group == 'pair_bonding_qwen')].rel_asym.mean() * 100:.2f}%. "
+          f"N. "
           "Read the pair runs as an existence proof that the two directions "
           "can stay locked together, not as evidence that small teams "
           "generally do.\n")

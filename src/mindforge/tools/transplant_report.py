@@ -2,13 +2,13 @@
 
 Every number in the report is computed from the raw run artifacts at
 generation time — nothing is hand-entered — so the report can be regenerated
-whenever new runs land (e.g. the Qwen Phase B):
+whenever new runs land:
 
     PYTHONPATH=src python src/mindforge/tools/transplant_report.py \
         --out runs_from_daic/rq3_topology_transfer/pair_bonding/TRANSPLANT_REPORT.md
 
 Inputs (defaults match the repo layout):
-  * Phase A run dirs   (Gemma + Qwen): ranked via pair_transplant.rank_pair_runs
+  * Phase A run dirs   (Gemma): ranked via pair_transplant.rank_pair_runs
   * merged inputs      merged/{transplant,shuffled}/merged_{W,manifest}.json
   * Phase B run dirs   expB_merged_{transplant,shuffled}/seed_*/
 """
@@ -324,18 +324,6 @@ memory volume?
             f"the engagement term rewards proximity + constant messaging.")
         L.append("")
 
-    if args.qwen_phasea_glob:
-        sec, q_stats = phase_a_section(
-            "Phase A replication (Qwen3.5-9B)", args.qwen_phasea_glob)
-        L.append(sec)
-        if q_stats:
-            L.append(
-                f"The bond↔co-firing inversion **replicates across models**: "
-                f"Qwen's {q_stats['n_cofired']} genuine co-firers ranked "
-                f"{', '.join(str(i + 1) for i in q_stats['cofired_ranks'])} "
-                f"of {q_stats['n_ok']} by bond (Qwen Phase B pending).")
-            L.append("")
-
     # Merged inputs
     L.append("## Merged Phase B inputs (Gemma)")
     L.append("")
@@ -575,9 +563,7 @@ memory volume?
 """)
     L.append("## Caveats")
     L.append("")
-    L.append(f"""- n = {len(seeds)} seeds per arm, one model (Gemma 4 E4B); the Qwen3.5-9B
-  Phase B replication is running and this report should be regenerated when
-  it lands.
+    L.append(f"""- n = {len(seeds)} seeds per arm, one model (Gemma 4 E4B).
 - Seatmate preference is message-based; proximity/joint-action based measures
   would strengthen the claim.
 - The shuffled arm shows emergent *new* pairs (strangers bootstrapping real
@@ -596,8 +582,6 @@ def main(argv=None):
                     default="runs_from_daic/rq3_topology_transfer/pair_bonding")
     ap.add_argument("--phasea-glob",
                     default="runs_from_daic/rq3_topology_transfer/pair_bonding/expA_pair_bonding/seed_*")
-    ap.add_argument("--qwen-phasea-glob",
-                    default="runs_from_daic/rq3_topology_transfer/pair_bonding_qwen/expA_pair_bonding/seed_*")
     ap.add_argument("--seeds", type=int, nargs="+", default=[42, 123, 456])
     ap.add_argument("--out",
                     default="paper_assets/transplant/TRANSPLANT_REPORT.md")

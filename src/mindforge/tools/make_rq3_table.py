@@ -57,7 +57,6 @@ TOPOLOGY = [
 
 TRANSPLANT = [
     ("Gemma 4 E4B", Path("runs_from_daic/rq3_topology_transfer/pair_bonding")),
-    ("Qwen3.5-9B", Path("runs_from_daic/rq3_topology_transfer/pair_bonding_qwen")),
 ]
 ARMS = [("Transplant (real partners)", "expB_merged_transplant"),
         ("Shuffled (strangers)", "expB_merged_shuffled")]

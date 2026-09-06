@@ -53,7 +53,6 @@ LAYOUT: dict[str, tuple[str, str]] = {
     # RQ3 — does an imposed or transplanted topology transfer?
     "medium_2k":         ("rq3_topology_transfer", "Imposed topology (allied-all / pair / none) at 2k steps"),
     "pair_bonding":      ("rq3_topology_transfer", "Phase-A dyads and the Phase-B transplant"),
-    "pair_bonding_qwen": ("rq3_topology_transfer", "The transplant suite, Qwen lane"),
     # Compute — what the social layer costs.
     "pareto_social":     ("compute", "Deliberation-interval sweep"),
     "pareto_gemma4":     ("compute", "Model-size sweep"),
