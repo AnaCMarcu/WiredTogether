@@ -39,15 +39,27 @@ Two things the table cannot show:
 
 The layers stack and none repeats another's files, so nobody downloads more than they need.
 
-| Layer | Holds | Raw | Needed for |
-|---|---|---|---|
-| `core` | metrics, events, per-episode tables, graph snapshots, configs | 2.6 GB | every table and quantitative figure |
-| `logs` | `llm_logs/*.log`, `log.txt` | 26 GB | `analysis/qualitative/`, and step-clock alignment for the RL arms |
-| `media` | the `.mp4` recordings | 7.5 GB | the story-timeline figures only |
+| Layer | Holds | Raw | Packed | Needed for |
+|---|---|---|---|---|
+| `core` | metrics, events, per-episode tables, graph snapshots, configs | 2.5 GB | 795 MB | every table and quantitative figure |
+| `logs` | `llm_logs/*.log`, `log.txt`, SLURM `.out`/`.err` | 29 GB | 2.6 GB | `analysis/qualitative/`, and step-clock alignment for the RL arms |
+| `media` | the `.mp4` recordings | 7.5 GB | ~7.5 GB | the story-timeline figures only |
 
-`log.txt` compresses about 18×, so `core` + `logs` is roughly 2 GB of archives despite the raw
-size. RL checkpoints (`checkpoints/`, 5.2 GB) are never bundled — nothing in `analysis/` reads
-them.
+`core` and `logs` together are 11 archives and 3.4 GB — `log.txt` compresses about 18×, so the
+bulky layer packs down hardest. The recordings are already compressed and gain nothing, which is
+why they are their own layer. RL checkpoints (`checkpoints/`, 5.2 GB) are never bundled: nothing
+in `analysis/` reads them.
+
+Per question, packed:
+
+| Question | `core` | `logs` |
+|---|---|---|
+| `rq1_social_plasticity` | 430 MB | 946 MB |
+| `rq2_cofiring` | 98 MB | 457 MB |
+| `rq3_topology_transfer` | 54 MB | 583 MB |
+| `compute` | 95 MB | 562 MB |
+| `social_replay` | 118 MB | 119 MB |
+| `cluster_logs` | — | 20 MB |
 
 ## Tooling
 
