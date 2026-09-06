@@ -5,7 +5,7 @@
 -- Appends one milestone event line to milestone_events.jsonl.
 -- Called by fire_milestone() in milestones.lua whenever a milestone fires.
 -- Python polls this file via CraftiumEnvironmentInterface.poll_milestone_events().
-function five_chambers.emit_milestone(milestone_id, contributors, reward)
+function wire.emit_milestone(milestone_id, contributors, reward)
     local world_path = minetest.get_worldpath()
     local path = world_path .. "/milestone_events.jsonl"
 
@@ -18,7 +18,7 @@ function five_chambers.emit_milestone(milestone_id, contributors, reward)
 
     local json_line = string.format(
         '{"step":%d,"milestone":"%s","contributors":%s,"reward":%d}\n',
-        five_chambers.step_counter or 0,
+        wire.step_counter or 0,
         milestone_id,
         contrib_json,
         reward
@@ -29,7 +29,7 @@ function five_chambers.emit_milestone(milestone_id, contributors, reward)
         f:write(json_line)
         f:close()
     else
-        minetest.log("error", "[five_chambers] emit_milestone: cannot open " .. path)
+        minetest.log("error", "[wire] emit_milestone: cannot open " .. path)
         return
     end
 
@@ -52,7 +52,7 @@ function five_chambers.emit_milestone(milestone_id, contributors, reward)
     local line = "[MILESTONE] " .. milestone_id
         .. " contributors=" .. contrib_str
         .. " reward=" .. tostring(reward)
-        .. " step=" .. tostring(five_chambers.step_counter or 0)
+        .. " step=" .. tostring(wire.step_counter or 0)
     minetest.log("action", line)
     if io and io.stderr then
         io.stderr:write(line .. "\n")
@@ -65,18 +65,18 @@ end
 -- Python polls this via CraftiumEnvironmentInterface.poll_death_events() and
 -- drains the (negative) reward into the RL signal. This JSONL is the
 -- AUTHORITATIVE death-reward channel: server-side craftium.reward() does NOT
--- reach env.step()'s reward channel in the multi-agent five-chambers context
+-- reach env.step()'s reward channel in the multi-agent wire context
 -- (same limitation that forces the milestone JSONL drain above), so without
 -- this file the −10 / −50 penalties never reach Python and vanish from the
 -- RL signal and episode_return. `kind` is "death" (real Ch5) or "woulddie"
 -- (forgiving Ch1-4). Unlike one-shot milestones, the same agent may emit many
 -- of these per episode — Python reads by byte-offset, so repeats are fine.
-function five_chambers.emit_death_event(kind, name, chamber, reward)
+function wire.emit_death_event(kind, name, chamber, reward)
     local world_path = minetest.get_worldpath()
     local path = world_path .. "/death_events.jsonl"
     local json_line = string.format(
         '{"step":%d,"kind":"%s","agent":"%s","chamber":"%s","reward":%d}\n',
-        five_chambers.step_counter or 0,
+        wire.step_counter or 0,
         kind, name, tostring(chamber), reward
     )
     local f = io.open(path, "a")
@@ -84,17 +84,17 @@ function five_chambers.emit_death_event(kind, name, chamber, reward)
         f:write(json_line)
         f:close()
     else
-        minetest.log("error", "[five_chambers] emit_death_event: cannot open " .. path)
+        minetest.log("error", "[wire] emit_death_event: cannot open " .. path)
     end
 end
 
 -- Appends one switch event line to switch_events.jsonl (D5 stub).
-function five_chambers.emit_switch_event(switch_id, door_opened, presser_name)
+function wire.emit_switch_event(switch_id, door_opened, presser_name)
     local world_path = minetest.get_worldpath()
     local path = world_path .. "/switch_events.jsonl"
     local json_line = string.format(
         '{"step":%d,"switch":"%s","door_opened":"%s","presser":"%s"}\n',
-        five_chambers.step_counter or 0,
+        wire.step_counter or 0,
         switch_id, door_opened, presser_name
     )
     local f = io.open(path, "a")
@@ -103,7 +103,7 @@ end
 
 -- Deletes all state files at episode start so Python sees a clean slate.
 -- Called from the reset handler in init.lua.
-function five_chambers.clear_state_files()
+function wire.clear_state_files()
     local world_path = minetest.get_worldpath()
     os.remove(world_path .. "/milestone_events.jsonl")
     os.remove(world_path .. "/death_events.jsonl")

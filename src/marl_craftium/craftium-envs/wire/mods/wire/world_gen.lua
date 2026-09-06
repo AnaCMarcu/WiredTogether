@@ -10,7 +10,7 @@ local required_apis = {
 }
 for _, name in ipairs(required_apis) do
     if not minetest[name] then
-        error("[five_chambers] world_gen.lua: required API minetest." .. name .. " is nil. " ..
+        error("[wire] world_gen.lua: required API minetest." .. name .. " is nil. " ..
               "This Luanti build is too old or missing required functions.")
     end
 end
@@ -124,15 +124,15 @@ end
 -- Trees, stones, mobs, and the Door 1 visible blocks are all shifted up
 -- by 1 vs the original (bedrock-only-floor) layout to sit on the dirt.
 local function build_chamber_1()
-    if not five_chambers.CHAMBERS[1].enabled then return end
+    if not wire.CHAMBERS[1].enabled then return end
 
-    local c       = five_chambers.CH1
-    local y0      = five_chambers.FLOOR_Y       -- 10 (bedrock subfloor)
-    local y_dirt  = five_chambers.CH1_DIRT_Y    -- 11 (dirt layer)
+    local c       = wire.CH1
+    local y0      = wire.FLOOR_Y       -- 10 (bedrock subfloor)
+    local y_dirt  = wire.CH1_DIRT_Y    -- 11 (dirt layer)
     local y_stand = y_dirt + 1                  -- 12 (agents stand here)
-    local y1      = five_chambers.CH1_CEIL_Y    -- 16 (Ch1 ceiling)
-    local wall    = five_chambers.WALL_NODE
-    local door_x  = five_chambers.DOOR1_X       -- 7
+    local y1      = wire.CH1_CEIL_Y    -- 16 (Ch1 ceiling)
+    local wall    = wire.WALL_NODE
+    local door_x  = wire.DOOR1_X       -- 7
 
     -- Force-load map chunks so set_node calls succeed on first run.
     minetest.load_area({x=c.x0, y=y0-1, z=c.z0}, {x=c.x1, y=y1+1, z=c.z1+2})
@@ -161,14 +161,14 @@ local function build_chamber_1()
     carve_doorway(door_x, c.z1, y_dirt, 3)  -- carves at y=y_dirt+1..+2 = 12..13
     for dx = -1, 1 do
         place_node({x=door_x + dx, y=y_stand,     z=c.z1},
-            {name="five_chambers:door_locked"})
+            {name="wire:door_locked"})
         place_node({x=door_x + dx, y=y_stand + 1, z=c.z1},
-            {name="five_chambers:door_locked"})
+            {name="wire:door_locked"})
     end
 
     -- 5. Place trees (trunk + simple leaf crown) at plan §2.3 positions.
     --    Trunks sit on the dirt layer.
-    for _, tp in ipairs(five_chambers.CH1_TREE_POSITIONS) do
+    for _, tp in ipairs(wire.CH1_TREE_POSITIONS) do
         local tx, tz = tp.x, tp.z
         -- Two-block trunk on top of dirt.
         place_node({x=tx, y=y_stand,     z=tz}, {name="mcl_core:tree"})
@@ -194,7 +194,7 @@ local function build_chamber_1()
     --    never fires despite the stones being technically present.
     --    Both blocks are mcl_core:stone, so digging EITHER counts toward
     --    counts.stone in milestones.lua.
-    for _, sp in ipairs(five_chambers.CH1_STONE_POSITIONS) do
+    for _, sp in ipairs(wire.CH1_STONE_POSITIONS) do
         place_node({x=sp.x, y=y_stand,     z=sp.z}, {name="mcl_core:stone"})
         place_node({x=sp.x, y=y_stand + 1, z=sp.z}, {name="mcl_core:stone"})
     end
@@ -202,17 +202,17 @@ local function build_chamber_1()
     -- 7. Ceiling lights so the room isn't pitch-dark.
     add_ceiling_lights(c.x0, c.x1, c.z0, c.z1, y1)
 
-    minetest.log("action", "[five_chambers] Chamber 1 built.")
+    minetest.log("action", "[wire] Chamber 1 built.")
 end
 
 local function build_chamber_2()
-    if not five_chambers.CHAMBERS[2].enabled then return end
+    if not wire.CHAMBERS[2].enabled then return end
 
-    local c    = five_chambers.CH2         -- {x0=2,x1=11,z0=13,z1=22}
-    local y0   = five_chambers.FLOOR_Y     -- 10
-    local y1   = five_chambers.CEIL_Y      -- 15
-    local wall = five_chambers.WALL_NODE
-    local N    = five_chambers.NUM_AGENTS
+    local c    = wire.CH2         -- {x0=2,x1=11,z0=13,z1=22}
+    local y0   = wire.FLOOR_Y     -- 10
+    local y1   = wire.CEIL_Y      -- 15
+    local wall = wire.WALL_NODE
+    local N    = wire.NUM_AGENTS
 
     minetest.load_area({x=c.x0, y=y0-1, z=c.z0-1}, {x=c.x1, y=y1+1, z=c.z1+2})
 
@@ -230,7 +230,7 @@ local function build_chamber_2()
     end
 
     -- 4. South entrance (aligns with Ch1 north opening at x=DOOR1_X).
-    local door_x = five_chambers.DOOR1_X
+    local door_x = wire.DOOR1_X
     carve_doorway(door_x, c.z0, y0, 3)
 
     -- 5. Enclosed 3-wide always-open corridor between Ch1 (z=CH1.z1) and Ch2 (z=c.z0).
@@ -243,52 +243,52 @@ local function build_chamber_2()
     --    a visible locked-door block (red, glowing). doors.lua replaces those
     --    two blocks with air to open. Floor / ceiling / side walls / above-door
     --    blocks stay bedrock so agents can't slip past or jump over.
-    local d2 = five_chambers.DOOR2_POS
+    local d2 = wire.DOOR2_POS
     build_corridor(d2.x, d2.z, y0, y1, wall)
-    place_node({x=d2.x, y=y0+1, z=d2.z}, {name="five_chambers:door_locked"})
-    place_node({x=d2.x, y=y0+2, z=d2.z}, {name="five_chambers:door_locked"})
+    place_node({x=d2.x, y=y0+1, z=d2.z}, {name="wire:door_locked"})
+    place_node({x=d2.x, y=y0+2, z=d2.z}, {name="wire:door_locked"})
     for y = y0+3, y1-1 do
         place_node({x=d2.x, y=y, z=d2.z}, {name=wall})  -- block jumping over
     end
 
     -- 8. Place each anvil as a 2-block pillar: a gray pedestal
-    --    (`five_chambers:anvil_pedestal`, cosmetic, no on_punch) at
-    --    FLOOR_Y+1, and the punchable purple `five_chambers:anvil` at
+    --    (`wire:anvil_pedestal`, cosmetic, no on_punch) at
+    --    FLOOR_Y+1, and the punchable purple `wire:anvil` at
     --    FLOOR_Y+2 = info.pos. Lifting the anvil one block off the floor
     --    puts the purple block at agent eye level so the LLM actually
     --    sees and targets it; the gray pedestal makes the lifted block
     --    look intentional rather than floating.
-    --    Sharing five_chambers.anvil_positions() between world_gen and
+    --    Sharing wire.anvil_positions() between world_gen and
     --    anvil.lua prevents the prior bug where this loop placed dummies
     --    at x=1,4,7 while anvil.lua tracked state at the centre column
     --    (net effect: zero functional anvils).
-    for _, info in ipairs(five_chambers.anvil_positions()) do
+    for _, info in ipairs(wire.anvil_positions()) do
         local pedestal_pos = {x = info.pos.x, y = info.pos.y - 1, z = info.pos.z}
-        place_node(pedestal_pos, {name="five_chambers:anvil_pedestal"})
-        place_node(info.pos,     {name="five_chambers:anvil"})
+        place_node(pedestal_pos, {name="wire:anvil_pedestal"})
+        place_node(info.pos,     {name="wire:anvil"})
     end
 
     add_ceiling_lights(c.x0, c.x1, c.z0, c.z1, y1)
 
-    minetest.log("action", "[five_chambers] Chamber 2 built.")
+    minetest.log("action", "[wire] Chamber 2 built.")
 end
 
 local function build_chamber_3()
-    if not five_chambers.CHAMBERS[3].enabled then return end
+    if not wire.CHAMBERS[3].enabled then return end
 
-    local N    = five_chambers.NUM_AGENTS
-    local y0   = five_chambers.FLOOR_Y               -- 10
-    local y1   = five_chambers.CEIL_Y                -- 15
-    local wall = five_chambers.WALL_NODE
+    local N    = wire.NUM_AGENTS
+    local y0   = wire.FLOOR_Y               -- 10
+    local y1   = wire.CEIL_Y                -- 15
+    local wall = wire.WALL_NODE
     local x0   = 0
     local x1   = 4 * N                               -- 12 for N=3
 
-    local z0      = five_chambers.CH3_Z0             -- 24
-    local z1      = five_chambers.CH3_NORTH_WALL_Z   -- 38
-    local cell_z0 = five_chambers.CH3_CELL_Z0        -- 25
-    local cell_z1 = five_chambers.CH3_CELL_Z1        -- 27
-    local comm_z0 = five_chambers.CH3_COMMUNAL_Z0    -- 29
-    local comm_z1 = five_chambers.CH3_COMMUNAL_Z1    -- 37
+    local z0      = wire.CH3_Z0             -- 24
+    local z1      = wire.CH3_NORTH_WALL_Z   -- 38
+    local cell_z0 = wire.CH3_CELL_Z0        -- 25
+    local cell_z1 = wire.CH3_CELL_Z1        -- 27
+    local comm_z0 = wire.CH3_COMMUNAL_Z0    -- 29
+    local comm_z1 = wire.CH3_COMMUNAL_Z1    -- 37
 
     minetest.load_area({x=x0, y=y0-1, z=z0}, {x=x1, y=y1+1, z=z1+1})
 
@@ -311,20 +311,20 @@ local function build_chamber_3()
         end
     end
     -- 2b. Place switch nodes on the south-facing wall of each cell (z=cell_z0).
-    --     five_chambers:switch is registered by switches.lua (already dofile'd).
+    --     wire:switch is registered by switches.lua (already dofile'd).
     for i = 0, N - 1 do
-        local sx = five_chambers.cell_x_center(i)
-        place_node({x=sx, y=y0+1, z=cell_z0}, {name="five_chambers:switch"})
+        local sx = wire.cell_x_center(i)
+        place_node({x=sx, y=y0+1, z=cell_z0}, {name="wire:switch"})
     end
     -- 2c. Place visible locked-door blocks at each cell front-wall door
     --     (cell_x_center(i), y0+1..y0+2, CH3_FRONT_WALL_Z). The rest of the
     --     front wall stays bedrock from step 1. open_cell_door() swaps the
     --     two door blocks to air when the corresponding switch is pressed.
-    local front_z = five_chambers.CH3_FRONT_WALL_Z
+    local front_z = wire.CH3_FRONT_WALL_Z
     for i = 0, N - 1 do
-        local dx = five_chambers.cell_x_center(i)
-        place_node({x=dx, y=y0+1, z=front_z}, {name="five_chambers:door_locked"})
-        place_node({x=dx, y=y0+2, z=front_z}, {name="five_chambers:door_locked"})
+        local dx = wire.cell_x_center(i)
+        place_node({x=dx, y=y0+1, z=front_z}, {name="wire:door_locked"})
+        place_node({x=dx, y=y0+2, z=front_z}, {name="wire:door_locked"})
     end
 
 
@@ -340,30 +340,30 @@ local function build_chamber_3()
     --    Door 3 starts as a visible locked-door block; check_door3() (doors.lua)
     --    swaps it to air once all NUM_AGENTS agents are simultaneously in the
     --    communal room.
-    local dx3 = five_chambers.DOOR3_X
-    place_node({x=dx3, y=y0+1, z=z1}, {name="five_chambers:door_locked"})
-    place_node({x=dx3, y=y0+2, z=z1}, {name="five_chambers:door_locked"})
+    local dx3 = wire.DOOR3_X
+    place_node({x=dx3, y=y0+1, z=z1}, {name="wire:door_locked"})
+    place_node({x=dx3, y=y0+2, z=z1}, {name="wire:door_locked"})
     build_corridor(dx3, z1 + 1, y0, y1, wall)
 
     -- 5. Lighting: one glowstone per cell ceiling + spread across communal ceiling.
     for i = 0, N - 1 do
-        local cx = five_chambers.cell_x_center(i)
+        local cx = wire.cell_x_center(i)
         local mz = math.floor((cell_z0 + cell_z1) / 2)
         place_node({x=cx, y=y1, z=mz}, {name="mcl_nether:glowstone"})
     end
     add_ceiling_lights(x0, x1, comm_z0, comm_z1, y1)
 
-    minetest.log("action", "[five_chambers] Chamber 3 built.")
+    minetest.log("action", "[wire] Chamber 3 built.")
 end
 
 local function build_chamber_4()
-    if not five_chambers.CHAMBERS[4].enabled then return end
+    if not wire.CHAMBERS[4].enabled then return end
 
-    local c    = five_chambers.CH4      -- {x0=3, x1=9, z0=40, z1=46}
-    local y0   = five_chambers.FLOOR_Y  -- 10
-    local y1   = five_chambers.CEIL_Y   -- 15
-    local wall = five_chambers.WALL_NODE
-    local dx   = five_chambers.DOOR3_X  -- 6
+    local c    = wire.CH4      -- {x0=3, x1=9, z0=40, z1=46}
+    local y0   = wire.FLOOR_Y  -- 10
+    local y1   = wire.CEIL_Y   -- 15
+    local wall = wire.WALL_NODE
+    local dx   = wire.DOOR3_X  -- 6
 
     minetest.load_area({x=c.x0, y=y0-1, z=c.z0}, {x=c.x1, y=y1+1, z=c.z1+2})
 
@@ -389,7 +389,7 @@ local function build_chamber_4()
     --    Use DOOR4_POS.x here, not DOOR3_X — they coincide at N=3 but
     --    diverge at smaller NUM_AGENTS where Door 3 sits at the centre of
     --    the narrower Ch3 (e.g. x=2 for N=1) while Door 4 stays at x=6.
-    local d4x = five_chambers.DOOR4_POS.x
+    local d4x = wire.DOOR4_POS.x
     place_node({x=d4x, y=y0+1, z=c.z1}, {name="air"})
     place_node({x=d4x, y=y0+2, z=c.z1}, {name="air"})
     place_node({x=d4x, y=y0,   z=c.z1}, {name="mcl_core:bedrock"})
@@ -397,29 +397,29 @@ local function build_chamber_4()
     -- 6. Door 4: enclosed corridor with a visible locked-door block at
     --    y0+1..y0+2. doors.lua replaces those two blocks with air to open
     --    once all Ch4 mobs are dead.
-    local d4 = five_chambers.DOOR4_POS
+    local d4 = wire.DOOR4_POS
     build_corridor(d4.x, d4.z, y0, y1, wall)
-    place_node({x=d4.x, y=y0+1, z=d4.z}, {name="five_chambers:door_locked"})
-    place_node({x=d4.x, y=y0+2, z=d4.z}, {name="five_chambers:door_locked"})
+    place_node({x=d4.x, y=y0+1, z=d4.z}, {name="wire:door_locked"})
+    place_node({x=d4.x, y=y0+2, z=d4.z}, {name="wire:door_locked"})
     for y = y0+3, y1-1 do
         place_node({x=d4.x, y=y, z=d4.z}, {name=wall})  -- block jumping over
     end
 
     add_ceiling_lights(c.x0, c.x1, c.z0, c.z1, y1)
 
-    minetest.log("action", "[five_chambers] Chamber 4 built.")
+    minetest.log("action", "[wire] Chamber 4 built.")
 end
 
 local function build_chamber_5()
-    if not five_chambers.CHAMBERS[5].enabled then return end
+    if not wire.CHAMBERS[5].enabled then return end
 
-    local c    = five_chambers.CH5      -- {x0=4, x1=8, z0=48, z1=52}
-    local y0   = five_chambers.FLOOR_Y  -- 10
-    local y1   = five_chambers.CEIL_Y   -- 15
-    local wall = five_chambers.WALL_NODE
+    local c    = wire.CH5      -- {x0=4, x1=8, z0=48, z1=52}
+    local y0   = wire.FLOOR_Y  -- 10
+    local y1   = wire.CEIL_Y   -- 15
+    local wall = wire.WALL_NODE
     -- Ch5's south entrance must line up with Door 4 (at DOOR4_POS.x), NOT
     -- with DOOR3_X. They coincide at N=3 but diverge for smaller N.
-    local dx   = five_chambers.DOOR4_POS.x
+    local dx   = wire.DOOR4_POS.x
 
     minetest.load_area({x=c.x0, y=y0-1, z=c.z0}, {x=c.x1, y=y1+1, z=c.z1})
 
@@ -444,11 +444,11 @@ local function build_chamber_5()
 
     add_ceiling_lights(c.x0, c.x1, c.z0, c.z1, y1)
 
-    minetest.log("action", "[five_chambers] Chamber 5 built.")
+    minetest.log("action", "[wire] Chamber 5 built.")
 end
 
 -- Public entry-point called from init.lua's on_mods_loaded callback.
-function five_chambers.build_all_chambers()
+function wire.build_all_chambers()
     build_chamber_1()
     build_chamber_2()
     build_chamber_3()

@@ -16,7 +16,7 @@ import os
 def parse_args():
     parser = argparse.ArgumentParser(description="Run Mindforge agents in Craftium OpenWorld")
     parser.add_argument("--num-agents", type=int, default=3,
-                        help="Number of agents in five-chambers (all share the agent role)")
+                        help="Number of agents in WIRE (all share the agent role)")
     parser.add_argument("--team-scaling", action="store_true",
                         help="Master switch for the agent-count scaling suite. "
                              "ON: prompt text is rendered truthfully for the "

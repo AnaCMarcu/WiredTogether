@@ -7,4 +7,4 @@ backend = sqlite3
 gameid = VoxeLibre
 world_name = world
 server_announce = false
-load_mod_five_chambers = mods/five_chambers
+load_mod_wire = mods/wire

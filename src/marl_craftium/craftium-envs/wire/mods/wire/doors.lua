@@ -9,7 +9,7 @@
 -- Visible "locked door" block: distinct red glowing texture so players /
 -- agents can see exactly where doors are. Solid + unbreakable: behaves
 -- like bedrock for collision and digging, but is recognisable on sight.
-minetest.register_node("five_chambers:door_locked", {
+minetest.register_node("wire:door_locked", {
     description = "Locked Door",
     tiles = {
         "mcl_core_stonebrick.png^[colorize:#bb1f1f:200",  -- top
@@ -23,7 +23,7 @@ minetest.register_node("five_chambers:door_locked", {
     sounds = nil,
 })
 
-five_chambers.door_state = {
+wire.door_state = {
     door1_open = false,
     door1_force_teleported = false,  -- did the Ch1 timeout already fire?
     door2_open = false,
@@ -37,8 +37,8 @@ five_chambers.door_state = {
 }
 
 -- ch2_transitioned[i] = true once agent_i has been teleported to Ch3 cell i.
-five_chambers.ch2_transitioned       = {}
-five_chambers.ch2_transitioned_count = 0
+wire.ch2_transitioned       = {}
+wire.ch2_transitioned_count = 0
 
 -- Tick at which all NUM_AGENTS players were first connected. The Ch1
 -- timeout countdown measures from THIS tick, not from server start —
@@ -46,22 +46,22 @@ five_chambers.ch2_transitioned_count = 0
 -- burns the whole timeout budget and the teleport fires the instant the
 -- last agent joins, dropping them in Ch2 with zero Ch1 experience.
 -- Reset to nil in init_doors() at episode boundaries.
-five_chambers.all_connected_tick = nil
+wire.all_connected_tick = nil
 
 -- Tick at which Python signals warmup-complete (preferred anchor over
 -- all_connected_tick — see the stamping logic in the timeout globalstep).
 -- Reset to nil in init_doors() so each episode re-anchors at episode start;
 -- the warmup_complete.txt file persists on disk, so the next globalstep
 -- after a reset will immediately re-stamp this to the current sc.
-five_chambers.warmup_complete_tick = nil
+wire.warmup_complete_tick = nil
 
 -- Re-place the visible door_locked block at a door position. Inverse of
 -- open_door_at(). Used by relock_all_doors() at episode reset to undo any
 -- doors that were swapped to air during the previous episode.
 local function lock_door_at(x, z)
-    local y = five_chambers.FLOOR_Y
-    minetest.set_node({x=x, y=y+1, z=z}, {name="five_chambers:door_locked"})
-    minetest.set_node({x=x, y=y+2, z=z}, {name="five_chambers:door_locked"})
+    local y = wire.FLOOR_Y
+    minetest.set_node({x=x, y=y+1, z=z}, {name="wire:door_locked"})
+    minetest.set_node({x=x, y=y+2, z=z}, {name="wire:door_locked"})
 end
 
 -- Re-places every door_locked block in the world. Called from the reset
@@ -72,8 +72,8 @@ end
 -- iterate over those three columns so the open/relock semantics match the
 -- 1-wide doors used elsewhere.
 local function _door1_columns()
-    local dx = five_chambers.DOOR1_X
-    local z  = five_chambers.CH1.z1
+    local dx = wire.DOOR1_X
+    local z  = wire.CH1.z1
     return {
         {x = dx - 1, z = z},
         {x = dx,     z = z},
@@ -87,15 +87,15 @@ end
 -- can't reuse them. The door blocks live at y=FLOOR_Y+2,+3 (which equals
 -- CH1_DIRT_Y+1, CH1_DIRT_Y+2 — agent height in Ch1).
 local function _door1_y_pair()
-    local y_dirt = five_chambers.CH1_DIRT_Y or (five_chambers.FLOOR_Y + 1)
+    local y_dirt = wire.CH1_DIRT_Y or (wire.FLOOR_Y + 1)
     return y_dirt + 1, y_dirt + 2
 end
 
 local function lock_door1()
     local y_lo, y_hi = _door1_y_pair()
     for _, p in ipairs(_door1_columns()) do
-        minetest.set_node({x=p.x, y=y_lo, z=p.z}, {name="five_chambers:door_locked"})
-        minetest.set_node({x=p.x, y=y_hi, z=p.z}, {name="five_chambers:door_locked"})
+        minetest.set_node({x=p.x, y=y_lo, z=p.z}, {name="wire:door_locked"})
+        minetest.set_node({x=p.x, y=y_hi, z=p.z}, {name="wire:door_locked"})
     end
 end
 
@@ -130,56 +130,56 @@ local function open_door1_blocks()
     vm:write_to_map(true)  -- true = update lighting
 end
 
-function five_chambers.relock_all_doors()
+function wire.relock_all_doors()
     -- Door 1 (Ch1 → Ch2)
     lock_door1()
 
     -- Door 2 (Ch2 → Ch3)
-    local d2 = five_chambers.DOOR2_POS
+    local d2 = wire.DOOR2_POS
     lock_door_at(d2.x, d2.z)
 
     -- Door 3 (Ch3 communal → Ch4 corridor)
-    lock_door_at(five_chambers.DOOR3_X, five_chambers.CH3_NORTH_WALL_Z)
+    lock_door_at(wire.DOOR3_X, wire.CH3_NORTH_WALL_Z)
 
     -- Door 4 (Ch4 → Ch5)
-    local d4 = five_chambers.DOOR4_POS
+    local d4 = wire.DOOR4_POS
     lock_door_at(d4.x, d4.z)
 
     -- Cell doors (Ch3 front wall, one per agent)
-    local front_z = five_chambers.CH3_FRONT_WALL_Z
-    for i = 0, five_chambers.NUM_AGENTS - 1 do
-        lock_door_at(five_chambers.cell_x_center(i), front_z)
+    local front_z = wire.CH3_FRONT_WALL_Z
+    for i = 0, wire.NUM_AGENTS - 1 do
+        lock_door_at(wire.cell_x_center(i), front_z)
     end
 end
 
-function five_chambers.init_doors()
-    five_chambers.door_state.door1_open             = false
-    five_chambers.door_state.door1_force_teleported = false
-    five_chambers.door_state.door2_open             = false
-    five_chambers.door_state.door2_countdown        = -1
-    five_chambers.door_state.door2_force_teleported = false
-    five_chambers.door_state.door3_open             = false
-    five_chambers.door_state.door3_force_teleported = false
-    five_chambers.door_state.door4_open             = false
-    five_chambers.door_state.door4_force_teleported = false
-    five_chambers.door_state.cell_doors             = {}
-    five_chambers.ch2_transitioned                  = {}
-    five_chambers.ch2_transitioned_count            = 0
-    five_chambers.all_connected_tick                = nil
-    five_chambers.warmup_complete_tick              = nil
-    for i = 0, five_chambers.NUM_AGENTS - 1 do
-        five_chambers.door_state.cell_doors[i] = false
-        five_chambers.ch2_transitioned[i]      = false
+function wire.init_doors()
+    wire.door_state.door1_open             = false
+    wire.door_state.door1_force_teleported = false
+    wire.door_state.door2_open             = false
+    wire.door_state.door2_countdown        = -1
+    wire.door_state.door2_force_teleported = false
+    wire.door_state.door3_open             = false
+    wire.door_state.door3_force_teleported = false
+    wire.door_state.door4_open             = false
+    wire.door_state.door4_force_teleported = false
+    wire.door_state.cell_doors             = {}
+    wire.ch2_transitioned                  = {}
+    wire.ch2_transitioned_count            = 0
+    wire.all_connected_tick                = nil
+    wire.warmup_complete_tick              = nil
+    for i = 0, wire.NUM_AGENTS - 1 do
+        wire.door_state.cell_doors[i] = false
+        wire.ch2_transitioned[i]      = false
     end
 
     -- DEBUG_SINGLE: skip the anvil-coop mechanic and leave Door 2 open from
     -- the start so a solo human player can walk Ch2 → Ch3 directly. The
     -- Ch2→Ch3 teleport globalstep then catches them at z >= DOOR2_POS.z and
     -- drops them into cell 0, so the switch puzzle still gets exercised.
-    if five_chambers.DEBUG_SINGLE then
-        five_chambers.door_state.door2_open = true
-        local d2 = five_chambers.DOOR2_POS
-        five_chambers.open_door_at(d2.x, d2.z)
+    if wire.DEBUG_SINGLE then
+        wire.door_state.door2_open = true
+        local d2 = wire.DOOR2_POS
+        wire.open_door_at(d2.x, d2.z)
     end
 end
 
@@ -195,8 +195,8 @@ end
 -- thinks the door is open. Going through VoxelManip avoids the hook;
 -- write_to_map(true) forces lighting recalc to clear door_locked's
 -- light_source=7 emission so the area properly darkens.
-function five_chambers.open_door_at(x, z)
-    local y = five_chambers.FLOOR_Y
+function wire.open_door_at(x, z)
+    local y = wire.FLOOR_Y
     local air_cid = minetest.get_content_id("air")
     local vm = minetest.get_voxel_manip(
         {x = x, y = y + 1, z = z},
@@ -235,11 +235,11 @@ end
 -- Opens Door 1 (Ch1 → Ch2). Idempotent. Called by milestones.lua when a
 -- "real" Ch1 milestone fires (M2/M3/M4/M5/M6/M7) and by the Ch1 timeout
 -- globalstep below as a fallback.
-function five_chambers.open_door1()
-    if five_chambers.door_state.door1_open then return end
-    five_chambers.door_state.door1_open = true
+function wire.open_door1()
+    if wire.door_state.door1_open then return end
+    wire.door_state.door1_open = true
     open_door1_blocks()
-    minetest.log("action", "[five_chambers] Door 1 opened.")
+    minetest.log("action", "[wire] Door 1 opened.")
     -- Surface to Python via the state-file IPC so agents still in Ch1
     -- can see "Door 1: OPEN — walk north to enter Chamber 2" in their
     -- chamber_state field on the next prompt. Without this they have
@@ -249,24 +249,24 @@ function five_chambers.open_door1()
 end
 
 -- Called when all anvils have been broken at least once; starts the countdown.
-function five_chambers.start_door2_countdown()
-    if five_chambers.door_state.door2_countdown < 0 then
-        five_chambers.door_state.door2_countdown = five_chambers.DOOR2_DELAY
+function wire.start_door2_countdown()
+    if wire.door_state.door2_countdown < 0 then
+        wire.door_state.door2_countdown = wire.DOOR2_DELAY
     end
 end
 
 -- Ticked each globalstep. Counts down by 1 env-step (3 Lua ticks) and opens
 -- Door 2 when the counter reaches zero.
-function five_chambers.tick_door2()
-    local ds = five_chambers.door_state
+function wire.tick_door2()
+    local ds = wire.door_state
     if ds.door2_open or ds.door2_countdown < 0 then return end
 
     ds.door2_countdown = ds.door2_countdown - 1
     if ds.door2_countdown <= 0 then
         ds.door2_open = true
-        local d2 = five_chambers.DOOR2_POS
-        five_chambers.open_door_at(d2.x, d2.z)
-        minetest.log("action", "[five_chambers] Door 2 opened.")
+        local d2 = wire.DOOR2_POS
+        wire.open_door_at(d2.x, d2.z)
+        minetest.log("action", "[wire] Door 2 opened.")
         -- Surface to Python (same pattern as door1_state.txt).
         _write_door_state_file("door2_state.txt", "open\n")
     end
@@ -274,36 +274,36 @@ end
 
 minetest.register_globalstep(function(dtime)
     -- Only tick every 3 Lua ticks (1 env step) using step_counter.
-    if five_chambers.step_counter % 3 ~= 0 then return end
-    five_chambers.tick_door2()
+    if wire.step_counter % 3 ~= 0 then return end
+    wire.tick_door2()
 end)
 
 -- Reinstates Door 2 (visible locked-door block) after all agents have been
 -- teleported to Ch3.
-function five_chambers.relock_door_2()
-    local d2 = five_chambers.DOOR2_POS
-    local y  = five_chambers.FLOOR_Y
-    minetest.set_node({x=d2.x, y=y+1, z=d2.z}, {name="five_chambers:door_locked"})
-    minetest.set_node({x=d2.x, y=y+2, z=d2.z}, {name="five_chambers:door_locked"})
-    minetest.log("action", "[five_chambers] Door 2 relocked.")
+function wire.relock_door_2()
+    local d2 = wire.DOOR2_POS
+    local y  = wire.FLOOR_Y
+    minetest.set_node({x=d2.x, y=y+1, z=d2.z}, {name="wire:door_locked"})
+    minetest.set_node({x=d2.x, y=y+2, z=d2.z}, {name="wire:door_locked"})
+    minetest.log("action", "[wire] Door 2 relocked.")
 end
 
 -- Opens a specific cell door (0-indexed). Called by switches.lua.
 -- Door for cell i is at (cell_x_center(i), FLOOR_Y+1, CH3_FRONT_WALL_Z).
-function five_chambers.open_cell_door(cell_i)
-    if five_chambers.door_state.cell_doors[cell_i] then return end
-    five_chambers.door_state.cell_doors[cell_i] = true
-    five_chambers.open_door_at(
-        five_chambers.cell_x_center(cell_i),
-        five_chambers.CH3_FRONT_WALL_Z)
+function wire.open_cell_door(cell_i)
+    if wire.door_state.cell_doors[cell_i] then return end
+    wire.door_state.cell_doors[cell_i] = true
+    wire.open_door_at(
+        wire.cell_x_center(cell_i),
+        wire.CH3_FRONT_WALL_Z)
 
     -- Surface to Python: rewrite the full per-cell map each time a door
     -- opens. File format is one line per agent index, "<i>:open" sorted
     -- numerically. Python reads this and tells each agent "Your cell
     -- door is OPEN/LOCKED" in chamber_state.
     local lines = {}
-    for i = 0, (five_chambers.NUM_AGENTS - 1) do
-        if five_chambers.door_state.cell_doors[i] then
+    for i = 0, (wire.NUM_AGENTS - 1) do
+        if wire.door_state.cell_doors[i] then
             table.insert(lines, tostring(i) .. ":open")
         end
     end
@@ -314,44 +314,44 @@ end
 
 -- Checks if all NUM_AGENTS agents are simultaneously in the communal room.
 -- When true: fires M19 for all agents in communal and opens Door 3.
-function five_chambers.check_door3()
-    if five_chambers.door_state.door3_open then return end
+function wire.check_door3()
+    if wire.door_state.door3_open then return end
 
     local names = {}
     for _, player in ipairs(minetest.get_connected_players()) do
         local name = player:get_player_name()
-        if five_chambers.agent_index(name) >= 0 then
+        if wire.agent_index(name) >= 0 then
             local pos = player:get_pos()
-            if pos and five_chambers.get_chamber_for_pos(pos) == "ch3_communal" then
+            if pos and wire.get_chamber_for_pos(pos) == "ch3_communal" then
                 table.insert(names, name)
             end
         end
     end
 
-    if #names >= five_chambers.NUM_AGENTS then
-        five_chambers.door_state.door3_open = true
-        five_chambers.open_door_at(
-            five_chambers.DOOR3_X, five_chambers.CH3_NORTH_WALL_Z)
-        five_chambers.fire_milestone("m19_all_in_communal", names)
+    if #names >= wire.NUM_AGENTS then
+        wire.door_state.door3_open = true
+        wire.open_door_at(
+            wire.DOOR3_X, wire.CH3_NORTH_WALL_Z)
+        wire.fire_milestone("m19_all_in_communal", names)
         minetest.log("action",
-            "[five_chambers] All agents in communal — Door 3 opened.")
+            "[wire] All agents in communal — Door 3 opened.")
         _write_door_state_file("door3_state.txt", "open\n")
     end
 end
 
 minetest.register_globalstep(function(dtime)
-    if not five_chambers.CHAMBERS[3].enabled then return end
-    if five_chambers.step_counter % 3 ~= 0 then return end
-    five_chambers.check_door3()
+    if not wire.CHAMBERS[3].enabled then return end
+    if wire.step_counter % 3 ~= 0 then return end
+    wire.check_door3()
 end)
 
 -- Opens Door 4 after all Ch4 mobs are dead. Called by mobs.lua.
-function five_chambers.open_door4()
-    if five_chambers.door_state.door4_open then return end
-    five_chambers.door_state.door4_open = true
-    local d4 = five_chambers.DOOR4_POS
-    five_chambers.open_door_at(d4.x, d4.z)
-    minetest.log("action", "[five_chambers] Door 4 opened.")
+function wire.open_door4()
+    if wire.door_state.door4_open then return end
+    wire.door_state.door4_open = true
+    local d4 = wire.DOOR4_POS
+    wire.open_door_at(d4.x, d4.z)
+    minetest.log("action", "[wire] Door 4 opened.")
     _write_door_state_file("door4_state.txt", "open\n")
 end
 
@@ -361,42 +361,42 @@ end
 -- After all NUM_AGENTS agents have transitioned, relock Door 2.
 
 minetest.register_globalstep(function(dtime)
-    if not five_chambers.door_state.door2_open then return end
-    if not five_chambers.CHAMBERS[3].enabled then return end
+    if not wire.door_state.door2_open then return end
+    if not wire.CHAMBERS[3].enabled then return end
 
-    local d2z = five_chambers.DOOR2_POS.z  -- 23
+    local d2z = wire.DOOR2_POS.z  -- 23
 
     for _, player in ipairs(minetest.get_connected_players()) do
         local name = player:get_player_name()
-        local idx  = five_chambers.agent_index(name)
-        if idx >= 0 and not five_chambers.ch2_transitioned[idx] then
+        local idx  = wire.agent_index(name)
+        if idx >= 0 and not wire.ch2_transitioned[idx] then
             local pos = player:get_pos()
             if pos and pos.z >= d2z then
-                local dest = five_chambers.cell_teleport_pos(idx)
+                local dest = wire.cell_teleport_pos(idx)
                 player:set_pos(dest)
-                five_chambers.ch2_transitioned[idx] = true
-                five_chambers.ch2_transitioned_count =
-                    five_chambers.ch2_transitioned_count + 1
+                wire.ch2_transitioned[idx] = true
+                wire.ch2_transitioned_count =
+                    wire.ch2_transitioned_count + 1
                 -- Suppress m16_enter_cell when the Ch2→Ch3 timeout
                 -- teleport already fired this episode: the agents were
                 -- force-relocated rather than entering via Door 2 on
                 -- their own, so this is not an honest entry milestone.
                 -- The teleport itself remains for layout continuity;
                 -- the milestone reward is what we withhold.
-                if five_chambers.door_state
-                   and five_chambers.door_state.door2_force_teleported then
+                if wire.door_state
+                   and wire.door_state.door2_force_teleported then
                     minetest.log("action",
-                        "[five_chambers] m16_enter_cell suppressed for "
+                        "[wire] m16_enter_cell suppressed for "
                         .. name .. " (Ch2 timeout teleport fired this episode)")
                 else
-                    five_chambers.fire_milestone("m16_enter_cell", {name})
+                    wire.fire_milestone("m16_enter_cell", {name})
                 end
                 minetest.log("action",
-                    "[five_chambers] " .. name .. " teleported to Ch3 cell " .. idx)
+                    "[wire] " .. name .. " teleported to Ch3 cell " .. idx)
 
-                if five_chambers.ch2_transitioned_count >= five_chambers.NUM_AGENTS then
-                    five_chambers.relock_door_2()
-                    five_chambers.door_state.door2_open = false
+                if wire.ch2_transitioned_count >= wire.NUM_AGENTS then
+                    wire.relock_door_2()
+                    wire.door_state.door2_open = false
                 end
             end
         end
@@ -423,10 +423,10 @@ end)
 local _CH1_DIAG_INTERVAL = 600
 
 minetest.register_globalstep(function(dtime)
-    if not five_chambers.CHAMBERS[2].enabled then return end
+    if not wire.CHAMBERS[2].enabled then return end
 
-    local sc = five_chambers.step_counter or 0
-    local n_required = five_chambers.NUM_AGENTS or 1
+    local sc = wire.step_counter or 0
+    local n_required = wire.NUM_AGENTS or 1
     local connected_now = minetest.get_connected_players()
     local n_connected_now = #connected_now
 
@@ -434,16 +434,16 @@ minetest.register_globalstep(function(dtime)
     -- timeout math is relative to THIS tick, not server start, so the
     -- warmup phase (server up several minutes before clients finish
     -- joining) doesn't burn the Ch1 budget. Once stamped, doesn't move.
-    if (not five_chambers.all_connected_tick)
+    if (not wire.all_connected_tick)
        and n_connected_now >= n_required then
-        five_chambers.all_connected_tick = sc
+        wire.all_connected_tick = sc
         if io and io.stderr then
             io.stderr:write(string.format(
                 "[CH1_TIMEOUT] all %d/%d players connected at tick=%d "
                 .. "— Ch1 timeout countdown starts now (target=%d ticks "
                 .. "from this point)\n",
                 n_connected_now, n_required, sc,
-                five_chambers.CH1_TIMEOUT_TICKS or -1))
+                wire.CH1_TIMEOUT_TICKS or -1))
             io.stderr:flush()
         end
     end
@@ -456,12 +456,12 @@ minetest.register_globalstep(function(dtime)
     -- agents start in Ch2. Warmup-complete is signalled by Python writing
     -- {worldpath}/warmup_complete.txt after the media-load poll loop ends
     -- (see CraftiumEnvironmentInterface.signal_warmup_complete).
-    if not five_chambers.warmup_complete_tick then
+    if not wire.warmup_complete_tick then
         local wc_path = (minetest.get_worldpath() or "") .. "/warmup_complete.txt"
         local f = io.open(wc_path, "r")
         if f then
             f:close()
-            five_chambers.warmup_complete_tick = sc
+            wire.warmup_complete_tick = sc
             if io and io.stderr then
                 io.stderr:write(string.format(
                     "[CH1_TIMEOUT] warmup_complete signalled at tick=%d "
@@ -481,28 +481,28 @@ minetest.register_globalstep(function(dtime)
     -- is only the safety net for runaway Python — and that safety net
     -- correctly stays disarmed until Python signals it's actually using
     -- the env.
-    local ref_tick = five_chambers.warmup_complete_tick
+    local ref_tick = wire.warmup_complete_tick
     local ticks_in_ch1 = (ref_tick and (sc - ref_tick)) or -1
 
     if sc > 0 and sc % _CH1_DIAG_INTERVAL == 0
-       and not five_chambers.door_state.door1_force_teleported then
+       and not wire.door_state.door1_force_teleported then
         if io and io.stderr then
-            local anchor = five_chambers.warmup_complete_tick
+            local anchor = wire.warmup_complete_tick
                 and "warmup_complete"
-                or (five_chambers.all_connected_tick and "all_connected_only_no_countdown" or "none")
+                or (wire.all_connected_tick and "all_connected_only_no_countdown" or "none")
             io.stderr:write(string.format(
                 "[CH1_TIMEOUT_DIAG] step_counter=%d ticks_in_ch1=%d "
                 .. "target=%d anchor=%s force_teleported=%s players=%d\n",
                 sc, ticks_in_ch1,
-                five_chambers.CH1_TIMEOUT_TICKS or -1,
+                wire.CH1_TIMEOUT_TICKS or -1,
                 anchor,
-                tostring(five_chambers.door_state.door1_force_teleported),
+                tostring(wire.door_state.door1_force_teleported),
                 n_connected_now))
             io.stderr:flush()
         end
     end
 
-    if five_chambers.door_state.door1_force_teleported then return end
+    if wire.door_state.door1_force_teleported then return end
     if sc % 3 ~= 0 then return end
 
     -- Two paths fire the teleport: (1) Python writes a force-flag file once
@@ -538,7 +538,7 @@ minetest.register_globalstep(function(dtime)
     -- path so a manual --ch1-timeout-steps still works.
     if (not force_fired)
        and (ticks_in_ch1 < 0
-            or ticks_in_ch1 < (five_chambers.CH1_TIMEOUT_TICKS or 3000)) then
+            or ticks_in_ch1 < (wire.CH1_TIMEOUT_TICKS or 3000)) then
         return
     end
 
@@ -548,9 +548,9 @@ minetest.register_globalstep(function(dtime)
     -- Door 1 stays locked. Agents are teleported across, not through —
     -- leaving it visibly closed is consistent with "Ch1 is over, no
     -- going back" and stops agents wasting actions trying to dig through.
-    five_chambers.door_state.door1_force_teleported = true
+    wire.door_state.door1_force_teleported = true
     minetest.log("action",
-        "[five_chambers] Ch1 timeout fired at tick "
+        "[wire] Ch1 timeout fired at tick "
         .. tostring(sc)
         .. " — teleporting agents to Ch2.")
     if io and io.stderr then
@@ -562,18 +562,18 @@ minetest.register_globalstep(function(dtime)
     end
     for _, player in ipairs(connected) do
         local name = player:get_player_name()
-        local idx  = five_chambers.agent_index(name)
+        local idx  = wire.agent_index(name)
         local dest = (idx >= 0)
-            and five_chambers.ch2_fallback_spawn_pos(idx)
-            or  {x = 7, y = five_chambers.FLOOR_Y + 1,
-                 z = (five_chambers.CH2 and five_chambers.CH2.z0 or 17) + 2}
+            and wire.ch2_fallback_spawn_pos(idx)
+            or  {x = 7, y = wire.FLOOR_Y + 1,
+                 z = (wire.CH2 and wire.CH2.z0 or 17) + 2}
         player:set_pos(dest)
         -- Forfeit any unearned Ch1 milestones: the team is being RESCUED out of
         -- Ch1, not clearing it, so it should not collect Ch1 rewards. Critically
         -- this stops m1_move_5 from firing off this teleport's position jump —
         -- the agent did not move, it was teleported. (Already-earned Ch1
         -- milestones stay earned; this only marks the not-yet-fired ones.)
-        five_chambers.forfeit_track_milestones(name, "ch1_solo")
+        wire.forfeit_track_milestones(name, "ch1_solo")
         if io and io.stderr then
             io.stderr:write(string.format(
                 "[CH1_TIMEOUT] %s idx=%d -> (%d,%d,%d)\n",
@@ -599,21 +599,21 @@ local _per_chamber_timeout_specs = {
     {
         from         = 2,
         flag_name    = "ch2_force_teleport.txt",
-        spawn_fn     = function(i) return five_chambers.cell_teleport_pos(i) end,
+        spawn_fn     = function(i) return wire.cell_teleport_pos(i) end,
         log_tag      = "CH2_TIMEOUT",
         dest_label   = "Ch3 cell",
     },
     {
         from         = 3,
         flag_name    = "ch3_force_teleport.txt",
-        spawn_fn     = function(i) return five_chambers.ch4_fallback_spawn_pos(i) end,
+        spawn_fn     = function(i) return wire.ch4_fallback_spawn_pos(i) end,
         log_tag      = "CH3_TIMEOUT",
         dest_label   = "Ch4",
     },
     {
         from         = 4,
         flag_name    = "ch4_force_teleport.txt",
-        spawn_fn     = function(i) return five_chambers.ch5_fallback_spawn_pos(i) end,
+        spawn_fn     = function(i) return wire.ch5_fallback_spawn_pos(i) end,
         log_tag      = "CH4_TIMEOUT",
         dest_label   = "Ch5",
     },
@@ -624,13 +624,13 @@ minetest.register_globalstep(function(_dtime)
     if world_path == "" then return end
     for _, spec in ipairs(_per_chamber_timeout_specs) do
         local already_key = "door" .. spec.from .. "_force_teleported"
-        if not five_chambers.door_state[already_key] then
+        if not wire.door_state[already_key] then
             local flag_path = world_path .. "/" .. spec.flag_name
             local f = io.open(flag_path, "r")
             if f then
                 f:close()
                 os.remove(flag_path)
-                five_chambers.door_state[already_key] = true
+                wire.door_state[already_key] = true
                 local connected = minetest.get_connected_players() or {}
                 if io and io.stderr then
                     io.stderr:write(string.format(
@@ -646,16 +646,16 @@ minetest.register_globalstep(function(_dtime)
                 -- above). Dead code in normal runs: the Python Ch1 timer
                 -- always fires first and sets door1_force_teleported.
                 local skip_ch1 = (spec.from == 2)
-                    and not five_chambers.door_state.door1_force_teleported
+                    and not wire.door_state.door1_force_teleported
                 if skip_ch1 then
-                    five_chambers.door_state.door1_force_teleported = true
+                    wire.door_state.door1_force_teleported = true
                 end
                 for _, player in ipairs(connected) do
                     local name = player:get_player_name()
-                    local idx  = five_chambers.agent_index(name)
+                    local idx  = wire.agent_index(name)
                     if idx >= 0 then
                         if skip_ch1 then
-                            five_chambers.forfeit_track_milestones(name, "ch1_solo")
+                            wire.forfeit_track_milestones(name, "ch1_solo")
                         end
                         local dest = spec.spawn_fn(idx)
                         player:set_pos(dest)

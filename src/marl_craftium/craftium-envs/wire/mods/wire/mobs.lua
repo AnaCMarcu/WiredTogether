@@ -16,7 +16,7 @@ local function patch_entity_for_kill_tracking(entity_name)
     local def = minetest.registered_entities[entity_name]
     if not def then
         minetest.log("warning",
-            "[five_chambers] patch_entity: not found: " .. entity_name)
+            "[wire] patch_entity: not found: " .. entity_name)
         return false
     end
 
@@ -37,7 +37,7 @@ local function patch_entity_for_kill_tracking(entity_name)
     return true
 end
 
-function five_chambers.patch_mobs_for_kill_tracking()
+function wire.patch_mobs_for_kill_tracking()
     patch_entity_for_kill_tracking("mobs_mc:chicken")
     patch_entity_for_kill_tracking("mobs_mc:sheep")
     patch_entity_for_kill_tracking("mobs_mc:zombie")  -- Ch4 combat mobs
@@ -54,10 +54,10 @@ function five_chambers.patch_mobs_for_kill_tracking()
     if chicken_def then
         chicken_def.do_custom = function(self, dtime) end
         minetest.log("action",
-            "[five_chambers] Patched mobs_mc:chicken — egg laying disabled.")
+            "[wire] Patched mobs_mc:chicken — egg laying disabled.")
     else
         minetest.log("warning",
-            "[five_chambers] mobs_mc:chicken not registered; "
+            "[wire] mobs_mc:chicken not registered; "
             .. "egg-laying patch skipped.")
     end
 end
@@ -65,7 +65,7 @@ end
 -- ── Spawn Ch1 animals ────────────────────────────────────────────
 
 -- Initialise mob_state table immediately (before on_mods_loaded / globalstep runs).
-five_chambers.mob_state = {
+wire.mob_state = {
     active_ch1_mobs  = {},
     ch4_mobs         = {},
     ch4_triggered    = false,
@@ -97,10 +97,10 @@ local CH4_SPAWN_POSITIONS = {
 -- Do NOT clear the list here — reset_mob_state() does that, and is called
 -- before spawn_ch1_animals() in on_mods_loaded.
 
-function five_chambers.spawn_ch1_animals()
+function wire.spawn_ch1_animals()
 
     -- Stand on the dirt layer (CH1_DIRT_Y), not on the bedrock subfloor.
-    local y = (five_chambers.CH1_DIRT_Y or (five_chambers.FLOOR_Y + 1)) + 1
+    local y = (wire.CH1_DIRT_Y or (wire.FLOOR_Y + 1)) + 1
 
     local function try_spawn(entity_name, pos)
         -- Ensure the spawn position is air before adding entity.
@@ -119,31 +119,31 @@ function five_chambers.spawn_ch1_animals()
                 lua_ent.persistent = true
                 lua_ent.despawn_immediately = false
             end
-            table.insert(five_chambers.mob_state.active_ch1_mobs,
+            table.insert(wire.mob_state.active_ch1_mobs,
                          {obj=obj, last_puncher=nil})
         else
             minetest.log("warning",
-                "[five_chambers] spawn failed for " .. entity_name
+                "[wire] spawn failed for " .. entity_name
                 .. " at " .. minetest.pos_to_string(pos))
         end
     end
 
-    for _, cp in ipairs(five_chambers.CH1_CHICKEN_POSITIONS) do
+    for _, cp in ipairs(wire.CH1_CHICKEN_POSITIONS) do
         try_spawn("mobs_mc:chicken", {x=cp.x, y=y, z=cp.z})
     end
-    for _, sp in ipairs(five_chambers.CH1_SHEEP_POSITIONS) do
+    for _, sp in ipairs(wire.CH1_SHEEP_POSITIONS) do
         try_spawn("mobs_mc:sheep", {x=sp.x, y=y, z=sp.z})
     end
 
     minetest.log("action",
-        "[five_chambers] Spawned " ..
-        #five_chambers.mob_state.active_ch1_mobs .. " Ch1 animals.")
+        "[wire] Spawned " ..
+        #wire.mob_state.active_ch1_mobs .. " Ch1 animals.")
 end
 
 -- ── Globalstep: kill detection ───────────────────────────────────
 
 minetest.register_globalstep(function(dtime)
-    local active = five_chambers.mob_state.active_ch1_mobs
+    local active = wire.mob_state.active_ch1_mobs
     if not active or #active == 0 then return end
 
     local still_alive = {}
@@ -162,7 +162,7 @@ minetest.register_globalstep(function(dtime)
                 if hp and hp <= 0 then
                     -- Dead but obj still momentarily valid.
                     if entry.last_puncher then
-                        five_chambers.record_animal_kill(entry.last_puncher)
+                        wire.record_animal_kill(entry.last_puncher)
                     end
                     -- Don't add back to still_alive.
                 else
@@ -171,17 +171,17 @@ minetest.register_globalstep(function(dtime)
             else
                 -- luaentity gone; treat as death.
                 if entry.last_puncher then
-                    five_chambers.record_animal_kill(entry.last_puncher)
+                    wire.record_animal_kill(entry.last_puncher)
                 end
             end
         else
             -- ObjectRef became invalid → mob was removed (killed or despawned).
             if entry.last_puncher then
-                five_chambers.record_animal_kill(entry.last_puncher)
+                wire.record_animal_kill(entry.last_puncher)
             end
         end
     end
-    five_chambers.mob_state.active_ch1_mobs = still_alive
+    wire.mob_state.active_ch1_mobs = still_alive
 end)
 
 -- ── Public reset ─────────────────────────────────────────────────
@@ -200,8 +200,8 @@ end
 -- including any TRACKED-table entry we might have lost or an untracked natural
 -- spawn. Players are never luaentities (get_luaentity()==nil) so they're safe.
 local function _despawn_chamber_mobs()
-    local z_max  = (five_chambers.CH5 and five_chambers.CH5.z1) or 70
-    local center = {x = 6, y = (five_chambers.FLOOR_Y or 10) + 3, z = z_max / 2}
+    local z_max  = (wire.CH5 and wire.CH5.z1) or 70
+    local center = {x = 6, y = (wire.FLOOR_Y or 10) + 3, z = z_max / 2}
     local radius = z_max + 10  -- comfortably spans Ch1..Ch5
     local n_zombie, n_other = 0, 0
     for _, obj in ipairs(minetest.get_objects_inside_radius(center, radius)) do
@@ -218,14 +218,14 @@ local function _despawn_chamber_mobs()
     end
 end
 
-function five_chambers.reset_mob_state()
+function wire.reset_mob_state()
     -- Clear out every leftover mob BEFORE wiping the bookkeeping table, so a
     -- survivor from the previous episode can't pile onto the freshly-spawned
     -- set (applies equally to Ch4 zombies and the Ch5 boss). Idempotent: at
     -- server start there are no mobs yet, so this is a no-op.
     _despawn_chamber_mobs()
 
-    five_chambers.mob_state = {
+    wire.mob_state = {
         active_ch1_mobs  = {},
         ch4_mobs         = {},
         ch4_triggered    = false,
@@ -240,60 +240,60 @@ end
 
 -- ── Ch4 zombie spawn ─────────────────────────────────────────────
 
-function five_chambers.spawn_ch4_mobs()
+function wire.spawn_ch4_mobs()
     -- Spawn min(CH4_MOB_COUNT or NUM_AGENTS, #positions) zombies — by
     -- default one per agent, so a solo DEBUG run faces 1 zombie and a
     -- 3-agent run faces 3. CH4_MOB_COUNT (FC_CH4_MOB_COUNT env var,
     -- config.lua) pins the count so agent-count scaling runs keep the
     -- chamber identical across team sizes.
-    local want = five_chambers.CH4_MOB_COUNT or five_chambers.NUM_AGENTS
+    local want = wire.CH4_MOB_COUNT or wire.NUM_AGENTS
     local n = math.min(want, #CH4_SPAWN_POSITIONS)
     for i = 1, n do
         local pos = CH4_SPAWN_POSITIONS[i]
         local obj = minetest.add_entity(pos, "mobs_mc:zombie")
         if obj then
-            table.insert(five_chambers.mob_state.ch4_mobs, {
+            table.insert(wire.mob_state.ch4_mobs, {
                 obj          = obj,
                 last_puncher = nil,
                 contributors = {},  -- {[name]=true}
             })
         else
             minetest.log("warning",
-                "[five_chambers] Ch4 zombie spawn failed at "
+                "[wire] Ch4 zombie spawn failed at "
                 .. minetest.pos_to_string(pos))
         end
     end
     minetest.log("action",
-        "[five_chambers] Spawned "
-        .. #five_chambers.mob_state.ch4_mobs .. " Ch4 zombies.")
+        "[wire] Spawned "
+        .. #wire.mob_state.ch4_mobs .. " Ch4 zombies.")
 end
 
 -- ── Globalstep: Ch4 entry detection (M20 + spawn trigger) ────────
 
 minetest.register_globalstep(function(dtime)
-    if not five_chambers.CHAMBERS[4].enabled then return end
-    if five_chambers.step_counter % 3 ~= 0 then return end
+    if not wire.CHAMBERS[4].enabled then return end
+    if wire.step_counter % 3 ~= 0 then return end
 
     for _, player in ipairs(minetest.get_connected_players()) do
         local name = player:get_player_name()
-        if five_chambers.agent_index(name) >= 0 then
+        if wire.agent_index(name) >= 0 then
             local pos = player:get_pos()
-            if pos and five_chambers.get_chamber_for_pos(pos) == "ch4" then
+            if pos and wire.get_chamber_for_pos(pos) == "ch4" then
                 -- Suppress m20_enter_ch4 when the Ch3→Ch4 timeout
                 -- teleport already fired this episode: agents were
                 -- force-relocated, not earned. Mob spawning still
                 -- proceeds (the chamber is in use either way).
-                if five_chambers.door_state
-                   and five_chambers.door_state.door3_force_teleported then
+                if wire.door_state
+                   and wire.door_state.door3_force_teleported then
                     minetest.log("action",
-                        "[five_chambers] m20_enter_ch4 suppressed for "
+                        "[wire] m20_enter_ch4 suppressed for "
                         .. name .. " (Ch3 timeout teleport fired this episode)")
                 else
-                    five_chambers.fire_milestone("m20_enter_ch4", {name})
+                    wire.fire_milestone("m20_enter_ch4", {name})
                 end
-                if not five_chambers.mob_state.ch4_triggered then
-                    five_chambers.mob_state.ch4_triggered = true
-                    five_chambers.spawn_ch4_mobs()
+                if not wire.mob_state.ch4_triggered then
+                    wire.mob_state.ch4_triggered = true
+                    wire.spawn_ch4_mobs()
                 end
             end
         end
@@ -303,8 +303,8 @@ end)
 -- ── Globalstep: Ch4 kill detection (M21, M22, M23) ───────────────
 
 minetest.register_globalstep(function(dtime)
-    local mobs = five_chambers.mob_state.ch4_mobs
-    if not five_chambers.mob_state.ch4_triggered then return end
+    local mobs = wire.mob_state.ch4_mobs
+    if not wire.mob_state.ch4_triggered then return end
     if not mobs or #mobs == 0 then return end
 
     local still_alive = {}
@@ -340,35 +340,35 @@ minetest.register_globalstep(function(dtime)
             -- M21: first Ch4 kill per agent (once=true handles dedup).
             if entry.last_puncher then
                 local killer = entry.last_puncher
-                five_chambers.mob_state.ch4_kills[killer] =
-                    (five_chambers.mob_state.ch4_kills[killer] or 0) + 1
-                five_chambers.fire_milestone("m21_first_mob_kill", {killer})
+                wire.mob_state.ch4_kills[killer] =
+                    (wire.mob_state.ch4_kills[killer] or 0) + 1
+                wire.fire_milestone("m21_first_mob_kill", {killer})
             end
             -- Accumulate cumulative damage per agent across all Ch4 mobs.
             for pname, dmg in pairs(entry.contributors) do
-                five_chambers.mob_state.ch4_contributors[pname] =
-                    (five_chambers.mob_state.ch4_contributors[pname] or 0) + dmg
+                wire.mob_state.ch4_contributors[pname] =
+                    (wire.mob_state.ch4_contributors[pname] or 0) + dmg
             end
         else
             table.insert(still_alive, entry)
         end
     end
 
-    five_chambers.mob_state.ch4_mobs = still_alive
+    wire.mob_state.ch4_mobs = still_alive
 
     -- All Ch4 mobs cleared: fire M22, M23, open Door 4.
     if #still_alive == 0 then
-        local min_dmg = five_chambers.MIN_DAMAGE_FOR_CREDIT or 0
+        local min_dmg = wire.MIN_DAMAGE_FOR_CREDIT or 0
         -- M22 contributors: only agents whose cumulative damage on Ch4 mobs
         -- meets the threshold. Free-riders (1-tap-and-flee) get filtered out.
         local contrib_list = {}
-        for pname, dmg in pairs(five_chambers.mob_state.ch4_contributors) do
+        for pname, dmg in pairs(wire.mob_state.ch4_contributors) do
             if dmg >= min_dmg then
                 table.insert(contrib_list, pname)
             end
         end
         if #contrib_list > 0 then
-            five_chambers.fire_milestone("m22_all_mobs_killed", contrib_list)
+            wire.fire_milestone("m22_all_mobs_killed", contrib_list)
 
             -- M23: "all survived" bonus. Now a REAL condition — fires only if
             -- NO agent recorded a would-have-died (-10 near-death) event during
@@ -381,18 +381,18 @@ minetest.register_globalstep(function(dtime)
             local survivor_list = {}
             for _, player in ipairs(minetest.get_connected_players()) do
                 local name = player:get_player_name()
-                if five_chambers.agent_index(name) >= 0 then
+                if wire.agent_index(name) >= 0 then
                     table.insert(survivor_list, name)
-                    if (five_chambers.would_die_count_ch4[name] or 0) > 0 then
+                    if (wire.would_die_count_ch4[name] or 0) > 0 then
                         all_survived = false
                     end
                 end
             end
-            if all_survived and #survivor_list >= five_chambers.NUM_AGENTS then
-                five_chambers.fire_milestone("m23_all_alive_ch4", survivor_list)
+            if all_survived and #survivor_list >= wire.NUM_AGENTS then
+                wire.fire_milestone("m23_all_alive_ch4", survivor_list)
             end
 
-            five_chambers.open_door4()
+            wire.open_door4()
         end
     end
 end)
@@ -402,10 +402,10 @@ end)
 -- Fires M27 (boss defeated) and M28 (all alive bonus), then signals
 -- episode termination via episode_done.txt and craftium.terminate().
 local function fire_boss_death()
-    local boss = five_chambers.mob_state.ch5_boss
+    local boss = wire.mob_state.ch5_boss
     if not boss then return end
 
-    local min_dmg = five_chambers.MIN_DAMAGE_FOR_CREDIT or 0
+    local min_dmg = wire.MIN_DAMAGE_FOR_CREDIT or 0
 
     -- M27 contributors: only agents whose cumulative damage on the boss meets
     -- the threshold. Agents who only landed a single 1-HP poke get filtered.
@@ -417,7 +417,7 @@ local function fire_boss_death()
     end
 
     if #contrib_list > 0 then
-        five_chambers.fire_milestone("m27_boss_defeated", contrib_list)
+        wire.fire_milestone("m27_boss_defeated", contrib_list)
     end
 
     -- M28: bonus if every agent is still alive AND contributed real damage.
@@ -426,26 +426,26 @@ local function fire_boss_death()
     for _, player in ipairs(minetest.get_connected_players()) do
         local name = player:get_player_name()
         local agent_dmg = boss.contributors[name] or 0
-        if five_chambers.agent_index(name) >= 0
+        if wire.agent_index(name) >= 0
            and player:get_hp() > 0
            and agent_dmg >= min_dmg then
             table.insert(alive_list, name)
         end
     end
-    if #alive_list >= five_chambers.NUM_AGENTS then
-        five_chambers.fire_milestone("m28_all_alive_bonus", alive_list)
+    if #alive_list >= wire.NUM_AGENTS then
+        wire.fire_milestone("m28_all_alive_bonus", alive_list)
     end
 
     -- Signal episode termination.
     local world_path = minetest.get_worldpath()
     local f = io.open(world_path .. "/episode_done.txt", "w")
     if f then
-        f:write(tostring(five_chambers.step_counter))
+        f:write(tostring(wire.step_counter))
         f:close()
     end
     if craftium and craftium.terminate then craftium.terminate() end
 
-    minetest.log("action", "[five_chambers] Boss defeated — episode complete.")
+    minetest.log("action", "[wire] Boss defeated — episode complete.")
 end
 
 -- Called when the boss ObjectRef/luaentity has vanished. A real kill is already
@@ -456,86 +456,86 @@ end
 -- which would otherwise write episode_done.txt, award m27/m28 and terminate the
 -- episode as if the agents had won. Defaults to "not killed" when HP is unknown.
 local function boss_vanished_handler()
-    local boss = five_chambers.mob_state.ch5_boss
+    local boss = wire.mob_state.ch5_boss
     if not boss then return end
-    if (boss.last_hp or five_chambers.BOSS_HP or 1) <= 0 then
+    if (boss.last_hp or wire.BOSS_HP or 1) <= 0 then
         fire_boss_death()  -- killed, then removed before the hp<=0 tick caught it
     else
         minetest.log("action", string.format(
-            "[five_chambers] Ch5 boss vanished with HP=%s (>0) — removal, NOT a "
+            "[wire] Ch5 boss vanished with HP=%s (>0) — removal, NOT a "
             .. "defeat (no episode-complete fired)", tostring(boss.last_hp)))
     end
-    five_chambers.mob_state.ch5_boss = nil
+    wire.mob_state.ch5_boss = nil
 end
 
-function five_chambers.spawn_boss()
-    local c   = five_chambers.CH5
-    local pos = {x = 6, y = five_chambers.FLOOR_Y + 1, z = math.floor((c.z0 + c.z1) / 2)}
+function wire.spawn_boss()
+    local c   = wire.CH5
+    local pos = {x = 6, y = wire.FLOOR_Y + 1, z = math.floor((c.z0 + c.z1) / 2)}
 
     local obj = minetest.add_entity(pos, "mobs_mc:zombie")
     if not obj then
-        minetest.log("error", "[five_chambers] Boss spawn failed.")
+        minetest.log("error", "[wire] Boss spawn failed.")
         return
     end
 
     -- Override HP to BOSS_HP (60); set after on_activate has run.
     local ent = obj:get_luaentity()
     if ent then
-        ent.health = five_chambers.BOSS_HP
-        ent.hp_max = five_chambers.BOSS_HP
+        ent.health = wire.BOSS_HP
+        ent.hp_max = wire.BOSS_HP
     end
-    obj:set_hp(five_chambers.BOSS_HP)
+    obj:set_hp(wire.BOSS_HP)
 
-    five_chambers.mob_state.ch5_boss = {
+    wire.mob_state.ch5_boss = {
         obj           = obj,
         contributors  = {},   -- {[agent_name]=cumulative_damage_HP}
         dmg_fired     = false,
         half_hp_fired = false,
-        last_hp       = five_chambers.BOSS_HP,  -- gates kill-vs-removal on vanish
+        last_hp       = wire.BOSS_HP,  -- gates kill-vs-removal on vanish
     }
 
-    minetest.log("action", "[five_chambers] Boss spawned at "
+    minetest.log("action", "[wire] Boss spawned at "
         .. minetest.pos_to_string(pos)
-        .. " with " .. five_chambers.BOSS_HP .. " HP.")
+        .. " with " .. wire.BOSS_HP .. " HP.")
 end
 
 -- ── Globalstep: Ch5 entry detection (M24 + spawn trigger) ────────
 
 minetest.register_globalstep(function(dtime)
-    if not five_chambers.CHAMBERS[5].enabled then return end
-    if five_chambers.step_counter % 3 ~= 0 then return end
+    if not wire.CHAMBERS[5].enabled then return end
+    if wire.step_counter % 3 ~= 0 then return end
 
     for _, player in ipairs(minetest.get_connected_players()) do
         local name = player:get_player_name()
-        if five_chambers.agent_index(name) >= 0 then
+        if wire.agent_index(name) >= 0 then
             local pos = player:get_pos()
-            if pos and five_chambers.get_chamber_for_pos(pos) == "ch5" then
+            if pos and wire.get_chamber_for_pos(pos) == "ch5" then
                 -- Full-heal each agent ONCE on first Ch5 entry, so the boss
                 -- fight starts fresh regardless of how battered they came out
                 -- of Ch4 combat (where the hpchange clamp leaves them at low HP
                 -- between virtual deaths). Guarded per-name so it heals only on
                 -- entry, not every tick they stand in the boss room. From here
                 -- on death is real (permadeath) — see deaths.lua.
-                if not five_chambers.mob_state.ch5_healed[name] then
-                    five_chambers.mob_state.ch5_healed[name] = true
+                if not wire.mob_state.ch5_healed[name] then
+                    wire.mob_state.ch5_healed[name] = true
                     player:set_hp(20, {type = "set_hp", from = "mod"})
                     minetest.log("action",
-                        "[five_chambers] " .. name .. " full-healed on Ch5 entry")
+                        "[wire] " .. name .. " full-healed on Ch5 entry")
                 end
                 -- Suppress m24_enter_ch5 when the Ch4→Ch5 timeout
                 -- teleport already fired this episode: agents were
                 -- force-relocated, not earned. Boss still spawns.
-                if five_chambers.door_state
-                   and five_chambers.door_state.door4_force_teleported then
+                if wire.door_state
+                   and wire.door_state.door4_force_teleported then
                     minetest.log("action",
-                        "[five_chambers] m24_enter_ch5 suppressed for "
+                        "[wire] m24_enter_ch5 suppressed for "
                         .. name .. " (Ch4 timeout teleport fired this episode)")
                 else
-                    five_chambers.fire_milestone("m24_enter_ch5", {name})
+                    wire.fire_milestone("m24_enter_ch5", {name})
                 end
-                if not five_chambers.mob_state.ch5_triggered then
-                    five_chambers.mob_state.ch5_triggered = true
-                    five_chambers.spawn_boss()
+                if not wire.mob_state.ch5_triggered then
+                    wire.mob_state.ch5_triggered = true
+                    wire.spawn_boss()
                 end
             end
         end
@@ -545,7 +545,7 @@ end)
 -- ── Globalstep: boss damage tracking (M25, M26, M27, M28) ────────
 
 minetest.register_globalstep(function(dtime)
-    local boss = five_chambers.mob_state.ch5_boss
+    local boss = wire.mob_state.ch5_boss
     if not boss then return end
 
     local obj = boss.obj
@@ -570,7 +570,7 @@ minetest.register_globalstep(function(dtime)
 
     local hp = ent.health or ent.hp or obj:get_hp()
     boss.last_hp = hp  -- so boss_vanished_handler can tell a kill from a removal
-    local min_dmg = five_chambers.MIN_DAMAGE_FOR_CREDIT or 0
+    local min_dmg = wire.MIN_DAMAGE_FOR_CREDIT or 0
 
     -- M25: first qualifying damage landed (≥ MIN_DAMAGE_FOR_CREDIT).
     -- Light pokes that don't pass the threshold no longer trip M25 — only
@@ -584,12 +584,12 @@ minetest.register_globalstep(function(dtime)
         end
         if #contrib_list > 0 then
             boss.dmg_fired = true
-            five_chambers.fire_milestone("m25_first_boss_dmg", contrib_list)
+            wire.fire_milestone("m25_first_boss_dmg", contrib_list)
         end
     end
 
     -- M26: boss below half HP — credit only qualifying contributors.
-    if not boss.half_hp_fired and hp and hp <= five_chambers.BOSS_HP / 2 then
+    if not boss.half_hp_fired and hp and hp <= wire.BOSS_HP / 2 then
         boss.half_hp_fired = true
         local contrib_list = {}
         for pname, dmg in pairs(boss.contributors) do
@@ -598,13 +598,13 @@ minetest.register_globalstep(function(dtime)
             end
         end
         if #contrib_list > 0 then
-            five_chambers.fire_milestone("m26_boss_half_hp", contrib_list)
+            wire.fire_milestone("m26_boss_half_hp", contrib_list)
         end
     end
 
     -- Boss dead (VoxeLibre mob HP reaches 0 before removal).
     if hp and hp <= 0 then
         fire_boss_death()
-        five_chambers.mob_state.ch5_boss = nil
+        wire.mob_state.ch5_boss = nil
     end
 end)

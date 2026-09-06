@@ -15,7 +15,7 @@
 -- collect M22/M23/M25-M28 each time the trigger condition is re-evaluated.
 -- With once=true, agents are incentivised to make new contributions rather
 -- than re-trigger old ones.
-five_chambers.MILESTONE_DEFS = {
+wire.MILESTONE_DEFS = {
     -- Ch1 solo learning
     m1_move_5            = { track="ch1_solo",  reward=10,  once=true },
     m2_dig_3_any         = { track="ch1_solo",  reward=30,  once=true },
@@ -60,13 +60,13 @@ five_chambers.MILESTONE_DEFS = {
 }
 
 -- Per-episode state (reset by reset_milestone_state()).
-five_chambers.milestone_fired    = {}  -- [name][milestone_id] = true
-five_chambers.dig_counts         = {}  -- [name] = {any=N, wood=N, stone=N}
-five_chambers.pickup_counts      = {}  -- [name] = N (only dig-attributed pickups)
-five_chambers.kill_counts        = {}  -- [name] = N  (Ch1 animal kills)
-five_chambers.spawn_pos          = {}  -- [name] = {x, z} initial position for M1
-five_chambers.prev_inv_total     = {}  -- [name] = N  for inventory-diff pickup tracking
-five_chambers.pending_dig_drops  = {}  -- [name] = FIFO list of step_counter ticks
+wire.milestone_fired    = {}  -- [name][milestone_id] = true
+wire.dig_counts         = {}  -- [name] = {any=N, wood=N, stone=N}
+wire.pickup_counts      = {}  -- [name] = N (only dig-attributed pickups)
+wire.kill_counts        = {}  -- [name] = N  (Ch1 animal kills)
+wire.spawn_pos          = {}  -- [name] = {x, z} initial position for M1
+wire.prev_inv_total     = {}  -- [name] = N  for inventory-diff pickup tracking
+wire.pending_dig_drops  = {}  -- [name] = FIFO list of step_counter ticks
                                        --          recording when this agent dug a
                                        --          node with non-empty drops. An
                                        --          inventory increase only counts
@@ -78,36 +78,36 @@ five_chambers.pending_dig_drops  = {}  -- [name] = FIFO list of step_counter tic
 -- ~150 Lua ticks ≈ 50 env steps. If the dropped item falls somewhere unreachable
 -- (lava, void) the credit silently expires instead of being collected by an
 -- unrelated future pickup.
-five_chambers.PENDING_DIG_TTL = 150
+wire.PENDING_DIG_TTL = 150
 
 -- Initialise or re-initialise per-player tracking for one agent.
-function five_chambers.init_player_milestone_state(name)
-    five_chambers.milestone_fired[name]    = {}
-    five_chambers.dig_counts[name]         = {any=0, wood=0, stone=0}
-    five_chambers.pickup_counts[name]      = 0
-    five_chambers.kill_counts[name]        = 0
-    five_chambers.prev_inv_total[name]     = 0
-    five_chambers.pending_dig_drops[name]  = {}
-    five_chambers.spawn_pos[name]          = nil  -- filled on joinplayer
+function wire.init_player_milestone_state(name)
+    wire.milestone_fired[name]    = {}
+    wire.dig_counts[name]         = {any=0, wood=0, stone=0}
+    wire.pickup_counts[name]      = 0
+    wire.kill_counts[name]        = 0
+    wire.prev_inv_total[name]     = 0
+    wire.pending_dig_drops[name]  = {}
+    wire.spawn_pos[name]          = nil  -- filled on joinplayer
 end
 
 -- Reset all milestone tracking. Called at episode start (reset handler in init.lua).
-function five_chambers.reset_milestone_state()
-    five_chambers.milestone_fired    = {}
-    five_chambers.dig_counts         = {}
-    five_chambers.pickup_counts      = {}
-    five_chambers.kill_counts        = {}
-    five_chambers.prev_inv_total     = {}
-    five_chambers.pending_dig_drops  = {}
+function wire.reset_milestone_state()
+    wire.milestone_fired    = {}
+    wire.dig_counts         = {}
+    wire.pickup_counts      = {}
+    wire.kill_counts        = {}
+    wire.prev_inv_total     = {}
+    wire.pending_dig_drops  = {}
     -- Re-record current position as spawn reference so M1 resets correctly each episode.
-    five_chambers.step_counter = 0
+    wire.step_counter = 0
 
     for _, p in ipairs(minetest.get_connected_players()) do
-        five_chambers.init_player_milestone_state(p:get_player_name())
+        wire.init_player_milestone_state(p:get_player_name())
         -- Re-record current position as spawn reference for M1.
         local pos = p:get_pos()
         if pos then
-            five_chambers.spawn_pos[p:get_player_name()] = {x=pos.x, z=pos.z}
+            wire.spawn_pos[p:get_player_name()] = {x=pos.x, z=pos.z}
         end
         -- Re-record current inventory total so we don't count gear already held.
         local inv = p:get_inventory()
@@ -116,7 +116,7 @@ function five_chambers.reset_milestone_state()
             for _, stack in ipairs(inv:get_list("main") or {}) do
                 total = total + stack:get_count()
             end
-            five_chambers.prev_inv_total[p:get_player_name()] = total
+            wire.prev_inv_total[p:get_player_name()] = total
         end
     end
 end
@@ -134,23 +134,23 @@ local _CH1_UNLOCK_MILESTONES = {
 
 -- Fire a milestone for a list of contributor player names.
 -- Skips contributors who already fired this milestone (when once=true).
-function five_chambers.fire_milestone(milestone_id, contributors)
-    local def = five_chambers.MILESTONE_DEFS[milestone_id]
+function wire.fire_milestone(milestone_id, contributors)
+    local def = wire.MILESTONE_DEFS[milestone_id]
     if not def then
-        minetest.log("warning", "[five_chambers] Unknown milestone: " .. milestone_id)
+        minetest.log("warning", "[wire] Unknown milestone: " .. milestone_id)
         return
     end
 
     local actual = {}
     for _, name in ipairs(contributors) do
-        if not five_chambers.milestone_fired[name] then
-            five_chambers.milestone_fired[name] = {}
+        if not wire.milestone_fired[name] then
+            wire.milestone_fired[name] = {}
         end
-        if def.once and five_chambers.milestone_fired[name][milestone_id] then
+        if def.once and wire.milestone_fired[name][milestone_id] then
             -- Already fired for this agent; skip.
         else
             if def.once then
-                five_chambers.milestone_fired[name][milestone_id] = true
+                wire.milestone_fired[name][milestone_id] = true
             end
             table.insert(actual, name)
         end
@@ -158,7 +158,7 @@ function five_chambers.fire_milestone(milestone_id, contributors)
 
     if #actual == 0 then return end
 
-    five_chambers.emit_milestone(milestone_id, actual, def.reward)
+    wire.emit_milestone(milestone_id, actual, def.reward)
 
     -- Door 1 unlock hook. The first agent to fire any of m2..m7 unlocks
     -- Ch1→Ch2 for the whole team and earns the m_door1_open bonus.
@@ -172,16 +172,16 @@ function five_chambers.fire_milestone(milestone_id, contributors)
     -- so this bonus has not been earned even if an m2..m7 milestone
     -- fires later from digging inside Ch2.
     if _CH1_UNLOCK_MILESTONES[milestone_id]
-       and five_chambers.door_state
-       and not five_chambers.door_state.door1_open then
-        if five_chambers.door_state.door1_force_teleported then
+       and wire.door_state
+       and not wire.door_state.door1_open then
+        if wire.door_state.door1_force_teleported then
             minetest.log("action",
-                "[five_chambers] m_door1_open suppressed for "
+                "[wire] m_door1_open suppressed for "
                 .. actual[1] .. " (Ch1 timeout teleport fired this episode; "
                 .. milestone_id .. " in Ch2 is not an honest Door 1 unlock)")
         else
-            five_chambers.open_door1()
-            five_chambers.fire_milestone("m_door1_open", {actual[1]})
+            wire.open_door1()
+            wire.fire_milestone("m_door1_open", {actual[1]})
         end
     end
 end
@@ -197,8 +197,8 @@ end
 -- ──────────────────────────────────────────────────────────────────
 
 -- Called by joinplayer and reset handler to capture initial position.
-function five_chambers.record_spawn_pos(name, pos)
-    five_chambers.spawn_pos[name] = {x=pos.x, z=pos.z}
+function wire.record_spawn_pos(name, pos)
+    wire.spawn_pos[name] = {x=pos.x, z=pos.z}
 end
 
 -- Mark every not-yet-fired milestone on a track as FORFEIT: recorded as fired
@@ -208,30 +208,30 @@ end
 -- rewards. In particular m1_move_5 (distance > 5 from spawn) would otherwise
 -- fire instantly off the teleport's large position jump, paying a "move"
 -- reward for being teleported. Idempotent.
-function five_chambers.forfeit_track_milestones(name, track)
-    if not five_chambers.milestone_fired[name] then
-        five_chambers.init_player_milestone_state(name)
+function wire.forfeit_track_milestones(name, track)
+    if not wire.milestone_fired[name] then
+        wire.init_player_milestone_state(name)
     end
-    for mid, def in pairs(five_chambers.MILESTONE_DEFS) do
-        if def.track == track and not five_chambers.milestone_fired[name][mid] then
-            five_chambers.milestone_fired[name][mid] = true
+    for mid, def in pairs(wire.MILESTONE_DEFS) do
+        if def.track == track and not wire.milestone_fired[name][mid] then
+            wire.milestone_fired[name][mid] = true
         end
     end
 end
 
 -- Called by mobs.lua when a Ch1 animal dies and the killer is known.
-function five_chambers.record_animal_kill(killer_name)
-    if not five_chambers.kill_counts[killer_name] then
-        five_chambers.kill_counts[killer_name] = 0
+function wire.record_animal_kill(killer_name)
+    if not wire.kill_counts[killer_name] then
+        wire.kill_counts[killer_name] = 0
     end
-    five_chambers.kill_counts[killer_name] = five_chambers.kill_counts[killer_name] + 1
-    local n = five_chambers.kill_counts[killer_name]
+    wire.kill_counts[killer_name] = wire.kill_counts[killer_name] + 1
+    local n = wire.kill_counts[killer_name]
 
     if n >= 1 then
-        five_chambers.fire_milestone("m5_kill_1_animal", {killer_name})
+        wire.fire_milestone("m5_kill_1_animal", {killer_name})
     end
     if n >= 2 then
-        five_chambers.fire_milestone("m6_kill_2_animals", {killer_name})
+        wire.fire_milestone("m6_kill_2_animals", {killer_name})
     end
 end
 
@@ -242,15 +242,15 @@ minetest.register_on_dignode(function(pos, oldnode, digger)
     local name = digger:get_player_name()
 
     -- Ensure per-player state exists (might have joined mid-episode).
-    if not five_chambers.dig_counts[name] then
-        five_chambers.dig_counts[name] = {any=0, wood=0, stone=0}
+    if not wire.dig_counts[name] then
+        wire.dig_counts[name] = {any=0, wood=0, stone=0}
     end
-    if not five_chambers.pending_dig_drops[name] then
-        five_chambers.pending_dig_drops[name] = {}
+    if not wire.pending_dig_drops[name] then
+        wire.pending_dig_drops[name] = {}
     end
 
     local node_name = oldnode.name
-    local counts    = five_chambers.dig_counts[name]
+    local counts    = wire.dig_counts[name]
 
     counts.any = counts.any + 1
     local is_tree  = minetest.get_item_group(node_name, "tree")  > 0
@@ -265,7 +265,7 @@ minetest.register_on_dignode(function(pos, oldnode, digger)
     -- given the heavily interspersed Dig/Move/Turn action mix), the
     -- breaks were genuinely happening but no log line ever appeared.
     minetest.log("action", string.format(
-        "[five_chambers] dig: agent=%s node=%s tree=%s stone=%s "
+        "[wire] dig: agent=%s node=%s tree=%s stone=%s "
         .. "counts={any=%d wood=%d stone=%d}",
         name, node_name, tostring(is_tree), tostring(is_stone),
         counts.any, counts.wood, counts.stone))
@@ -276,9 +276,9 @@ minetest.register_on_dignode(function(pos, oldnode, digger)
         io.stderr:flush()
     end
 
-    if counts.any   >= 3 then five_chambers.fire_milestone("m2_dig_3_any",   {name}) end
-    if counts.wood  >= 5 then five_chambers.fire_milestone("m4_dig_5_wood",  {name}) end
-    if counts.stone >= 3 then five_chambers.fire_milestone("m7_dig_3_stone", {name}) end
+    if counts.any   >= 3 then wire.fire_milestone("m2_dig_3_any",   {name}) end
+    if counts.wood  >= 5 then wire.fire_milestone("m4_dig_5_wood",  {name}) end
+    if counts.stone >= 3 then wire.fire_milestone("m7_dig_3_stone", {name}) end
 
     -- M3 attribution: only push a pickup credit if the dug node actually
     -- drops an item. Without this filter, digging a no-drop node would let a
@@ -286,8 +286,8 @@ minetest.register_on_dignode(function(pos, oldnode, digger)
     local drops = minetest.get_node_drops(node_name, "")
     if drops and #drops > 0 then
         table.insert(
-            five_chambers.pending_dig_drops[name],
-            five_chambers.step_counter
+            wire.pending_dig_drops[name],
+            wire.step_counter
         )
     end
 end)
@@ -296,9 +296,9 @@ end)
 -- check_equip is defined in gear.lua (loaded after milestones.lua).
 
 minetest.register_globalstep(function(dtime)
-    if not five_chambers.CHAMBERS[2].enabled then return end
+    if not wire.CHAMBERS[2].enabled then return end
     for _, player in ipairs(minetest.get_connected_players()) do
-        five_chambers.check_equip(player)
+        wire.check_equip(player)
     end
 end)
 
@@ -309,19 +309,19 @@ minetest.register_globalstep(function(dtime)
         local name = player:get_player_name()
 
         -- Ensure state is initialised (first globalstep after join).
-        if not five_chambers.milestone_fired[name] then
-            five_chambers.init_player_milestone_state(name)
+        if not wire.milestone_fired[name] then
+            wire.init_player_milestone_state(name)
         end
 
         -- M1: distance >5 from initial spawn position (Y-plane only).
-        local sp = five_chambers.spawn_pos[name]
-        if sp and not five_chambers.milestone_fired[name]["m1_move_5"] then
+        local sp = wire.spawn_pos[name]
+        if sp and not wire.milestone_fired[name]["m1_move_5"] then
             local cur = player:get_pos()
             if cur then
                 local dx = cur.x - sp.x
                 local dz = cur.z - sp.z
                 if math.sqrt(dx*dx + dz*dz) > 5 then
-                    five_chambers.fire_milestone("m1_move_5", {name})
+                    wire.fire_milestone("m1_move_5", {name})
                 end
             end
         end
@@ -335,13 +335,13 @@ minetest.register_globalstep(function(dtime)
             for _, stack in ipairs(inv:get_list("main") or {}) do
                 total = total + stack:get_count()
             end
-            local prev  = five_chambers.prev_inv_total[name] or 0
+            local prev  = wire.prev_inv_total[name] or 0
             local delta = total - prev
             if delta > 0 then
-                local pending = five_chambers.pending_dig_drops[name] or {}
+                local pending = wire.pending_dig_drops[name] or {}
                 -- Expire stale credits whose drop was never collected.
-                local cutoff = (five_chambers.step_counter or 0)
-                               - five_chambers.PENDING_DIG_TTL
+                local cutoff = (wire.step_counter or 0)
+                               - wire.PENDING_DIG_TTL
                 while #pending > 0 and pending[1] < cutoff do
                     table.remove(pending, 1)
                 end
@@ -350,16 +350,16 @@ minetest.register_globalstep(function(dtime)
                 for _ = 1, credits do
                     table.remove(pending, 1)
                 end
-                five_chambers.pending_dig_drops[name] = pending
+                wire.pending_dig_drops[name] = pending
                 if credits > 0 then
-                    five_chambers.pickup_counts[name] =
-                        (five_chambers.pickup_counts[name] or 0) + credits
-                    if five_chambers.pickup_counts[name] >= 3 then
-                        five_chambers.fire_milestone("m3_pickup_3", {name})
+                    wire.pickup_counts[name] =
+                        (wire.pickup_counts[name] or 0) + credits
+                    if wire.pickup_counts[name] >= 3 then
+                        wire.fire_milestone("m3_pickup_3", {name})
                     end
                 end
             end
-            five_chambers.prev_inv_total[name] = total
+            wire.prev_inv_total[name] = total
         end
     end
 end)

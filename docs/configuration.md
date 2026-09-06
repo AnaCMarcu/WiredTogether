@@ -99,7 +99,7 @@ mini-batch 4, entropy 0.05 → 0.001 — live in `RLConfig` and are pinned by
 
 | Variable | Used for |
 |---|---|
-| `CRAFTIUM_ENV_DIR` | The world to load — must point at `five-chambers` |
+| `CRAFTIUM_ENV_DIR` | The world to load — must point at `craftium-envs/wire` |
 | `CRAFTIUM_LUANTI_DIR` | Engine directory, if not the one inside the craftium install |
 | `PYTHONPATH` | Must contain `src/` |
 | `LLM_MODEL_PATH` | Local checkpoint served in-process |

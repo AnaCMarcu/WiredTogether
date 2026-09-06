@@ -2,7 +2,7 @@
 
 Tracks:
 - Cumulative return per agent
-- Milestone events from five-chambers JSONL (M1-M28)
+- Milestone events from the WIRE JSONL (M1-M28)
 - Steps-to-milestone per track
 - Communication events
 - Generates plots and saves JSON data
@@ -250,7 +250,7 @@ from mindforge.agent_modules._metric_summary import _SummaryMixin
 
 
 class CraftiumMetric(_PlotsMixin, _SummaryMixin):
-    """Tracks evaluation metrics for Craftium five-chambers multi-agent experiments."""
+    """Tracks evaluation metrics for Craftium WIRE multi-agent experiments."""
 
     def __init__(
         self,
@@ -385,7 +385,7 @@ class CraftiumMetric(_PlotsMixin, _SummaryMixin):
 
         components keys (all floats, default 0):
           task              env-step reward + pitch-cap penalty + drained
-                            five-chambers milestone rewards (m1..m28) +
+                            WIRE milestone rewards (m1..m28) +
                             drained death / would-die penalties (−50 / −10)
           comm_base         BASE_MSG_REWARD per valid message
           comm_milestone    Tier-2 per-chamber communication milestones
@@ -881,7 +881,7 @@ class CraftiumMetric(_PlotsMixin, _SummaryMixin):
         os.makedirs(path, exist_ok=True)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         comm_str  = "comm" if self.communication else "noComm"
-        base = self.run_id or f"five_chambers_{self.num_agents}agents_{comm_str}_{timestamp}"
+        base = self.run_id or f"wire_{self.num_agents}agents_{comm_str}_{timestamp}"
         target = os.path.join(path, base)
         os.makedirs(target, exist_ok=True)
         return target

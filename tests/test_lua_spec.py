@@ -1,4 +1,4 @@
-"""Spec tests over the five_chambers Lua mod, plus Python<->Lua drift guards.
+"""Spec tests over the WIRE Lua mod, plus Python<->Lua drift guards.
 
 Pure text parsing — no Lua runtime, no game launch.  Pins:
   * the complete milestone/reward table in milestones.lua (paper Table 2),
@@ -47,7 +47,7 @@ def _lua(lua_root, name: str) -> str:
 def _milestone_defs(lua_root) -> dict:
     """{id: (track, reward, once_str)} parsed from the MILESTONE_DEFS block."""
     text = _lua(lua_root, "milestones.lua")
-    start = text.index("five_chambers.MILESTONE_DEFS = {")
+    start = text.index("wire.MILESTONE_DEFS = {")
     end = text.index("\n}", start)  # outer table closes at column 0
     block = text[start:end]
     return {
@@ -57,13 +57,13 @@ def _milestone_defs(lua_root) -> dict:
 
 
 def _canonical_assignments(text: str, name: str) -> list:
-    """Values of column-0 `five_chambers.<name> = <int>` lines, in file order.
+    """Values of column-0 `wire.<name> = <int>` lines, in file order.
 
     Column-0 anchoring excludes indented assignments inside the
-    `if five_chambers.DEBUG_SINGLE then` solo-mode override block.
+    `if wire.DEBUG_SINGLE then` solo-mode override block.
     """
     pat = re.compile(
-        r"^five_chambers\.%s\s*=\s*(-?\d+)" % re.escape(name), re.MULTILINE
+        r"^wire\.%s\s*=\s*(-?\d+)" % re.escape(name), re.MULTILINE
     )
     return [int(m.group(1)) for m in pat.finditer(text)]
 
@@ -71,12 +71,12 @@ def _canonical_assignments(text: str, name: str) -> list:
 def _debug_guarded_assignments(text: str, name: str) -> list:
     """(value, inside_DEBUG_SINGLE_guard) for each INDENTED assignment."""
     pat = re.compile(
-        r"^[ \t]+five_chambers\.%s\s*=\s*(-?\d+)" % re.escape(name), re.MULTILINE
+        r"^[ \t]+wire\.%s\s*=\s*(-?\d+)" % re.escape(name), re.MULTILINE
     )
     out = []
     for m in pat.finditer(text):
         before = text[: m.start()]
-        if_pos = before.rfind("if five_chambers.DEBUG_SINGLE then")
+        if_pos = before.rfind("if wire.DEBUG_SINGLE then")
         end_pos = before.rfind("\nend")
         out.append((int(m.group(1)), if_pos > end_pos))
     return out
@@ -148,9 +148,9 @@ def test_milestones_all_once_true(lua_root):
 def test_switch_rotation_formula(lua_root):
     """switches.lua: switch i opens cell (i + 1) % NUM_AGENTS, one-shot, fires m17/m18."""
     text = _lua(lua_root, "switches.lua")
-    assert re.search(r"\(\s*i\s*\+\s*1\s*\)\s*%\s*five_chambers\.NUM_AGENTS", text)
+    assert re.search(r"\(\s*i\s*\+\s*1\s*\)\s*%\s*wire\.NUM_AGENTS", text)
     # One-shot guard: a pressed switch never re-fires.
-    assert "if five_chambers.switch_pressed[sw_i] then return end" in text
+    assert "if wire.switch_pressed[sw_i] then return end" in text
     # Milestones fired from this file exist in MILESTONE_DEFS.
     fired = set(re.findall(r'fire_milestone\("(m\w+)"', text))
     assert fired == {"m17_switch_pressed", "m18_door_opened"}
@@ -172,12 +172,12 @@ def test_config_num_agents(lua_root):
         text, re.MULTILINE,
     )
     assert re.search(
-        r"^five_chambers\.NUM_AGENTS\s*=\s*_env_agents or 3$",
+        r"^wire\.NUM_AGENTS\s*=\s*_env_agents or 3$",
         text, re.MULTILINE,
     )
     assert _debug_guarded_assignments(text, "NUM_AGENTS") == [(1, True)]
     # DEBUG_SINGLE is off, so the override is dead code in training runs.
-    assert re.search(r"^five_chambers\.DEBUG_SINGLE\s*=\s*false", text, re.MULTILINE)
+    assert re.search(r"^wire\.DEBUG_SINGLE\s*=\s*false", text, re.MULTILINE)
 
 
 def test_config_door3_x_clamped(lua_root):
@@ -185,8 +185,8 @@ def test_config_door3_x_clamped(lua_root):
     inside Ch4's fixed x-span (1..11) when NUM_AGENTS >= 6."""
     text = _lua(lua_root, "config.lua")
     assert re.search(
-        r"^five_chambers\.DOOR3_X\s*=\s*math\.min\("
-        r"2 \* five_chambers\.NUM_AGENTS, 10\)",
+        r"^wire\.DOOR3_X\s*=\s*math\.min\("
+        r"2 \* wire\.NUM_AGENTS, 10\)",
         text, re.MULTILINE,
     )
 
@@ -237,7 +237,7 @@ def test_anvil_coop_constants(lua_root):
     anvil = _lua(lua_root, "anvil.lua")
     for name in ("SOLO_DIG_RATE", "PAIR_DIG_RATE", "TRIO_DIG_RATE",
                  "DECAY_RATE", "ANVIL_MAX_HP", "ACTIVE_WINDOW"):
-        assert f"five_chambers.{name}" in anvil, name
+        assert f"wire.{name}" in anvil, name
 
 
 # ── anvil.lua ────────────────────────────────────────────────────────────────
@@ -282,7 +282,7 @@ def test_would_die_penalty_gating(lua_root):
     p_refill = text.index("vhp = MAX_HP")
     assert p_lethal < p_gate < p_emit < p_refill
     # Per-event counter; no fired-once dedup between the Ch4 gate and the emit.
-    assert "(five_chambers.would_die_count[name] or 0) + 1" in text
+    assert "(wire.would_die_count[name] or 0) + 1" in text
     assert "would_die_count" not in text[p_gate:p_emit]
     # Ch5: real damage passes through; real death emits the -50 terminal penalty.
     assert 'if chamber == "ch5" then return hp_change end' in text

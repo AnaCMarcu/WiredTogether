@@ -1,7 +1,7 @@
 """Pareto figures: task performance vs. inference compute, by team size.
 
 The agent-count scaling suite (submit_agent_scaling.sh) runs the IDENTICAL
-five-chambers environment (Ch4 pinned to 3 zombies via --ch4-mob-count; only
+WIRE environment (Ch4 pinned to 3 zombies via --ch4-mob-count; only
 Ch3 grows one cell per agent; milestone reward values unchanged) with
 N ∈ {2,3,4,5,6,9} Gemma agents for 500-step episodes. Team size therefore
 traces out a compute axis — more agents means proportionally more LLM

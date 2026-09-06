@@ -49,7 +49,7 @@ end
 -- gear to every connected agent and fires the equip milestone (M14/M15)
 -- for each agent who received it.
 -- drop_type: "sword" | "chestplate"
-function five_chambers.give_gear_to_all(drop_type)
+function wire.give_gear_to_all(drop_type)
     local item, milestone_id, equip_fn
     if drop_type == "sword" then
         item         = "mcl_tools:sword_diamond"
@@ -69,25 +69,25 @@ function five_chambers.give_gear_to_all(drop_type)
 
     for _, player in ipairs(minetest.get_connected_players()) do
         local name = player:get_player_name()
-        if five_chambers.agent_index(name) >= 0 then
+        if wire.agent_index(name) >= 0 then
             local ok = equip_fn(player)
             if ok then
-                five_chambers.fire_milestone(milestone_id, {name})
+                wire.fire_milestone(milestone_id, {name})
             end
         end
     end
     minetest.log("action",
-        "[five_chambers] Distributed " .. drop_type
+        "[wire] Distributed " .. drop_type
         .. " to all agents on anvil break.")
 end
 
 -- Backwards-compat shim: any code still calling drop_gear(pos, kind) now
 -- routes through give_gear_to_all (kind matters; pos is ignored since
 -- agents receive directly).
-function five_chambers.drop_gear(_pos, drop_type)
-    five_chambers.give_gear_to_all(drop_type)
+function wire.drop_gear(_pos, drop_type)
+    wire.give_gear_to_all(drop_type)
 end
 
 -- check_equip is no longer needed for milestone firing (M14/M15 are fired
 -- in give_gear_to_all). Kept as a no-op so any legacy caller doesn't break.
-function five_chambers.check_equip(_player) end
+function wire.check_equip(_player) end

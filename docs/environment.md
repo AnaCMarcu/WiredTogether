@@ -4,8 +4,8 @@ Five chambers connected by one-way transitions, traversed by a fixed team of `N`
 chamber gates progression on a shared objective, so co-location is enforced rather than left to
 emerge — which is the whole point: bonds cannot form if agents never meet.
 
-World: `src/marl_craftium/craftium-envs/five-chambers/`, geometry and mechanics in
-`mods/five_chambers/*.lua`, all constants in `config.lua`.
+World: `src/marl_craftium/craftium-envs/wire/`, geometry and mechanics in
+`mods/wire/*.lua`, all constants in `config.lua`.
 
 ## The chambers
 

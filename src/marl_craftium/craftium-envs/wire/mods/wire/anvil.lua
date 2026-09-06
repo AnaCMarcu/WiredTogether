@@ -13,10 +13,10 @@
 -- anvil per gear type (one round of cooperation needed) keeps the coop
 -- requirement central without the exponential discovery cost.
 
-five_chambers.anvil_state        = {}  -- key=pos_string → {pos,hp,punchers,milestone_id,row,first_break}
-five_chambers.anvil_breaks_total = 0
-five_chambers.anvil_first_breaks = 0  -- distinct anvils broken at least once
-five_chambers.total_anvils       = 0  -- set in init_anvils(); door 2 fires when first_breaks >= total_anvils
+wire.anvil_state        = {}  -- key=pos_string → {pos,hp,punchers,milestone_id,row,first_break}
+wire.anvil_breaks_total = 0
+wire.anvil_first_breaks = 0  -- distinct anvils broken at least once
+wire.total_anvils       = 0  -- set in init_anvils(); door 2 fires when first_breaks >= total_anvils
 
 -- ── Helpers ──────────────────────────────────────────────────────────
 
@@ -27,20 +27,20 @@ five_chambers.total_anvils       = 0  -- set in init_anvils(); door 2 fires when
 -- nodes had no state and the state entries had no nodes. Every anvil punch
 -- silently early-returned. Exposing this function publicly makes the two
 -- callers share one definition.
-function five_chambers.anvil_positions()
+function wire.anvil_positions()
     -- Two anvils: sword (row A) and chestplate (row B). Centred along x in
     -- Ch2 so all 3 agents can reach either from the south-side spawn.
     --
     -- pos is the eye-level (FLOOR_Y+2) position of the PURPLE punchable
     -- anvil — the ONLY interactive block in the pillar. world_gen.lua
     -- additionally places a gray, non-interactive pedestal node
-    -- (`five_chambers:anvil_pedestal`) one block below at FLOOR_Y+1. The
+    -- (`wire:anvil_pedestal`) one block below at FLOOR_Y+1. The
     -- pedestal is purely cosmetic: it lifts the anvil into the agent's
     -- field of view but has no on_punch handler, so digging it does
     -- nothing (and it isn't in the `stone` group, so it can't be mistaken
     -- for an M7 dig target either).
-    local c  = five_chambers.CH2
-    local y  = five_chambers.FLOOR_Y + 2
+    local c  = wire.CH2
+    local y  = wire.FLOOR_Y + 2
     local cx = math.floor((c.x0 + c.x1) / 2)  -- 6 for default Ch2 bounds
     return {
         {
@@ -58,7 +58,7 @@ end
 
 -- ── Node registration (module-level, runs when anvil.lua is dofile'd) ──
 
-minetest.register_node("five_chambers:anvil", {
+minetest.register_node("wire:anvil", {
     description = "Heavy Anvil (Purple)",
     -- Vivid purple tint over a stone base so agents can recognise the
     -- coop-anvil at a glance and tell it apart from regular stone, the
@@ -73,16 +73,16 @@ minetest.register_node("five_chambers:anvil", {
     on_punch = function(pos, node, puncher, pointed_thing)
         if not puncher or not puncher:is_player() then return end
         local key   = minetest.pos_to_string(pos)
-        local state = five_chambers.anvil_state[key]
+        local state = wire.anvil_state[key]
         if not state then return end
-        state.punchers[puncher:get_player_name()] = five_chambers.step_counter
+        state.punchers[puncher:get_player_name()] = wire.step_counter
 
         -- DEBUG_SINGLE: directly advance HP per click. The tick-based dig
         -- rate is calibrated for AI agents that punch every 3 Lua ticks
         -- (one env step); a human's ~1 click/sec is too slow to stack hits
         -- inside the 6-tick ACTIVE_WINDOW before decay clears progress.
         -- 10 HP/click × ANVIL_MAX_HP=30 → ~3 clicks per anvil.
-        if five_chambers.DEBUG_SINGLE then
+        if wire.DEBUG_SINGLE then
             state.hp = state.hp + 10
         end
     end,
@@ -94,8 +94,8 @@ minetest.register_node("five_chambers:anvil", {
 -- unbreakable, and deliberately NOT in the `stone` group so digging it
 -- could never count toward M7 (m7_dig_3_stone). One pedestal per anvil
 -- is placed at FLOOR_Y+1 by world_gen.lua, directly below the
--- corresponding `five_chambers:anvil` block.
-minetest.register_node("five_chambers:anvil_pedestal", {
+-- corresponding `wire:anvil` block.
+minetest.register_node("wire:anvil_pedestal", {
     description = "Anvil Pedestal (Gray)",
     -- Plain mid-gray over the same stone base used for the anvil — visually
     -- a neutral architectural block, clearly distinct from the purple anvil
@@ -110,19 +110,19 @@ minetest.register_node("five_chambers:anvil_pedestal", {
 })
 
 -- Keep as no-op so init.lua call (legacy) does nothing harmful.
-function five_chambers.register_anvil_node() end
+function wire.register_anvil_node() end
 
 -- ── Public init (called from init.lua on_mods_loaded + reset handler) ──
 
-function five_chambers.init_anvils()
-    five_chambers.anvil_state        = {}
-    five_chambers.anvil_breaks_total = 0
-    five_chambers.anvil_first_breaks = 0
-    local positions = five_chambers.anvil_positions()
-    five_chambers.total_anvils = #positions
+function wire.init_anvils()
+    wire.anvil_state        = {}
+    wire.anvil_breaks_total = 0
+    wire.anvil_first_breaks = 0
+    local positions = wire.anvil_positions()
+    wire.total_anvils = #positions
     for _, info in ipairs(positions) do
         local key = minetest.pos_to_string(info.pos)
-        five_chambers.anvil_state[key] = {
+        wire.anvil_state[key] = {
             pos          = info.pos,
             hp           = 0,
             punchers     = {},
@@ -140,13 +140,13 @@ end
 -- ── Globalstep: HP decay + break detection ───────────────────────────
 
 minetest.register_globalstep(function(dtime)
-    if not five_chambers.CHAMBERS[2].enabled then return end
-    if not next(five_chambers.anvil_state) then return end
+    if not wire.CHAMBERS[2].enabled then return end
+    if not next(wire.anvil_state) then return end
 
-    local tick = five_chambers.step_counter
-    local W    = five_chambers.ACTIVE_WINDOW
+    local tick = wire.step_counter
+    local W    = wire.ACTIVE_WINDOW
 
-    for key, state in pairs(five_chambers.anvil_state) do
+    for key, state in pairs(wire.anvil_state) do
         -- Count diggers active within the last W ticks.
         local active = {}
         for name, last_tick in pairs(state.punchers) do
@@ -166,7 +166,7 @@ minetest.register_globalstep(function(dtime)
             state.coop_logged_at = tick
             local active_str = table.concat(active, ",")
             minetest.log("action", string.format(
-                "[five_chambers] anvil_coop: anvil=%s row=%s n=%d active=[%s] step=%d",
+                "[wire] anvil_coop: anvil=%s row=%s n=%d active=[%s] step=%d",
                 key, tostring(state.row), n, active_str, tick))
             if io and io.stderr then
                 io.stderr:write(string.format(
@@ -198,20 +198,20 @@ minetest.register_globalstep(function(dtime)
 
         local dig_rate
         if     n == 0 then dig_rate = 0
-        elseif n == 1 then dig_rate = five_chambers.SOLO_DIG_RATE
-        elseif n == 2 then dig_rate = five_chambers.PAIR_DIG_RATE
-        else               dig_rate = five_chambers.TRIO_DIG_RATE
+        elseif n == 1 then dig_rate = wire.SOLO_DIG_RATE
+        elseif n == 2 then dig_rate = wire.PAIR_DIG_RATE
+        else               dig_rate = wire.TRIO_DIG_RATE
         end
 
-        state.hp = math.max(0, state.hp + dig_rate - five_chambers.DECAY_RATE)
+        state.hp = math.max(0, state.hp + dig_rate - wire.DECAY_RATE)
 
-        if state.hp >= five_chambers.ANVIL_MAX_HP then
+        if state.hp >= wire.ANVIL_MAX_HP then
             state.hp = 0
-            five_chambers.anvil_breaks_total = five_chambers.anvil_breaks_total + 1
+            wire.anvil_breaks_total = wire.anvil_breaks_total + 1
 
             -- Fire milestone for all active diggers.
             if #active > 0 then
-                five_chambers.fire_milestone(state.milestone_id, active)
+                wire.fire_milestone(state.milestone_id, active)
             end
 
             -- Distribute gear DIRECTLY to every connected agent's inventory
@@ -219,18 +219,18 @@ minetest.register_globalstep(function(dtime)
             -- agents don't need to walk over a dropped item to gain combat
             -- ability — Ch4/Ch5 fights become tractable even without
             -- dedicated pickup behaviour.
-            five_chambers.give_gear_to_all(
+            wire.give_gear_to_all(
                 state.row == "A" and "sword" or "chestplate")
 
             -- Track first-break per distinct anvil; open Door 2 when ALL
             -- anvils (currently 2) have broken at least once.
             if not state.first_break then
                 state.first_break = true
-                five_chambers.anvil_first_breaks = five_chambers.anvil_first_breaks + 1
-                if five_chambers.anvil_first_breaks >= (five_chambers.total_anvils or 2) then
-                    five_chambers.start_door2_countdown()
+                wire.anvil_first_breaks = wire.anvil_first_breaks + 1
+                if wire.anvil_first_breaks >= (wire.total_anvils or 2) then
+                    wire.start_door2_countdown()
                     minetest.log("action",
-                        "[five_chambers] Both anvils broken — Door 2 countdown started.")
+                        "[wire] Both anvils broken — Door 2 countdown started.")
                 end
             end
 
@@ -241,9 +241,9 @@ minetest.register_globalstep(function(dtime)
             -- the current key during iteration, so dropping the entry
             -- inside the for loop is safe.
             minetest.set_node(state.pos, {name = "air"})
-            five_chambers.anvil_state[key] = nil
+            wire.anvil_state[key] = nil
             minetest.log("action",
-                "[five_chambers] Anvil " .. key .. " destroyed after break.")
+                "[wire] Anvil " .. key .. " destroyed after break.")
         end
     end
 end)

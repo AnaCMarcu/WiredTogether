@@ -1,6 +1,6 @@
 #!/bin/bash
 # ── exp0_long.sh ─────────────────────────────────────────────────────────────
-# Login-node launcher for the exp0 baseline sweep on five-chambers.
+# Login-node launcher for the exp0 baseline sweep on WIRE.
 #
 # Submits 3 condition chains × 5 chunks of 8k env-steps each
 #   = 15 SLURM jobs, 24 h wall-clock per job, 40k total env-steps per condition.

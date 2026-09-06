@@ -1,5 +1,5 @@
 """Qualitative environment gallery (ICLR-style): five rows, one per chamber
-of the five_chambers curriculum, each showing hand-picked first-person
+of the WIRE curriculum, each showing hand-picked first-person
 frames sampled around real milestone events across many runs (not a single
 episode) so each row shows different agents/seeds/moments.
 

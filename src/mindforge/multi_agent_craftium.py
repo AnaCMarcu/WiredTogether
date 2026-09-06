@@ -335,7 +335,7 @@ async def run(args):
         # can never fire a Ch1→Ch2 rescue in a run that starts past Ch1.
         _ch1_lua_ticks = 10 ** 9
     os.environ["CH1_TIMEOUT_TICKS"] = str(_ch1_lua_ticks)
-    # Keep Lua's five_chambers.NUM_AGENTS in lockstep with --num-agents.
+    # Keep Lua's wire.NUM_AGENTS in lockstep with --num-agents.
     # Without this, any N != 3 desyncs agent_index()/geometry on the Lua side
     # (agents with idx >= NUM_AGENTS get no cell, no switch, no milestones).
     os.environ["FC_NUM_AGENTS"] = str(num_agents)
@@ -2074,7 +2074,7 @@ async def run(args):
             # Lua's emit_milestone() writes to milestone_events.jsonl and also
             # calls craftium.reward() as a backup, but the latter does not
             # reach env.step()'s rewards channel in the multi-agent
-            # five-chambers context — so the JSONL is the authoritative reward
+            # WIRE context — so the JSONL is the authoritative reward
             # source. We must drain into step_rewards_raw HERE (before Hebbian
             # diffusion + record_reward) so the +N points propagate through
             # the graph and into cumulative_returns. The events are saved into
@@ -2125,7 +2125,7 @@ async def run(args):
             # ── Phase 1d: Drain death / would-die penalties ──
             # deaths.lua emits these to death_events.jsonl; like milestones, the
             # server-side craftium.reward() it also fires does NOT reach
-            # env.step()'s reward channel in multi-agent five-chambers, so this
+            # env.step()'s reward channel in multi-agent WIRE, so this
             # JSONL is the authoritative source. Each event carries a NEGATIVE
             # reward for exactly one agent (−10 would-die in Ch1–4, −50 real Ch5
             # death). Drain into step_rewards_raw HERE (before Hebbian diffusion

@@ -1,4 +1,4 @@
--- Five Chambers client mod.
+-- WIRE client mod.
 -- Rewards are delivered server-side via craftium.reward() in state_files.lua.
 -- This mod only handles soft-reset signalling over the mod channel.
 
@@ -20,7 +20,7 @@ end
 callback = function()
     mod_channel = minetest.mod_channel_join(channel_name)
     local my_name = minetest.localplayer:get_name()
-    print("[five_chambers client] " .. my_name .. " joined channel " .. channel_name)
+    print("[wire client] " .. my_name .. " joined channel " .. channel_name)
 end
 
 -- Send soft-reset signal to server when craftium requests an episode reset.

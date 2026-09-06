@@ -108,7 +108,7 @@ run_exp() {
         --env SENTENCE_TRANSFORMERS_HOME="$MODELS" \
         --env HF_HUB_OFFLINE=1 \
         --env TRANSFORMERS_OFFLINE=1 \
-        --env CRAFTIUM_ENV_DIR="$REPO/src/marl_craftium/craftium-envs/five-chambers" \
+        --env CRAFTIUM_ENV_DIR="$REPO/src/marl_craftium/craftium-envs/wire" \
         --env WIREDTOGETHER_RUNS_ROOT="$REPO/runs" \
         --env SDL_VIDEODRIVER=dummy \
         --env SDL_AUDIODRIVER=dummy \

@@ -40,7 +40,7 @@ world, which has no chambers and no milestones — the usual cause of a run that
 cooperative progress.
 
 ```bash
-export CRAFTIUM_ENV_DIR="$PWD/src/marl_craftium/craftium-envs/five-chambers"
+export CRAFTIUM_ENV_DIR="$PWD/src/marl_craftium/craftium-envs/wire"
 export PYTHONPATH="$PWD/src"
 export LLM_MODEL_PATH=/path/to/Qwen3.5-2B   # or LLM_BASE_URL for an OpenAI-compatible endpoint
 ```

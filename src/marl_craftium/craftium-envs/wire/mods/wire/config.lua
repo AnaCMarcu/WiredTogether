@@ -1,4 +1,4 @@
--- config.lua: all tunable constants for Five Chambers.
+-- config.lua: all tunable constants for WIRE.
 -- Change NUM_AGENTS to run with more or fewer agents; all geometry
 -- and wiring is derived from it at load time.
 
@@ -8,7 +8,7 @@
 -- CH1_TIMEOUT_TICKS below). Defaults to 3 when unset so standalone launches
 -- keep today's behavior.
 local _env_agents = tonumber(os and os.getenv and os.getenv("FC_NUM_AGENTS") or "")
-five_chambers.NUM_AGENTS = _env_agents or 3
+wire.NUM_AGENTS = _env_agents or 3
 
 -- DEBUG_SINGLE: solo human walkthrough mode. When true:
 --   * NUM_AGENTS is forced to 1 — one cell, one switch, one Ch4 spawn group.
@@ -22,9 +22,9 @@ five_chambers.NUM_AGENTS = _env_agents or 3
 -- walk into communal → Door 3 opens (1 agent suffices) → Ch4 → kill mob →
 -- Door 4 opens → Ch5 boss.
 -- Set back to false before training runs.
-five_chambers.DEBUG_SINGLE = false
-if five_chambers.DEBUG_SINGLE then
-    five_chambers.NUM_AGENTS = 1
+wire.DEBUG_SINGLE = false
+if wire.DEBUG_SINGLE then
+    wire.NUM_AGENTS = 1
 end
 
 -- Ch4 zombie-count pin. By default the combat chamber spawns one zombie
@@ -35,19 +35,19 @@ end
 -- FC_NUM_AGENTS above) so every team size faces the identical chamber.
 -- Unset -> nil -> legacy one-zombie-per-agent behavior.
 local _env_ch4_mobs = tonumber(os and os.getenv and os.getenv("FC_CH4_MOB_COUNT") or "")
-five_chambers.CH4_MOB_COUNT = _env_ch4_mobs
+wire.CH4_MOB_COUNT = _env_ch4_mobs
 
 -- Master switch for the agent-count scaling suite's Lua-side tweaks
 -- (currently only the generic N~=3 Ch1 spawn row in util.lua). Set to "1"
 -- by Python's --team-scaling; every legacy suite leaves it unset so their
 -- behavior is bit-for-bit unchanged.
-five_chambers.TEAM_SCALING =
+wire.TEAM_SCALING =
     ((os and os.getenv and os.getenv("WT_TEAM_SCALING")) or "") == "1"
 
 -- Per-chamber enable flags. Set enabled=false to skip a chamber
 -- entirely; world_gen will leave its space void and open the connecting
 -- door so the sequence still connects.
-five_chambers.CHAMBERS = {
+wire.CHAMBERS = {
     [1] = { enabled = true,  name = "solo_learning" },
     [2] = { enabled = true,  name = "anvil_coop" },
     [3] = { enabled = true,  name = "switch_puzzle" },
@@ -61,21 +61,21 @@ five_chambers.CHAMBERS = {
 -- digging practice, so agents stand at FLOOR_Y+2 in Ch1 (one block higher
 -- than elsewhere). The Ch1 ceiling is correspondingly one block higher
 -- than the other chambers' ceiling so headroom stays the same.
-five_chambers.FLOOR_Y   = 10
-five_chambers.CEIL_Y    = 15
-five_chambers.WALL_NODE = "mcl_core:bedrock"
-five_chambers.AIR_NODE  = "air"
+wire.FLOOR_Y   = 10
+wire.CEIL_Y    = 15
+wire.WALL_NODE = "mcl_core:bedrock"
+wire.AIR_NODE  = "air"
 
 -- ── Chamber 1 vertical layout overrides ──
 -- y = FLOOR_Y         : bedrock subfloor (unbreakable)
 -- y = CH1_DIRT_Y      : dirt layer (diggable; agents' visible floor)
 -- y = CH1_DIRT_Y + 1  : agents' feet (FLOOR_Y + 2)
 -- y = CH1_CEIL_Y      : bedrock ceiling
-five_chambers.CH1_DIRT_Y = 11   -- FLOOR_Y + 1
-five_chambers.CH1_CEIL_Y = 16   -- CEIL_Y + 1 (one block taller than ch2-5)
+wire.CH1_DIRT_Y = 11   -- FLOOR_Y + 1
+wire.CH1_CEIL_Y = 16   -- CEIL_Y + 1 (one block taller than ch2-5)
 
 -- Chamber 1 bounds (solo learning, 16×16)
-five_chambers.CH1 = { x0=0, x1=15, z0=0, z1=15 }
+wire.CH1 = { x0=0, x1=15, z0=0, z1=15 }
 
 -- Ch1 spawn points. y=12 = CH1_DIRT_Y + 1 — agents stand on the dirt
 -- layer, not on the bedrock subfloor. ch1_spawn_pos() in util.lua is the
@@ -89,27 +89,27 @@ five_chambers.CH1 = { x0=0, x1=15, z0=0, z1=15 }
 -- The new positions are each 3+ blocks from the nearest wall and have at
 -- least one breakable target (tree or stone) within 3 blocks — so the
 -- first scan-of-the-room has something dig-worthy in view.
-five_chambers.CH1_SPAWNS_3 = {
+wire.CH1_SPAWNS_3 = {
     [0] = {x=3,  y=12, z=4},   -- adjacent to stone (3,5); near trees (2,2), (5,3)
     [1] = {x=10, y=12, z=5},   -- adjacent to tree (10,4); near stone (9,3), tree (9,6)
     [2] = {x=5,  y=12, z=11},  -- near stone (5,8), tree (7,9), sheep (3,9)
 }
 
 -- Ch1 resource positions (plan §2.3) — all at Y=FLOOR_Y+1=11
-five_chambers.CH1_TREE_POSITIONS = {
+wire.CH1_TREE_POSITIONS = {
     {x=2,z=2},{x=5,z=3},{x=8,z=2},{x=3,z=7},
     {x=9,z=6},{x=7,z=9},{x=2,z=8},{x=10,z=4},
 }
-five_chambers.CH1_STONE_POSITIONS = {
+wire.CH1_STONE_POSITIONS = {
     {x=4,z=4},{x=3,z=5},{x=6,z=6},{x=8,z=7},
     {x=5,z=8},{x=4,z=2},{x=9,z=3},{x=7,z=5},
 }
 
 -- Ch1 animal spawn positions (5 chickens + 3 sheep, away from trees/stone)
-five_chambers.CH1_CHICKEN_POSITIONS = {
+wire.CH1_CHICKEN_POSITIONS = {
     {x=1,z=1},{x=6,z=1},{x=10,z=2},{x=1,z=5},{x=9,z=9},
 }
-five_chambers.CH1_SHEEP_POSITIONS = {
+wire.CH1_SHEEP_POSITIONS = {
     {x=6,z=5},{x=3,z=9},{x=8,z=3},
 }
 
@@ -121,7 +121,7 @@ five_chambers.CH1_SHEEP_POSITIONS = {
 -- window for solo skills, then the team is moved on regardless of
 -- whether any Ch1 milestone fired.
 -- Centered on the new 9-wide Ch2 (x0=2, x1=10 → center x=6).
-five_chambers.DOOR1_X = 6
+wire.DOOR1_X = 6
 -- Lua tick rate is 20Hz; one env step = 3 Lua ticks. 1200 ticks =
 -- 400 env steps ≈ 60 seconds of wall time at full env throughput.
 -- The value is overridable from Python via the CH1_TIMEOUT_TICKS env
@@ -129,11 +129,11 @@ five_chambers.DOOR1_X = 6
 -- mod-security sandbox is disabled in Craftium builds so os.getenv is
 -- available; we still guard the conversion in case the var is unset.
 local _env_ticks = tonumber(os and os.getenv and os.getenv("CH1_TIMEOUT_TICKS") or "")
-five_chambers.CH1_TIMEOUT_TICKS = _env_ticks or 1200
+wire.CH1_TIMEOUT_TICKS = _env_ticks or 1200
 -- Where agents land when the Ch1 timeout fires. Spread along z=CH2.z0+2
 -- inside the new 9-wide Ch2 (x ∈ [2..10]); x=3/6/9 keeps the team
 -- spaced two blocks apart and centred on DOOR1_X.
-five_chambers.CH2_FALLBACK_SPAWNS_3 = {
+wire.CH2_FALLBACK_SPAWNS_3 = {
     [0] = {x=3,  y=11, z=19},
     [1] = {x=6,  y=11, z=19},
     [2] = {x=9,  y=11, z=19},
@@ -143,12 +143,12 @@ five_chambers.CH2_FALLBACK_SPAWNS_3 = {
 -- keep agents close to the two anvils (anvil-A at (6,_,19), anvil-B at
 -- (6,_,22) — both inside the new footprint) and reduce wandering. The
 -- Ch3+ chambers were shifted south by 5 to keep the layout contiguous.
-five_chambers.CH2 = { x0=2, x1=10, z0=17, z1=25 }
+wire.CH2 = { x0=2, x1=10, z0=17, z1=25 }
 
 -- Door 2: opens 20 steps after 6th anvil break. Sits in Ch2's new north
 -- wall (z=26), centred on the new chamber width (x=6).
-five_chambers.DOOR2_POS    = { x=6, z=26 }
-five_chambers.DOOR2_DELAY  = 20
+wire.DOOR2_POS    = { x=6, z=26 }
+wire.DOOR2_DELAY  = 20
 
 -- Chamber 3 (switch puzzle) — width scales with NUM_AGENTS
 -- Width = 4*N+1 blocks; X: 0..(4N)
@@ -156,28 +156,28 @@ five_chambers.DOOR2_DELAY  = 20
 -- (Shifted south by 5 from the original z0=32 layout when Ch2 shrank
 -- from 14-deep to 9-deep. CH2.z1 is now 25, CH3 starts immediately
 -- after Ch2's north wall at z=26 → CH3_Z0=27.)
-five_chambers.CH3_Z0           = 27
-five_chambers.CH3_CELL_Z0      = 28
-five_chambers.CH3_CELL_Z1      = 30
-five_chambers.CH3_FRONT_WALL_Z = 31
-five_chambers.CH3_COMMUNAL_Z0  = 32
-five_chambers.CH3_COMMUNAL_Z1  = 44
-five_chambers.CH3_NORTH_WALL_Z = 45
+wire.CH3_Z0           = 27
+wire.CH3_CELL_Z0      = 28
+wire.CH3_CELL_Z1      = 30
+wire.CH3_FRONT_WALL_Z = 31
+wire.CH3_COMMUNAL_Z0  = 32
+wire.CH3_COMMUNAL_Z1  = 44
+wire.CH3_NORTH_WALL_Z = 45
 -- Door 3 sits at the middle of Ch3's north wall. Ch3 width = 4*N+1 (x: 0..4N),
 -- so the centre is at x = 2*N — but the door must also open into Ch4, which
 -- spans a fixed x=1..11. Clamp to 10 (one block inside Ch4's east wall) so
 -- NUM_AGENTS >= 6 still gets a walkable Ch3→Ch4 doorway. N=3 → min(6,10)=6,
 -- unchanged.
-five_chambers.DOOR3_X          = math.min(2 * five_chambers.NUM_AGENTS, 10)
+wire.DOOR3_X          = math.min(2 * wire.NUM_AGENTS, 10)
 
 -- Chamber 4 (combat, 11×11). Shifted south by 5 to align with the
 -- shrunk Ch3 (CH3_NORTH_WALL_Z=45 → Ch4 starts at z=47, +1 for the wall).
-five_chambers.CH4     = { x0=1, x1=11, z0=47, z1=57 }
-five_chambers.DOOR4_POS = { x=6, z=58 }
+wire.CH4     = { x0=1, x1=11, z0=47, z1=57 }
+wire.DOOR4_POS = { x=6, z=58 }
 
 -- Chamber 5 (boss, 9×9). Shifted south by 5 to align with the shrunk
 -- Ch4 (z1=57 → Ch5 starts at z=59).
-five_chambers.CH5 = { x0=2, x1=10, z0=59, z1=67 }
+wire.CH5 = { x0=2, x1=10, z0=59, z1=67 }
 
 -- Anvil mechanic (plan §4)
 -- Two anvils total in Ch2: one drops swords, one drops chestplates. Both
@@ -199,17 +199,17 @@ five_chambers.CH5 = { x0=2, x1=10, z0=59, z1=67 }
 -- both pick Dig within the same agent's two-action cycle. 10 env steps
 -- of slack means an agent's Dig stays active across 3+ of their own
 -- decisions, giving the coop pattern more time to form.
-five_chambers.ANVIL_MAX_HP  = 20  -- was 30; cuts pair-coop break time
-five_chambers.SOLO_DIG_RATE = 1
-five_chambers.PAIR_DIG_RATE = 4
-five_chambers.TRIO_DIG_RATE = 8
-five_chambers.DECAY_RATE    = 1   -- was 2 (made solo digging net negative)
-five_chambers.ACTIVE_WINDOW = 30  -- was 18 (~1s); 30 ticks ≈ 1.5s, 10 env steps
-five_chambers.DIGGER_RADIUS = 3
+wire.ANVIL_MAX_HP  = 20  -- was 30; cuts pair-coop break time
+wire.SOLO_DIG_RATE = 1
+wire.PAIR_DIG_RATE = 4
+wire.TRIO_DIG_RATE = 8
+wire.DECAY_RATE    = 1   -- was 2 (made solo digging net negative)
+wire.ACTIVE_WINDOW = 30  -- was 18 (~1s); 30 ticks ≈ 1.5s, 10 env steps
+wire.DIGGER_RADIUS = 3
 
 -- Boss (plan §5)
-five_chambers.BOSS_HP  = 60
-five_chambers.BOSS_DMG = 3
+wire.BOSS_HP  = 60
+wire.BOSS_DMG = 3
 
 -- Minimum cumulative damage (HP) an agent must have dealt to a target type
 -- (Ch4 zombies for m22/m23, the Ch5 boss for m27/m28) to be considered a
@@ -218,7 +218,7 @@ five_chambers.BOSS_DMG = 3
 -- Free-rider deterrent: with default zombie HP=20 and boss HP=60, a value
 -- of 5 means the agent must land roughly a quarter of one zombie's HP or
 -- about a twelfth of the boss's HP to qualify.
-five_chambers.MIN_DAMAGE_FOR_CREDIT = 5
+wire.MIN_DAMAGE_FOR_CREDIT = 5
 
 -- DEBUG_SINGLE balance overrides. The production env is tuned for 3 agents
 -- cooperating; a solo human walkthrough has to clear the same content alone
@@ -229,8 +229,8 @@ five_chambers.MIN_DAMAGE_FOR_CREDIT = 5
 --   * Boss: lower HP from 60 → 20 so an unarmed player can punch it to death.
 --     (BOSS_DMG isn't wired to the entity yet — VoxeLibre's mobs_mc:zombie
 --     default melee applies; keep the override anyway as a marker.)
-if five_chambers.DEBUG_SINGLE then
-    five_chambers.SOLO_DIG_RATE = 4
-    five_chambers.BOSS_HP       = 20
-    five_chambers.BOSS_DMG      = 1
+if wire.DEBUG_SINGLE then
+    wire.SOLO_DIG_RATE = 4
+    wire.BOSS_HP       = 20
+    wire.BOSS_DMG      = 1
 end

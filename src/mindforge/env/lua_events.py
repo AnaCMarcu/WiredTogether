@@ -148,7 +148,7 @@ class LuaEventsMixin:
         forgiving-chamber would-have-died, −50 for a real Ch5 permadeath).
         deaths.lua writes these to death_events.jsonl because the server-side
         craftium.reward() it also calls does NOT reach env.step()'s reward
-        channel in the multi-agent five-chambers context — so this JSONL is the
+        channel in the multi-agent WIRE context — so this JSONL is the
         authoritative reward source. The caller (multi_agent_craftium.py) drains
         each event's reward into step_rewards_raw before Hebbian diffusion /
         record_reward, so the penalty propagates into the graph and into

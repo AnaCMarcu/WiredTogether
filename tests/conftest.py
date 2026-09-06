@@ -81,8 +81,8 @@ def seed_all():
 
 @pytest.fixture
 def lua_root() -> Path:
-    """Root of the five_chambers Lua mod (for spec-parsing tests)."""
-    return SRC / "marl_craftium" / "craftium-envs" / "five-chambers" / "mods" / "five_chambers"
+    """Root of the WIRE Lua mod (for spec-parsing tests)."""
+    return SRC / "marl_craftium" / "craftium-envs" / "wire" / "mods" / "wire"
 
 
 @pytest.fixture

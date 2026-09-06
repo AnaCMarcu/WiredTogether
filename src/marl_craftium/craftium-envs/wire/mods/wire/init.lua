@@ -1,4 +1,4 @@
--- init.lua: module loader and Craftium entry hooks for Five Chambers.
+-- init.lua: module loader and Craftium entry hooks for WIRE.
 
 -- Fast-fail API check: report missing minetest functions before any dofile.
 local _top_level_apis = {
@@ -8,14 +8,14 @@ local _top_level_apis = {
 }
 for _, _n in ipairs(_top_level_apis) do
     if not minetest[_n] then
-        error("[five_chambers] init.lua: minetest." .. _n .. " is nil — " ..
+        error("[wire] init.lua: minetest." .. _n .. " is nil — " ..
               "Luanti build is missing required API.")
     end
 end
 
-local modpath = minetest.get_modpath("five_chambers")
-five_chambers = {}
-five_chambers.step_counter = 0
+local modpath = minetest.get_modpath("wire")
+wire = {}
+wire.step_counter = 0
 
 dofile(modpath .. "/config.lua")
 dofile(modpath .. "/util.lua")
@@ -37,7 +37,7 @@ dofile(modpath .. "/deaths.lua")
 minetest.register_on_mods_loaded(function()
     -- Patch mob entities for kill-tracking BEFORE any entities spawn.
     -- Safe to do here because it only modifies entity definition tables.
-    five_chambers.patch_mobs_for_kill_tracking()
+    wire.patch_mobs_for_kill_tracking()
 
     -- Defer everything that touches the map (world_gen, doors, anvils,
     -- mob spawns) by one tick. During on_mods_loaded the map subsystem
@@ -45,14 +45,14 @@ minetest.register_on_mods_loaded(function()
     -- nil and the mcl_observers monkey-patch on set_node/swap_node calls
     -- get_node() on unloaded chunks, which crashes.
     minetest.after(0, function()
-        five_chambers.build_all_chambers()
-        five_chambers.init_doors()
-        five_chambers.init_switches()
-        five_chambers.init_anvils()
-        five_chambers.reset_mob_state()
-        five_chambers.spawn_ch1_animals()
-        five_chambers.clear_state_files()
-        minetest.log("action", "[five_chambers] Server-start init complete.")
+        wire.build_all_chambers()
+        wire.init_doors()
+        wire.init_switches()
+        wire.init_anvils()
+        wire.reset_mob_state()
+        wire.spawn_ch1_animals()
+        wire.clear_state_files()
+        minetest.log("action", "[wire] Server-start init complete.")
     end)
 end)
 
@@ -96,14 +96,14 @@ end
 
 minetest.register_on_joinplayer(function(player)
     local name = player:get_player_name()
-    local idx  = five_chambers.agent_index(name)
+    local idx  = wire.agent_index(name)
 
     -- Teleport to designated Ch1 spawn corner.
     local spawn_pos
     if idx >= 0 then
-        spawn_pos = five_chambers.ch1_spawn_pos(idx)
+        spawn_pos = wire.ch1_spawn_pos(idx)
     else
-        spawn_pos = {x=5, y=five_chambers.FLOOR_Y + 1, z=5}
+        spawn_pos = {x=5, y=wire.FLOOR_Y + 1, z=5}
     end
     player:set_pos(spawn_pos)
     player:set_hp(20, {type="set_hp", from="mod"})
@@ -112,8 +112,8 @@ minetest.register_on_joinplayer(function(player)
     hide_player_hud(player)
 
     -- Milestone tracking: record initial position for M1 and inventory for M3.
-    five_chambers.init_player_milestone_state(name)
-    five_chambers.record_spawn_pos(name, spawn_pos)
+    wire.init_player_milestone_state(name)
+    wire.record_spawn_pos(name, spawn_pos)
     -- Inventory is empty on first join; prev_inv_total defaults to 0.
 end)
 
@@ -146,7 +146,7 @@ minetest.register_globalstep(function(dtime)
     -- Keep world at midday (no day/night cycle).
     minetest.set_timeofday(0.5)
     -- Increment Lua-tick counter (runs at 20Hz; Python step = 3 Lua ticks).
-    five_chambers.step_counter = five_chambers.step_counter + 1
+    wire.step_counter = wire.step_counter + 1
 
     local _players = minetest.get_connected_players()
 
@@ -171,7 +171,7 @@ minetest.register_globalstep(function(dtime)
     -- These only reset on respawn, and hud_set_flags sends a packet on every
     -- call, so it is throttled rather than run every tick. (hide_player_hud also
     -- re-hides the hudbars, harmlessly.)
-    if five_chambers.step_counter % 20 == 0 then
+    if wire.step_counter % 20 == 0 then
         for _, p in ipairs(_players) do
             hide_player_hud(p)
         end
@@ -188,15 +188,15 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
     if not (msg and msg.agent == "server" and msg.reset == true) then return end
 
     -- Clear all per-episode state.
-    five_chambers.step_counter = 0
-    five_chambers.reset_milestone_state()
+    wire.step_counter = 0
+    wire.reset_milestone_state()
     -- Clear death bookkeeping + the episode_over flag (see deaths.lua) so the
     -- new episode starts with every agent alive and the loop doesn't see a
     -- stale all-dead signal.
-    five_chambers.player_dead = {}
-    five_chambers._virtual_hp = {}
-    five_chambers.would_die_count = {}
-    five_chambers.would_die_count_ch4 = {}
+    wire.player_dead = {}
+    wire._virtual_hp = {}
+    wire.would_die_count = {}
+    wire.would_die_count_ch4 = {}
     os.remove(minetest.get_worldpath() .. "/episode_over.txt")
     -- Rebuild the world geometry: re-places trees, stone blocks, ceiling
     -- glowstones, and the anvils (which got DESTROYED on break in the
@@ -204,20 +204,20 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
     -- where they originally were is safe and idempotent. Without this,
     -- ep 2+ would have an empty Ch1 (trees/stones dug) and an anvil-less
     -- Ch2, blocking progression to Ch3.
-    five_chambers.build_all_chambers()
+    wire.build_all_chambers()
     -- Re-place door_locked blocks at every door position. Must run BEFORE
     -- init_doors() so that init_doors's DEBUG_SINGLE branch (which opens
     -- Door 2) wins over the relock for that one door.
-    five_chambers.relock_all_doors()
-    five_chambers.init_doors()
-    five_chambers.init_switches()
-    five_chambers.init_anvils()
-    five_chambers.reset_mob_state()
+    wire.relock_all_doors()
+    wire.init_doors()
+    wire.init_switches()
+    wire.init_anvils()
+    wire.reset_mob_state()
     -- Respawn the Ch1 animals (chickens + sheep) too — the previous
     -- episode may have killed them, and reset_mob_state only clears
     -- the bookkeeping table, not the entities.
-    five_chambers.spawn_ch1_animals()
-    five_chambers.clear_state_files()
+    wire.spawn_ch1_animals()
+    wire.clear_state_files()
 
     -- Teleport all connected agents back to Ch1 spawns AND fully wipe
     -- per-player state so each episode starts with identical conditions.
@@ -225,10 +225,10 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
     --  policy, not from ep N's leftover inventory / hunger drift.)
     for _, p in ipairs(minetest.get_connected_players()) do
         local name = p:get_player_name()
-        local i    = five_chambers.agent_index(name)
+        local i    = wire.agent_index(name)
         local pos  = (i >= 0)
-            and five_chambers.ch1_spawn_pos(i)
-            or  {x=5, y=five_chambers.FLOOR_Y + 1, z=5}
+            and wire.ch1_spawn_pos(i)
+            or  {x=5, y=wire.FLOOR_Y + 1, z=5}
 
         -- Robust teleport-back-to-Ch1. Observed failure mode in exp15:
         -- chamber_entry_steps['ch2'] = 0 for ep2 AND ep3 → none of the
@@ -260,7 +260,7 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
         local pre_s  = pre  and string.format("(%.1f,%.1f,%.1f)", pre.x,  pre.y,  pre.z)  or "nil"
         local post_s = post and string.format("(%.1f,%.1f,%.1f)", post.x, post.y, post.z) or "nil"
         minetest.log("action", string.format(
-            "[five_chambers] reset-teleport %s: pre=%s -> target=(%d,%d,%d) post=%s",
+            "[wire] reset-teleport %s: pre=%s -> target=(%d,%d,%d) post=%s",
             name, pre_s, pos.x, pos.y, pos.z, post_s))
         if io and io.stderr then
             io.stderr:write(string.format(
@@ -322,7 +322,7 @@ minetest.register_on_modchannel_message(function(ch, sender, raw)
         -- prev_inv_total was set in reset_milestone_state() based on the
         -- pre-wipe inventory; now that we've cleared the inventory it
         -- must be 0 so M3 (pick up 3 items) counts only NEW pickups.
-        five_chambers.record_spawn_pos(name, pos)
-        five_chambers.prev_inv_total[name] = 0
+        wire.record_spawn_pos(name, pos)
+        wire.prev_inv_total[name] = 0
     end
 end)

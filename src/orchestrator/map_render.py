@@ -1,7 +1,7 @@
-"""Schematic top-down map of the five-chambers world for the orchestrator.
+"""Schematic top-down map of the WIRE world for the orchestrator.
 
 Pure matplotlib (headless Agg) over LOGGED state — no game-engine rendering.
-The static geometry mirrors src/marl_craftium/.../five_chambers/config.lua
+The static geometry mirrors src/marl_craftium/.../mods/wire/config.lua
 (the 3-agent legacy layout; Ch3 width scales as 4*N+1 like the Lua side).
 The PNG saved per call under the run's orchestrator log dir doubles as an
 audit artifact of exactly what the orchestrator saw.

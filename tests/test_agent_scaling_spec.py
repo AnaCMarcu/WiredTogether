@@ -1,6 +1,6 @@
 """Lua-spec pins for the agent-count scaling suite (N ∈ {2,...,9}).
 
-Same style as test_lua_spec.py: parse the five_chambers Lua sources and
+Same style as test_lua_spec.py: parse the WIRE Lua sources and
 assert the contracts the scaling experiment depends on —
 
 1. config.lua exposes the FC_CH4_MOB_COUNT pin (nil when unset → legacy
@@ -37,7 +37,7 @@ def test_config_ch4_mob_count_env_override(lua_root):
     # No integer-literal default: unset must stay nil so mobs.lua falls back
     # to the legacy per-agent count.
     assert re.search(
-        r"^five_chambers\.CH4_MOB_COUNT = _env_ch4_mobs$",
+        r"^wire\.CH4_MOB_COUNT = _env_ch4_mobs$",
         text, re.MULTILINE,
     )
 
@@ -47,7 +47,7 @@ def test_config_team_scaling_master_switch(lua_root):
     legacy suites are bit-for-bit unchanged."""
     text = _lua(lua_root, "config.lua")
     assert re.search(
-        r'five_chambers\.TEAM_SCALING =\s*\n?\s*'
+        r'wire\.TEAM_SCALING =\s*\n?\s*'
         r'\(\(os and os\.getenv and os\.getenv\("WT_TEAM_SCALING"\)\) or ""\)'
         r' == "1"',
         text,
@@ -59,7 +59,7 @@ def test_config_team_scaling_master_switch(lua_root):
 def test_spawn_ch4_mobs_uses_pin_with_legacy_fallback(lua_root):
     text = _lua(lua_root, "mobs.lua")
     assert re.search(
-        r"local want = five_chambers\.CH4_MOB_COUNT or five_chambers\.NUM_AGENTS",
+        r"local want = wire\.CH4_MOB_COUNT or wire\.NUM_AGENTS",
         text,
     )
     assert re.search(r"math\.min\(want, #CH4_SPAWN_POSITIONS\)", text)
@@ -70,7 +70,7 @@ def test_spawn_ch4_mobs_uses_pin_with_legacy_fallback(lua_root):
 def _positions(config_text: str, table_name: str) -> list[tuple[int, int]]:
     # Tables span multiple lines; grab up to the table's closing brace
     # (first "\n}" after the opening line).
-    start = config_text.index(f"five_chambers.{table_name} = {{")
+    start = config_text.index(f"wire.{table_name} = {{")
     end = config_text.index("\n}", start)
     block = config_text[start:end]
     return [(int(x), int(z))
@@ -81,11 +81,11 @@ def _spawn_branch(util_text: str, scaling: bool) -> tuple[int, int, int]:
     """(x_base, x_span, z_row) for one branch of ch1_spawn_pos's generic
     (N != 3) path: `x = math.floor(<base> + frac * <span> + 0.5)`, `z = <row>`.
 
-    The scaling branch is the one guarded by `if five_chambers.TEAM_SCALING`;
+    The scaling branch is the one guarded by `if wire.TEAM_SCALING`;
     the legacy branch is the fall-through after it.
     """
-    fn = util_text[util_text.index("function five_chambers.ch1_spawn_pos"):]
-    guard = fn.index("if five_chambers.TEAM_SCALING then")
+    fn = util_text[util_text.index("function wire.ch1_spawn_pos"):]
+    guard = fn.index("if wire.TEAM_SCALING then")
     block = fn[guard:fn.index("\n    end", guard)] if scaling else fn[fn.index("\n    end", guard):]
     m = re.search(
         r"x = math\.floor\((\d+) \+ frac \* (\d+) \+ 0\.5\),\s*\n"
@@ -170,7 +170,7 @@ def _grid_slot(i, x0, x1, z0, z1, blocked):
 
 def _chamber_bounds(config_text: str, name: str) -> dict:
     m = re.search(
-        rf"five_chambers\.{name}\s*=\s*\{{\s*x0=(-?\d+),\s*x1=(-?\d+),"
+        rf"wire\.{name}\s*=\s*\{{\s*x0=(-?\d+),\s*x1=(-?\d+),"
         rf"\s*z0=(-?\d+),\s*z1=(-?\d+)\s*\}}", config_text)
     assert m, f"{name} bounds not parsed"
     return dict(zip(("x0", "x1", "z0", "z1"), map(int, m.groups())))
@@ -222,9 +222,9 @@ def test_rescue_teleports_gated_by_team_scaling(lua_root):
     util = _lua(lua_root, "util.lua")
     for fn in ("ch2_fallback_spawn_pos", "ch4_fallback_spawn_pos",
                "ch5_fallback_spawn_pos"):
-        body = util[util.index(f"function five_chambers.{fn}"):]
+        body = util[util.index(f"function wire.{fn}"):]
         body = body[:body.index("\nend")]
-        assert "five_chambers.TEAM_SCALING" in body, f"{fn} not gated"
+        assert "wire.TEAM_SCALING" in body, f"{fn} not gated"
         assert "grid_slot(" in body, f"{fn} missing grid placement"
         # Legacy formula still present for the switch-off path.
         assert "math.floor(x_min + frac * (x_max - x_min) + 0.5)" in body, (

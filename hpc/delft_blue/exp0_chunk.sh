@@ -13,7 +13,7 @@
 # ── exp0_chunk.sh ────────────────────────────────────────────────────────────
 # Per-chunk SLURM worker for the exp0_long experiment.
 # Runs ONE 8k-step chunk (--episodes 2 --max-steps 4000) of
-# multi_agent_craftium.py on five-chambers, then writes
+# multi_agent_craftium.py on WIRE, then writes
 # latest_checkpoint.txt so the next chunk in the chain can resume.
 #
 # Submitted by hpc/delft_blue/experiments/exp0_long.sh, which chains 5 of

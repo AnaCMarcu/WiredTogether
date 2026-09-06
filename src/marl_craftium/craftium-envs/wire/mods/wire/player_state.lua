@@ -34,13 +34,13 @@ end
 minetest.register_on_mods_loaded(function()
     if not (mcl_hunger and mcl_hunger.exhaust) then
         minetest.log("warning",
-            "[five_chambers] mcl_hunger.exhaust not found; hunger drain "
+            "[wire] mcl_hunger.exhaust not found; hunger drain "
             .. "patch skipped (agents may starve over long episodes).")
         return
     end
     mcl_hunger.exhaust = function(_playername, _increase) return true end
     minetest.log("action",
-        "[five_chambers] mcl_hunger.exhaust patched to no-op "
+        "[wire] mcl_hunger.exhaust patched to no-op "
         .. "(hunger drain unconditionally disabled).")
 end)
 
@@ -53,7 +53,7 @@ minetest.register_globalstep(function(dtime)
 
     for _, player in ipairs(minetest.get_connected_players()) do
         local name = player:get_player_name()
-        local idx  = five_chambers.agent_index(name)
+        local idx  = wire.agent_index(name)
         if idx >= 0 then
             -- Health: player:get_hp() returns 0-20
             local hp = math.floor(player:get_hp())
@@ -106,11 +106,11 @@ minetest.register_globalstep(function(dtime)
     -- Format (one anvil per line):
     --   sword|<hp>/<max>|<comma-separated active puncher names or empty>
     --   chestplate|<hp>/<max>|<comma-separated names>
-    if five_chambers.anvil_state then
+    if wire.anvil_state then
         local lines = {}
-        local now_tick = five_chambers.step_counter or 0
-        local W = five_chambers.ACTIVE_WINDOW or 18
-        for _, state in pairs(five_chambers.anvil_state) do
+        local now_tick = wire.step_counter or 0
+        local W = wire.ACTIVE_WINDOW or 18
+        for _, state in pairs(wire.anvil_state) do
             local active_names = {}
             if state.punchers then
                 for name, last_tick in pairs(state.punchers) do
@@ -124,7 +124,7 @@ minetest.register_globalstep(function(dtime)
                 "%s|%d/%d|%s",
                 kind,
                 state.hp or 0,
-                five_chambers.ANVIL_MAX_HP or 30,
+                wire.ANVIL_MAX_HP or 30,
                 table.concat(active_names, ",")))
         end
         write_file(world_path .. "/anvils.txt", table.concat(lines, "\n"))

@@ -1209,7 +1209,7 @@ class CraftiumEnvironmentInterface(ChamberStateMixin, LuaEventsMixin):
         "[TOOLS]", "[INVENTORY]", "[TRACK STATUS]",
         "[DIG]", "[HUNT]", "[DEFEND]",
         "[PHASE]",       # phase transitions
-        "[MILESTONE]",   # five_chambers milestone events
+        "[MILESTONE]",   # WIRE milestone events
         "[ANVIL]", "[SWITCH]", "[DOOR]", "[MOB]", "[BOSS]",
         "[CH1_TIMEOUT]", "[CH1_TIMEOUT_DIAG]",
         "[CH2_TIMEOUT]", "[CH3_TIMEOUT]", "[CH4_TIMEOUT]",
