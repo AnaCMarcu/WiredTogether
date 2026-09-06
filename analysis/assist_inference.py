@@ -7,10 +7,10 @@ import math
 import re
 from pathlib import Path
 
-from paths import RUNS  # noqa: E402  (also puts siblings on sys.path)
+from paths import group  # noqa: E402  (also puts siblings on sys.path)
 from make_results import MILESTONE_TRACK  # noqa: E402
 
-ROOT = RUNS / "new_exp_0_gemma" / "new_exp_0_gemma_hebbian3f"
+ROOT = group("new_exp_0_gemma") / "new_exp_0_gemma_hebbian3f"
 RADIUS, WIN = 5.0, 10
 
 

@@ -21,9 +21,9 @@ import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from paths import ASSETS, RUNS
+from paths import ASSETS, group
 
-ROOT = RUNS / "pair_bonding"
+ROOT = group("pair_bonding")
 OUT = ASSETS / "transplant" / "qualitative_excerpts"
 
 ARMS = {

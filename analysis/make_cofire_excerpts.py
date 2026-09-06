@@ -23,9 +23,9 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from paths import ASSETS, RUNS
+from paths import ASSETS, group
 
-ROOT = RUNS / "cofiring_final"
+ROOT = group("cofiring_final")
 OUT = ASSETS / "cofiring_v2" / "qualitative_excerpts"
 
 # imitation arm and communication arm — the RQ2 contrast in the paper

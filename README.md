@@ -63,7 +63,9 @@ its launcher under `hpc/`.
 
 ## Reproduce
 
-Analysis scripts read run directories under `runs_from_daic/` and write into `paper_assets/`:
+Analysis scripts read run directories under `runs_from_daic/` and write into `paper_assets/`. The
+run artifacts are 46 GB and live outside this repo; [docs/dataset.md](docs/dataset.md) covers how
+they are grouped and packaged.
 
 ```bash
 python analysis/make_final_table.py        # Table 2: cross-model comparison

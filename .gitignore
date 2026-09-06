@@ -220,3 +220,6 @@ paper_assets/
 analysis/qualitative/out/*
 !analysis/qualitative/out/annotations/
 analysis/qualitative/out_*/
+
+# Release bundles built by analysis/runs_dataset.py.
+dist/

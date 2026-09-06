@@ -58,7 +58,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from paths import ASSETS, RUNS  # noqa: E402  (also puts siblings on sys.path)
+from paths import ASSETS, group  # noqa: E402  (also puts siblings on sys.path)
 
 from make_results import (  # noqa: E402  (repo-root module, same dir)
     COOP_MAX,
@@ -493,9 +493,9 @@ def write_csv(rows, out_dir: Path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--anchors-root", type=Path,
-                    default=RUNS / "new_exp_0_gemma")
+                    default=group("new_exp_0_gemma"))
     ap.add_argument("--sweep-root", type=Path,
-                    default=RUNS / "pareto_social")
+                    default=group("pareto_social"))
     ap.add_argument("--out", type=Path, default=ASSETS / "pareto_social")
     ap.add_argument("--n-eff", type=float, default=4.5e9,
                     help="active params for FLOPs = 2*N*tokens "

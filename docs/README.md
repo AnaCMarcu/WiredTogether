@@ -12,6 +12,7 @@ then read the layer you need.
 | [rl-layer.md](rl-layer.md) | LoRA-PPO over a frozen actor, MAPPO/IPPO critics, weight-gated experience sharing |
 | [configuration.md](configuration.md) | Every flag and config field, its default, and the paper symbol it carries |
 | [experiments.md](experiments.md) | Running the paper's conditions, the cluster launchers, and the analysis pipeline |
+| [dataset.md](dataset.md) | The run artifacts: how they are grouped, what the release layers hold, how to rebuild them |
 
 Conventions used throughout:
 

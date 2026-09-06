@@ -27,3 +27,22 @@ ASSETS = REPO / "paper_assets"
 for _p in (ANALYSIS, REPO, SRC, QUALITATIVE):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
+
+
+def group(name: str, runs: Path | None = None) -> Path:
+    """Locate one run group by name, whatever it is nested under.
+
+    Run groups are filed by research question (``rq1_social_plasticity/``,
+    ``rq2_cofiring/``, ...; see ``docs/dataset.md``), but a group name is unique
+    across the dataset, so scripts ask for it by name and stay independent of
+    the grouping. Falls back to ``<runs>/<name>`` when nothing matches, so the
+    caller reports a missing run root rather than this raising.
+    """
+    root = runs or RUNS
+    direct = root / name
+    if direct.is_dir():
+        return direct
+    for rq in sorted(p for p in root.glob("*") if p.is_dir()):
+        if (rq / name).is_dir():
+            return rq / name
+    return direct

@@ -37,7 +37,7 @@ import statistics as st
 from collections import defaultdict
 from pathlib import Path
 
-from paths import ASSETS, QUALITATIVE, RUNS  # noqa: E402  (also puts siblings on sys.path)
+from paths import ASSETS, QUALITATIVE, group  # noqa: E402  (also puts siblings on sys.path)
 
 from make_results import (  # noqa: F401 (COOP_TRACKS/MILESTONE_TRACK re-exported)
 
@@ -53,10 +53,10 @@ from make_results import (  # noqa: F401 (COOP_TRACKS/MILESTONE_TRACK re-exporte
 # next regeneration. Single source of truth: make_results.
 assert NONCOMM_MAX == 25 and COOP_MAX == 17, (NONCOMM_MAX, COOP_MAX)
 
-MEDIUM = RUNS / "medium_runs"
-GEMMA = RUNS / "new_exp_0_gemma"
-SOCIAL_REPLAY = RUNS / "social_replay_qwen"
-ORCHESTRATOR = RUNS / "orchestrator"
+MEDIUM = group("medium_runs")
+GEMMA = group("new_exp_0_gemma")
+SOCIAL_REPLAY = group("social_replay_qwen")
+ORCHESTRATOR = group("orchestrator")
 
 # Which arms stand for "+Heb" in the RL rows of the paper table:
 #   "replay"    — exp30/exp31: reward diffusion + weight-gated experience

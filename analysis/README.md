@@ -1,7 +1,8 @@
 # Analysis
 
 Every table and figure in the paper is produced by a script here. They read run directories
-(`runs_from_daic/<group>/<arm>/seed_<N>/`, git-ignored) and write into `paper_assets/`.
+(`runs_from_daic/<question>/<group>/<arm>/seed_<N>/`, git-ignored — see
+[../docs/dataset.md](../docs/dataset.md)) and write into `paper_assets/`.
 
 Run them from anywhere — `paths.py` anchors the inputs and outputs to the repo root and puts the
 sibling modules, `src/` and `qual_lib` on `sys.path`:
@@ -14,6 +15,10 @@ python analysis/make_pareto_social_fig.py --out paper_assets/pareto_social
 `make_results.py` is the shared aggregation layer, not just a script: the condition registry,
 milestone accounting, episode slicing and the pooling convention live there and everything else
 imports them, so the numbers cannot drift between a table and the figure next to it.
+
+`runs_dataset.py` owns the run tree itself — it groups the collected runs by research question and
+builds the released archives (`plan`, `regroup`, `bundle`, `verify`); see
+[../docs/dataset.md](../docs/dataset.md).
 
 ## Tables
 

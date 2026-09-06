@@ -5,8 +5,8 @@
 Every condition in the paper is one launcher under `hpc/daic/experiments/`, and every launcher
 sources `_common.sh` (container, model paths, headless rendering, `CRAFTIUM_ENV_DIR`, seeds, W&B)
 and calls `multi_agent_craftium.py` with a fixed configuration. Seeds come from a SLURM array.
-Results land in `runs/<group>/<arm>/seed_<N>/`; the group name is what the analysis scripts look
-for under `runs_from_daic/`.
+Results land in `runs/<group>/<arm>/seed_<N>/`. Synced off the cluster, groups are filed under the
+question they answer and looked up by name — see [dataset.md](dataset.md).
 
 | Question | Launchers | Run group |
 |---|---|---|
