@@ -84,17 +84,5 @@ python -m pytest tests -q
 the paper's tables, the Hebbian update arithmetic, the reward ledger, and the Lua and Python
 milestone tables against each other.
 
-## Citation
-
-```bibtex
-@mastersthesis{marcu2026wiredtogether,
-  author = {Marcu, Ana Cristiana},
-  title  = {Wired Together: Reward-Modulated Hebbian Social Plasticity for
-            Emergent Social Intelligence in Multi-Agent Systems},
-  school = {Delft University of Technology},
-  year   = {2026},
-}
-```
-
 MIT licensed. Built on [Craftium](https://github.com/mikelma/craftium),
 [VoxeLibre](https://git.minetest.land/VoxeLibre/VoxeLibre) and the MindForge agent stack.
