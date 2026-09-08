@@ -17,29 +17,6 @@ Social interactions and spatial engagement define pairwise co-firing signals, wh
 reward-modulated updates to `W(t)`. The learned graph is coupled back to the agents, closing an
 interaction–plasticity–behaviour loop.
 
-## What the paper finds
-
-Evaluated across three LLM backbones, two RL algorithms and a compute-matched centralised
-orchestrator:
-
-- **Plasticity buys no uniform task-level gain.** The effect of the social module is the
-  coordination it *adds* minus the coordination it *displaces*, so it helps backbones that
-  negotiate little on their own and hurts one that already negotiates densely.
-- **What counts as co-firing decides what is learned.** Communication is the most frequent cue and
-  builds the strongest bonds (`W = 0.22`) yet the weakest cooperation (3.9%); observation builds
-  moderate bonds and cooperates best (16.3%). Cues compete rather than compose.
-- **The learned graph comes out almost symmetric** even though the update rule is directed —
-  co-firing is itself mutual.
-- **Reward acts only at the step it arrives.** Routing it through an eligibility trace lifts
-  cooperative completion from 12.1% to 14.4%.
-- **History matters more than strength.** With bond magnitude equalised, agents transplanted into
-  new populations still prefer genuine former partners over strangers (0.56 vs 0.40), while an
-  imposed topology alone confers no consistent advantage.
-
-Useful social structure is therefore carried by shared interaction history rather than by
-connection strength — an inexpensive substrate for decentralised coordination, competitive with
-centralised orchestration at matched inference compute.
-
 ## WIRE
 
 Everything runs in **WIRE** (Wired Inter-agent Reasoning Evaluation), a five-chamber cooperative
