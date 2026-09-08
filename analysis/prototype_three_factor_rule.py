@@ -123,7 +123,7 @@ def build_paper(inp, variants, out_dir: Path, seed: int, width: float = 5.5):
     descriptive panel headers, no in-figure title or percentages. Palette,
     envelope fill, gridlines and legend styling match the final qualitative
     figures (make_final_figures.py / make_mechanistic_figure.py), so this
-    plot reads as part of the same figure family as e.g. wide_gemma_hebbian3f."""
+    plot reads as part of the same figure family as e.g. coordination_timeline_gemma_e4b_hebbian_seed123."""
     import make_directive_timelines as mdt  # applies the camera-ready rcParams
     plt.rcParams["mathtext.fontset"] = "stix"
     ink, muted, rule = mdt.INK, "#8b95a1", "#9aa3ad"

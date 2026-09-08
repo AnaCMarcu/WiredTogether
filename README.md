@@ -11,7 +11,7 @@ social co-firing and outcome salience, then couples that graph back to behaviour
 diffusion and weight-gated experience sharing for RL agents, and a bond-conditioned social module
 at inference time for LLM agents.
 
-![Overview of Hebbian social plasticity](figures/FIG_1.3.png)
+![Overview of Hebbian social plasticity](figures/overview_social_plasticity_loop.png)
 
 Social interactions and spatial engagement define pairwise co-firing signals, which drive
 reward-modulated updates to `W(t)`. The learned graph is coupled back to the agents, closing an
@@ -22,7 +22,7 @@ interaction–plasticity–behaviour loop.
 Everything runs in **WIRE** (Wired Inter-agent Reasoning Evaluation), a five-chamber cooperative
 environment built on Craftium/Luanti and shipped in this repo.
 
-![The WIRE environment](figures/env_minecraft_v5.png)
+![The WIRE environment](figures/wire_five_chambers.png)
 
 Agents progress through five chambers, each targeting a distinct coordination competency: solo
 skill acquisition (Ch1), cooperative resource acquisition under joint-action requirements (Ch2),

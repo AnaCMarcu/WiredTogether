@@ -1,4 +1,4 @@
-r"""Central orchestrator vs Hebbian bonds, in the wide_gemma_hebbian3f grammar.
+r"""Central orchestrator vs Hebbian bonds, in the coordination_timeline_gemma_e4b_hebbian_seed123 grammar.
 
 Two mechanism lanes on one seed, sharing an exact step axis. Neither carries a
 panel title -- both are meant to be labelled from the caption.
