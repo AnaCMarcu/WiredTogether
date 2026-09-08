@@ -67,11 +67,7 @@ SMOKE_MARKERS = ("smoke", "probe", "orchestrator")
 
 # Groups whose runs exist but are not comparable science. Skipped unless
 # named explicitly in --groups.
-VOID_GROUPS = {
-    # First six social-replay Qwen seeds ran text-only by mistake while the
-    # rest of the suite ran vision=True; set aside, comparisons void.
-    "social_replay_qwen_textonly",
-}
+VOID_GROUPS: set[str] = set()
 
 # ── channel regime, keyed on (group, arm) ────────────────────────────────
 # What can make W[i,j] differ from W[j,i] in a given arm:

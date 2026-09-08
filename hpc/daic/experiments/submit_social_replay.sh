@@ -69,10 +69,9 @@ for lane in $LANES; do
             LANE_STAGGER=0
             # "auto" = the medium suite's setting: Qwen3.5-2B is a VL model and
             # the sniff turns vision ON (every exp03-06 medium run logs
-            # "vision=True"). The first 6 replay seeds (2026-08-23/24) were
-            # launched with "text" by mistake and are kept aside as
-            # runs/social_replay_qwen_textonly — NOT comparable to the
-            # baselines (no frames -> perception grounding collapses).
+            # "vision=True"). Keep it here: the first 6 replay seeds
+            # (2026-08-23/24) were launched with "text" by mistake, and without
+            # frames their perception grounding collapses.
             LANE_VISION="auto"
             ;;
         gemma4)

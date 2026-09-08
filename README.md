@@ -2,14 +2,57 @@
 
 **Reward-Modulated Hebbian Social Plasticity for Emergent Social Intelligence in Multi-Agent Systems**
 
-A multi-agent system modelled as an adaptive network: agents are *neurons*, the social bonds
-between them are *synapses*, and reward is the *modulatory signal*. A reward-modulated Hebbian rule
-learns a directed bond matrix `W(t) ∈ [0,1]^{N×N}` online from co-firing and outcome salience, and
-couples it back to behaviour through reward diffusion, weight-gated experience sharing (RL agents)
-and a bond-conditioned social module (LLM agents).
+Multi-agent systems coordinate through communication, shared policies or centralised
+orchestration, but they usually keep no explicit representation of *who has worked with whom*.
+This work adds one. A multi-agent system is modelled as an adaptive network: agents are *neurons*,
+the social bonds between them are *synapses*, and reward is the *modulatory signal*. A
+reward-modulated Hebbian rule learns a directed bond matrix `W(t) ∈ [0,1]^{N×N}` online from
+social co-firing and outcome salience, then couples that graph back to behaviour — through reward
+diffusion and weight-gated experience sharing for RL agents, and a bond-conditioned social module
+at inference time for LLM agents.
+
+![Overview of Hebbian social plasticity](figures/FIG_1.3.png)
+
+Social interactions and spatial engagement define pairwise co-firing signals, which drive
+reward-modulated updates to `W(t)`. The learned graph is coupled back to the agents, closing an
+interaction–plasticity–behaviour loop.
+
+## What the paper finds
+
+Evaluated across three LLM backbones, two RL algorithms and a compute-matched centralised
+orchestrator:
+
+- **Plasticity buys no uniform task-level gain.** The effect of the social module is the
+  coordination it *adds* minus the coordination it *displaces*, so it helps backbones that
+  negotiate little on their own and hurts one that already negotiates densely.
+- **What counts as co-firing decides what is learned.** Communication is the most frequent cue and
+  builds the strongest bonds (`W = 0.22`) yet the weakest cooperation (3.9%); observation builds
+  moderate bonds and cooperates best (16.3%). Cues compete rather than compose.
+- **The learned graph comes out almost symmetric** even though the update rule is directed —
+  co-firing is itself mutual.
+- **Reward acts only at the step it arrives.** Routing it through an eligibility trace lifts
+  cooperative completion from 12.1% to 14.4%.
+- **History matters more than strength.** With bond magnitude equalised, agents transplanted into
+  new populations still prefer genuine former partners over strangers (0.56 vs 0.40), while an
+  imposed topology alone confers no consistent advantage.
+
+Useful social structure is therefore carried by shared interaction history rather than by
+connection strength — an inexpensive substrate for decentralised coordination, competitive with
+centralised orchestration at matched inference compute.
+
+## WIRE
 
 Everything runs in **WIRE** (Wired Inter-agent Reasoning Evaluation), a five-chamber cooperative
 environment built on Craftium/Luanti and shipped in this repo.
+
+![The WIRE environment](figures/env_minecraft_v5.png)
+
+Agents progress through five chambers, each targeting a distinct coordination competency: solo
+skill acquisition (Ch1), cooperative resource acquisition under joint-action requirements (Ch2),
+targeted communication under partial observability (Ch3), team combat (Ch4), and a cooperative
+boss fight (Ch5). Episodes end on boss defeat or full team death.
+
+## Layout
 
 | Path | Contents |
 |---|---|
@@ -19,6 +62,7 @@ environment built on Craftium/Luanti and shipped in this repo.
 | `src/marl_craftium/` | PettingZoo wrapper over Craftium plus the WIRE world as Lua mods |
 | `src/orchestrator/` | Centralised orchestration baselines |
 | `analysis/` | Every table and figure in the paper |
+| `figures/` | The paper's figures |
 | `hpc/` | SLURM launchers, one per experiment arm |
 | `docs/` | Code reference, one document per layer |
 
@@ -64,8 +108,8 @@ its launcher under `hpc/`.
 ## Reproduce
 
 Analysis scripts read run directories under `runs_from_daic/` and write into `paper_assets/`. The
-run artifacts are 46 GB and live outside this repo; [docs/dataset.md](docs/dataset.md) covers how
-they are grouped and packaged.
+run artifacts live outside this repo; [docs/dataset.md](docs/dataset.md) covers how they are
+grouped and packaged.
 
 ```bash
 python analysis/make_final_table.py        # Table 2: cross-model comparison
