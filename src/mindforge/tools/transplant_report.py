@@ -23,8 +23,11 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from mindforge.tools.analyze_wiring import (  # noqa: E402
+    interior_seats,
     load_co_milestone_matrix,
     load_message_matrix,
+    mean_preference,
+    ring_conditioned_preference,
     seat_pair_table,
     seatmate_preference,
 )
@@ -123,14 +126,49 @@ def phase_a_noise(run_glob):
 
 # ── Phase B ──────────────────────────────────────────────────────────────────
 
+# Run directory per arm. The memory x bond cells (memory_only / bond_only /
+# neither) do not follow the expB_merged_* naming, so the mapping is explicit.
+ARM_DIRS = {
+    "transplant": "expB_merged_transplant",
+    "shuffled": "expB_merged_shuffled",
+    "memory_only": "expB_memory_only",
+    "bond_only": "expB_bond_only",
+    "neither": "expB_neither",
+}
+
+# Which merge manifest describes an arm's SEATING, or None when the arm has no
+# transplanted memories at all. memory_only keeps the true pairings (only its
+# W is flattened), so it reads the transplant manifest; the fresh-agent cells
+# have nothing to label and fall back to unlabelled standard seating.
+ARM_MANIFEST = {
+    "transplant": "transplant",
+    "shuffled": "shuffled",
+    "memory_only": "transplant",
+    "bond_only": None,
+    "neither": None,
+}
+
+
 def load_manifest(base, arm):
-    with open(base / "merged" / arm / "merged_manifest.json") as f:
+    """Merge manifest for `arm`, or {} when the arm has no transplanted state.
+
+    Returns {} rather than raising so a fresh-agent arm reads as "no seat
+    labels" instead of killing the whole report.
+    """
+    name = ARM_MANIFEST.get(arm, arm)
+    if name is None:
+        return {}
+    path = base / "merged" / name / "merged_manifest.json"
+    if not path.exists():
+        return {}
+    with open(path) as f:
         return json.load(f)
 
 
 def phase_b_runs(base, arm, seeds):
-    return [base / f"expB_merged_{arm}" / f"seed_{s}" for s in seeds
-            if (base / f"expB_merged_{arm}" / f"seed_{s}" / "config.json").exists()]
+    d = ARM_DIRS.get(arm, f"expB_merged_{arm}")
+    return [base / d / f"seed_{s}" for s in seeds
+            if (base / d / f"seed_{s}" / "config.json").exists()]
 
 
 def run_wall_hours(run):
@@ -173,12 +211,17 @@ def phase_b_wiring(base, arms, seeds, n=6):
             co = load_co_milestone_matrix(run, n, selective=True)
             prefs = seatmate_preference(total)
             run_prefs = [p for p, _ in prefs.values() if p is not None]
+            # Geometry-free companion metric; see ring_conditioned_preference.
+            ring = ring_conditioned_preference(total)
             ep_trend = {}
+            ep_ring_trend = {}
             ep_dominant = {}
             for ep, mat in sorted(per_ep.items()):
                 ps = [p for p, _ in seatmate_preference(mat).values()
                       if p is not None]
                 ep_trend[ep] = st.mean(ps) if ps else None
+                ep_ring_trend[ep] = mean_preference(
+                    ring_conditioned_preference(mat))
                 ep_dominant[ep] = {
                     i: (max(range(n), key=lambda j: mat[i][j])
                         if sum(mat[i]) else None) for i in range(n)
@@ -197,7 +240,12 @@ def phase_b_wiring(base, arms, seeds, n=6):
             arm_d["runs"][run.name] = {
                 "pref_mean": st.mean(run_prefs) if run_prefs else None,
                 "prefs": {i: prefs[i][0] for i in range(n)},
+                "ring_pref_mean": mean_preference(ring),
+                "ring_pref_interior": mean_preference(
+                    ring, agents=set(interior_seats(n))),
+                "ring_prefs": {i: ring[i][0] for i in range(n)},
                 "ep_trend": ep_trend,
+                "ep_ring_trend": ep_ring_trend,
                 "ep_dominant": ep_dominant,
                 "w_by_ep": w_by_ep,
                 "seat_rows": seat_pair_table(total, co, sp_meta),

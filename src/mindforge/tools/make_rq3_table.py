@@ -35,6 +35,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "src"))
+# make_results.py moved to analysis/ in the 2026-09-06 reorganisation;
+# without this the import below still looks in the old repo root.
+sys.path.insert(0, str(REPO / "analysis"))
 
 import make_results as mr  # noqa: E402
 from mindforge.tools.analyze_wiring import (  # noqa: E402

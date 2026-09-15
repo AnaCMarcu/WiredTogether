@@ -85,7 +85,7 @@ def seatmate_preference(matrix, seat_of_partner=None):
     """
     n = len(matrix)
     if seat_of_partner is None:
-        seat_of_partner = {i: i + 1 if i % 2 == 0 else i - 1 for i in range(n)}
+        seat_of_partner = _standard_seating(n)
     out = {}
     for i in range(n):
         sent = sum(matrix[i])
@@ -93,6 +93,76 @@ def seatmate_preference(matrix, seat_of_partner=None):
         pref = (matrix[i][mate] / sent) if (sent and mate is not None) else None
         out[i] = (pref, sent)
     return out
+
+
+def _standard_seating(n):
+    """Seat pairs (0,1), (2,3), ... as {agent: seatmate}."""
+    return {i: i + 1 if i % 2 == 0 else i - 1 for i in range(n)}
+
+
+def ring_neighbours(i, n):
+    """Agent i's two task-adjacent seats under WIRE's Chamber-3 ring."""
+    return {(i + 1) % n, (i - 1) % n}
+
+
+def interior_seats(n):
+    """Seats whose two ring neighbours are also spatially symmetric.
+
+    The Ch4/Ch5 rescue spawns lay agents along one row in seat order, so the
+    two END seats have one ring neighbour beside them and one at the far end
+    of the row. Every other seat sits between its two ring neighbours.
+    """
+    return [i for i in range(n) if i not in (0, n - 1)]
+
+
+def ring_conditioned_preference(matrix, seat_of_partner=None):
+    """P(target = seatmate | target is a ring neighbour), per agent.
+
+    Raw seatmate preference mixes relationship with task geometry. WIRE wires
+    switch i to the door of agent (i+1) mod N (mods/wire/switches.lua), and
+    the Ch4/Ch5 rescue spawns lay agents out along a row in seat order, so an
+    agent's seatmate is always one of its two ring neighbours. An agent that
+    holds no relationship at all, and simply talks to whoever can open its
+    door or whoever is standing next to it, therefore already scores far above
+    the 1/(N-1) chance line.
+
+    Conditioning on the message having gone to a ring neighbour removes that
+    advantage: every agent has exactly two ring neighbours and exactly one of
+    them is its seatmate, so chance is 0.50 for every N. What is left is which
+    of two equally task-relevant partners the agent chose.
+
+    Caveat, and why interior_seats() exists: the spawn row is linear in seat
+    index, so for the two END seats the seatmate is spatially adjacent while
+    the other ring neighbour is at the far end of the row. The measure is
+    geometry-free for the interior seats and mildly seatmate-favouring for the
+    two end ones. Report the interior-only mean beside it as the robustness
+    line.
+
+    Returns {agent: (preference or None, n_ring_messages)}.
+    """
+    n = len(matrix)
+    if seat_of_partner is None:
+        seat_of_partner = _standard_seating(n)
+    out = {}
+    for i in range(n):
+        ring = ring_neighbours(i, n)
+        mate = seat_of_partner.get(i)
+        # Undefined when the ring collapses (n < 4) or the seating is not
+        # index-adjacent: there is then no two-way choice to measure.
+        if len(ring) < 2 or mate is None or mate not in ring:
+            out[i] = (None, 0)
+            continue
+        sent_ring = sum(matrix[i][j] for j in ring)
+        pref = (matrix[i][mate] / sent_ring) if sent_ring else None
+        out[i] = (pref, sent_ring)
+    return out
+
+
+def mean_preference(prefs, agents=None):
+    """Mean over a preference dict, optionally restricted to `agents`."""
+    vals = [p for i, (p, _) in prefs.items()
+            if p is not None and (agents is None or i in agents)]
+    return sum(vals) / len(vals) if vals else None
 
 
 def load_co_milestone_matrix(run_dir, num_agents, selective=True):
@@ -202,9 +272,28 @@ def analyze_run(run_dir, manifest_path=None, per_episode=False, out=sys.stdout):
                       "co-milestones (selective, all-hands dropped):"),
           file=out)
     print(f"\nseatmate preference (chance = {chance:.2f}):", file=out)
-    for i, (pref, sent) in seatmate_preference(total).items():
+    prefs = seatmate_preference(total)
+    for i, (pref, sent) in prefs.items():
         p = f"{pref:.2f}" if pref is not None else " -  "
         print(f"  agent_{i}: {p}  ({sent} msgs sent)", file=out)
+    m = mean_preference(prefs)
+    print(f"  mean: {m:.2f}" if m is not None else "  mean: -", file=out)
+
+    # Geometry-free companion. WIRE's Ch3 ring and its index-ordered spawn
+    # rows make an agent's seatmate a task partner, which lifts the raw
+    # number in every arm. See ring_conditioned_preference.
+    ring = ring_conditioned_preference(total)
+    print("", file=out)
+    print("ring-conditioned preference "
+          "(P(seatmate | ring neighbour), chance = 0.50):", file=out)
+    for i, (pref, sent) in ring.items():
+        p = f"{pref:.2f}" if pref is not None else " -  "
+        print(f"  agent_{i}: {p}  ({sent} msgs to a ring neighbour)", file=out)
+    rm = mean_preference(ring)
+    ri = mean_preference(ring, agents=set(interior_seats(num_agents)))
+    print(f"  mean: {rm:.2f}" if rm is not None else "  mean: -", file=out)
+    print(f"  mean over interior seats {interior_seats(num_agents)}: "
+          + (f"{ri:.2f}" if ri is not None else "-"), file=out)
     print("\nseat pairs:", file=out)
     for row in seat_pair_table(total, co_sel, seat_pairs):
         pa = f"{row['pref_a']:.2f}" if row["pref_a"] is not None else "-"
@@ -218,6 +307,8 @@ def analyze_run(run_dir, manifest_path=None, per_episode=False, out=sys.stdout):
         print(f"\n({all_hands // 2} all-hands co-contribution pairs dropped "
               f"by the selective filter)", file=out)
     return {"messages": total, "co_milestones": co_sel,
+            "seatmate_preference": prefs,
+            "ring_conditioned_preference": ring,
             "seat_pairs": seat_pair_table(total, co_sel, seat_pairs)}
 
 

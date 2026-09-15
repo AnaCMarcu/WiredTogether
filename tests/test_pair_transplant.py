@@ -8,9 +8,12 @@ import pytest
 from mindforge.tools.pair_transplant import (
     build_merged_manifest,
     build_slot_assignment,
+    magnitude_matched_uniform_W,
+    mean_offdiagonal,
     merge_hebbian_W,
     rank_pair_runs,
     remap_agent_names,
+    uniform_hebbian_W,
 )
 
 
@@ -322,3 +325,55 @@ def test_rank_surfaces_bond_vs_behaviour_mismatch(tmp_path):
     assert rows[0]["run_dir"] == str(hi_bond)   # bond ranks it first
     assert rows[0]["joint_dig"] == 0            # despite never co-digging
     assert rows[1]["joint_dig"] == 4
+
+
+# ── Magnitude-matched uniform W (the bond-reset cells of the 2x2) ──────────
+
+def test_mean_offdiagonal_ignores_the_diagonal():
+    W = [[9.0, 1.0, 2.0],
+         [3.0, 9.0, 4.0],
+         [5.0, 6.0, 9.0]]
+    assert mean_offdiagonal(W) == pytest.approx(21.0 / 6)
+    with pytest.raises(ValueError):
+        mean_offdiagonal([[1.0, 2.0]])          # not square
+    with pytest.raises(ValueError):
+        mean_offdiagonal([[0.0]])               # n < 2
+
+
+def test_uniform_hebbian_W_shape_and_zero_fixed_point():
+    W = uniform_hebbian_W(4, 0.2)
+    assert W.shape == (4, 4)
+    assert np.allclose(np.diag(W), 0.0)
+    off = W[~np.eye(4, dtype=bool)]
+    assert np.allclose(off, 0.2)
+    # W=0 is a fixed point of the gated rule: a zero start could never grow,
+    # so the bond-reset arm would test nothing. Same guard as cross_weight.
+    for bad in (0.0, -0.1):
+        with pytest.raises(ValueError, match="fixed point"):
+            uniform_hebbian_W(4, bad)
+
+
+def test_magnitude_matched_uniform_preserves_bond_mass_and_kills_structure():
+    # A merged-shaped matrix: three 0.265 blocks, 0.10 elsewhere.
+    merged, _ = merge_hebbian_W(
+        [[[0.0, 0.265], [0.265, 0.0]]] * 3, cross_weight=0.10
+    )
+    flat, weight = magnitude_matched_uniform_W(merged)
+
+    # The invariant the design rests on: identical total bond mass...
+    assert mean_offdiagonal(flat) == pytest.approx(mean_offdiagonal(merged))
+    assert weight == pytest.approx(mean_offdiagonal(merged))
+    # ...and no structure left to distinguish any dyad from any other.
+    off = flat[~np.eye(6, dtype=bool)]
+    assert np.allclose(off, off[0])
+    # Strictly between the merged matrix's two levels, and strictly above the
+    # plain Hebbian default (0.1) — which is why the default is NOT used as
+    # the reset: it would be both structureless AND weaker.
+    assert 0.10 < weight < 0.265
+
+
+def test_magnitude_matched_uniform_is_idempotent():
+    flat, w1 = magnitude_matched_uniform_W(uniform_hebbian_W(6, 0.133))
+    assert w1 == pytest.approx(0.133)
+    again, w2 = magnitude_matched_uniform_W(flat)
+    assert np.allclose(flat, again) and w2 == pytest.approx(w1)

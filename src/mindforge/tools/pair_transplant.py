@@ -105,6 +105,56 @@ def merge_hebbian_W(pair_Ws, cross_weight=0.1, normalize="block_mean"):
     return W, provenance
 
 
+def mean_offdiagonal(W):
+    """Mean of a square matrix's off-diagonal entries (its total bond mass).
+
+    The magnitude summary that the 2x2 memory-vs-bond design has to hold
+    constant: two matrices with the same value here differ only in how the
+    bond mass is distributed, not in how much of it there is.
+    """
+    A = np.asarray(W, dtype=float)
+    if A.ndim != 2 or A.shape[0] != A.shape[1]:
+        raise ValueError(f"expected a square matrix, got shape {A.shape}")
+    n = A.shape[0]
+    if n < 2:
+        raise ValueError("off-diagonal mean is undefined for n < 2")
+    return float(A[~np.eye(n, dtype=bool)].mean())
+
+
+def uniform_hebbian_W(n, weight):
+    """Flat n x n W: every off-diagonal entry `weight`, zero diagonal.
+
+    The topology-free start matrix for the bond-reset arms. `weight` must be
+    > 0 for the same reason cross_weight must be: W=0 is a fixed point of the
+    gated rule, so a zero matrix could never grow and the arm would be a test
+    of nothing.
+    """
+    if weight <= 0.0:
+        raise ValueError(
+            f"weight must be > 0 (got {weight}): W=0 is a fixed point of the "
+            "gated Hebbian rule, so a zero start matrix can never grow"
+        )
+    W = np.full((n, n), float(weight), dtype=float)
+    np.fill_diagonal(W, 0.0)
+    np.clip(W, 0.0, 1.0, out=W)
+    return W
+
+
+def magnitude_matched_uniform_W(W):
+    """`W`'s topology-free counterpart: same mean bond mass, no structure.
+
+    Returns ``(uniform_W, weight)``. Used for the bond-reset cells of the
+    memory x bond design: pairing this against the learned block matrix
+    varies the TOPOLOGY while holding total bond mass fixed, so a difference
+    cannot be attributed to one arm simply starting with stronger bonds.
+    Contrast with the plain Hebbian default (init_weight 0.1), which is both
+    structureless AND weaker.
+    """
+    weight = mean_offdiagonal(W)
+    n = np.asarray(W, dtype=float).shape[0]
+    return uniform_hebbian_W(n, weight), weight
+
+
 def build_slot_assignment(n_pairs=3, shuffled=False, seed=0):
     """Seat the 2*n_pairs source agents.
 

@@ -16,6 +16,7 @@ question they answer and looked up by name — see [dataset.md](dataset.md).
 | RQ2 — co-firing channels | `exp20`–`exp29` (`prc`, `pro`, `pri`, `prco`, `prcoi`, anchor, null) | `cofiring_final` |
 | RQ3 — imposed topology | `exp09`–`exp11` (allied-all, allied-pair, no-bonds) | `final` |
 | RQ3 — transplant | `expA_pair_bonding`, then `expB_merged_transplant` / `expB_merged_shuffled` | `pair_bonding` |
+| RQ3 — memory x bond | `expB_memory_only`, `expB_bond_only`, `expB_neither` | `pair_bonding` |
 | Compute — deliberation interval | `new_exp_0_gemma_si` | `pareto_social` |
 | Compute — model size | `new_exp_pareto` | `pareto_gemma4` |
 | Compute — team size | `scale_gemma` | `agent_scaling` |
@@ -42,6 +43,41 @@ population in Chamber 3 with `--hebbian-init-file` and `--agent-state-init`;
 `expB_merged_shuffled` is the control that pairs agents with strangers from other Phase-A runs.
 `merge_pair_runs.py` picks the input runs, `transplant_report.py` and `make_transplant_table.py`
 produce the numbers.
+
+### The memory x bond cells
+
+Those two arms vary one factor. Both transplant memories *and* bonds, and the contrast between
+them only changes whether the memories are true, which leaves open the question of whether the
+Hebbian graph is doing anything that episodic memory alone would not. Three further arms cross
+the two factors:
+
+| cell | memory | bond | arm | launcher |
+|---|---|---|---|---|
+| A | retained | retained | `expB_merged_transplant` (+ `_shuffled`) | `submit_transplant.sh phaseB` |
+| B | retained | reset | `expB_memory_only` | `submit_transplant_2x2.sh phaseB` |
+| C | reset | retained | `expB_bond_only` | `submit_transplant_2x2.sh phaseB` |
+| D | reset | reset | `expB_neither` | `submit_transplant_2x2.sh phaseB` |
+
+*Bond reset* is the flat matrix written by `merge_pair_runs.py uniform-w`, whose mean off-diagonal
+equals the merged matrix's exactly, so every cell starts with the same total bond mass and only its
+distribution differs. The plain Hebbian default (`init_weight` 0.1) is deliberately not used as the
+reset: it is both structureless and weaker, which would confound the two factors. *Memory reset* is
+fresh agents, with no `--agent-state-init`. Build the flat matrix once with
+`submit_transplant_2x2.sh uniform` before submitting. `memory_bond_report.py` reports the cells and
+leaves rows blank until their runs land.
+
+Cell C is not the frozen-topology ablation. `exp09`–`exp11` impose a hand-set graph on three agents
+with `--social-module bias`, which overwrites the message target outright; cell C uses the learned,
+plastic graph coupled only as prompt text.
+
+Two readouts, both in `analyze_wiring.py`. Raw seatmate preference is `P(target = seatmate)` against
+a nominal chance of `1/(N-1)`. That chance line understates the floor, because WIRE makes
+index-adjacent agents task partners: switch `i` opens the door of agent `(i+1) mod N`, and the Ch4
+and Ch5 rescue spawns lay agents along one row in seat order. Ring-conditioned preference,
+`P(seatmate | target is a ring neighbour)`, has a chance of exactly 0.50 at any `N` and is the
+primary metric; cell D measures the raw floor directly. Report the interior-seat mean alongside it,
+since the spawn row is linear in seat index and so the two end seats are not spatially symmetric
+between their ring neighbours.
 
 ## Analysis
 

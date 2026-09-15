@@ -38,6 +38,7 @@ if __package__ in (None, ""):
     from mindforge.tools.pair_transplant import (
         build_merged_manifest,
         build_slot_assignment,
+        magnitude_matched_uniform_W,
         merge_hebbian_W,
         pair_cofired,
         rank_pair_runs,
@@ -47,6 +48,7 @@ else:
     from .pair_transplant import (
         build_merged_manifest,
         build_slot_assignment,
+        magnitude_matched_uniform_W,
         merge_hebbian_W,
         pair_cofired,
         rank_pair_runs,
@@ -206,6 +208,52 @@ def cmd_merge(args):
           f"  --agent-state-init  {out_dir / 'merged_manifest.json'}")
 
 
+
+def cmd_uniform_w(args):
+    """Write the magnitude-matched uniform counterpart of a merged W.
+
+    The bond-reset half of the memory x bond design. Reads a merged_W.json,
+    flattens its topology, and keeps the mean off-diagonal identical so the
+    two matrices differ in STRUCTURE alone.
+    """
+    src = Path(args.from_w)
+    with open(src) as f:
+        payload = json.load(f)
+    W_in = payload["W"] if isinstance(payload, dict) else payload
+    U, weight = magnitude_matched_uniform_W(W_in)
+
+    n = U.shape[0]
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = {
+        "num_agents": n,
+        "W": U.tolist(),
+        "condition": "uniform",
+        "uniform_weight": weight,
+        "matched_to": str(src),
+        "matched_mean_offdiagonal": weight,
+        # Seat pairs carry no provenance here: every entry is identical, so
+        # the dyads are interchangeable by construction. Recorded so the
+        # readout can still name the seats without implying a label.
+        "seat_pairs": [
+            {"seats": [2 * k, 2 * k + 1], "same_source_run": None,
+             "cofired": None}
+            for k in range(n // 2)
+        ],
+    }
+    dest = out_dir / "uniform_W.json"
+    with open(dest, "w") as f:
+        json.dump(out, f, indent=2)
+
+    print(f"[uniform] {n}x{n} flat W at {weight:.6f} -> {dest}")
+    print(f"  matched to {src} (mean off-diagonal preserved exactly)")
+    for row in U:
+        print("  " + " ".join(f"{w:.3f}" for w in row))
+    print("")
+    print("Phase B flag:")
+    print(f"  --hebbian-init-file {dest}")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     # No required=True: the DAIC login node runs Python 3.6, where
@@ -238,6 +286,15 @@ def main(argv=None):
                          help="block_mean (default): rescale each pair block "
                               "to a common mean so no pair starts advantaged")
     p_merge.set_defaults(func=cmd_merge)
+
+    p_uni = sub.add_parser(
+        "uniform-w",
+        help="write the magnitude-matched uniform W (bond-reset arms)"
+    )
+    p_uni.add_argument("--from-w", required=True, dest="from_w",
+                       help="merged_W.json whose mean bond mass to match")
+    p_uni.add_argument("--out-dir", required=True)
+    p_uni.set_defaults(func=cmd_uniform_w)
 
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):
