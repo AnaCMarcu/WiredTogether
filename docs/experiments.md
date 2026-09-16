@@ -66,6 +66,12 @@ fresh agents, with no `--agent-state-init`. Build the flat matrix once with
 `submit_transplant_2x2.sh uniform` before submitting. `memory_bond_report.py` reports the cells and
 leaves rows blank until their runs land.
 
+All five cells run the `reward_modulated` rule, which is the `--hebbian-mode` default and
+what cell A recorded in its `config.json`; 213 of the 225 Hebbian runs in the suite use it. The
+cells are only meaningful against cell A, so do not give B, C or D a different rule. Moving the
+family to `three_factor` means re-running Phase A as well, since Phase A produces the transplanted
+`W`. Note that `legacy` is a separate mode in that flag's choices and is not this rule.
+
 Cell C is not the frozen-topology ablation. `exp09`–`exp11` impose a hand-set graph on three agents
 with `--social-module bias`, which overwrites the message target outright; cell C uses the learned,
 plastic graph coupled only as prompt text.

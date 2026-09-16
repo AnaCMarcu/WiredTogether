@@ -24,10 +24,18 @@
 # "Memory reset" means fresh agents: no --agent-state-init at all.
 #
 # Everything else is pinned to cell A: 6 agents, --start-chamber 3, 3 episodes
-# x 1000 steps, the legacy reward-modulated rule at the exp08 settings,
+# x 1000 steps, the reward_modulated rule at the exp08 settings,
 # --social-module prompt, and seeds 42/123/456 so the cells pair seed-wise.
-# Do NOT retarget these at --hebbian-mode three_factor: cell A ran on the
-# legacy rule and the comparison dies if the rule differs.
+#
+# THE RULE. No --hebbian-mode is passed, so these arms take the flag's default,
+# reward_modulated (Variant B) -- exactly what cell A recorded in its
+# config.json, and the rule behind 213 of the 225 Hebbian runs in the suite.
+# Do NOT retarget these at --hebbian-mode three_factor: the cells only mean
+# something against cell A, so changing the rule for B/C/D alone destroys the
+# comparison. Moving the whole family to three_factor means re-running Phase A
+# too, since Phase A is what produces the transplanted W.
+# Beware: "legacy" is a SEPARATE mode in that flag's choices (legacy /
+# coactivity / reward_modulated / three_factor) and is NOT this rule.
 #
 # Usage (from the DAIC login node):
 #   cd $REPO/hpc/daic/experiments

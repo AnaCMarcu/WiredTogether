@@ -115,8 +115,9 @@ def build(args):
              "0.265 within-seat and 0.100 cross-seat), so a difference cannot "
              "come from one arm simply starting with stronger bonds. "
              "Everything else is pinned to cell A: 6 agents, "
-             "`--start-chamber 3`, 3 episodes x 1000 steps, the legacy "
-             "reward-modulated rule at the exp08 settings, "
+             "`--start-chamber 3`, 3 episodes x 1000 steps, the "
+             "`reward_modulated` rule at the exp08 settings (the "
+             "`--hebbian-mode` default, and what cell A recorded), "
              "`--social-module prompt`.")
     L.append("")
 
