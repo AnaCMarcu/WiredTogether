@@ -17,6 +17,7 @@ question they answer and looked up by name — see [dataset.md](dataset.md).
 | RQ3 — imposed topology | `exp09`–`exp11` (allied-all, allied-pair, no-bonds) | `final` |
 | RQ3 — transplant | `expA_pair_bonding`, then `expB_merged_transplant` / `expB_merged_shuffled` | `pair_bonding` |
 | RQ3 — memory x bond | `expB_memory_only`, `expB_bond_only`, `expB_neither` | `pair_bonding` |
+| RQ3 — memory x bond (3f) | the same three plus `expB_merged_transplant_3f` / `expB_merged_shuffled_3f`, all `_3f` | `pair_bonding_3f` |
 | Compute — deliberation interval | `new_exp_0_gemma_si` | `pareto_social` |
 | Compute — model size | `new_exp_pareto` | `pareto_gemma4` |
 | Compute — team size | `scale_gemma` | `agent_scaling` |
@@ -66,11 +67,19 @@ fresh agents, with no `--agent-state-init`. Build the flat matrix once with
 `submit_transplant_2x2.sh uniform` before submitting. `memory_bond_report.py` reports the cells and
 leaves rows blank until their runs land.
 
-All five cells run the `reward_modulated` rule, which is the `--hebbian-mode` default and
-what cell A recorded in its `config.json`; 213 of the 225 Hebbian runs in the suite use it. The
-cells are only meaningful against cell A, so do not give B, C or D a different rule. Moving the
-family to `three_factor` means re-running Phase A as well, since Phase A produces the transplanted
-`W`. Note that `legacy` is a separate mode in that flag's choices and is not this rule.
+The cells exist in two rule variants, and a cell is only interpretable against the other cells of
+its own variant. `submit_transplant_2x2.sh` runs them on `reward_modulated`, the `--hebbian-mode`
+default and what the original cell A recorded. `submit_transplant_2x2_3f.sh` runs all five arms on
+`three_factor` with the same parameters as the other `_3f` launchers, writing to `pair_bonding_3f`
+so the two never mix. Note that `legacy` is a separate mode in that flag's choices and is neither
+of these.
+
+The three-factor suite moves cell A as well, which is why it is five arms rather than three: a
+`three_factor` cell B compared against a `reward_modulated` cell A would measure the rule, not the
+factor under test. It does *not* re-run Phase A. The transplanted bonds and memories still come
+from the `reward_modulated` pair runs, on the reasoning that Phase A is the relationship-formation
+stage and the suite asks how the new rule treats a relationship that already exists. State that in
+the paper rather than leaving it implicit.
 
 Cell C is not the frozen-topology ablation. `exp09`–`exp11` impose a hand-set graph on three agents
 with `--social-module bias`, which overwrites the message target outright; cell C uses the learned,

@@ -91,8 +91,12 @@ def build(args):
     base = Path(args.phaseb_base)
     seeds = args.seeds
     arms = [c[1] for c in CELLS]
-    wiring = phase_b_wiring(base, arms, seeds)
-    present = {arm: len(phase_b_runs(base, arm, seeds)) for arm in arms}
+    suffix = args.dir_suffix
+    merged_base = Path(args.merged_base) if args.merged_base else None
+    wiring = phase_b_wiring(base, arms, seeds, dir_suffix=suffix,
+                            merged_base=merged_base)
+    present = {arm: len(phase_b_runs(base, arm, seeds, dir_suffix=suffix))
+               for arm in arms}
 
     L = []
     L.append("# Memory x Bond (2x2) — what carries partner preference?")
@@ -250,6 +254,13 @@ def main(argv=None):
     ap.add_argument("--phaseb-base",
                     default="runs_from_daic/rq3_topology_transfer/pair_bonding")
     ap.add_argument("--seeds", type=int, nargs="+", default=[42, 123, 456])
+    ap.add_argument("--dir-suffix", default="",
+                    help="rule-variant suffix on the run dirs, e.g. _3f for "
+                         "the three-factor cells in pair_bonding_3f/")
+    ap.add_argument("--merged-base", default=None,
+                    help="where merged/ lives, when the transplant inputs sit "
+                         "outside --phaseb-base (the _3f runs read the "
+                         "reward_modulated Phase-A merge)")
     ap.add_argument("--out", default=str(OUT))
     args = ap.parse_args(argv)
     report = build(args)

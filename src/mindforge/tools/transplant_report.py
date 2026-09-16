@@ -149,24 +149,29 @@ ARM_MANIFEST = {
 }
 
 
-def load_manifest(base, arm):
+def load_manifest(base, arm, merged_base=None):
     """Merge manifest for `arm`, or {} when the arm has no transplanted state.
 
     Returns {} rather than raising so a fresh-agent arm reads as "no seat
     labels" instead of killing the whole report.
+
+    merged_base: where merged/ lives, when that differs from the run base.
+    The three-factor cells write to pair_bonding_3f/ but still transplant the
+    Phase-A merge from pair_bonding/merged/, so the two are not the same root.
     """
     name = ARM_MANIFEST.get(arm, arm)
     if name is None:
         return {}
-    path = base / "merged" / name / "merged_manifest.json"
+    path = Path(merged_base or base) / "merged" / name / "merged_manifest.json"
     if not path.exists():
         return {}
     with open(path) as f:
         return json.load(f)
 
 
-def phase_b_runs(base, arm, seeds):
-    d = ARM_DIRS.get(arm, f"expB_merged_{arm}")
+def phase_b_runs(base, arm, seeds, dir_suffix=""):
+    """Run dirs for `arm`. dir_suffix names a rule variant, e.g. "_3f"."""
+    d = ARM_DIRS.get(arm, f"expB_merged_{arm}") + dir_suffix
     return [base / d / f"seed_{s}" for s in seeds
             if (base / d / f"seed_{s}" / "config.json").exists()]
 
@@ -198,15 +203,19 @@ def run_wall_hours(run):
     return (last - start).total_seconds() / 3600 if last else None
 
 
-def phase_b_wiring(base, arms, seeds, n=6):
+def phase_b_wiring(base, arms, seeds, n=6, dir_suffix="", merged_base=None):
     """All wiring stats per arm: per-run and pooled preference, seat pairs,
-    per-episode trend, W evolution."""
+    per-episode trend, W evolution.
+
+    dir_suffix / merged_base select a rule variant whose runs sit in their own
+    group but whose transplant inputs stay in the original one.
+    """
     out = {}
     for arm in arms:
-        manifest = load_manifest(base, arm)
+        manifest = load_manifest(base, arm, merged_base=merged_base)
         sp_meta = manifest.get("seat_pairs")
         arm_d = {"runs": {}, "seat_pairs": {}, "manifest": manifest}
-        for run in phase_b_runs(base, arm, seeds):
+        for run in phase_b_runs(base, arm, seeds, dir_suffix=dir_suffix):
             total, per_ep = load_message_matrix(run, n)
             co = load_co_milestone_matrix(run, n, selective=True)
             prefs = seatmate_preference(total)
