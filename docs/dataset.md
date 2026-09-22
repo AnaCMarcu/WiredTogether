@@ -18,7 +18,7 @@ runs_from_daic/<question>/<group>/<arm>/seed_<N>/
 | `rq1_social_plasticity/` | `medium_runs` (Qwen 2B/9B, MAPPO/IPPO, ±Hebbian, ±social module), `new_exp_0_gemma`, `gemma4`, `orchestrator` |
 | `rq2_cofiring/` | `cofiring_final` (the seven channel arms in the paper), `cofiring`, `cofiring_bidi`, `cofiring_noreward` |
 | `rq3_topology_transfer/` | `medium_2k`, `pair_bonding` |
-| `compute/` | `pareto_social` (deliberation interval), `pareto_gemma4` (model size), `agent_scaling` (team size) |
+| `compute/` | `pareto_social` (deliberation interval), `pareto_gemma4` (model size), `agent_scaling` (team size), `comm_budget` (per-episode communication budget × team size; `messages.jsonl` carries `tokens_model`/`charged`/`budget_left`, `summary.json` a `comm_budget` block) |
 | `social_replay/` | `social_replay_gemma4`, `social_replay_qwen` |
 | `cluster_logs/` | SLURM stdout/stderr, kept as provenance |
 | `smoke/` | Smoke tests; not part of the release |

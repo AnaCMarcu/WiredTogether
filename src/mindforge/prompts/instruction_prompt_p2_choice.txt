@@ -9,7 +9,7 @@ Chamber state: {chamber_state}   (live puzzle state — e.g. anvil HP and who is
 Visited chambers so far this episode: {visited_chambers}   (you have ONLY been in these — never claim to be in a chamber not listed)
 Milestone progress (authoritative — advance an [OPEN] milestone in YOUR chamber, marked "(YOU ARE HERE)"; do not redo [you done] ones):
 {milestone_progress}
-{milestone_event}
+{milestone_event}{comm_budget}
 Status: {player_status_text}
 Critique: {critique}
 Error: {error}

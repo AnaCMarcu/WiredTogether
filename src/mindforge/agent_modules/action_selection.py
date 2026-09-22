@@ -7,6 +7,7 @@ from mindforge.agent_modules.util import (
     normalize_agent_target,
     safe_format,
 )
+from mindforge.env.comm_budget import apply_comm_budget_static
 
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
@@ -29,14 +30,25 @@ class ActionSelection:
         action_model_client=None,
         user_prompt_template=None,
     ):
+        # Communication-budget sweep: the STATIC comm placeholders
+        # ({comm_rule}, {comm_target_rule}, {comm_field_hint}) are resolved
+        # once here, at construction. With the WT_COMM_BUDGET switch off
+        # (every legacy suite) they render the original bytes; the per-step
+        # {comm_budget} line is filled by llm_call like every other field.
         self.system_prompt = (
-            system_prompt if system_prompt else safe_format(system_prompt_txt, environment_prompt=environment_prompt)
+            system_prompt if system_prompt else safe_format(
+                apply_comm_budget_static(system_prompt_txt),
+                environment_prompt=environment_prompt,
+            )
         )
         # Choice mode (Experiment 2) passes the parallel
         # instruction_prompt_p2_choice template here; legacy leaves it None
         # and keeps the original file byte-for-byte.
-        self.user_prompt_template = (
+        self.user_prompt_template = apply_comm_budget_static(
             user_prompt_template if user_prompt_template else instruction_prompt_p2
+        )
+        self.thoughts_prompt_template = apply_comm_budget_static(
+            instruction_prompt_p2_thoughts
         )
         self.action_model_client = (
             action_model_client
@@ -143,7 +155,7 @@ class ActionSelection:
         content = await llm_call(
             comm_client,
             system_prompt=self.system_prompt,
-            user_prompt=instruction_prompt_p2_thoughts + per_step_observation,
+            user_prompt=self.thoughts_prompt_template + per_step_observation,
             frame=last_frame,
             cancellation_token=cancellation_token,
             log_prefix=f"Agent {agent_name} rl_thoughts: ",

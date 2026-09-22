@@ -1,4 +1,4 @@
-YOU ARE: {agent_name}. Your teammates are: {teammate_names}. "communication_target" must be EXACTLY one of {teammate_names} — never "{agent_name}", never "all", never empty.
+YOU ARE: {agent_name}. Your teammates are: {teammate_names}. "communication_target" must be EXACTLY one of {teammate_names} — never "{agent_name}", {comm_target_rule}
 
 Task: {task}
 Last action: {last_action}
@@ -9,7 +9,7 @@ Chamber state: {chamber_state}   (live puzzle state — e.g. anvil HP and who is
 Visited chambers so far this episode: {visited_chambers}   (you have ONLY been in these — never claim to be in a chamber not listed)
 Milestone progress (authoritative — advance an [OPEN] milestone in YOUR chamber, marked "(YOU ARE HERE)"; do not redo [you done] ones):
 {milestone_progress}
-{milestone_event}
+{milestone_event}{comm_budget}
 Status: {player_status_text}
 Critique: {critique}
 Error: {error}
@@ -33,4 +33,4 @@ Your "thoughts" must give spatial reasoning + your predicted observation for the
 Also pick ONE teammate to address this step (nearest your target, or in the same chamber, or whose door you can open) and write them a short, useful message.
 
 RESPONSE FORMAT — respond with EXACTLY this JSON, no extra text:
-{{"thoughts": "<spatial reasoning + intent for this step + predicted observation + check of last step's prediction vs reality>", "communication": "<short message to the teammate in communication_target — an observation, request, or commitment relevant to THEM; never empty>", "communication_target": "<a teammate's name in the form agent_N, never yourself, never 'all'>"}}
+{{"thoughts": "<spatial reasoning + intent for this step + predicted observation + check of last step's prediction vs reality>", "communication": "<short message to the teammate in communication_target{comm_field_hint}>", "communication_target": "<a teammate's name in the form agent_N, never yourself, never 'all'>"}}

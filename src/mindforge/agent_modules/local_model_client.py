@@ -54,6 +54,24 @@ def _inner_tokenizer(tok):
     return getattr(tok, "tokenizer", tok)
 
 
+def count_text_tokens(text) -> int | None:
+    """Token count of ``text`` under the LOADED model's tokenizer, or None.
+
+    Used by the communication-budget ledger (env/comm_budget.py) so a
+    message is charged exactly what the served model would spend on it. None
+    (no model loaded yet, or a tokenizer that cannot count plain text) tells
+    the caller to fall back to its whitespace estimate.
+    """
+    if _shared_tokenizer is None or not text:
+        return 0 if (_shared_tokenizer is not None and not text) else None
+    tok = _inner_tokenizer(_shared_tokenizer)
+    try:
+        ids = tok(str(text), add_special_tokens=False)["input_ids"]
+    except Exception:  # pragma: no cover - exotic tokenizer API
+        return None
+    return len(ids)
+
+
 def _detect_is_vision(model_path: str, config) -> bool:
     """Vision model = vision keyword in model_type, OR preprocessor file, OR vision_config.
 

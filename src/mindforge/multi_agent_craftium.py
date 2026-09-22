@@ -82,6 +82,8 @@ async def agent_do_action(
     orchestrator_directive=None,
     orchestrator_plan_note=None,
     orchestrator_assigned_objective=None,
+    comm_budget_text=None,
+    comm_budget_locked=False,
 ):
     """Have one agent observe and choose an action.
 
@@ -127,6 +129,8 @@ async def agent_do_action(
         orchestrator_directive=orchestrator_directive,
         orchestrator_plan_note=orchestrator_plan_note,
         orchestrator_assigned_objective=orchestrator_assigned_objective,
+        comm_budget_text=comm_budget_text,
+        comm_budget_locked=comm_budget_locked,
     )
 
     last_action = "NoOp"
@@ -155,6 +159,8 @@ async def agent_do_action(
                 orchestrator_directive=orchestrator_directive,
                 orchestrator_plan_note=orchestrator_plan_note,
                 orchestrator_assigned_objective=orchestrator_assigned_objective,
+                comm_budget_text=comm_budget_text,
+                comm_budget_locked=comm_budget_locked,
             )
         else:
             logging.error(f"Agent {agent_id} exceeded retry limit, using NoOp")
@@ -176,6 +182,34 @@ async def run(args):
     obs_width = args.obs_width
     obs_height = args.obs_height
     communication = not args.no_communication
+
+    # ── Communication budget (comm-budget sweep) ───────────────────────
+    # None (default) = legacy: no ledger, prompts byte-identical. Otherwise
+    # every agent gets `comm_budget_tokens` message tokens per episode, is
+    # told the remainder each step, and is muted in code once it is spent
+    # (see mindforge/env/comm_budget.py). The WT_COMM_BUDGET switch tells
+    # the prompt loaders (ActionSelection) which comm rule to render.
+    comm_budget_tokens = getattr(args, "comm_budget_tokens", None)
+    comm_budget_msg_cap = int(getattr(args, "comm_budget_msg_cap", 32) or 32)
+    comm_budget_enabled = comm_budget_tokens is not None
+    if comm_budget_enabled and not communication:
+        raise SystemExit(
+            "--comm-budget-tokens cannot be combined with --no-communication "
+            "(use --comm-budget-tokens 0 for the zero arm)"
+        )
+    from mindforge.env.comm_budget import (
+        CommBudgetLedger,
+        apply_comm_budget_to_prompts,
+        make_token_counter,
+        set_env_switch,
+    )
+    set_env_switch(comm_budget_enabled, comm_budget_msg_cap)
+    _comm_token_counter = make_token_counter() if comm_budget_enabled else None
+    if comm_budget_enabled:
+        print(f"[FEATURES] Comm budget:      {int(comm_budget_tokens)} tokens/"
+              f"agent/episode  msg_cap={comm_budget_msg_cap}  "
+              f"(messaging optional, muted in code once spent)")
+    comm_budget = None   # per-episode ledger, rebuilt at each episode start
 
     # ── Choice-mode social acts (Experiment 2) ─────────────────────────
     # legacy (default): everything below stays inert and the run is
@@ -302,6 +336,11 @@ async def run(args):
     from mindforge.agent_modules.team_scaling import apply_team_scaling_to_prompts
     prompts = apply_team_scaling_to_prompts(
         load_prompts(), num_agents, enabled=team_scaling)
+    # Communication-budget sweep: resolve the static comm placeholders in
+    # the system template ({comm_rule}) BEFORE safe_format below would
+    # default them to "N/A". Legacy renders the original bytes.
+    prompts = apply_comm_budget_to_prompts(
+        prompts, enabled=comm_budget_enabled, msg_cap=comm_budget_msg_cap)
     environment_prompt = prompts["environment"]
 
     from mindforge.agent_modules.util import safe_format
@@ -836,6 +875,16 @@ async def run(args):
             agent_ids=list(range(num_agents)),
             reward_scale=args.comm_reward_scale,
         )
+        # Communication budget: a FRESH ledger per episode (the per-episode
+        # reset holds by construction). None in every legacy run.
+        comm_budget = (
+            CommBudgetLedger(
+                agent_ids=list(range(num_agents)),
+                budget_tokens=int(comm_budget_tokens),
+                msg_cap=comm_budget_msg_cap,
+                token_counter=_comm_token_counter,
+            ) if comm_budget_enabled else None
+        )
         # Act-reward symmetry suite: obs/imit acts paid like messages.
         act_reward_tracker = None
         if social_act_mode == "choice" and args.social_act_rewards:
@@ -1068,6 +1117,9 @@ async def run(args):
             # (agent_id, "obs"|"imit", rescued) — for SocialActRewardTracker.
             _act_events_this_step: list = []
             _messages_this_step = []
+            # agent_id -> ChargeResult for messages the budget let through
+            # this step (stamped onto messages.jsonl records below).
+            _comm_budget_charge: dict = {}
             _milestone_events_this_step: list = []
             _bond_strings = {}
             _bond_weights: dict[int, dict[str, float]] = {}
@@ -1371,6 +1423,14 @@ async def run(args):
                             orchestrator_assigned_objective=(
                                 _orch_assigned_objectives.get(_i)
                             ),
+                            comm_budget_text=(
+                                comm_budget.render_action_line(_i, max_steps - step)
+                                if comm_budget is not None else None
+                            ),
+                            comm_budget_locked=(
+                                comm_budget.is_locked(_i)
+                                if comm_budget is not None else False
+                            ),
                         )
                         return _i, _content
                     except Exception as _exc:
@@ -1475,6 +1535,14 @@ async def run(args):
                         orchestrator_assigned_objective=(
                             _orch_assigned_objectives.get(agent_id)
                         ),
+                        comm_budget_text=(
+                            comm_budget.render_action_line(agent_id, max_steps - step)
+                            if comm_budget is not None else None
+                        ),
+                        comm_budget_locked=(
+                            comm_budget.is_locked(agent_id)
+                            if comm_budget is not None else False
+                        ),
                     )
                     agents_error_count[agent_id] = error_count
                     for _i in range(num_agents):
@@ -1510,6 +1578,46 @@ async def run(args):
                     if _act_norm != "communicate":
                         content["communication"] = ""
                         content["communication_target"] = ""
+
+                # ── Communication budget gate (comm-budget sweep) ──────
+                # Charge the sender BEFORE the message exists anywhere:
+                # blocked → both comm fields blanked (and a choice-mode
+                # "communicate" act degraded to none) so the wire message,
+                # the metric count, the co-firing event, the inbox and the
+                # comm tracker below all see silence; truncated → the cut
+                # text replaces the model's. Every attempt after the lock is
+                # logged to event_log.jsonl; sent ones are stamped onto
+                # their messages.jsonl record.
+                if (
+                    comm_budget is not None
+                    and content
+                    and content.get("communication")
+                    and content["communication"] not in ("", "None")
+                    and communication
+                ):
+                    _cb = comm_budget.charge(
+                        agent_id, content["communication"], step
+                    )
+                    if _cb.status == "blocked":
+                        content["communication"] = ""
+                        content["communication_target"] = ""
+                        if content.get("social_act") == "communicate":
+                            content["social_act"] = "none"
+                        ep_logger.log_event({
+                            "step": step, "type": "comm_budget_blocked",
+                            "agent": agent.name,
+                            "tokens_model": _cb.tokens_model,
+                        })
+                    else:
+                        content["communication"] = _cb.text
+                        _comm_budget_charge[agent_id] = _cb
+                    if _cb.exhausted_now:
+                        ep_logger.log_event({
+                            "step": step, "type": "comm_budget_exhausted",
+                            "agent": agent.name,
+                            "budget": comm_budget.budget_tokens,
+                            "spent": comm_budget.state(agent_id).spent,
+                        })
 
                 # Handle communication (collect comm_events for Hebbian)
                 if (
@@ -1650,7 +1758,7 @@ async def run(args):
                     comm_events.append((sender_idx, recv_idx))
                     # Stash per-message metadata; rewards are stamped in Phase 1b
                     # once CommunicationTracker has processed the step.
-                    _messages_this_step.append({
+                    _msg_rec = {
                         "t": step,
                         "sender": f"agent_{sender_idx}",
                         "receiver": f"agent_{recv_idx}",
@@ -1659,7 +1767,18 @@ async def run(args):
                         "routing": routing_source,
                         "model_target": comm_target,
                         "model_target_canonical": canonical_target,
-                    })
+                    }
+                    # Comm-budget sweep only (legacy records stay as they
+                    # were): what this message cost and what is left.
+                    _cb_rec = _comm_budget_charge.get(agent_id)
+                    if _cb_rec is not None:
+                        _msg_rec.update({
+                            "tokens_model": _cb_rec.tokens_model,
+                            "charged": _cb_rec.charged,
+                            "budget_left": _cb_rec.budget_left,
+                            "truncated": _cb_rec.status == "truncated",
+                        })
+                    _messages_this_step.append(_msg_rec)
 
                 # ── Choice-mode social-act router (Experiment 2) ──────────
                 # observe → deliver the target's state+beliefs to the
@@ -2751,6 +2870,12 @@ async def run(args):
             )
             _wb_episode_payload[f"ep/milestones_reached/agent_{i}"] = _ep_milestone_count[i]
             _wb_episode_payload[f"ep/comm_count/agent_{i}"] = int(_ep_comm_count[i])
+            if comm_budget is not None:
+                _cbs = comm_budget.state(i)
+                _wb_episode_payload[f"ep/comm_budget_spent/agent_{i}"] = int(_cbs.spent)
+                _wb_episode_payload[f"ep/comm_budget_exhausted_step/agent_{i}"] = (
+                    int(_cbs.exhausted_step) if _cbs.exhausted_step is not None else -1
+                )
             for _track, _val in _ep_track_rewards[i].items():
                 _wb_episode_payload[f"ep/track_reward/agent_{i}/{_track}"] = float(_val)
         if hebbian_config.enabled and _hebb_W is not None:
@@ -2770,6 +2895,10 @@ async def run(args):
             "total_reward_per_agent": _ep_return_per_agent,
             "cooperation_metrics": _coop_summary,
         }
+        if comm_budget is not None:
+            # Comm-budget sweep: per-agent spend / sent / truncated /
+            # blocked / exhaustion step for this episode.
+            _ep_summary["comm_budget"] = comm_budget.summary()
         ep_logger.finalize(_ep_summary)
 
         # Append Hebbian snapshot to run-level JSONL stream.

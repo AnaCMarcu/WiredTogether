@@ -158,6 +158,8 @@ class CustomAgent(BaseChatAgent):
         orchestrator_directive=None,
         orchestrator_plan_note=None,
         orchestrator_assigned_objective=None,
+        comm_budget_text=None,
+        comm_budget_locked=False,
     ):
 
         self._call_count += 1
@@ -396,6 +398,8 @@ class CustomAgent(BaseChatAgent):
                 picked_object=picked_object or "N/A",
                 position_text=position_text or "Unknown",
                 cancellation_token=cancellation_token,
+                comm_budget_text=comm_budget_text or "",
+                comm_budget_locked=bool(comm_budget_locked),
             )
             social_directive = self.social_module.render_directive()
             self.metric.log(
@@ -435,6 +439,11 @@ class CustomAgent(BaseChatAgent):
             # legacy template has no {social_returns} placeholder, so this
             # key is inert in legacy runs.
             "social_returns": social_returns or "",
+            # Communication-budget line (comm-budget sweep). Sits at the end
+            # of the {milestone_event} line in every instruction template and
+            # carries its own leading newline, so "" (every legacy run)
+            # renders the templates byte-identically.
+            "comm_budget": comm_budget_text or "",
         }
         self.belief_system.task_beliefs = belief_parts["task_beliefs"]
         self.metric.log(f"Agent {self.name} beliefs: {beliefs}")
@@ -459,6 +468,7 @@ class CustomAgent(BaseChatAgent):
                 f"Critique: {critique}\n"
                 f"Error: {error}\n"
                 f"Communications:\n{comm_text or '  (none)'}\n"
+                f"{(comm_budget_text.strip() + chr(10)) if comm_budget_text else ''}"
                 f"Skills: {skill_memory}\n"
                 f"Episodes: {episode_summary}\n"
                 f"Task beliefs: {beliefs.get('task_beliefs', '')}\n"

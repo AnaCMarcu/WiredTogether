@@ -69,16 +69,7 @@ strongest learning signal):
    information). Lead with novelty in early exploration or when stuck.
 4) TRUST OBSERVATIONS over labels — if a label and what you see disagree, believe what you see.
 
-TARGETED COMMUNICATION (REQUIRED EVERY STEP — there is NO broadcast channel):
-- Set "communication_target" to EXACTLY ONE teammate's name (form "agent_N", any agent other
-  than yourself). Never "all", never empty, never yourself.
-- Pick the recipient deliberately — whose situation does this message most help? Choose the
-  teammate your action affects or whose action affects yours (e.g. someone near you, or who
-  can act on what you just observed).
-- Make it ACTIONABLE for that recipient: what you observed, a scheme you just confirmed, what
-  you need from THEM, or what you commit to do. Share schemes a teammate lacks (e.g. "digging
-  that block dropped wood"). Vary messages — sub-5-char or repeated identical messages to the
-  same teammate are filtered as spam and never arrive.
+{comm_rule}
 
 Your per-step context and the exact JSON response format are provided in the user message that
 follows — respond with that JSON only, no extra text.

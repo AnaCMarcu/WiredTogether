@@ -8,7 +8,7 @@ Your social bonds (Hebbian weights, range [0, 1]; higher = stronger bond). Each 
 A rising bond (Δ > 0) signals an active alliance — cooperation has been recent and effective. A decaying bond (Δ < 0) signals trust has eroded — recent requests have been ignored, or co-presence without cooperation has thinned the connection. A stable bond near zero means you and that teammate are essentially strangers; a stable bond near 1 is a strong, well-established alliance.
 
 Recent messages addressed to you this step:
-{incoming_comms}
+{incoming_comms}{comm_budget}
 
 Your recent state:
 - Last action you took: {last_action}

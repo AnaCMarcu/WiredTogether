@@ -96,6 +96,10 @@ class SocialModule:
         )
         self._prompt = override_prompt or _social_prompt
         self.last_thought: Optional[dict] = None  # last parsed SocialThought as dict
+        # Communication-budget sweep: True once this agent's per-episode
+        # budget is spent (or the arm is zero-budget). render_directive then
+        # stops instructing the action LLM to message anyone.
+        self._comm_locked = False
 
     async def deliberate(
         self,
@@ -108,13 +112,21 @@ class SocialModule:
         picked_object: str,
         position_text: str,
         cancellation_token,
+        comm_budget_text: str = "",
+        comm_budget_locked: bool = False,
     ) -> dict:
         """Run one deliberation step. Returns the parsed SocialThought dict.
 
         Caches the result in ``self.last_thought`` so the directive renderer
         and the routing-layer bias coupling can read the same thought without
         a duplicate LLM call.
+
+        ``comm_budget_text`` fills the prompt's ``{comm_budget}`` line (empty
+        in every legacy run); ``comm_budget_locked`` is refreshed on EVERY
+        call, including interval-skipped ones, so a cached thought is never
+        rendered as "ask X" after the budget ran out.
         """
+        self._comm_locked = bool(comm_budget_locked)
         self._call_count += 1
         if (
             self.social_interval > 1
@@ -140,6 +152,7 @@ class SocialModule:
             last_reward=last_reward or "N/A",
             picked_object=picked_object or "N/A",
             position_text=position_text or "Unknown",
+            comm_budget=comm_budget_text or "",
         )
 
         if not response:
@@ -185,20 +198,38 @@ class SocialModule:
         if not isinstance(bond_expl, dict):
             bond_expl = {}
 
-        outgoing = (
-            f"Ask {ask_target} for help. Suggested message: \"{ask_message}\". "
-            f"Put {ask_target} in your communication_target field and a help "
-            f"request in your communication field."
-            if ask_target
-            else "No help to ask for this step."
-        )
-        incoming = (
-            f"You have decided to help: {', '.join(respond_to)}. Your "
-            f"communication this step should acknowledge them, and your "
-            f"action should move toward or support their stated goal."
-            if respond_to
-            else "No pending requests warrant your help this step."
-        )
+        if self._comm_locked:
+            # Budget spent (or zero-budget arm): no message can go out, so
+            # the directive must not tell the action LLM to send one.
+            outgoing = (
+                f"Communication budget exhausted — you cannot send any message "
+                f"this episode. To get help from {ask_target}, move to them and "
+                f"work the same target."
+                if ask_target
+                else "No help to ask for this step (communication budget exhausted)."
+            )
+            incoming = (
+                f"You have decided to help: {', '.join(respond_to)}. You cannot "
+                f"message them (communication budget exhausted); show it by "
+                f"moving toward or supporting their stated goal."
+                if respond_to
+                else "No pending requests warrant your help this step."
+            )
+        else:
+            outgoing = (
+                f"Ask {ask_target} for help. Suggested message: \"{ask_message}\". "
+                f"Put {ask_target} in your communication_target field and a help "
+                f"request in your communication field."
+                if ask_target
+                else "No help to ask for this step."
+            )
+            incoming = (
+                f"You have decided to help: {', '.join(respond_to)}. Your "
+                f"communication this step should acknowledge them, and your "
+                f"action should move toward or support their stated goal."
+                if respond_to
+                else "No pending requests warrant your help this step."
+            )
         bond_notes = (
             "\n  ".join(f"- {k}: {v}" for k, v in bond_expl.items())
             if bond_expl

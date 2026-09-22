@@ -350,6 +350,28 @@ def parse_args():
                              "values) — the act-reward symmetry suite. "
                              "Choice mode only. Default off: reward streams "
                              "byte-identical to the historical behavior.")
+    parser.add_argument("--comm-budget-tokens", type=int, default=None,
+                        help="Per-agent, per-episode COMMUNICATION BUDGET in "
+                             "model tokens (the comm-budget sweep). Unset "
+                             "(default) = legacy: unlimited, messaging "
+                             "required every step, prompts byte-identical. "
+                             "0 = the zero arm (same prompts, every message "
+                             "blocked). Any value makes messaging OPTIONAL "
+                             "in the prompts, shows the remaining budget "
+                             "each step, charges every sent message its "
+                             "tokenized length (cut at "
+                             "--comm-budget-msg-cap), and blanks the "
+                             "communication fields for the rest of the "
+                             "episode once the budget is spent. Sender-side "
+                             "only; the ledger resets every episode. "
+                             "Incompatible with --no-communication.")
+    parser.add_argument("--comm-budget-msg-cap", type=int, default=32,
+                        help="Max tokens ONE message may cost under "
+                             "--comm-budget-tokens (longer messages are cut "
+                             "at a word boundary). Default 32 ~ the p99 of "
+                             "observed Gemma-E4B message lengths, so "
+                             "budget/cap is the number of messages an agent "
+                             "can always afford.")
     parser.add_argument("--comm-reward-scale", type=float, default=1.0,
                         help="Scale on every communication PAYOUT (base msg "
                              "reward + chamber comm milestones). 0.0 = the "
@@ -624,3 +646,15 @@ def validate_args(args) -> None:
             "directives — there is no comm_target to bias; use "
             "--orchestrator-mode advisory"
         )
+    if args.comm_budget_tokens is not None and args.no_communication:
+        # A budget meters a channel that must exist; the zero arm is
+        # --comm-budget-tokens 0 (same prompts, every message blocked),
+        # not the legacy no-comm switch (different prompts, no ledger).
+        raise SystemExit(
+            "--comm-budget-tokens cannot be combined with --no-communication "
+            "(use --comm-budget-tokens 0 for the zero-budget arm)"
+        )
+    if args.comm_budget_tokens is not None and args.comm_budget_tokens < 0:
+        raise SystemExit("--comm-budget-tokens must be >= 0")
+    if args.comm_budget_msg_cap <= 0:
+        raise SystemExit("--comm-budget-msg-cap must be positive")
