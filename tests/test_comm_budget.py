@@ -16,7 +16,8 @@ Pins four contracts:
    construction; SocialModule refreshes its lock even on interval-skipped
    calls and renders a "budget exhausted" directive instead of "ask X".
 4. LAUNCHER SPEC — the sbatch passes the budget flags + comm reward scale 0
-   on every cell; the submit script's default ladder is 0/800/3200/12800.
+   on every cell; the submit script's default ladder is the tokenizer-pinned
+   0/600/2600/10400 and a refused sbatch is reported as FAILED, not queued.
 """
 
 import asyncio
@@ -411,7 +412,8 @@ def test_budget_sbatch_passes_the_sweep_flags():
 def test_submit_script_default_ladder_and_pilot_seed():
     txt = (HPC / "submit_comm_budget.sh").read_text(encoding="utf-8")
     assert "NS_LIST=(${NS:-3 5 7})" in txt
-    assert "BUDGET_LIST=(${BUDGETS:-0 800 3200 12800})" in txt
+    assert "BUDGET_LIST=(${BUDGETS:-0 600 2600 10400})" in txt
+    assert 'if [ -z "$jobid" ]; then' in txt   # a refused sbatch is FAILED, not queued
     assert "ARM_LIST=(${ARMS:-base hebbian})" in txt
     assert "SEEDS_LIST=(${SEEDS:-42})" in txt
     assert "budget_gemma.sbatch" in txt

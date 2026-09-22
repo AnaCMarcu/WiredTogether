@@ -2,26 +2,36 @@
 # ────────────────────────────────────────────────────────────────────────────
 # submit_comm_budget.sh — the communication-budget sweep.
 #
-#   N ∈ {3,5,7}  ×  budget ∈ {0, 800, 3200, 12800} tokens/agent/episode
+#   N ∈ {3,5,7}  ×  budget ∈ {0, 600, 2600, 10400} tokens/agent/episode
 #                ×  arm ∈ {base, hebbian}  ×  seeds
 #
 # Gemma 4 E4B, 3 ep × 1000 steps, one budget_gemma.sbatch job per cell.
 # Lands in runs/comm_budget/budget_gemma_<arm>_n<N>_b<B>/seed_<S>/.
 #
-# Ladder (per agent per episode; ~16 model tokens per short message):
+# Ladder (per agent per episode), PINNED 2026-09-22 with the Gemma-4-E4B
+# tokenizer over 30k agent_scaling_3f messages (p50 = 13 tokens/message,
+# 1.28 tokens/word, the 32-token cap cuts 0.0 % of messages):
 #     0      zero      control
-#     800    low       ≈ 50 msgs  ≈ 5 % of steps (the observed request rate)
-#     3200   medium    ≈ 200 msgs ≈ 20 % of steps
-#     12800  high      ≈ 800 msgs ≈ 80 % of steps (binds only for every-step chatter)
-# The token values assume 16 tokens/message; re-pin them with
+#     600    low       = 50 msgs  ≈ 5 % of steps (the observed request rate)
+#     2600   medium    = 200 msgs ≈ 20 % of steps
+#     10400  high      = 800 msgs ≈ 80 % of steps (binds only for every-step chatter)
+# Message counts are the invariant; re-pin for another backbone with
 #     python analysis/calibrate_comm_budget.py --model $MODEL_LLM
-# before the first submission (message counts are the invariant).
+# (cell directories are named by token value, so a re-pinned ladder is a
+# new set of cells — do not mix ladders within one run group).
 #
 # Wall-time policy: same fit as submit_agent_scaling_3f.sh (min/step ≈
 # 0.14 + 0.19·N, ×1.5 margin, ladder-rounded; medium ≤ 36 h else long). At
 # 3 ep × 1000 steps every N lands on long: N=3 → 72 h, N=5 → 96 h, N=7 → 120 h.
-# Budgeted cells should run faster than the fit (shorter inboxes, empty
-# comm fields), so the margin is generous.
+# The finished Gemma-E4B scaling runs measured 0.84 / 0.93 / ~1.45 min/step
+# at N = 3 / 5 / 7 (42 / 47 / ~73 h for 3000 steps, worst seed ≤ 1.1× the
+# median), so the fit over-requests at N=5 and N=7. TIME applies to every N
+# in one call, so trim per N:
+#     NS="3" TIME=72:00:00 bash submit_comm_budget.sh
+#     NS="5" TIME=72:00:00 bash submit_comm_budget.sh
+#     NS="7" TIME=96:00:00 bash submit_comm_budget.sh
+# A run that hits the wall is lost (no resumable state) — keep ≥ 1.2× the
+# worst measured seed.
 #
 # Usage (from the DAIC login node):
 #   cd $REPO/hpc/daic/experiments
@@ -29,6 +39,9 @@
 #   DRY_RUN=1 bash submit_comm_budget.sh     # print what would be submitted
 #   SEEDS="42" bash submit_comm_budget.sh    # PILOT: 3 N × 4 budgets × 2 arms = 24 jobs
 #   SEEDS="123 456" bash submit_comm_budget.sh   # extension: +48 jobs
+# QOSMaxSubmitJobPerUserLimit caps the number of jobs one user may have
+# queued; a refused cell is reported as FAILED (not queued) and is picked up
+# by simply re-running the same command once the queue has drained.
 #   NS="3" BUDGETS="0 800" ARMS="hebbian" bash submit_comm_budget.sh  # subset
 #
 # Idempotent: a cell whose final_metrics.json already exists on PRB is
@@ -61,7 +74,7 @@ _EXPLICIT_SEEDS="${SEEDS:+1}"
 export MODEL_LLM WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT COMM_MSG_CAP
 
 NS_LIST=(${NS:-3 5 7})
-BUDGET_LIST=(${BUDGETS:-0 800 3200 12800})
+BUDGET_LIST=(${BUDGETS:-0 600 2600 10400})
 ARM_LIST=(${ARMS:-base hebbian})
 # Pilot = one seed; extend with SEEDS="123 456" (finished cells are skipped).
 SEEDS_LIST=(${SEEDS:-42})
@@ -69,7 +82,7 @@ SEEDS_LIST=(${SEEDS:-42})
 # SMOKE supplies DEFAULTS, never overrides.
 if [ "${SMOKE:-0}" = "1" ]; then
     [ -z "$_EXPLICIT_NS" ]        && NS_LIST=(3)
-    [ -z "$_EXPLICIT_BUDGETS" ]   && BUDGET_LIST=(800)
+    [ -z "$_EXPLICIT_BUDGETS" ]   && BUDGET_LIST=(600)
     [ -z "$_EXPLICIT_ARMS" ]      && ARM_LIST=(base hebbian)
     [ -z "$_EXPLICIT_SEEDS" ]     && SEEDS_LIST=(42)
     [ -z "$_EXPLICIT_RUN_GROUP" ] && RUN_GROUP=comm_budget_smoke
@@ -142,6 +155,7 @@ queued_names=$(squeue -u "$USER" -h -o "%j" 2>/dev/null || true)
 
 n_queued=0
 n_skipped=0
+n_failed=0
 for n in "${NS_LIST[@]}"; do
     resources_for_n "$n"
     for b in "${BUDGET_LIST[@]}"; do
@@ -166,6 +180,13 @@ for n in "${NS_LIST[@]}"; do
                         --mem="$R_MEM" --cpus-per-task="$R_CPUS" \
                         --qos="$R_QOS" --time="$R_TIME" \
                         budget_gemma.sbatch)
+                    if [ -z "$jobid" ]; then
+                        # sbatch printed its own error (typically
+                        # QOSMaxSubmitJobPerUserLimit); nothing is queued.
+                        echo "FAILED  $exp  seed_$seed  — not submitted; re-run this command later" >&2
+                        n_failed=$((n_failed + 1))
+                        continue
+                    fi
                     echo "queued  $exp  seed_$seed  →  job $jobid  (mem=$R_MEM qos=$R_QOS time=$R_TIME)"
                 fi
                 n_queued=$((n_queued + 1))
@@ -173,7 +194,8 @@ for n in "${NS_LIST[@]}"; do
         done
     done
 done
-echo "── done: $n_queued submitted, $n_skipped skipped ──"
+echo "── done: $n_queued submitted, $n_skipped skipped, $n_failed FAILED ──"
+[ "$n_failed" -gt 0 ] && echo "   re-run the same command once the queue drains; finished/queued cells are skipped" >&2
 echo "Track with:   squeue -u \$USER -o \"%.10i %.52j %.8T %.12M %.12l %R\""
 echo "Then locally: bash pull_new.sh  (runs_from_daic/comm_budget) and"
 echo "              python analysis/make_budget_fig.py"

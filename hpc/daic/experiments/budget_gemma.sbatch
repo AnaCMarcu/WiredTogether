@@ -13,7 +13,7 @@
 
 # ───────────────────────────────────────────────────────────────────────────
 # budget_gemma — ONE cell of the communication-budget sweep:
-#     N ∈ {3,5,7}  ×  budget ∈ {0, 800, 3200, 12800} tokens/agent/episode
+#     N ∈ {3,5,7}  ×  budget ∈ {0, 600, 2600, 10400} tokens/agent/episode
 #                  ×  arm ∈ {base, hebbian}
 # Gemma 4 E4B (vision), 3 ep × 1000 steps, team scaling on, Ch4 mobs pinned
 # to 3, simultaneous stepping — the agent-count scaling invariants — plus:
@@ -33,8 +33,8 @@
 # Lands in runs/comm_budget/budget_gemma_<arm>_n<N>_b<B>/seed_<S>/ + wandb
 # project comm_budget. Normally submitted through submit_comm_budget.sh.
 # Manual:
-#   NUM_AGENTS=5 COMM_BUDGET=3200 ARM=hebbian SEED=42 \
-#       sbatch --mem=48GB --qos=long --time=96:00:00 budget_gemma.sbatch
+#   NUM_AGENTS=5 COMM_BUDGET=2600 ARM=hebbian SEED=42 \
+#       sbatch --mem=48GB --qos=long --time=72:00:00 budget_gemma.sbatch
 # ───────────────────────────────────────────────────────────────────────────
 
 WORKSPACE=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu
