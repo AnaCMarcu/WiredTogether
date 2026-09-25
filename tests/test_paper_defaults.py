@@ -17,7 +17,7 @@ from rl_layer.config import RLConfig
 
 
 def test_rlconfig_table6_defaults():
-    """RLConfig() defaults match paper Table 6 field-by-field."""
+    """RLConfig() defaults match the paper's RL table (Table 7) field by field."""
     cfg = RLConfig()
     assert cfg.gamma == pytest.approx(0.995)
     assert cfg.gae_lambda == pytest.approx(0.95)
@@ -31,7 +31,7 @@ def test_rlconfig_table6_defaults():
     assert cfg.max_grad_norm == pytest.approx(0.5)
     assert cfg.ppo_epochs == 2
     assert cfg.mini_batch_size == 4
-    assert cfg.update_interval == 128
+    assert cfg.update_interval == 64
     assert cfg.buffer_size == 2048
     assert cfg.lora_rank == 8
     assert cfg.lora_alpha == 16
@@ -39,7 +39,10 @@ def test_rlconfig_table6_defaults():
     assert cfg.dtype == "float16"
     assert cfg.critic_hidden == 256
     assert cfg.critic_lr == pytest.approx(3e-4)
-    assert cfg.lr == pytest.approx(1e-4)  # actor (LoRA) learning rate
+    # Actor (LoRA) learning rate. NOTE: Table 7 says 1e-4, but every reported
+    # RL run passed --rl-lr 3e-4 (recorded in each run's config.json); the
+    # table, not this default, needs correcting before the two are aligned.
+    assert cfg.lr == pytest.approx(1e-4)
 
 
 def test_rlconfig_actions_tuple():
@@ -145,3 +148,12 @@ def test_comm_reward_constants():
         "ch4": (4, 10.0, "m_comm_ch4"),
         "ch5": (4, 10.0, "m_comm_ch5"),
     }
+
+
+def test_cli_rl_update_interval_matches_config(monkeypatch):
+    """The CLI and RLConfig agree on K (they had drifted to 256 vs 128)."""
+    import sys
+    from mindforge import cli
+
+    monkeypatch.setattr(sys, "argv", ["x"])
+    assert cli.parse_args().rl_update_interval == RLConfig().update_interval == 64

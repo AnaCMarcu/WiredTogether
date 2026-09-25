@@ -132,8 +132,9 @@ def parse_args():
                         help="Path to base model for RL (e.g. /scratch/.../Qwen3.5-2B)")
     parser.add_argument("--rl-lora-rank", type=int, default=8,
                         help="LoRA rank for RL adapter")
-    parser.add_argument("--rl-update-interval", type=int, default=256,
-                        help="Steps between MAPPO updates")
+    parser.add_argument("--rl-update-interval", type=int, default=64,
+                        help="K: environment steps between PPO updates "
+                             "(paper: 64)")
     parser.add_argument("--rl-update-stagger", action="store_true",
                         default=os.environ.get("RL_UPDATE_STAGGER", "0") == "1",
                         help="Stagger per-agent PPO updates by agent_id steps "

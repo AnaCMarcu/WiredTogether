@@ -57,7 +57,7 @@ class RLConfig:
 
     # ── Rollout / update schedule ──
     buffer_size: int = 2048
-    update_interval: int = 128
+    update_interval: int = 64       # K (paper Table 7)
     # Stagger per-agent updates by agent_id steps (agent i updates at
     # interval+i) so the env is stepped BETWEEN updates instead of idling
     # for one long 3×update pause. Motivation: on Gemma E4B each agent's
