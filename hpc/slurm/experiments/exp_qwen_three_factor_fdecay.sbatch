@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/qwen_3f_fdecay_%j.out
 #SBATCH --error=slurm_logs/qwen_3f_fdecay_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # exp_qwen_three_factor_fdecay — Qwen3.5 (2B or 9B), three-factor rule PLUS

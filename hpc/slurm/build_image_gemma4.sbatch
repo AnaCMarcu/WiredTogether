@@ -8,7 +8,6 @@
 #SBATCH --mem=16GB
 #SBATCH --output=slurm_logs/build_gemma4_%j.out
 #SBATCH --error=slurm_logs/build_gemma4_%j.err
-#SBATCH --exclude=cor1
 
 # Builds images/wiredtogether_gemma4.sif from wiredtogether_gemma4.def.
 # The original wiredtogether.sif is NOT touched — the Qwen runs stay

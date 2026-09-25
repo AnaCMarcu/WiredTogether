@@ -113,7 +113,7 @@ for lane in $LANES; do
     [ -n "$LANE_GPU" ]    && SBATCH_OVERRIDES+=(--gres="$LANE_GPU")
     [ -n "$LANE_MEM" ]    && SBATCH_OVERRIDES+=(--mem="$LANE_MEM")
     # A command-line --exclude REPLACES the sbatch files' baked-in
-    # "--exclude=cor1", so always include cor1 in the list.
+    # "--exclude", so always include the base-excluded nodes in the list.
     [ -n "${EXCLUDE:-}" ] && SBATCH_OVERRIDES+=(--exclude="$EXCLUDE")
 
     echo "== lane $lane: model=$LANE_MODEL group=$LANE_GROUP vision=$LANE_VISION stagger=$LANE_STAGGER =="

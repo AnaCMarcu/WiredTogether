@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/qwen_three_factor_%j.out
 #SBATCH --error=slurm_logs/qwen_three_factor_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # exp_qwen_three_factor — Qwen3.5 (2B or 9B) + the three-factor Hebbian rule.

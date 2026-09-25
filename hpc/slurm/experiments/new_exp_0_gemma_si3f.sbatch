@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/new_exp_0_gemma_si3f_%j.out
 #SBATCH --error=slurm_logs/new_exp_0_gemma_si3f_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # new_exp_0_gemma_si3f — social-interval Pareto sweep on the NEW Hebbian rule

@@ -11,9 +11,8 @@
 #SBATCH --error=slurm_logs/expA_pair_bonding_%A_%a.err
 # Small-GPU nodes are handled by gpu_filter.sh + bad_gpu_nodes.txt (submit via
 # submit_transplant.sh), plus the MIN_GPU_MEM_MIB preflight in _common.sh.
-# Keep this header at cor1 only: a command-line --exclude REPLACES the header's,
-# and gpu_filter.sh re-adds cor1 as BASE_EXCLUDE.
-#SBATCH --exclude=cor1
+# Keep this header at the base-excluded nodes only: a command-line --exclude REPLACES the header's,
+# and gpu_filter.sh re-adds the base-excluded nodes as BASE_EXCLUDE.
 #SBATCH --array=0-8
 
 # ── Phase A of the pair-bonding transplant experiment ──

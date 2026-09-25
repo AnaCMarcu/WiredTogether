@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/scale_gemma_3f_%j.out
 #SBATCH --error=slurm_logs/scale_gemma_3f_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # scale_gemma_3f — the agent-count scaling suite's HEBBIAN arm on the NEW

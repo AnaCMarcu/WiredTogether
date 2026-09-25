@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/exp28_cofire_null_%j.out
 #SBATCH --error=slurm_logs/exp28_cofire_null_%j.err
-#SBATCH --exclude=cor1
 
 # Experiment 2 (co-firing without enforced communication), arm "null" (pr).
 #

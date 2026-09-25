@@ -33,7 +33,7 @@
 #   bash submit_gemma4.sh             # submit the full suite
 #
 # Idempotent, like submit_medium2k.sh: an exp/seed whose final_metrics.json
-# already exists on PRB is skipped, so re-running fills in only what is missing.
+# already exists on the shared workspace is skipped, so re-running fills in only what is missing.
 # ────────────────────────────────────────────────────────────────────────────
 set -u
 cd "$(dirname "$0")"

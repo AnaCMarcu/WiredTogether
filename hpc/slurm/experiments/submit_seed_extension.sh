@@ -16,7 +16,7 @@
 #   WANDB_PROJECT=medium_wired_together
 #
 # Idempotent: skips any exp/seed whose runs/legacy/.../final_metrics.json
-# already exists on PRB, so re-running the script only submits what is
+# already exists on the shared workspace, so re-running the script only submits what is
 # missing (this is also what makes the exp07/seed_42 backfill automatic —
 # seed 42 is in the loop and only its missing run gets queued).
 #

@@ -9,7 +9,7 @@
 #     sbatch ${GPU_FILTER_FLAGS[@]:+"${GPU_FILTER_FLAGS[@]}"} exp04_ippo.sbatch
 #
 # Produces:
-#   --exclude=<cor1 + every node in bad_gpu_nodes.txt>
+#   --exclude=<the base-excluded nodes + every node in bad_gpu_nodes.txt>
 #   --constraint=$GPU_CONSTRAINT       (only when GPU_CONSTRAINT is set)
 #
 # The exclude list is the belt; _common.sh's MIN_GPU_MEM_MIB preflight is the
@@ -25,9 +25,9 @@
 _GPU_FILTER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BAD_NODE_FILE="${BAD_NODE_FILE:-$_GPU_FILTER_DIR/bad_gpu_nodes.txt}"
 
-# cor1 was already excluded in every exp*.sbatch header for unrelated reasons;
+# the base-excluded nodes was already excluded in every exp*.sbatch header for unrelated reasons;
 # an --exclude on the command line REPLACES the header's, so keep it here.
-BASE_EXCLUDE="${BASE_EXCLUDE:-cor1}"
+BASE_EXCLUDE="${BASE_EXCLUDE:-}"
 
 # NOTE the trailing `|| true`: callers run under `set -euo pipefail`, and an
 # all-comments node file makes `grep -v` exit 1, which would abort the submit.
@@ -37,13 +37,13 @@ if [ -r "$BAD_NODE_FILE" ]; then
                     | grep -v '^$' | sort -u | paste -sd, -; } || true )
 fi
 
-if [ -n "$_bad_nodes" ]; then
-    GPU_EXCLUDE="${BASE_EXCLUDE},${_bad_nodes}"
-else
-    GPU_EXCLUDE="$BASE_EXCLUDE"
-fi
+GPU_EXCLUDE=$(printf '%s
+' "$BASE_EXCLUDE" "$_bad_nodes" | grep -v '^$' | paste -sd, - || true)
 
-GPU_FILTER_FLAGS=(--exclude="$GPU_EXCLUDE")
+GPU_FILTER_FLAGS=()
+if [ -n "$GPU_EXCLUDE" ]; then
+    GPU_FILTER_FLAGS+=(--exclude="$GPU_EXCLUDE")
+fi
 if [ -n "${GPU_CONSTRAINT:-}" ]; then
     GPU_FILTER_FLAGS+=(--constraint="$GPU_CONSTRAINT")
 fi

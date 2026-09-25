@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/scale_gemma_orch_%j.out
 #SBATCH --error=slurm_logs/scale_gemma_orch_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # scale_gemma_orch — the centralized orchestrator at an arbitrary team size.

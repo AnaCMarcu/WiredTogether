@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/budget_gemma_%j.out
 #SBATCH --error=slurm_logs/budget_gemma_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # budget_gemma — ONE cell of the communication-budget sweep:

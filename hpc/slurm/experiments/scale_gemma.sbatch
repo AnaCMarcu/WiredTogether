@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/scale_gemma_%j.out
 #SBATCH --error=slurm_logs/scale_gemma_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # scale_gemma — agent-count scaling suite (compute vs. cooperative milestones).

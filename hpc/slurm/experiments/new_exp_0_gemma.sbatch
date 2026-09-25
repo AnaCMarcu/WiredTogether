@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/new_exp_0_gemma_%j.out
 #SBATCH --error=slurm_logs/new_exp_0_gemma_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # new_exp_0_gemma — Gemma 4 LLM agents, with and without the Hebbian social
@@ -32,7 +31,7 @@
 # One arm, one seed:
 #   SEED=42 HEBBIAN=1 sbatch new_exp_0_gemma.sbatch
 #
-# --exclude names cor1 ONLY. It briefly also listed influ[2-3] (11264 MiB RTX
+# --exclude names the base-excluded nodes ONLY. It briefly also listed a small-GPU node (11264 MiB RTX
 # 2080 Tis, under _common.sh's 15000 MiB preflight threshold, which aborted
 # jobs that landed there). Those nodes have since left the cluster — `sinfo -N`
 # no longer lists them — and sbatch rejects an ENTIRE submission whose

@@ -8,7 +8,6 @@
 #SBATCH --mem=16GB
 #SBATCH --output=slurm_logs/build_%j.out
 #SBATCH --error=slurm_logs/build_%j.err
-#SBATCH --exclude=cor1
 
 set -eu
 

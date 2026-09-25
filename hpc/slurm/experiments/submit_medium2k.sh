@@ -17,7 +17,7 @@
 # override here rather than in each file.)
 #
 # Idempotent: skips any exp/seed whose runs/medium2k/.../final_metrics.json
-# already exists on PRB, so re-running only submits what is still missing.
+# already exists on the shared workspace, so re-running only submits what is still missing.
 #
 # Every setting is env-overridable, e.g. to schedule faster on medium qos:
 #   QOS=medium TIME=36:00:00 bash submit_medium2k.sh

@@ -145,7 +145,7 @@ SBATCH_OVERRIDES=()
 [ -n "${TIME:-}" ] && SBATCH_OVERRIDES+=(--time="$TIME")
 
 # Keep jobs off GPUs too small to hold the model. An --exclude on the command
-# line REPLACES the header's --exclude=cor1, so gpu_filter.sh folds cor1 back
+# line REPLACES the header's --exclude, so gpu_filter.sh folds the base-excluded nodes back
 # in alongside every node in bad_gpu_nodes.txt.
 source "$EXP_DIR/gpu_filter.sh"
 SBATCH_OVERRIDES+=(${GPU_FILTER_FLAGS[@]:+"${GPU_FILTER_FLAGS[@]}"})

@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/exp05_mappo_hebbian_%j.out
 #SBATCH --error=slurm_logs/exp05_mappo_hebbian_%j.err
-#SBATCH --exclude=cor1
 
 source $WORKSPACE/WiredTogether/hpc/slurm/experiments/_common.sh
 

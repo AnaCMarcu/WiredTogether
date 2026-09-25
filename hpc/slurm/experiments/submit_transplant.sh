@@ -9,7 +9,7 @@
 #
 # Routed through gpu_filter.sh so jobs never land on a GPU too small to hold
 # the model — the failure mode that produced six 99.8%-NoOp RL runs, and that
-# made the first Phase A smoke (job 12765952, influ3 / 11 GB) take 9h45m per
+# made the first Phase A smoke (job 12765952, a small-GPU node / 11 GB) take 9h45m per
 # env step. _common.sh's MIN_GPU_MEM_MIB preflight is the second line of
 # defence and records any new offender in bad_gpu_nodes.txt.
 #

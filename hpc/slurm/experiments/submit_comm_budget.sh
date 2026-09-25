@@ -44,7 +44,7 @@
 # by simply re-running the same command once the queue has drained.
 #   NS="3" BUDGETS="0 800" ARMS="hebbian" bash submit_comm_budget.sh  # subset
 #
-# Idempotent: a cell whose final_metrics.json already exists on PRB is
+# Idempotent: a cell whose final_metrics.json already exists on the shared workspace is
 # skipped, and one already sitting in the Slurm queue (same job name) is not
 # resubmitted.
 # ────────────────────────────────────────────────────────────────────────────

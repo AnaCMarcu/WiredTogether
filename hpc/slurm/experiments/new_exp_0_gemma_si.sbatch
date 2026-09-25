@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/new_exp_0_gemma_si_%j.out
 #SBATCH --error=slurm_logs/new_exp_0_gemma_si_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # new_exp_0_gemma_si — social-interval Pareto sweep (compute vs performance).

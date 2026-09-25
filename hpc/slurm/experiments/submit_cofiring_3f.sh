@@ -124,7 +124,7 @@ SBATCH_OVERRIDES=()
 [ -n "${GPU:-}" ]  && SBATCH_OVERRIDES+=(--gres="$GPU")
 [ -n "${MEM:-}" ]  && SBATCH_OVERRIDES+=(--mem="$MEM")
 # A command-line --exclude REPLACES the sbatch files' baked-in
-# "--exclude=cor1", so always include cor1 in the list.
+# "--exclude", so always include the base-excluded nodes in the list.
 [ -n "${EXCLUDE:-}" ] && SBATCH_OVERRIDES+=(--exclude="$EXCLUDE")
 
 echo "== submit_cofiring_3f.sh =="

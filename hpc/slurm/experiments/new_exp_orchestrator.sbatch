@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/new_exp_orch_%j.out
 #SBATCH --error=slurm_logs/new_exp_orch_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # new_exp_orchestrator — centralised orchestration baseline (VillagerAgent-

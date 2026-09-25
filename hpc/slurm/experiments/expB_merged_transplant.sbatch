@@ -10,9 +10,8 @@
 #SBATCH --output=slurm_logs/expB_merged_transplant_%j.out
 #SBATCH --error=slurm_logs/expB_merged_transplant_%j.err
 # Small-GPU nodes: see gpu_filter.sh / bad_gpu_nodes.txt (submit via
-# submit_transplant.sh). Header stays cor1-only — a command-line --exclude
-# replaces it, and gpu_filter.sh re-adds cor1 as BASE_EXCLUDE.
-#SBATCH --exclude=cor1,influ3
+# submit_transplant.sh). Header stays the base-excluded nodes-only — a command-line --exclude
+# replaces it, and gpu_filter.sh re-adds the base-excluded nodes as BASE_EXCLUDE.
 
 # ── Phase B of the pair-bonding transplant experiment (T arm) ──
 # One 6-agent run starting directly in the Chamber 3 cells (--start-chamber 3;

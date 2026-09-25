@@ -21,7 +21,7 @@
 #   ARMS="0" bash submit_agent_scaling.sh    # base (non-Hebbian) arm only
 #   NS="2 9" SEEDS="42" bash submit_agent_scaling.sh   # subset override
 #
-# Idempotent: an N/arm/seed whose final_metrics.json already exists on PRB is
+# Idempotent: an N/arm/seed whose final_metrics.json already exists on the shared workspace is
 # skipped, and one already sitting in the Slurm queue (same job name) is not
 # resubmitted.
 # ────────────────────────────────────────────────────────────────────────────

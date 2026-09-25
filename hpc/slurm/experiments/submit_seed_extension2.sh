@@ -24,7 +24,7 @@
 #     SEED=<s> HEBBIAN=<h> sbatch --qos=long --time=168:00:00 new_exp_0_gemma.sbatch
 #
 # Idempotent: skips any exp/seed whose final_metrics.json already exists on
-# PRB, so re-running only submits what is missing.
+# the shared workspace, so re-running only submits what is missing.
 #
 # Usage (from the cluster login node):
 #   cd $REPO/hpc/slurm/experiments

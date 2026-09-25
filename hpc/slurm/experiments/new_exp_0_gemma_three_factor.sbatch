@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/new_exp_0_gemma_3f_%j.out
 #SBATCH --error=slurm_logs/new_exp_0_gemma_3f_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # new_exp_0_gemma_three_factor — Gemma-4-E4B + the three-factor Hebbian rule.

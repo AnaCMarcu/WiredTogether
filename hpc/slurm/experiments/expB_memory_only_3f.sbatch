@@ -10,9 +10,8 @@
 #SBATCH --output=slurm_logs/expB_memory_only_3f_%j.out
 #SBATCH --error=slurm_logs/expB_memory_only_3f_%j.err
 # Small-GPU nodes: see gpu_filter.sh / bad_gpu_nodes.txt (submit via
-# submit_transplant_2x2.sh). Header stays cor1-only — a command-line
-# --exclude replaces it, and gpu_filter.sh re-adds cor1 as BASE_EXCLUDE.
-#SBATCH --exclude=cor1,influ3
+# submit_transplant_2x2.sh). Header stays the base-excluded nodes-only — a command-line
+# --exclude replaces it, and gpu_filter.sh re-adds the base-excluded nodes as BASE_EXCLUDE.
 
 # ── Memory x bond design, cell B: memory RETAINED, bond RESET ──
 #

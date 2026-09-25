@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/new_exp_pareto_3f_%j.out
 #SBATCH --error=slurm_logs/new_exp_pareto_3f_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # new_exp_pareto_3f — model-size Pareto HEBBIAN arm on the NEW rule

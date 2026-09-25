@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/new_exp_pareto_%j.out
 #SBATCH --error=slurm_logs/new_exp_pareto_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # new_exp_pareto — Gemma 4 size sweep for the Pareto plots (perception ×

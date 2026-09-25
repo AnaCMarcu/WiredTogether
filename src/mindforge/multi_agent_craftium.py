@@ -903,7 +903,7 @@ async def run(args):
             """Write a checkpoint GIF + MP4 per agent from the rolling window.
 
             Intermediate (mid-episode) checkpoint media go to
-            intermediate_gif_dir — kept off the PRB share so the runs/
+            intermediate_gif_dir — kept off the shared workspace so the runs/
             tree stays small (the final per-episode MP4 lives in
             <run_dir>/gifs/ via the streaming writer above).
 

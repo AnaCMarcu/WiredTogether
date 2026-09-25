@@ -27,7 +27,7 @@
 #   NS="2 9" SEEDS="42" bash submit_agent_scaling_3f.sh   # subset override
 #   SEEDS="789 1011 1213" bash submit_agent_scaling_3f.sh # seed extension
 #
-# Idempotent: an N/seed whose final_metrics.json already exists on PRB is
+# Idempotent: an N/seed whose final_metrics.json already exists on the shared workspace is
 # skipped, and one already sitting in the Slurm queue (same job name) is not
 # resubmitted.
 # ────────────────────────────────────────────────────────────────────────────

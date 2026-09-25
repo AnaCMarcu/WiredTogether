@@ -91,7 +91,7 @@ run_exp() {
     local ARTIFACTS_DIR="$REPO/run_artifacts/${RUN_GROUP}/${EXP_NAME}/seed_${SEED}"
     local WORK_DIR="/tmp/$USER/${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
     # Apptainer's own squashfuse/session files + any in-container tempfiles —
-    # kept OUT of WORK_DIR so the salvage rsync doesn't copy them to PRB, but
+    # kept OUT of WORK_DIR so the salvage rsync doesn't copy them to the shared workspace, but
     # still under /tmp/$USER so the cleanup below removes them with the rest.
     local TMP_ROOT="/tmp/$USER/tmp_${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
     export APPTAINER_TMPDIR="$TMP_ROOT/apptainer"
@@ -370,7 +370,7 @@ run_exp() {
 
     local EXIT_CODE=${PIPESTATUS[0]}
 
-    # Salvage craftium's per-run dirs (debug.txt, gifs, etc.) back to PRB.
+    # Salvage craftium's per-run dirs (debug.txt, gifs, etc.) back to the shared workspace.
     # If wandb ran in offline mode, this also captures wandb/offline-run-*
     # which you can later upload with `wandb sync <dir>`.
     # Split salvage:
@@ -412,7 +412,7 @@ run_exp() {
             2>&1 | tail -20 || echo "[wandb] auto-sync failed (will need a manual retry)"
     fi
 
-    # Free the node's /tmp now that artifacts are salvaged to PRB. The EXIT
+    # Free the node's /tmp now that artifacts are salvaged to the shared workspace. The EXIT
     # trap is the backstop for abnormal exits; this is the normal-path cleanup.
     echo "── cleaning node /tmp: $WORK_DIR + $TMP_ROOT ──"
     rm -rf "$WORK_DIR" "$TMP_ROOT" 2>/dev/null || true

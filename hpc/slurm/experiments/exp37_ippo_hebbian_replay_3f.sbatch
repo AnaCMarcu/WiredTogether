@@ -9,7 +9,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=slurm_logs/exp37_ippo_hebbian_replay_3f_%j.out
 #SBATCH --error=slurm_logs/exp37_ippo_hebbian_replay_3f_%j.err
-#SBATCH --exclude=cor1
 
 # ───────────────────────────────────────────────────────────────────────────
 # exp37_ippo_hebbian_replay_3f — exp31 (IPPO + Hebbian + weight-gated
