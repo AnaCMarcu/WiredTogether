@@ -12,10 +12,61 @@ Our `site/` folder is already this kind of page: hand-written `index.html`, a ge
 `gallery.html`, and static assets. It is 233 MB in 791 files, and no file is over 15 MB, which is
 inside GitHub Pages' limits (1 GB per site, 100 MB per file, about 100 GB of traffic per month).
 
-## Recommendation
+## During review: Anonymous GitHub (recommended)
 
-Use the same pattern under a neutral organization created now, so the URL survives from review to
-camera-ready and only the content changes at acceptance.
+Anonymous GitHub serves a mirrored repository's GitHub Pages site at
+`https://anonymous.4open.science/w/<id>/`, next to the code mirror at `/r/<id>/`. Verified in its
+source (`src/server/routes/webview.ts`, the "GitHub Pages" option of the anonymize form):
+
+- **The source repository must have GitHub Pages enabled**, and Pages must publish from the same
+  branch that is anonymised. The page root is the Pages folder, which GitHub restricts to `/`
+  or `/docs`.
+- A private source repository needs GitHub Pro (or Team) to enable Pages; Pro is free for
+  students through GitHub Education. Note that Pages on a private Pro repository is still
+  publicly reachable at `<username>.github.io/<repo>`, which names the account. Never link that
+  address; share only the anonymous one.
+- The page runs in a sandbox: scripts, popups and autoplay work, but it has an opaque origin.
+  Our site uses neither `fetch` nor browser storage, so it works as is. External fonts and the
+  KaTeX CDN load normally.
+- Files up to 100 MB each; our largest is 15 MB.
+- Text files pass through the term replacement, so the term list must only contain strings that
+  never occur legitimately in the site (names, usernames, institution). Our scan finds none, so
+  the list is a safety net.
+- After 200 requests per visitor within 15 minutes, each further request is delayed (150 ms,
+  rising to 5 s). The main page makes about 95 requests, so it is unaffected. The gallery makes
+  up to 528 as a reader scrolls, so thin it with `keep.txt` before publishing.
+- Mirrors expire on the date you set; pick one after the rebuttal period, or "never".
+
+Steps:
+
+1. Create a new **private** repository, for example `wire-site`, containing the contents of
+   `site/` at its root, committed with a neutral identity:
+
+   ```bash
+   cp -r site ../wire-site && cd ../wire-site
+   git init -b main
+   git -c user.name="Anonymous" -c user.email="anonymous@example.com" add -A
+   git -c user.name="Anonymous" -c user.email="anonymous@example.com" commit -m "WIRE project page"
+   git remote add origin https://github.com/<you>/wire-site.git && git push -u origin main
+   ```
+
+2. In that repository: Settings → Pages → *Deploy from a branch*, branch `main`, folder `/ (root)`.
+3. At anonymous.4open.science, anonymise `wire-site`: branch `main`, tick **GitHub Pages**, add
+   the term list, set the expiry.
+4. Open `https://anonymous.4open.science/w/<id>/` in a private window and click through the page,
+   the gallery, the PDF and every link.
+5. Link the page's "Code" button to the code mirror (`/r/<id>/`) and put both anonymous URLs in
+   the paper's reproducibility statement.
+
+The site stays in its own repository rather than in the code mirror because Pages can only
+publish from `/` or `/docs`, and `docs/` already holds the code documentation.
+
+## After acceptance
+
+
+Move to the TeamCraft pattern: an organization site at `https://<org>.github.io/`. Creating the
+organization now from a neutral account (below) also works during review and keeps one URL
+throughout; Anonymous GitHub is the simpler option for review alone.
 
 | | During review | After acceptance |
 |---|---|---|
