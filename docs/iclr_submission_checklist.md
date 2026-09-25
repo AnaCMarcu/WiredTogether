@@ -7,6 +7,13 @@ the three-agent Figure 4), so "in the paper" below always means the v6 PDF.
 
 Legend: `[x]` done · `[ ]` to do · `[?]` decision needed.
 
+**Decisions (2026-09-25):**
+
+- Keep the communication-budget module, its launchers, its analysis scripts and its tests.
+- Orchestrator: villager only, and the default. **Done** in `9ce12ac`.
+- CLI flags: investigated flag by flag in [cli_flag_audit.md](cli_flag_audit.md).
+- `figures/` and `paper_assets/` do not ship in the code release (§3.7).
+
 ---
 
 ## 0. Where the anonymised artefacts go
@@ -16,7 +23,7 @@ Legend: `[x]` done · `[ ]` to do · `[?]` decision needed.
 | Code | **Anonymous GitHub** — <https://anonymous.4open.science> — mirroring a **new private** GitHub repo that holds only the orphan release branch (§1) | Hides the origin URL, author, and history; supports private sources; term-replacement list catches stragglers; expiry date is set per mirror. Never mirror `AnaCMarcu/WiredTogether` or `tapri-lab/wired-together` directly — both names identify the authors. |
 | Project page (`site/`) | Same Anonymous GitHub mirror (it can serve the repo's GitHub Pages site), **or** GitHub Pages from a throwaway account with a neutral name | `.github/workflows/pages.yml` on the personal repo would publish under `anacmarcu.github.io` — do not use it during review. |
 | Run artefacts (§4) | **OSF** project with an *anonymised view-only link* (hides contributors), holding the `core` archive (~300 MB packed) and the `logs` archive (~2 GB packed) | OpenReview supplementary is capped at 100 MB; Zenodo has no anonymous mode. At camera-ready: Zenodo DOI + the lab release repo. |
-| OpenReview supplementary zip | Code snapshot (`git archive` of the release branch, ~90 MB because VoxeLibre is vendored) + the generated paper tables (`results/`) | Reviewers who never click a link still get the code and the numbers. If it must stay under 100 MB, drop `src/marl_craftium/craftium-envs/wire/games/VoxeLibre/` from the zip and point to the mirror. |
+| OpenReview supplementary zip | Code snapshot (`git archive` of the release branch, ~90 MB because VoxeLibre is vendored) | Reviewers who never click a link still get the code. If it must stay under 100 MB, drop `src/marl_craftium/craftium-envs/wire/games/VoxeLibre/` from the zip and point to the mirror. |
 | Craftium engine fork | **Do not link** `AnaCMarcu/craftium_wired_together`. Ship `craftium.patch` (the fork is upstream `mikelma/craftium` @ `e8290cb` + a 14-line diff in `craftium/craftium_env.py` and `craftium/minetest.py`) | A personal fork URL de-anonymises; a patch does not. |
 
 Also: set `AnaCMarcu/WiredTogether` and `AnaCMarcu/craftium_wired_together` to **private for the
@@ -28,8 +35,13 @@ would otherwise find the source repo in one query.
 ## 1. Branch and history
 
 - [x] `git checkout -b iclr-anon submission`
-- [ ] Commit the pending edits on `iclr-anon` (`analysis/make_final_table.py`,
-      `make_final_table_extended.py`, `docs/dataset.md`) so the branch starts from the numbers in v6.
+- [x] Commit the pending edits on `iclr-anon` (`f5e4e88`).
+- [x] Track the fourteen scripts behind Tables 1–3, 9–12 and Figures 4, 6–8, 10–13, which had
+      never been committed (`5506746`). Their imports close over tracked files.
+- [ ] Before the orphan snapshot, the working tree must hold **only** release files: the
+      snapshot recipe below uses `git add -A`, which would sweep in every untracked file in the
+      tree (pull scripts, `wt_pull_pair_bonding_3f.tgz`, loose figures). Either delete them first
+      or build the snapshot with `git archive iclr-anon | tar -x` into a clean directory.
 - [ ] Do the pruning (§3) and scrubbing (§2) as ordinary commits on `iclr-anon` — this branch is for
       *us*, history is fine here.
 - [ ] Build the **release snapshot** as an orphan branch with one anonymous commit (the 556 commits
@@ -115,10 +127,10 @@ perception metric — keep, they are small).
 
 ### 3.2 `analysis/` — delete
 
+(`calibrate_comm_budget.py` and `make_budget_fig.py` stay with the budget module.)
+
 ```
 analysis/assist_inference.py
-analysis/calibrate_comm_budget.py
-analysis/make_budget_fig.py
 analysis/make_baseline_deltas.py
 analysis/make_bond_asymmetry.py
 analysis/make_bond_asymmetry_fig.py
@@ -198,6 +210,7 @@ hpc/daic/experiments/new_exp_0_gemma_si3f.sbatch + submit_pareto_social_3f.sh   
 hpc/daic/experiments/new_exp_pareto.sbatch, new_exp_pareto_3f.sbatch + submit_pareto.sh   Fig 8
 hpc/daic/experiments/scale_gemma_3f.sbatch + submit_agent_scaling_3f.sh (N=6 only)     Fig 4, 10, 11
 hpc/daic/experiments/scale_gemma_orch.sbatch                           Fig 4, 10
+hpc/daic/experiments/budget_gemma.sbatch, submit_comm_budget.sh       communication budget (kept)
 ```
 
 ### 3.4 `hpc/` — delete
@@ -212,7 +225,6 @@ hpc/daic/tmp_cleanup_test.sbatch
 hpc/daic/download_gemma4.sbatch, download_gemma4.sh
 hpc/daic/build_image_gemma4_torch26.sbatch, wiredtogether_gemma4_torch26.def   (image appears only in its own build log; every v6 run used wiredtogether.sif or wiredtogether_gemma4.sif)
 hpc/daic/experiments/bad_gpu_nodes.txt
-hpc/daic/experiments/budget_gemma.sbatch, submit_comm_budget.sh       (comm-budget sweep, not in v6)
 hpc/daic/experiments/exp05_… exp06_… exp07_… exp08_…                  (old-rule Hebbian arms)
 hpc/daic/experiments/exp30_… exp31_… submit_social_replay.sh           (old-rule replay)
 hpc/daic/experiments/exp_qwen_three_factor.sbatch                       (exp32/33, no death term)
@@ -242,9 +254,9 @@ Delete, with the edits each one drags along:
 
 | Feature | Delete | Also edit | Tests affected |
 |---|---|---|---|
-| Communication budget | `src/mindforge/env/comm_budget.py`, `cli.py:353-374,649-660`, call sites in `action_selection.py:10,33-51`, `social_module.py:99-129,155,202-213`, `custom_agent.py:161-162,401-402,442-446,471`, `multi_agent_craftium.py` (13 blocks, listed in the sweep) | **first** paste `COMM_RULE_LEGACY` / `COMM_TARGET_RULE_LEGACY` / `COMM_FIELD_HINT_LEGACY` (`comm_budget.py:72-108`) back into `system_prompt.txt:72`, `instruction_prompt_p2*.txt`, and drop `{comm_budget}` from `instruction_prompt_p2*.txt`, `social_module*.txt` — otherwise every paper prompt loses its communication rule | `tests/test_comm_budget.py` (delete whole file; it also pins `budget_gemma.sbatch`) |
+| Communication budget | **Kept** (decision 2026-09-25) | — | `tests/test_comm_budget.py` stays |
 | Hebbian `legacy` + `coactivity` modes | `graph.py:176-368` (`_compute_coactivity`, `_compute_modulator`, `_update_failure_window`, `_compute_sustained_ltd`), legacy branch of `update()` `:795-875`, `get_ltd_heatmap` `:1147-1161`, `:535-536`; config fields `config.py:57-81` (`ltp_lr`, `ltd_lr`, `ltd_threshold`, `base_ltp`, `modulation_beta`, `ltd_sustained_lr`, `failure_*`) | `multi_agent_craftium.py:501-504,654-659,906,2296-2356`; `cli.py:165` choices. **Keep** `eta_minus`, `coop_eps`, `coop_window`, `neg_theta`, `eta_plus`, `reward_norm_R`, `decay`, `eligibility_rho`, `coact_floor`, `eta_minus_death`, `death_cap`, `_windowed_stats`, `_coactivity_gated`, `_engagement`, `_chamber_gate` — three_factor uses them | `test_hebbian_graph_api.py:345-366,385`; `test_hebbian_update.py:47-72,231-233` |
-| Orchestrator variants `task`/`social`/`plan`, mode `bias` | `core.py:47-60,316-455,475-657 (non-villager parts),659-691,721-883`; `prompt.py:25-27,32-175`; `prompts/orchestrator.txt`, `orchestrator_social.txt`, `orchestrator_plan.txt`; `events.py:87-180` (`PairAccumulator`); `map_render.py:58-167`; `curriculum_hook.py:24-53`; `config.py` variant/mode/`use_map_image` | **Keep** `core.py:61-158,159-231,233-315,456-473,697-720`, `prompt.py:28-29,176-260`, `orchestrator_decompose.txt`, `orchestrator_allocate.txt`, `map_render.render_map_text`, `apply_villager_suffix`. Driver: `multi_agent_craftium.py:464-466,613-623,781-786,1197-1305,1730-1751,2127-2164,2345-2346`; `cli.py:403-447,637-648`. **Flip `new_exp_orchestrator.sbatch:98` default from `task` to `villager`**, drop its `bias` branch (`:78,:108`). Prompt loaders and prompt files must go in the same commit or every orchestrator test fails at import | `test_orchestrator.py`: drop `:191-258,340-631,668-676,703-845`; keep the shared tests (`:56-189,259-337,622-664,677-700`) — fold into `test_orchestrator_villager.py` |
+| Orchestrator variants `task`/`social`/`plan`, mode `bias` | **Done** (`9ce12ac`): 2,857 lines removed; three prompt templates, seven CLI flags and the `bias` routing deleted; `--orchestrator-variant` accepts only `villager` and defaults to it | Launchers and `submit_orchestrator.sh` keep the run names `new_exp_0_gemma_orch_villager_advisory` / `scale_gemma_orch_villager_n6` | 50 tests of deleted code removed; 585 pass |
 | OpenWorld roles | `prompts/role_hunter.txt`, `role_harvester.txt`, `role_scouter.txt` | `agent_factory.py:26` (`ROLE_NAMES`), `:52-54` (eager load), `:77-96`; `cli.py:507-531` (`--team-mode`, `--homogeneous-role`, `--roles`); `multi_agent_craftium.py:353-365,650-651`; `team_scaling.py:44,91-102,119` (`regroup_teammates` exists only for `role_scouter.txt`). **Keep `role_agent.txt`** (the default role) | `test_team_scaling.py:27,80-83,164-169` |
 | Resume chains | `checkpointing.py:153-225` (`load_checkpoint`); `cli.py:542-550,614-621`; `multi_agent_craftium.py:47,410-415,459,709-731,792,2789-2790,2806-2807` | keep `save_checkpoint` and `--checkpoint-interval` (or hard-code 500) | none |
 | Token-mode RL | `src/rl_layer/token_opt.py`, `prompts/learning_belief.txt`; `--rl-auto-token-opt`, `--rl-mode` (`cli.py:143-148`); `multi_agent_craftium.py:423,2611-2649`; `rl_layer.py:414-420` | — | none |
@@ -252,11 +264,15 @@ Delete, with the edits each one drags along:
 | Old table tools | `src/mindforge/tools/{make_rq3_table,make_topology_horizon_table,make_transplant_table,memory_bond_report,transplant_report}.py` (hard-code `runs_from_daic/...` paths; superseded by `analysis/make_agent_completion_tables.py` and `make_transplant_tables.py`) | keep `pair_transplant.py`, `merge_pair_runs.py`, `analyze_wiring.py`; drop the "regenerate with …" header lines in `paper_assets/transplant/*.tex|md` | `test_analyze_wiring.py`, `test_pair_transplant.py` cover only the keepers |
 | Dead odds and ends | `--interpretability` (`cli.py:288-292`, never read); `util.py:310-345` (`visualize_frames`, `autogenImg_to_Pil`); `ippo.py:34 _normalize`; `wandb_logger.is_active`; `graph.py:160-169` `star`/`ring` presets + `--hebbian-hub`; `craftium_metric.py:543,899,902`; `critic.py:70`; `run_layout.py` unused properties; `dag.busy_agents`; `custom_environment_craftium.py:732,867-899`; `_patched_env.step_agent` | — | none |
 
-Never-set CLI flags (37 more, always at default — `--belief-interval`, `--gif-*`, `--obs-*`,
-`--wandb-entity`, `--hebbian-alpha/-radius/-beta/-init-weight/-eta-plus/-eta-minus/-coop-*/-neg-theta/-delta`,
-`--comm-reward-scale`, the `--orchestrator-*` tuning knobs, …): `[?]` remove the flags for a
-leaner `cli.py` and `docs/configuration.md`, but **keep the `HebbianConfig` fields** — several
-feed the three-factor rule. Removing them is optional polish; the paper's runs are unaffected.
+CLI flags: see [cli_flag_audit.md](cli_flag_audit.md). Of 99 flags, 15 go with the code they
+gate (table G there); the rest stay, including 12 that carry a Table 7/8 hyperparameter at its
+default. Argparse prefix matching is now off, so a stale flag fails loudly.
+
+`[?]` **The Hebbian CLI defaults are the old single-timescale rule, not Table 8** (mode,
+η₀, R, λ, η₋ᵈ, ρ). No reported number is affected — every launcher passes them — but a reviewer
+running `--hebbian` alone gets the wrong rule, and `tests/test_paper_defaults.py` pins the old
+values. Recommendation and the launchers that must first pin their values explicitly are in the
+audit's last section.
 
 Do **not** delete despite looking unused: the PettingZoo `ParallelEnv` API methods in
 `openworld_multi_agents.py:143-156`, `custom_agent.produced_message_types` (autogen),
@@ -271,8 +287,8 @@ tools above. `tests/` is clean.
 
 ### 3.6 `tests/`
 
-- delete `tests/test_comm_budget.py`; slim `test_orchestrator.py` to the shared tests and fold
-  them into `test_orchestrator_villager.py`; drop the legacy/coactivity cases in
+- [x] orchestrator tests slimmed to the surviving code (`9ce12ac`); `test_comm_budget.py` stays.
+- drop the legacy/coactivity cases in
   `test_hebbian_graph_api.py` and `test_hebbian_update.py`; drop the scouter cases in
   `test_team_scaling.py`; edit the `test_paper_defaults.py` docstring (§2).
 - keep everything else; run `python -m pytest tests -q` after every prune commit.
@@ -284,21 +300,21 @@ tools above. `tests/` is clean.
   `pull_missing.ps1`, `pull_missing.sh`, `pull_new.sh`, `wt_pull_pair_bonding_3f.tgz` (54 MB,
   move outside the repo), `.github/`, `docs/experiment_checklist.md`, `tests/README.md` if it
   names the cluster.
-- `figures/`: replace the ten tracked files (none of them is in v6 except as README art) with the
-  v6 set + a README that maps each file to its script:
-  `fig1_graph_formation.png`, `fig2_couplings.png`, `WIRE_FINAL.png`, `chamber_gallery.png`,
-  `counterfactual_compact_n6_{a,b}.pdf`, `social_frontier_all.pdf`, `rq2_pareto_{coop,solo}.pdf`,
-  `pareto_perception_all.pdf`, `pareto_partner_all.pdf`, `wide_gemma_hebbian3f.pdf`,
-  `counterfactual_full_{orch,plast}_n6.pdf`, `counterfactual_{a,b}.pdf`, `team_tenure_{a,b}.pdf`.
-  (`[?]` confirm the `_all` vs `_coop` / `_err` variants against the v6 source before copying.)
+- `figures/` and `paper_assets/`: **not in the release.** `paper_assets/` (498 MB) is already
+  git-ignored, so it never enters the snapshot. `figures/` holds ten tracked and ten untracked
+  images; no code reads any of them, and every paper figure is regenerated by its script (§3.1).
+  Delete `figures/` except the two images `README.md` embeds
+  (`overview_social_plasticity_loop.png`, `wire_five_chambers.png`), which are hand-made and
+  cannot be regenerated; move those two to `docs/img/`. The 6.7 MB `wire_first_person_views.png`
+  goes too.
+- The one derived file a script needs but cannot rebuild from the `core` data layer is
+  `paper_assets/perception_3f/beliefs_3f.csv` (Figure 8, built from the qualitative pipeline's
+  outputs over the 21 GB `logs` layer). Ship it inside the OSF data bundle (§4), not in the repo.
 - `docs/`: rewrite `experiments.md` (only the §3.3 arms, one cluster), `dataset.md` (§4 layout and
   sizes), `configuration.md` (drop removed flags), `README.md`; scrub the rest.
 - `README.md`: reviewer-facing — what WIRE is, install (upstream Craftium + `craftium.patch`),
   run one arm locally, reproduce every table/figure (one command each), where the dataset is,
   license. No author, lab, cluster, or acknowledgement text.
-- Add `results/` (git-tracked, ~1 MB): the generated `.tex`/`.csv` behind Tables 1–3, 9–12 from
-  `paper_assets/agent_completion/`, `paper_assets/transplant/`, the steps and rho rows, and
-  `perception_3f/beliefs_3f.csv` — so a reviewer can check numbers without running anything.
 
 ### 3.8 `craftium.patch`
 
@@ -358,6 +374,7 @@ Steps:
       it was built from (Fig 8), and the Fig 5/9 frame PNGs.
 - [ ] `zip -r wire_paper_runs_core.zip dist/paper_runs/*core*` (+ a separate `_logs.zip`); upload
       both to the OSF project; paste the anonymised view-only link into the reproducibility statement.
+- [ ] Put `beliefs_3f.csv` (Figure 8) into the core archive under `derived/`.
 - [ ] `docs/dataset.md`: replace the 46 GB layout with this table and the extract-and-run recipe.
 
 ---
@@ -371,8 +388,7 @@ Steps:
       `make_steps_table_pct.py`, `make_bond_behaviour_rho.py`, `make_transplant_tables.py`,
       `make_agent_completion_figs.py`, `make_final_figures.py gemma3f_seed123`,
       `make_chamber_gallery.py`, `make_counterfactual_story.py`, `make_counterfactual_n6.py`,
-      `make_counterfactual_compact_n6.py`, `make_team_tenure.py` — every output must match the
-      committed `results/` and `figures/`.
+      `make_counterfactual_compact_n6.py`, `make_team_tenure.py` — every number must match v6.
 - [ ] `python -m compileall -q src analysis` (catches imports of deleted modules).
 - [ ] Open the anonymous mirror in a private window; check README renders, the site loads, and
       term replacement did not rewrite code.
