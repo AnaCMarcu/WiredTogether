@@ -110,7 +110,8 @@ their layout.
 | Figures 13, 14 | `analysis/make_counterfactual_story.py` |
 | Figure 15 | `analysis/make_team_tenure.py` |
 
-The bond-implied preference column of Table 3 is not yet produced by a script in this repository.
+The bond-implied preference column of Table 3 and the switch-press odds ratio in Section 5.3 are
+not yet produced by a script in this repository.
 
 [analysis/README.md](analysis/README.md) gives the inputs of each script.
 
