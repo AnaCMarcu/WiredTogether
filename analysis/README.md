@@ -14,20 +14,21 @@ disagree about how a milestone counts.
 
 | Paper | Script | Run groups it reads |
 |---|---|---|
-| Tables 1, 2, 14; Table 3 except the bond-implied column | `make_agent_completion_tables.py` | `medium_runs`, `new_exp_0_gemma`, `gemma4`, `orchestrator`, `social_replay_3f_{qwen,gemma4}`, `cofiring_bidi_3f`, `pair_bonding_3f`, `medium_2k` |
+| Tables 1, 2, 12; Table 3 except the bond-implied column | `make_agent_completion_tables.py` | `medium_runs`, `new_exp_0_gemma`, `gemma4`, `orchestrator`, `social_replay_3f_{qwen,gemma4}`, `cofiring_bidi_3f`, `pair_bonding_3f`, `medium_2k` |
 | Table 9 | `make_steps_table_pct.py` | as Table 1 |
 | Table 10 | `make_bond_behaviour_rho.py` | `medium_runs` (exp34, exp35), `new_exp_0_gemma` (hebbian3f) |
-| Table 13 | `make_transplant_tables.py` | `pair_bonding_3f` |
-| Figures 4, 10, 11 | `make_counterfactual_compact_n6.py`, `make_counterfactual_n6.py` | `agent_scaling_orch`, `agent_scaling_3f` |
-| Figure 5 | `make_chamber_gallery.py` | frames written by `make_final_figures.py` |
-| Figure 6 | `make_agent_completion_figs.py` | `new_exp_0_gemma`, `pareto_social_3f` |
-| Figure 7 | `make_agent_completion_figs.py` | `cofiring_bidi_3f` |
-| Figure 8 | `make_agent_completion_figs.py` | `medium_runs`, `new_exp_0_gemma`, `pareto_gemma4`, `pareto_gemma4_3f`, and the perception table below |
-| Figure 9 | `make_final_figures.py` (arm `gemma3f_seed123`) | `new_exp_0_gemma` (hebbian3f, seed 123) and its recordings |
-| Figures 12, 13 | `make_counterfactual_story.py` | `orchestrator`, `pareto_social_3f` (si3f8), seed 42 |
-| Figure 14 | `make_team_tenure.py` | `orchestrator`, `new_exp_0_gemma` (hebbian3f), seed 456 |
+| Table 11 | `make_transplant_tables.py` | `pair_bonding_3f` |
+| Figures 4, 11, 12 | `make_counterfactual_compact_n6.py`, `make_counterfactual_n6.py` | `agent_scaling_orch`, `agent_scaling_3f` |
+| Figure 5 | `make_rq3_dynamics_fig.py` | `pair_bonding_3f` (seed 42) |
+| Figure 6 | `make_chamber_gallery.py` | frames written by `make_final_figures.py` |
+| Figure 7 | `make_agent_completion_figs.py` | `new_exp_0_gemma`, `pareto_social_3f` |
+| Figure 8 | `make_agent_completion_figs.py` | `cofiring_bidi_3f` |
+| Figure 9 | `make_agent_completion_figs.py` | `medium_runs`, `new_exp_0_gemma`, `pareto_gemma4`, `pareto_gemma4_3f`, and the perception table below |
+| Figure 10 | `make_final_figures.py` (arm `gemma3f_seed123`) | `new_exp_0_gemma` (hebbian3f, seed 123) and its recordings |
+| Figures 13, 14 | `make_counterfactual_story.py` | `orchestrator`, `pareto_social_3f` (si3f8), seed 42 |
+| Figure 15 | `make_team_tenure.py` | `orchestrator`, `new_exp_0_gemma` (hebbian3f), seed 456 |
 
-Figure 8's perception axes come from `paper_assets/perception_3f/beliefs_3f.csv`, which
+Figure 9's perception axes come from `paper_assets/perception_3f/beliefs_3f.csv`, which
 `make_beliefs_3f_view.py` assembles from the qualitative pipeline's belief tables. The released
 dataset includes that CSV, so the figure does not require re-running the pipeline.
 
