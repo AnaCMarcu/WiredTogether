@@ -65,12 +65,13 @@ ORCHESTRATOR = group("orchestrator")
 # Both use the same medium config (3 agents, 3 eps x 1000 steps, Qwen3.5-2B),
 # so the baselines (exp03/exp04) are shared.
 #
-# Setting this to "replay" swaps the RL "+Heb" rows over to exp30/exp31. Note
-# what that compares: those runs ran with LLM_VISION_MODE=text (vision=False),
-# while exp03/exp04 — the baselines the rows are read against — ran vision=True,
-# so a perception difference sits inside the arm difference. Each run's log.txt
-# records its mode; see docs/dataset.md.
-RL_HEB_ARMS = "diffusion"
+# Setting this to "replay" swaps the RL "+Heb" rows over to exp30/exp31, which
+# is what the paper's tab:final_comparison rows (m)/(p) report. The first six
+# replay seeds ran with LLM_VISION_MODE=text while exp03/exp04 ran vision=True,
+# which would have put a perception difference inside the arm difference; those
+# runs were replaced on disk by vision-on re-runs (2026-09-21), so the arms are
+# vision-matched. Each run's log.txt records its mode; see docs/dataset.md.
+RL_HEB_ARMS = "replay"
 _RL_HEB = {
     "replay": {
         "IPPO+Heb":  ("exp31_ippo_hebbian_replay",  SOCIAL_REPLAY,

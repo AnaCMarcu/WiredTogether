@@ -43,6 +43,16 @@ SR_GEMMA = group("social_replay_gemma4")
 # shape make_final_table.ROWS uses.
 NEW_ROWS = [
     # Hebbian 2.0 (three-factor + signed death LTD) on the frozen-LLM arms.
+    #
+    # The Gemma row is `hebbian3f`, NOT `si3f8` (group pareto_social_3f), by
+    # decision on 2026-09-23. The two arms are byte-identical in every rule
+    # hyperparameter except one: si3f8 sets --hebbian-death-ltd 0.05 and
+    # hebbian3f leaves it at 0.0. hebbian3f has 6 seeds against si3f8's 3, and
+    # the seed count won the trade. Consequence to keep in view: (i) is then
+    # the only +plast. row in tab:final_comparison whose rule carries no death
+    # term -- (b)/(e)/(l)/(o)/(r)/(u) all run death_ltd=0.05 -- so the paper's
+    # "Rule versions" paragraph must not claim the signed failure-decay term
+    # for every +plast. row. si3f8 remains the death-LTD ablation.
     ("Gemma-E4B+Heb2.0", "new_exp_0_gemma_hebbian3f", mft.GEMMA,
      "Gemma-4-E4B", "none (frozen LLM)", "Hebbian 2.0 + prompt"),
     ("LLM-2B+Heb2.0", "exp34_llm_2b_three_factor_fdecay", mft.MEDIUM,

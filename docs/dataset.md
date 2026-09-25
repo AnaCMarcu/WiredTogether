@@ -33,8 +33,11 @@ Two things the table cannot show:
   (`exp09`–`exp11`). They were one submission wave and `make_results.py` builds the main and
   topology tables from a single run root, so the group stays whole.
 - `social_replay_qwen` supplies the `MAPPO+Heb` and `IPPO+Heb` experience-sharing rows of the
-  cross-model table. It ran with `LLM_VISION_MODE=text`; `exp05`/`exp06`, the Qwen arms it is
-  tabled against, ran with vision. Each run's `log.txt` records which it was.
+  cross-model table (`make_final_table.RL_HEB_ARMS = "replay"`); `social_replay_gemma4` supplies
+  the Gemma-lane rows. An earlier batch ran with `LLM_VISION_MODE=text` against vision baselines;
+  those runs were re-run with vision and replaced on disk. Verified 2026-09-21: every run under
+  `social_replay/` and all four RL baselines log `vision=True`, so the rows are modality-matched.
+  Each run's `log.txt` records its mode — `grep -o "vision=[A-Za-z]*" <run>/log.txt` to re-check.
 
 ## Layers
 
