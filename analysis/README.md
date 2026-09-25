@@ -1,73 +1,52 @@
 # Analysis
 
-Every table and figure in the paper is produced by a script here. They read run directories
-(`runs_from_daic/<question>/<group>/<arm>/seed_<N>/`, git-ignored — see
-[../docs/dataset.md](../docs/dataset.md)) and write into `paper_assets/`.
+Every table and figure in the paper is produced by a script here. The scripts read run
+directories from `runs_from_daic/<question>/<group>/<arm>/seed_<N>/` (see
+[../docs/dataset.md](../docs/dataset.md)) and write to `paper_assets/`. Run them from anywhere:
+`paths.py` anchors inputs and outputs to the repository root, puts `src/` and the qualitative
+pipeline on `sys.path`, and resolves run groups by name through `paths.group()`.
 
-Run them from anywhere — `paths.py` anchors the inputs and outputs to the repo root and puts the
-sibling modules, `src/` and `qual_lib` on `sys.path`:
+`make_results.py` is the shared aggregation layer: condition registry, milestone accounting,
+episode slicing. Every other script imports it, so a table and the figure next to it cannot
+disagree about how a milestone counts.
 
-```bash
-python analysis/make_final_table.py
-python analysis/make_pareto_social_fig.py --out paper_assets/pareto_social
-```
+## Paper tables and figures
 
-`make_results.py` is the shared aggregation layer, not just a script: the condition registry,
-milestone accounting, episode slicing and the pooling convention live there and everything else
-imports them, so the numbers cannot drift between a table and the figure next to it.
+| Paper | Script | Run groups it reads |
+|---|---|---|
+| Tables 1–3, 12 | `make_agent_completion_tables.py` | `medium_runs`, `new_exp_0_gemma`, `gemma4`, `orchestrator`, `social_replay_3f_{qwen,gemma4}`, `cofiring_bidi_3f`, `pair_bonding_3f`, `medium_2k` |
+| Table 9 | `make_steps_table_pct.py` | as Table 1 |
+| Table 10 | `make_bond_behaviour_rho.py` | `medium_runs` (exp34, exp35), `new_exp_0_gemma` (hebbian3f) |
+| Table 11 | `make_transplant_tables.py` | `pair_bonding_3f` |
+| Figures 4, 10, 11 | `make_counterfactual_compact_n6.py`, `make_counterfactual_n6.py` | `agent_scaling_orch`, `agent_scaling_3f` |
+| Figure 5 | `make_chamber_gallery.py` | frames written by `make_final_figures.py` |
+| Figure 6 | `make_agent_completion_figs.py` | `new_exp_0_gemma`, `pareto_social_3f` |
+| Figure 7 | `make_agent_completion_figs.py` | `cofiring_bidi_3f` |
+| Figure 8 | `make_agent_completion_figs.py` | `medium_runs`, `new_exp_0_gemma`, `pareto_gemma4`, `pareto_gemma4_3f`, and the perception table below |
+| Figure 9 | `make_final_figures.py` (arm `gemma3f_seed123`) | `new_exp_0_gemma` (hebbian3f, seed 123) and its recordings |
+| Figures 12, 13 | `make_counterfactual_story.py` | `orchestrator`, `pareto_social_3f` (si3f8), seed 42 |
+| Figure 14 | `make_team_tenure.py` | `orchestrator`, `new_exp_0_gemma` (hebbian3f), seed 456 |
 
-`runs_dataset.py` owns the run tree itself — it groups the collected runs by research question and
-builds the released archives (`plan`, `regroup`, `bundle`, `verify`); see
-[../docs/dataset.md](../docs/dataset.md).
+Figure 8's perception axes come from `paper_assets/perception_3f/beliefs_3f.csv`, which
+`make_beliefs_3f_view.py` assembles from the qualitative pipeline's belief tables. The released
+dataset includes that CSV, so the figure does not require re-running the pipeline.
 
-## Tables
+## Shared modules
 
-| Script | Produces |
+| Module | Role |
 |---|---|
-| `make_final_table.py` | The cross-model comparison: task return, milestone and cooperative completion, steps-to-first-completion, perception columns |
-| `make_results.py` | Main results, steps-to-milestone, topology ablation and graph-statistics rows, plus the milestone progression and timeline figures |
-| `cofire_table.py` | The co-firing channel table: per-cue act use, bond growth attribution, ρ(W, acts) |
-| `make_bond_asymmetry_report.py` | `BOND_ASYMMETRY.md` — W_ij vs W_ji across every run carrying a graph |
-| `wandb_compute_budget.py` | Wall-clock and GPU budget table (needs `wandb`, run where you are logged in) |
-
-## Figures
-
-| Script | Produces |
-|---|---|
-| `make_pareto_social_fig.py` | Performance vs social-module compute across deliberation intervals |
-| `make_scaling_fig.py` | Performance vs whole-system compute across team sizes |
-| `make_pareto_fig.py`, `make_pareto_grid.py` | Model-size sweep: compute vs performance, headline and grid |
-| `make_pareto_perception_fig.py`, `make_pareto_delta.py` | Milestone completion vs perception grounding; Hebbian benefit vs partner localisation |
-| `make_bond_asymmetry_fig.py` | Directedness of the learned graph |
-| `make_bond_behavior_fig.py` | Correlation between bonds and messages / joint digging / proximity |
-| `make_mechanistic_figure.py` | Long-horizon bond dynamics with magnified case studies |
-| `make_final_figures.py`, `make_final_figures_callouts.py`, `make_iclr_figure.py` | Qualitative timelines per arm: frames, chat, bonds (two layout variants + the single-column cut) |
-| `make_qualitative_figure.py`, `make_story_timelines_multi.py` | Earlier timeline variants kept for the appendix |
-| `make_directive_timelines.py`, `make_coordination_timelines.py` | Team formation over time: base vs orchestrator vs Hebbian |
-| `make_team_comparison.py`, `make_team_tenure.py`, `make_plan_vs_completion.py` | Planned vs realised teams, team tenure, when cooperation actually starts |
-| `make_social_dynamics.py` | Standalone communication-rate and bond-strength figures |
-| `make_qwen_hebbian_analysis.py` | Why the 9B backbone loses under the social module |
-| `make_chamber_gallery.py` | Environment gallery, one row per chamber |
-| `make_compose_assets.py` | Component export of the qualitative figures for hand layout |
-
-## Appendix material
-
-| Script | Produces |
-|---|---|
-| `make_cofire_excerpts.py` | Co-firing events joined with milestones, per run — candidates for the channel excerpts |
-| `make_transplant_excerpts.py` | Phase-B interaction excerpts: reunions, re-pairing, partner preference |
-| `assist_inference.py` | Assisted-kill classification behind the combat annotations |
-
-## Mechanism replay
-
-| Script | Produces |
-|---|---|
-| `replay_hebbian_terms.py` | Replays the deployed rule offline from logged positions, events and rewards, term by term — reproduces the stored `W` exactly |
-| `prototype_three_factor_rule.py` | The same trajectories under an eligibility-trace variant (open-loop counterfactual) |
-| `compute_flops.py` | Inference FLOPs per run from the logs; imported by the Pareto figures and usable on its own |
+| `paths.py` | Repository paths and run-group lookup |
+| `make_results.py` | Aggregation layer used by every script |
+| `make_final_table.py`, `make_final_table_extended.py`, `make_final_table_latex.py` | Condition rows behind Tables 1 and 9 |
+| `cofire_table.py` | Per-cue act use, attributed bond growth and ρ behind Table 2 |
+| `compute_flops.py` | Inference FLOPs per run, for the deliberation-interval sweep |
+| `replay_hebbian_terms.py`, `prototype_three_factor_rule.py` | Offline replay of the plasticity rule from logged inputs; reproduces the stored `W` |
+| `make_directive_timelines.py`, `make_counterfactual_table.py` | Loaders and layout shared by the timeline figures |
+| `runs_dataset.py` | Groups the run tree by research question and builds the released archives |
 
 ## Qualitative pipeline
 
-`qualitative/` is a seven-stage CLI (`parse`, `metrics`, `sample`, `validate`, `cases`, `collab`,
-`report`) over the same run logs, producing the communication, interpretability, failure and belief
-tables plus the bonds-vs-behaviour correlations. See `qualitative/README.md`.
+`qualitative/` is a staged CLI (`parse`, `metrics`, `sample`, `validate`, `cases`, `collab`,
+`report`) over the per-module LLM logs. It produces the belief and message tables used above. The
+annotation labels under `qualitative/out/annotations/` are kept because they were produced by an
+LLM annotator and cannot be regenerated deterministically. See `qualitative/README.md`.

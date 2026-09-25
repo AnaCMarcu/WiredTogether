@@ -12,7 +12,15 @@ Legend: `[x]` done · `[ ]` to do · `[?]` decision needed.
 - Keep the communication-budget module, its launchers, its analysis scripts and its tests.
 - Orchestrator: villager only, and the default. **Done** in `9ce12ac`.
 - CLI flags: investigated flag by flag in [cli_flag_audit.md](cli_flag_audit.md).
-- `figures/` and `paper_assets/` do not ship in the code release (§3.7).
+- `figures/` and `paper_assets/` do not ship in the code release (§3.7). `figures/` is untracked
+  (`e2522dd`); the README uses the paper's Figures 1 and 3 from `docs/img/`.
+- Defaults match the paper (`94bf86f`, `8cf2903`): the Hebbian rule of Table 8 and K = 64. Every
+  launcher that relied on an old default pins it, so no launcher's behaviour changed.
+- Craftium is vendored as two patched files in `third_party/craftium/` (`6b6ae9a`); the container
+  recipes no longer clone the personal fork.
+- `[?]` **Paper fix needed:** Table 7 lists the actor learning rate as 1×10⁻⁴, but every
+  reported RL run used 3×10⁻⁴ (`rl_lr` in each run's `config.json`). Correct the table, then set
+  the `--rl-lr` default to 3e-4 so `--rl` alone reproduces the runs.
 
 ---
 
@@ -21,7 +29,7 @@ Legend: `[x]` done · `[ ]` to do · `[?]` decision needed.
 | Artefact | Host | Why |
 |---|---|---|
 | Code | **Anonymous GitHub** — <https://anonymous.4open.science> — mirroring a **new private** GitHub repo that holds only the orphan release branch (§1) | Hides the origin URL, author, and history; supports private sources; term-replacement list catches stragglers; expiry date is set per mirror. Never mirror `AnaCMarcu/WiredTogether` or `tapri-lab/wired-together` directly — both names identify the authors. |
-| Project page (`site/`) | Same Anonymous GitHub mirror (it can serve the repo's GitHub Pages site), **or** GitHub Pages from a throwaway account with a neutral name | `.github/workflows/pages.yml` on the personal repo would publish under `anacmarcu.github.io` — do not use it during review. |
+| Project page (`site/`) | GitHub Pages under a neutral organization, `https://<org>.github.io/`, the TeamCraft pattern — full plan in [website_plan.md](website_plan.md) | Same URL from review to camera-ready. Pushed from a neutral account, because commit authors and the Actions tab reveal who deployed. |
 | Run artefacts (§4) | **OSF** project with an *anonymised view-only link* (hides contributors), holding the `core` archive (~300 MB packed) and the `logs` archive (~2 GB packed) | OpenReview supplementary is capped at 100 MB; Zenodo has no anonymous mode. At camera-ready: Zenodo DOI + the lab release repo. |
 | OpenReview supplementary zip | Code snapshot (`git archive` of the release branch, ~90 MB because VoxeLibre is vendored) | Reviewers who never click a link still get the code. If it must stay under 100 MB, drop `src/marl_craftium/craftium-envs/wire/games/VoxeLibre/` from the zip and point to the mirror. |
 | Craftium engine fork | **Do not link** `AnaCMarcu/craftium_wired_together`. Ship `craftium.patch` (the fork is upstream `mikelma/craftium` @ `e8290cb` + a 14-line diff in `craftium/craftium_env.py` and `craftium/minetest.py`) | A personal fork URL de-anonymises; a patch does not. |
