@@ -50,16 +50,12 @@ overrides the action model's `communication_target` with `ask_target` at the rou
 ## Orchestration baselines
 
 `src/orchestrator/` replaces the graph with a central coordinator (mutually exclusive with
-`--hebbian`). Four variants, all `--orchestrator-variant`:
+`--hebbian`), in the style of VillagerAgent: a decomposer LLM breaks the remaining objective into
+milestone-verified subtasks held in a dependency graph, and an allocator LLM assigns ready subtasks
+to free agents. Assignments bind the objective, not the primitives — the agent's auto-curriculum
+must propose tasks that advance it, and reasoning, actions and messages stay the agent's own.
 
-| Variant | What the coordinator sees and does |
-|---|---|
-| `task` | Keeps a within-episode task ledger; issues per-agent comm-target/help directives. Relational content filtered out |
-| `social` | Information-matched to the Hebbian rule: pair co-presence, message counts and co-reward in, a directive in the social module's exact format out; ledger persists across episodes like `W` |
-| `plan` | `social` plus each agent's current curriculum task, and a plan note delivered into that agent's next task generation |
-| `villager` | VillagerAgent-style: an LLM decomposes the remaining objective into milestone-verified subtasks in a dependency graph and assigns them to agents. Assignments bind the objective, not the primitives |
-
-`villager` is the baseline reported in the paper. Subtasks complete only when a real WIRE milestone
-fires — the coordinator never asks an agent to self-report success — and failures are retired
-rather than retried. Decomposition is event-driven and rate-limited to the same cadence as the
-social module, which is what makes the compute comparison fair.
+Subtasks complete only when a real WIRE milestone fires — the coordinator never asks an agent to
+self-report success — and failures are retired rather than retried. Decomposition is event-driven
+and rate-limited by `--orchestrator-decompose-min-interval` (default 8, the social module's
+interval), which is what makes the compute comparison fair. The graph is rebuilt every episode.

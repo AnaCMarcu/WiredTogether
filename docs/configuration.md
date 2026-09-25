@@ -85,15 +85,15 @@ The remaining PPO constants — `γ`=0.995, `λ_GAE`=0.95, clip 0.2, value clip 
 mini-batch 4, entropy 0.05 → 0.001 — live in `RLConfig` and are pinned by
 `tests/test_paper_defaults.py`.
 
-## Orchestrator baselines
+## Orchestrator baseline
 
 | Flag | Default | Meaning |
 |---|---|---|
 | `--orchestrator` | off | Enable the central coordinator (excludes `--hebbian`) |
-| `--orchestrator-variant` | `task` | `task` \| `social` \| `plan` \| `villager` |
-| `--orchestrator-mode` | `advisory` | `advisory` writes a directive; `bias` also routes messages |
-| `--orchestrator-cadence` | 8 | Minimum steps between decompositions — matched to `--social-interval` |
+| `--orchestrator-variant` | `villager` | Only `villager`; recorded in the run config |
+| `--orchestrator-decompose-min-interval` | 8 | Minimum steps between decompositions — matched to `--social-interval` (T_soc) |
 | `--orchestrator-node-timeout-steps` | 60 | Steps before an unfinished subtask is failed |
+| `--orchestrator-max-open-tasks` | 0 | Cap on open + running subtasks; 0 = 2 × agents |
 
 ## Environment variables
 

@@ -120,7 +120,6 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
                  social_module_mode: str = "none", social_interval: int = 8,
                  social_act_mode: str = "legacy",
                  social_act_channels: tuple = (),
-                 orchestrator_plan: bool = False,
                  orchestrator_villager: bool = False):
     """Initialize all Mindforge agents.
 
@@ -136,18 +135,12 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
     templates + the SocialAgentResponse schema; "legacy" (default) keeps the
     original templates and AgentResponse byte-for-byte.
     """
-    # O-plan orchestrator variant: curriculum USER template with the
-    # {team_plan_note} placeholder appended. None in every other
-    # configuration → AutoCurriculum falls back to its module-level default,
-    # byte-identical to the historical prompt.
+    # Orchestrator: curriculum USER template with the HARD assignment block
+    # ({assigned_objective}) appended. None in every other configuration →
+    # AutoCurriculum falls back to its module-level default, byte-identical
+    # to the historical prompt.
     _task_info_override = None
-    if orchestrator_plan:
-        from mindforge.agent_modules.auto_curriculum import curriculum_info as _cur_info
-        from orchestrator.curriculum_hook import apply_plan_suffix
-        _task_info_override = apply_plan_suffix(_cur_info, True)
-    elif orchestrator_villager:
-        # Villager: HARD assignment block ({assigned_objective}) instead of
-        # the advisory plan-note block.
+    if orchestrator_villager:
         from mindforge.agent_modules.auto_curriculum import curriculum_info as _cur_info
         from orchestrator.curriculum_hook import apply_villager_suffix
         _task_info_override = apply_villager_suffix(_cur_info, True)

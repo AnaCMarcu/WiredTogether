@@ -80,7 +80,6 @@ async def agent_do_action(
     bond_deltas=None,
     social_returns=None,
     orchestrator_directive=None,
-    orchestrator_plan_note=None,
     orchestrator_assigned_objective=None,
     comm_budget_text=None,
     comm_budget_locked=False,
@@ -127,7 +126,6 @@ async def agent_do_action(
         bond_deltas=bond_deltas,
         social_returns=social_returns,
         orchestrator_directive=orchestrator_directive,
-        orchestrator_plan_note=orchestrator_plan_note,
         orchestrator_assigned_objective=orchestrator_assigned_objective,
         comm_budget_text=comm_budget_text,
         comm_budget_locked=comm_budget_locked,
@@ -157,7 +155,6 @@ async def agent_do_action(
                 bond_deltas=bond_deltas,
                 social_returns=social_returns,
                 orchestrator_directive=orchestrator_directive,
-                orchestrator_plan_note=orchestrator_plan_note,
                 orchestrator_assigned_objective=orchestrator_assigned_objective,
                 comm_budget_text=comm_budget_text,
                 comm_budget_locked=comm_budget_locked,
@@ -461,12 +458,7 @@ async def run(args):
                          social_interval=args.social_interval,
                          social_act_mode=social_act_mode,
                          social_act_channels=_social_menu_channels,
-                         orchestrator_plan=(
-                             args.orchestrator
-                             and args.orchestrator_variant == "plan"),
-                         orchestrator_villager=(
-                             args.orchestrator
-                             and args.orchestrator_variant == "villager"))
+                         orchestrator_villager=args.orchestrator)
 
     if args.agent_state_init:
         # Transplant memories into the freshly-constructed agents. Must run
@@ -551,20 +543,19 @@ async def run(args):
         print(_np.array2string(hebbian_graph.get_all_weights(),
                                precision=2, suppress_small=True))
 
-    # ── Centralized task-ledger orchestrator (O2 baseline) ────────────────
+    # ── Centralised orchestration baseline (VillagerAgent-style) ─────────
     # Everything below is None when --orchestrator is off, and every hook in
-    # the loop is guarded on that — legacy runs are untouched.
+    # the loop is guarded on that — every other condition is untouched.
     orchestrator_state = None
     orchestrator_config = None
-    orchestrator_client = None
     orch_logger = None
     _orch_core = None
     _orch_events = None
-    _orch_pair_acc = None
     villager_controller = None
     if args.orchestrator:
         from orchestrator import core as _orch_core
         from orchestrator import events as _orch_events
+        from orchestrator import villager as _orch_villager
         from orchestrator.config import OrchestratorConfig
         from orchestrator.logging import OrchestratorLogger
         from orchestrator.state import OrchestratorState
@@ -572,13 +563,6 @@ async def run(args):
         orchestrator_config = OrchestratorConfig(
             enabled=True,
             variant=args.orchestrator_variant,
-            mode=args.orchestrator_mode,
-            cadence=args.orchestrator_cadence,
-            event_triggers=args.orchestrator_event_triggers,
-            stall_threshold=args.orchestrator_stall_threshold,
-            max_task_facts=args.orchestrator_max_task_facts,
-            max_digest_events=args.orchestrator_max_digest_events,
-            use_map_image=args.orchestrator_use_map_image,
             model=args.orchestrator_model,
             log_dir_name=args.orchestrator_log_dir_name,
             node_timeout_steps=args.orchestrator_node_timeout_steps,
@@ -591,51 +575,27 @@ async def run(args):
             run_dir=str(run_paths.root),
             dir_name=orchestrator_config.log_dir_name,
         )
-        if orchestrator_config.variant == "villager":
-            # Villager: an event-driven controller with two dedicated
-            # clients (distinct response schemas on the shared backbone —
-            # same pattern as the curriculum/critic/social clients). The
-            # generic orchestrate() client is never used for this variant.
-            from orchestrator import villager as _orch_villager
-            villager_controller = _orch_villager.VillagerController(
-                orchestrator_config, num_agents,
-                decompose_client=_orch_core.create_orchestrator_client(
-                    orchestrator_config,
-                    response_format=_orch_villager.VillagerDecomposeResponse,
-                ),
-                allocate_client=_orch_core.create_orchestrator_client(
-                    orchestrator_config,
-                    response_format=_orch_villager.VillagerAllocateResponse,
-                ),
-                orch_logger=orch_logger,
-            )
-        else:
-            orchestrator_client = _orch_core.create_orchestrator_client(
-                orchestrator_config
-            )
-        # social/plan variants: the Hebbian-rule-matched pair-activity
-        # accumulator (fed each step from Phase-2 scope). Radius from
-        # --hebbian-radius so a radius ablation stays matched.
-        _orch_pair_acc = None
-        if orchestrator_config.variant in ("social", "plan"):
-            _orch_pair_acc = _orch_events.PairAccumulator(
-                num_agents, radius=args.hebbian_radius,
-            )
-        _villager_info = (
-            f"node_timeout={orchestrator_config.node_timeout_steps}  "
-            f"max_open={orchestrator_config.max_open_tasks or 2 * num_agents}  "
-            f"decompose_min_interval="
-            f"{orchestrator_config.decompose_min_interval}  "
-            if orchestrator_config.variant == "villager" else ""
+        # An event-driven controller with two dedicated clients (distinct
+        # response schemas on the shared backbone — same pattern as the
+        # curriculum/critic/social clients).
+        villager_controller = _orch_villager.VillagerController(
+            orchestrator_config, num_agents,
+            decompose_client=_orch_core.create_orchestrator_client(
+                orchestrator_config,
+                response_format=_orch_villager.VillagerDecomposeResponse,
+            ),
+            allocate_client=_orch_core.create_orchestrator_client(
+                orchestrator_config,
+                response_format=_orch_villager.VillagerAllocateResponse,
+            ),
+            orch_logger=orch_logger,
         )
         print(f"[FEATURES] Orchestrator:     ENABLED "
-              f"[{orchestrator_config.variant}/{orchestrator_config.mode}]  "
-              f"cadence={orchestrator_config.cadence}  "
-              f"event_triggers={orchestrator_config.event_triggers}  "
-              f"stall_threshold={orchestrator_config.stall_threshold}  "
-              f"max_task_facts={orchestrator_config.max_task_facts}  "
-              f"map_image={orchestrator_config.use_map_image}  "
-              f"{_villager_info}"
+              f"[{orchestrator_config.variant}]  "
+              f"node_timeout={orchestrator_config.node_timeout_steps}  "
+              f"max_open={orchestrator_config.max_open_tasks or 2 * num_agents}  "
+              f"decompose_min_interval="
+              f"{orchestrator_config.decompose_min_interval}  "
               f"model={orchestrator_config.model or 'backbone'}  "
               f"log_dir={orch_logger.dir}")
 
@@ -766,26 +726,15 @@ async def run(args):
                 await _ag.on_reset(CancellationToken())
 
         # ── Orchestrator: memory horizon at the episode boundary ──
-        # task variant: ledger/directives wiped every episode (the
-        # experimental contrast with W(t)). social/plan variants: ledger AND
-        # directives survive, matching W(t)'s cross-episode horizon; only
-        # the episode-clock state resets. _orch_prev_chambers feeds the
-        # chamber_change events; _orch_prev_tasks feeds the plan variant's
-        # task-compliance log.
+        # The DAG and its assignments are wiped every episode (the
+        # experimental contrast with W(t)). _orch_prev_chambers feeds the
+        # chamber_change events; _orch_prev_tasks feeds the task-compliance
+        # log.
         _orch_prev_chambers: dict = {}
         _orch_prev_tasks: dict = {}
         if orchestrator_state is not None:
-            # Only social/plan keep memory across episodes (W(t)'s horizon);
-            # task AND villager start fresh — explicit variant set, not
-            # `!= "task"`, so a new variant never inherits the wrong horizon.
-            orchestrator_state.reset(
-                keep_ledger=(orchestrator_config.variant
-                             in ("social", "plan"))
-            )
-            if _orch_pair_acc is not None:
-                _orch_pair_acc.clear()
-            if villager_controller is not None:
-                villager_controller.reset()
+            orchestrator_state.reset()
+            villager_controller.reset()
 
         import time as _time
         skip_warmup = (
@@ -1173,10 +1122,9 @@ async def run(args):
                 if _ch:
                     _visited_chambers[_i].add(_ch)
 
-            # ── Orchestrator (O2): chamber events, scheduled call, and
+            # ── Orchestrator: chamber events, controller tick, and
             # per-agent directive text for this step's action prompts ──
             _orch_directives_text: dict = {}
-            _orch_plan_notes: dict = {}
             _orch_assigned_objectives: dict = {}
             if orchestrator_state is not None:
                 _orch_new_chambers = set()
@@ -1194,117 +1142,45 @@ async def run(args):
                     f"agent_{_i}" for _i in range(num_agents)
                     if not environment._terminations.get(f"agent_{_i}", False)
                 ]
-                if orchestrator_config.variant == "villager":
-                    # ── Villager: event-driven controller tick ──
-                    # Deterministic scheduling every step (event drain,
-                    # timeouts, cascades); LLM decompose/allocate calls only
-                    # when due. Short-circuits the cadence-based should_call
-                    # path entirely. tick() also runs on a team wipe (fails
-                    # running nodes, no LLM calls).
-                    try:
-                        _v_tick = await villager_controller.tick(
-                            state=orchestrator_state,
-                            living_agents=_orch_living,
-                            episode=episode + 1, t=step,
-                            environment=environment, agents=agents,
-                            metric=metric,
-                        )
-                        # HARD enforcement: a reassigned agent's curriculum
-                        # replans immediately under the new objective (the
-                        # _initialized guard makes clearing current_task a
-                        # pure replan, never a DB wipe).
-                        for _nm in _v_tick.reassigned:
-                            try:
-                                _ri = int(str(_nm).rsplit("_", 1)[-1])
-                            except (ValueError, IndexError):
-                                continue
-                            if 0 <= _ri < num_agents:
-                                agents[_ri].auto_curriculum.current_task = None
-                    except (KeyboardInterrupt, SystemExit):
-                        raise
-                    except Exception as _orch_exc:
-                        logging.error(
-                            "Villager tick crashed at ep=%d step=%d: %s "
-                            "— keeping previous assignments",
-                            episode + 1, step, _orch_exc,
-                        )
-                    for _i in range(num_agents):
-                        _orch_directives_text[_i] = (
-                            villager_controller.directive_text(f"agent_{_i}")
-                        )
-                        _orch_assigned_objectives[_i] = (
-                            villager_controller.assigned_objective(
-                                f"agent_{_i}")
-                        )
-                elif _orch_living and _orch_core.should_call(
-                        orchestrator_state, step, orchestrator_config):
-                    if orchestrator_config.variant == "task":
-                        _orch_recent_msgs = [
-                            (_ev.get("sender"), _ev.get("target"))
-                            for _ev in orchestrator_state.event_buffer
-                            if _ev.get("type") == "message"
-                        ]
-                        _orch_env_state = _orch_core.collect_env_state(
-                            environment, num_agents, step,
-                            recent_messages=_orch_recent_msgs,
-                        )
-                    else:
-                        # social/plan: the Hebbian-rule-matched inputs only.
-                        _orch_env_state = {
-                            "pair_digest": _orch_pair_acc.render(),
-                            "task_table": (
-                                _orch_core.collect_task_table(
-                                    agents, num_agents)
-                                if orchestrator_config.variant == "plan"
-                                else None
-                            ),
-                        }
-                    _orch_fails_before = orchestrator_state.failed_calls
-                    try:
-                        await _orch_core.orchestrate(
-                            orchestrator_state, _orch_env_state,
-                            orchestrator_client, orchestrator_config,
-                            living_agents=_orch_living,
-                            episode=episode + 1, t=step,
-                            orch_logger=orch_logger,
-                            num_agents=num_agents,
-                        )
-                    except (KeyboardInterrupt, SystemExit):
-                        raise
-                    except Exception as _orch_exc:
-                        logging.error(
-                            "Orchestrator call crashed at ep=%d step=%d: %s "
-                            "— keeping previous directives",
-                            episode + 1, step, _orch_exc,
-                        )
-                    # Mirror the event-buffer policy: a successful call
-                    # consumed the pair window; a failed one keeps it so the
-                    # next call still sees those signals.
-                    if (_orch_pair_acc is not None
-                            and orchestrator_state.failed_calls
-                            == _orch_fails_before):
-                        _orch_pair_acc.clear()
-                if orchestrator_config.variant != "villager":
-                    # (villager filled its directives inside its own branch)
-                    for _i in range(num_agents):
-                        if orchestrator_config.variant == "task":
-                            _orch_directives_text[_i] = (
-                                _orch_core.render_agent_directive(
-                                    f"agent_{_i}", orchestrator_state
-                                )
-                            )
-                        else:
-                            _orch_directives_text[_i] = (
-                                _orch_core.render_social_directive(
-                                    f"agent_{_i}", orchestrator_state
-                                )
-                            )
-                            if orchestrator_config.variant == "plan":
-                                _orch_plan_notes[_i] = (
-                                    _orch_core.plan_note_for(
-                                        orchestrator_state, f"agent_{_i}"
-                                    )
-                                )
+                # Deterministic scheduling every step (event drain,
+                # timeouts, cascades); LLM decompose/allocate calls only when
+                # due. tick() also runs on a team wipe (fails running nodes,
+                # no LLM calls).
+                try:
+                    _v_tick = await villager_controller.tick(
+                        state=orchestrator_state,
+                        living_agents=_orch_living,
+                        episode=episode + 1, t=step,
+                        environment=environment, agents=agents,
+                        metric=metric,
+                    )
+                    # HARD enforcement: a reassigned agent's curriculum
+                    # replans immediately under the new objective (the
+                    # _initialized guard makes clearing current_task a
+                    # pure replan, never a DB wipe).
+                    for _nm in _v_tick.reassigned:
+                        try:
+                            _ri = int(str(_nm).rsplit("_", 1)[-1])
+                        except (ValueError, IndexError):
+                            continue
+                        if 0 <= _ri < num_agents:
+                            agents[_ri].auto_curriculum.current_task = None
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except Exception as _orch_exc:
+                    logging.error(
+                        "Villager tick crashed at ep=%d step=%d: %s "
+                        "— keeping previous assignments",
+                        episode + 1, step, _orch_exc,
+                    )
+                for _i in range(num_agents):
+                    _orch_directives_text[_i] = (
+                        villager_controller.directive_text(f"agent_{_i}")
+                    )
+                    _orch_assigned_objectives[_i] = (
+                        villager_controller.assigned_objective(
+                            f"agent_{_i}")
+                    )
 
             # ── Phase 0: encode the PRE-step joint state (s_t) ──
             # Computed BEFORE any agent acts so V_global represents V(s_t),
@@ -1417,9 +1293,6 @@ async def run(args):
                             orchestrator_directive=(
                                 _orch_directives_text.get(_i)
                             ),
-                            orchestrator_plan_note=(
-                                _orch_plan_notes.get(_i)
-                            ),
                             orchestrator_assigned_objective=(
                                 _orch_assigned_objectives.get(_i)
                             ),
@@ -1528,9 +1401,6 @@ async def run(args):
                         ),
                         orchestrator_directive=(
                             _orch_directives_text.get(agent_id)
-                        ),
-                        orchestrator_plan_note=(
-                            _orch_plan_notes.get(agent_id)
                         ),
                         orchestrator_assigned_objective=(
                             _orch_assigned_objectives.get(agent_id)
@@ -1722,33 +1592,6 @@ async def run(args):
                                     ):
                                         recv_idx = _sm_idx
                                         routing_source = "social_bias"
-                                except (IndexError, ValueError):
-                                    pass
-
-                    # ── Orchestrator bias coupling (O2) ──
-                    # Mirrors the social-module bias exactly: in "bias" mode
-                    # the orchestrator's standing comm_target for the sender
-                    # overrides whatever the action LLM emitted, making the
-                    # directive a hard guarantee on routing. Skipped in
-                    # "advisory" mode (directive stays prompt-text only).
-                    if (orchestrator_state is not None
-                            and args.orchestrator_mode == "bias"):
-                        _o_target = _orch_core.directive_comm_target(
-                            orchestrator_state, agent.name
-                        )
-                        if _o_target:
-                            _m3 = _re.match(
-                                r"^\s*agent_?(\d+)\s*$", str(_o_target).lower()
-                            )
-                            if _m3:
-                                try:
-                                    _o_idx = int(_m3.group(1))
-                                    if (
-                                        _o_idx != sender_idx
-                                        and 0 <= _o_idx < num_agents
-                                    ):
-                                        recv_idx = _o_idx
-                                        routing_source = "orchestrator_bias"
                                 except (IndexError, ValueError):
                                     pass
 
@@ -2111,9 +1954,8 @@ async def run(args):
                     _msg["receiver_chamber"] = None
                 ep_logger.log_message(_msg)
 
-            # ── Orchestrator: message events + per-step compliance log ──
-            # Uses the routed metadata the loop already built; complied is
-            # whether the actual receiver matches the standing directive.
+            # ── Orchestrator: message events ──
+            # Uses the routed metadata the loop already built.
             if orchestrator_state is not None:
                 for _msg in _messages_this_step:
                     orchestrator_state.add_event(
@@ -2122,37 +1964,17 @@ async def run(args):
                             _msg["text"],
                         )
                     )
-                    # Villager issues task assignments, not comm directives —
-                    # a compliance stream would be all-None noise rows.
-                    if orchestrator_config.variant != "villager":
-                        _o_directed = _orch_core.directive_comm_target(
-                            orchestrator_state, _msg["sender"]
-                        )
-                        orch_logger.log_compliance({
-                            "episode": episode + 1,
-                            "t": step,
-                            "agent": _msg["sender"],
-                            "directed_comm_target": _o_directed,
-                            "actual_comm_target": _msg["receiver"],
-                            "complied": (_o_directed is not None
-                                         and _o_directed == _msg["receiver"]),
-                        })
 
-            # ── Orchestrator plan/villager variants: task-compliance log ──
-            # One record per task CHANGE, carrying the guidance that was
-            # standing when the new task was generated (plan: the advisory
-            # note; villager: the HARD assigned objective) — the raw
-            # material for scoring whether central guidance shapes plans.
-            if (orchestrator_state is not None
-                    and orchestrator_config.variant in ("plan", "villager")):
+            # ── Orchestrator: task-compliance log ──
+            # One record per task CHANGE, carrying the HARD assigned
+            # objective that was standing when the new task was generated —
+            # the raw material for scoring whether central guidance shapes
+            # plans.
+            if orchestrator_state is not None:
                 for _i in range(num_agents):
                     _cur_task = agents[_i].auto_curriculum.current_task
                     if _cur_task != _orch_prev_tasks.get(_i):
-                        _active_note = (
-                            _orch_plan_notes.get(_i)
-                            if orchestrator_config.variant == "plan"
-                            else _orch_assigned_objectives.get(_i)
-                        )
+                        _active_note = _orch_assigned_objectives.get(_i)
                         orch_logger.log_task_compliance({
                             "episode": episode + 1,
                             "t": step,
@@ -2339,16 +2161,6 @@ async def run(args):
                 + _step_pitch_penalty[_i]
                 for _i in range(num_agents)
             ]
-            # ── Orchestrator social/plan: feed the pair accumulator the SAME
-            # per-step streams the Hebbian rule consumes (positions for
-            # co-presence, comm pair events, bondable rewards, chambers).
-            if _orch_pair_acc is not None:
-                _orch_pair_acc.note_step(
-                    positions,
-                    comm_events if communication else [],
-                    _bond_rewards,
-                    _chambers,
-                )
 
             hebbian_graph.update(
                 positions=positions,

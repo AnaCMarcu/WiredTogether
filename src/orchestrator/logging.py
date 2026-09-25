@@ -2,14 +2,11 @@
 
 Everything lands under ``<run_dir>/<orchestrator.log_dir_name>/``:
 
-  calls.jsonl        one record per orchestrator LLM call
-                     {episode, t, prompt_tokens, completion_tokens, changed,
-                      why, ledger_snapshot, directives, failed,
-                      leakage_filtered, map_path, ...}
-  compliance.jsonl   one record per routed message while the orchestrator is
-                     enabled {episode, t, agent, directed_comm_target,
-                      actual_comm_target, complied}
-  maps/              one schematic-map PNG per call (audit artifact)
+  calls.jsonl            one record per decomposer / allocator LLM call
+  dag.jsonl              DAG snapshot per change, with its trigger
+  assignments.jsonl      per-agent assignment lifecycle (allocate / freed_*)
+  task_compliance.jsonl  one record per curriculum task change while an
+                         objective was assigned
 
 Token counts also go to the run log as a tagged line
 ``[Orchestrator usage] prompt_tokens=... completion_tokens=...`` so the
@@ -32,16 +29,14 @@ logger = _stdlog.getLogger(__name__)
 class OrchestratorLogger:
     def __init__(self, run_dir: str, dir_name: str = "orchestrator"):
         self.dir = os.path.join(str(run_dir), dir_name)
-        self.maps_dir = os.path.join(self.dir, "maps")
-        os.makedirs(self.maps_dir, exist_ok=True)
+        os.makedirs(self.dir, exist_ok=True)
         self.calls_path = os.path.join(self.dir, "calls.jsonl")
-        self.compliance_path = os.path.join(self.dir, "compliance.jsonl")
-        # Plan variant only: one record per task CHANGE while a plan note
-        # was standing — {episode, t, agent, active_note, old_task, new_task}.
+        # One record per task CHANGE while an objective was assigned —
+        # {episode, t, agent, active_note, old_task, new_task}.
         self.task_compliance_path = os.path.join(self.dir,
                                                  "task_compliance.jsonl")
-        # Villager variant only: DAG snapshots (per change, with trigger)
-        # and per-agent assignment lifecycle rows (allocate / freed_*).
+        # DAG snapshots (per change, with trigger) and per-agent assignment
+        # lifecycle rows (allocate / freed_*).
         self.dag_path = os.path.join(self.dir, "dag.jsonl")
         self.assignments_path = os.path.join(self.dir, "assignments.jsonl")
 
@@ -63,9 +58,6 @@ class OrchestratorLogger:
             bool(record.get("failed")),
         )
 
-    def log_compliance(self, record: dict) -> None:
-        self._append(self.compliance_path, record)
-
     def log_task_compliance(self, record: dict) -> None:
         self._append(self.task_compliance_path, record)
 
@@ -74,6 +66,3 @@ class OrchestratorLogger:
 
     def log_assignment(self, record: dict) -> None:
         self._append(self.assignments_path, record)
-
-    def map_path(self, episode: int, t: int) -> str:
-        return os.path.join(self.maps_dir, f"ep{episode:04d}_t{t:06d}.png")

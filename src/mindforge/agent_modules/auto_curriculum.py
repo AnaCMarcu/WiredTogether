@@ -130,8 +130,8 @@ class AutoCurriculum:
         self._questions_prompt = override_questions_prompt or curriculum_questions
         # USER template for get_new_task (the one llm_call formats). Default
         # is the module-level curriculum_info, byte-identical to the historical
-        # behavior; the O-plan orchestrator variant passes a version with the
-        # {team_plan_note} placeholder appended (orchestrator.curriculum_hook).
+        # behavior; the orchestrator passes a version with the
+        # {assigned_objective} placeholder appended (orchestrator.curriculum_hook).
         self._task_info_prompt = override_task_info_prompt or curriculum_info
 
         self.task_model_client = task_model_client or create_model_client(
@@ -185,7 +185,6 @@ class AutoCurriculum:
         current_chamber=None,
         completed_milestones=None,
         milestone_progress=None,
-        team_plan_note="",
         assigned_objective="",
     ):
         completed = self.get_completed_tasks()
@@ -204,10 +203,9 @@ class AutoCurriculum:
             cancellation_token=cancellation_token,
             parse_check=_require_key("task"),
             log_prefix="Auto Curriculum get_new_task: ",
-            # Inert for the legacy template (str.format ignores unused
-            # kwargs); fills {team_plan_note} when the O-plan suffix is on
-            # and {assigned_objective} when the villager suffix is on.
-            team_plan_note=team_plan_note or "(none)",
+            # Inert for the default template (str.format ignores unused
+            # kwargs); fills {assigned_objective} when the orchestrator's
+            # curriculum suffix is on.
             assigned_objective=assigned_objective or "(none)",
             completed_tasks=completed,
             failed_tasks=failed,

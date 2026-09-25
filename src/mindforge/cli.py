@@ -2,7 +2,7 @@
 
 Every knob of the system is set here: environment and episode shape, the
 LLM backbone, the RL layer, the Hebbian graph and its couplings, the
-orchestrator baselines, and the logging/checkpointing behaviour. Defaults
+orchestration baseline, and the logging/checkpointing behaviour. Defaults
 reproduce the paper's zero-shot LLM configuration; the launchers under
 ``hpc/`` override them per experiment.
 """
@@ -14,7 +14,11 @@ import os
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Run Mindforge agents in Craftium OpenWorld")
+    # allow_abbrev=False: with prefix matching on, a stale flag such as
+    # "--orchestrator-mode bias" silently parsed as --orchestrator-model.
+    parser = argparse.ArgumentParser(
+        description="Run WIRE agents in the Craftium five-chamber world",
+        allow_abbrev=False)
     parser.add_argument("--num-agents", type=int, default=3,
                         help="Number of agents in WIRE (all share the agent role)")
     parser.add_argument("--team-scaling", action="store_true",
@@ -389,88 +393,37 @@ def parse_args():
                              "(growing at the η0 floor, without comm-reward "
                              "salience) still equilibrate in the analyzable "
                              "band against the homeostatic decay.")
-    # ── Centralized task-ledger orchestrator (O2 baseline) ──────────────
+    # ── Centralised orchestration baseline (VillagerAgent-style) ───────
     # Mutually exclusive with the Hebbian condition (validated in __main__).
-    # All flags default to the disabled/no-op values so legacy runs are
-    # byte-identical.
+    # All flags default to the disabled/no-op values so every other
+    # condition is byte-identical.
     parser.add_argument("--orchestrator", action="store_true",
-                        help="Enable the O2 centralized orchestrator: a "
-                             "non-embodied coordinator called every "
-                             "--orchestrator-cadence steps (and on events) "
-                             "that keeps a within-episode task ledger and "
-                             "issues per-agent comm_target/help directives. "
-                             "Runs INSTEAD of the Hebbian coupling.")
-    parser.add_argument("--orchestrator-variant", type=str, default="task",
-                        choices=["task", "social", "plan", "villager"],
-                        help="'task' (default) = the O2 task-ledger "
-                             "orchestrator (map + event digest in, "
-                             "comm_target/help out, relational content "
-                             "filtered, ledger reset per episode). 'social' "
-                             "= centralized social deliberation, information-"
-                             "matched to the Hebbian rule: pair co-presence/"
-                             "message-count/co-reward digest in, a per-agent "
-                             "SocialThought (ask_target/ask_message/"
-                             "respond_to) out, rendered in the SocialModule's "
-                             "exact directive format; relational notes "
-                             "allowed; ledger persists across episodes like "
-                             "W(t). 'plan' = social + each agent's auto-"
-                             "curriculum task in view + a per-agent plan_note "
-                             "delivered to that agent's curriculum at its "
-                             "next task generation (upper baseline). "
-                             "'villager' = VillagerAgent-style centralized "
-                             "DAG orchestration: a decomposer LLM proposes "
-                             "milestone-verified subtasks into a dependency "
-                             "graph, an allocator LLM HARD-assigns ready "
-                             "tasks to free agents (curriculum constrained "
-                             "to the objective; replans on reassignment); "
-                             "no communication routing.")
+                        help="Enable the centralised orchestration baseline: "
+                             "a non-embodied coordinator whose decomposer "
+                             "LLM proposes milestone-verified subtasks into "
+                             "a dependency graph and whose allocator LLM "
+                             "HARD-assigns ready subtasks to free agents "
+                             "(curriculum constrained to the objective; "
+                             "replans on reassignment; no communication "
+                             "routing). Runs INSTEAD of the Hebbian coupling.")
+    parser.add_argument("--orchestrator-variant", type=str, default="villager",
+                        choices=["villager"],
+                        help="Orchestrator implementation (only 'villager'; "
+                             "recorded in the run config).")
     parser.add_argument("--orchestrator-node-timeout-steps", type=int,
                         default=60,
-                        help="Villager only: a running DAG task fails after "
-                             "this many steps without one of its milestones "
-                             "firing (default 60)")
+                        help="A running DAG task fails after this many steps "
+                             "without one of its milestones firing "
+                             "(default 60)")
     parser.add_argument("--orchestrator-max-open-tasks", type=int, default=0,
-                        help="Villager only: cap on open+running DAG tasks; "
-                             "0 = auto (2 x num agents)")
+                        help="Cap on open+running DAG tasks; 0 = auto "
+                             "(2 x num agents)")
     parser.add_argument("--orchestrator-decompose-min-interval", type=int,
                         default=8,
-                        help="Villager only: minimum steps between "
-                             "decomposer calls, and the cooldown after a "
-                             "failed allocator call (default 8)")
-    parser.add_argument("--orchestrator-mode", type=str, default="advisory",
-                        choices=["advisory", "bias"],
-                        help="'advisory' = directives rendered into the same "
-                             "{social_directive} action-prompt slot the "
-                             "social module uses; 'bias' = additionally "
-                             "override the emitted communication_target at "
-                             "the routing site (mirrors --social-module "
-                             "bias exactly)")
-    parser.add_argument("--orchestrator-cadence", type=int, default=8,
-                        help="Steps between scheduled orchestrator calls "
-                             "(default 8 = the social module's T_soc "
-                             "default, --social-interval)")
-    parser.add_argument("--orchestrator-event-triggers",
-                        action=argparse.BooleanOptionalAction, default=True,
-                        help="Also call the orchestrator when a milestone / "
-                             "chamber change / death occurred since its "
-                             "last call (default on)")
-    parser.add_argument("--orchestrator-stall-threshold", type=int, default=2,
-                        help="The orchestrator is told to replan when its "
-                             "ledger stall_counter exceeds this (default 2)")
-    parser.add_argument("--orchestrator-max-task-facts", type=int, default=15,
-                        help="Ledger task-facts cap; FIFO eviction keeps the "
-                             "most recent (default 15)")
-    parser.add_argument("--orchestrator-max-digest-events", type=int,
-                        default=30,
-                        help="Events included in the since-last-call digest "
-                             "(default 30; older events are dropped with a "
-                             "'(showing last K of M)' banner)")
-    parser.add_argument("--orchestrator-use-map-image",
-                        action=argparse.BooleanOptionalAction, default=True,
-                        help="Attach the schematic top-down map PNG to the "
-                             "orchestrator call (default on; falls back to "
-                             "a text world-state block when off or when the "
-                             "client lacks vision)")
+                        help="Minimum steps between decomposer calls, and "
+                             "the cooldown after a failed allocator call "
+                             "(default 8 = the social module's T_soc, "
+                             "--social-interval)")
     parser.add_argument("--orchestrator-model", type=str, default=None,
                         help="LLM for the orchestrator (default None = reuse "
                              "the agents' backbone/client). Only supported "
@@ -478,8 +431,8 @@ def parse_args():
                              "LLM_MODEL_PATH pins a local in-process model.")
     parser.add_argument("--orchestrator-log-dir-name", type=str,
                         default="orchestrator",
-                        help="Subdirectory of the run dir for orchestrator "
-                             "calls.jsonl / compliance.jsonl / maps/")
+                        help="Subdirectory of the run dir for the "
+                             "orchestrator's calls / dag / assignments logs")
     # ── Experiment tracking ──
     parser.add_argument("--experiment-id", type=str, default=None,
                         help="Experiment identifier (e.g. E1a, E5) — saved in metrics for traceability")
@@ -624,7 +577,7 @@ def validate_args(args) -> None:
             "--start-chamber and --max-chamber are mutually exclusive"
         )
     if args.orchestrator and args.hebbian:
-        # The orchestrator (O2) is a BASELINE against the Hebbian condition;
+        # The orchestrator is a BASELINE against the Hebbian condition;
         # enabling both would confound the comparison. Reward diffusion
         # (--hebbian-gamma) belongs to the Hebbian condition and is only
         # active under --hebbian, so this one check also excludes it. Fail
@@ -638,13 +591,6 @@ def validate_args(args) -> None:
         raise SystemExit(
             "--orchestrator and --social-module both write the "
             "{social_directive} action-prompt slot; disable one"
-        )
-    if (args.orchestrator and args.orchestrator_variant == "villager"
-            and args.orchestrator_mode == "bias"):
-        raise SystemExit(
-            "the villager variant issues task assignments, not comm "
-            "directives — there is no comm_target to bias; use "
-            "--orchestrator-mode advisory"
         )
     if args.comm_budget_tokens is not None and args.no_communication:
         # A budget meters a channel that must exist; the zero arm is

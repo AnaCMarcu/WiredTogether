@@ -1,21 +1,20 @@
 #!/bin/bash
 # ────────────────────────────────────────────────────────────────────────────
-# submit_orchestrator.sh — O2 centralized orchestrator baseline on the
-# new_exp_0_gemma suite (Gemma 4 E4B, vision, 3 ep × 1000 steps).
+# submit_orchestrator.sh — centralised orchestration baseline (VillagerAgent-
+# style) on the new_exp_0_gemma suite (Gemma 4 E4B, vision, 3 ep × 1000 steps).
 #
-# Arms (per mode) land in runs/orchestrator/new_exp_0_gemma_orch_<mode>/
+# Runs land in runs/orchestrator/new_exp_0_gemma_orch_villager_advisory/
 # seed_<S>/ + wandb project orchestrator_wired_together; the comparison
 # anchors (new_exp_0_gemma_base / _hebbian) stay in runs/new_exp_0_gemma/
 # and are never touched here — analyses read both roots.
 #
 # Usage (from the DAIC login node):
 #   cd $REPO/hpc/daic/experiments
-#   SMOKE=1   bash submit_orchestrator.sh   # advisory × seed 42, 1 ep × 150
-#                                           # steps, wandb off, 4 h walltime
+#   SMOKE=1   bash submit_orchestrator.sh   # seed 42, 1 ep × 150 steps,
+#                                           # wandb off, 4 h walltime
 #   DRY_RUN=1 bash submit_orchestrator.sh   # print what would be submitted
-#   bash submit_orchestrator.sh             # advisory × 3 seeds = 3 jobs
+#   bash submit_orchestrator.sh             # 3 seeds = 3 jobs
 #
-#   MODES="advisory bias" bash submit_orchestrator.sh   # both couplings
 #   SEEDS="42 123 456 789 1011 1213" bash submit_orchestrator.sh
 #
 # QOS: this account tops out at medium, so everything (smoke included)
@@ -28,12 +27,11 @@
 # neither finished nor queued.
 #
 # Smoke pass/fail — after the job drains, check the smoke run dir
-# (runs/orchestrator_smoke/new_exp_0_gemma_orch_advisory/seed_42/):
-#   run.log        has "[FEATURES] Orchestrator:     ENABLED [advisory]"
+# (runs/orchestrator_smoke/new_exp_0_gemma_orch_villager_advisory/seed_42/):
+#   run.log        has "[FEATURES] Orchestrator:     ENABLED [villager]"
 #                  and "[Orchestrator usage] prompt_tokens=..." lines
-#   orchestrator/  calls.jsonl (~19 calls at cadence 8 over 150 steps, more
-#                  with event triggers; "failed": false on most),
-#                  compliance.jsonl, maps/*.png
+#   orchestrator/  calls.jsonl, dag.jsonl, assignments.jsonl
+#                  (smoke: ORCH_NODE_TIMEOUT=20, see the sbatch file)
 #   final_metrics.json exists (episode completed end-to-end)
 # ────────────────────────────────────────────────────────────────────────────
 set -u
@@ -55,22 +53,15 @@ REPO="$WORKSPACE/WiredTogether"
 : "${WANDB_PROJECT:=orchestrator_wired_together}"
 export MODEL_LLM WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT
 
-MODES=(${MODES:-advisory})
 SEEDS=(${SEEDS:-42 123 456})
-# Arm families: task (O2 task-ledger), social (Hebbian-matched centralized
-# deliberation), plan (social + curriculum plan notes; upper baseline),
-# villager (VillagerAgent-style DAG task orchestration; hard assignments,
-# advisory mode only). Smoke example: SMOKE=1 VARIANTS=villager
-VARIANTS=(${VARIANTS:-task})
 
-# Smoke: one advisory seed, one short episode — proves the orchestrator call
-# fires on Gemma 4 (map image attaches, JSON validates, directives reach the
-# prompts, calls.jsonl/compliance.jsonl fill up) before committing
-# 3 × 36 GPU-hours. Lands in runs/orchestrator_smoke/, wandb off.
+# Smoke: one seed, one short episode — proves the decomposer and allocator
+# calls fire on Gemma 4 (JSON validates, assignments reach the prompts,
+# calls.jsonl/dag.jsonl fill up) before committing 3 × 36 GPU-hours. Lands
+# in runs/orchestrator_smoke/, wandb off.
 if [ "${SMOKE:-0}" = "1" ]; then
-    MODES=(advisory)
     SEEDS=(42)
-    # VARIANTS is honoured in smoke mode: SMOKE=1 VARIANTS="social plan" ...
+    export ORCH_NODE_TIMEOUT="${ORCH_NODE_TIMEOUT:-20}"
     RUN_GROUP=orchestrator_smoke
     EPISODES=1
     MAX_STEPS=${SMOKE_STEPS:-150}
@@ -99,8 +90,6 @@ echo "  run_group : $RUN_GROUP"
 echo "  episodes  : $EPISODES"
 echo "  max_steps : $MAX_STEPS"
 echo "  wandb     : ${WANDB:-1} (project=$WANDB_PROJECT)"
-echo "  variants  : ${VARIANTS[*]}"
-echo "  modes     : ${MODES[*]}  (anchors: base=no coupling, hebbian=W(t))"
 echo "  seeds     : ${SEEDS[*]}"
 [ ${#SBATCH_OVERRIDES[@]} -gt 0 ] && echo "  overrides : ${SBATCH_OVERRIDES[*]}"
 [ "${SMOKE:-0}" = "1" ]   && echo "  mode      : SMOKE"
@@ -130,15 +119,8 @@ n_queued=0
 n_skipped=0
 n_inqueue=0
 n_failed=0
-for variant in "${VARIANTS[@]}"; do
-for mode in "${MODES[@]}"; do
-    # Naming mirrors the sbatch file: the task variant keeps its original
-    # arm name so finished runs keep matching the idempotency check.
-    if [ "$variant" = "task" ]; then
-        exp="new_exp_0_gemma_orch_${mode}"
-    else
-        exp="new_exp_0_gemma_orch_${variant}_${mode}"
-    fi
+# Arm name mirrors the sbatch file.
+exp="new_exp_0_gemma_orch_villager_advisory"
     for seed in "${SEEDS[@]}"; do
         if [ -f "$REPO/runs/$RUN_GROUP/$exp/seed_$seed/final_metrics.json" ]; then
             n_skipped=$((n_skipped + 1))
@@ -159,7 +141,7 @@ for mode in "${MODES[@]}"; do
             echo "would queue  $exp  seed_$seed"
             n_queued=$((n_queued + 1))
         else
-            jobid=$(SEED=$seed ORCH_MODE=$mode ORCH_VARIANT=$variant \
+            jobid=$(SEED=$seed \
                 sbatch --parsable --job-name="$jobname" \
                 ${SBATCH_OVERRIDES[@]:+"${SBATCH_OVERRIDES[@]}"} \
                 new_exp_orchestrator.sbatch)
@@ -173,12 +155,10 @@ for mode in "${MODES[@]}"; do
                 # drains; dedup makes that safe.
                 echo "FAILED  $exp  seed_$seed  — sbatch rejected the job" >&2
                 n_failed=$((n_failed + 1))
-                break 3
+                break
             fi
         fi
     done
-done
-done
 echo "── done: $n_queued submitted, $n_skipped already complete, $n_inqueue in queue, $n_failed failed ──"
 [ "$n_failed" -gt 0 ] && exit 1
 echo "Track with:   squeue -u \$USER"

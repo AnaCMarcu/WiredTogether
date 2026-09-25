@@ -80,57 +80,20 @@ export WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT NUM_A
 
 source "$WORKSPACE/WiredTogether/hpc/daic/experiments/_common.sh"
 
-# Same validation as new_exp_orchestrator.sbatch — refuse to burn GPU-hours
-# on a typo'd arm name.
-ORCH_VARIANT="${ORCH_VARIANT:-villager}"
-case "$ORCH_VARIANT" in
-    task|social|plan|villager) ;;
-    *)
-        echo "ERROR: ORCH_VARIANT must be 'task', 'social', 'plan' or 'villager' (got '${ORCH_VARIANT}')." >&2
-        exit 1
-        ;;
-esac
-ORCH_MODE="${ORCH_MODE:-advisory}"
-case "$ORCH_MODE" in
-    advisory|bias) ;;
-    *)
-        echo "ERROR: ORCH_MODE must be 'advisory' or 'bias' (got '${ORCH_MODE}')." >&2
-        exit 1
-        ;;
-esac
-if [ "$ORCH_VARIANT" = "villager" ] && [ "$ORCH_MODE" = "bias" ]; then
-    echo "ERROR: villager issues task assignments, not comm directives — bias mode is invalid; use ORCH_MODE=advisory." >&2
-    exit 1
-fi
-# Cadence 8 = the Hebbian anchor's social-interval default (matched call
-# rate). A different value makes the arm non-comparable to the anchors.
-ORCH_CADENCE="${ORCH_CADENCE:-8}"
-case "$ORCH_CADENCE" in
-    ''|*[!0-9]*|0)
-        echo "ERROR: ORCH_CADENCE must be a positive integer (got '${ORCH_CADENCE}')." >&2
-        exit 1
-        ;;
-esac
+EXP_NAME="scale_gemma_orch_villager_n${NUM_AGENTS}"
+export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,orchestrator,villager,scaling,n${NUM_AGENTS}}"
 
-EXP_NAME="scale_gemma_orch_${ORCH_VARIANT}_n${NUM_AGENTS}"
-export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,orchestrator,${ORCH_VARIANT},${ORCH_MODE},cadence${ORCH_CADENCE},scaling,n${NUM_AGENTS}}"
-
+# Node timeout: 60 is the published setting for 1000-step runs. NOTE
+# (measured): at N=3 a 60-step timeout dissolves nearly every staffed team
+# before it completes anything — 74% of teams freed by timeout vs 3.4% by
+# success. Raise it deliberately via ORCH_NODE_TIMEOUT if the N=6 runs are
+# meant to show teams persisting.
 ORCH_ARGS=(
     --orchestrator
-    --orchestrator-variant "$ORCH_VARIANT"
-    --orchestrator-mode "$ORCH_MODE"
-    --orchestrator-cadence "$ORCH_CADENCE"
+    --orchestrator-node-timeout-steps "${ORCH_NODE_TIMEOUT:-60}"
 )
-# Villager only: node timeout. 60 is the published setting for 1000-step
-# runs. NOTE (measured): at N=3 a 60-step timeout dissolves nearly every
-# staffed team before it completes anything — 74% of teams freed by timeout
-# vs 3.4% by success. Raise it deliberately via ORCH_NODE_TIMEOUT if the
-# N=6 runs are meant to show teams persisting.
-if [ "$ORCH_VARIANT" = "villager" ]; then
-    ORCH_ARGS+=(--orchestrator-node-timeout-steps "${ORCH_NODE_TIMEOUT:-60}")
-fi
 
-echo "── scale_gemma_orch: NUM_AGENTS=$NUM_AGENTS variant=$ORCH_VARIANT mode=$ORCH_MODE cadence=$ORCH_CADENCE → $EXP_NAME ──"
+echo "── scale_gemma_orch: NUM_AGENTS=$NUM_AGENTS node_timeout=${ORCH_NODE_TIMEOUT:-60} → $EXP_NAME ──"
 
 run_exp "$EXP_NAME" "$MODEL_LLM" \
     "${ORCH_ARGS[@]}" \

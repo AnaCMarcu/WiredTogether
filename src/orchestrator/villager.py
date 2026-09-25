@@ -1,4 +1,4 @@
-"""VillagerAgent-style centralized DAG orchestration (variant "villager").
+"""VillagerAgent-style centralized DAG orchestration.
 
 Port of VillagerAgent's orchestration core — central state → dynamic task
 DAG → deterministic ready-task detection → central LLM task allocation →
@@ -379,7 +379,7 @@ class VillagerController:
             })
 
     async def _call_llm(self, client, filled: str, parse_json) -> dict:
-        """One attempt against a client; mirrors orchestrate()'s call shape.
+        """One attempt against a client.
         Returns {"parsed", "prompt_tokens", "completion_tokens", "raw"}."""
         from autogen_core import CancellationToken
         from autogen_core.models import UserMessage
@@ -431,9 +431,8 @@ class VillagerController:
         result = TickResult()
         living = [_normalize_agent(a) or a for a in living_agents]
 
-        # 1. Drain events (load-bearing: villager never calls apply_success,
-        #    so nothing else bounds the buffer). Success before timeouts so
-        #    a same-tick tie goes to success.
+        # 1. Drain events (load-bearing: nothing else bounds the buffer).
+        #    Success before timeouts so a same-tick tie goes to success.
         events = list(state.event_buffer)
         state.event_buffer = []
         for ev in events:
@@ -616,7 +615,7 @@ class VillagerController:
             logger.warning("Villager decompose failed validation "
                            "(attempt %d): %s", attempt + 1, ingest["error"])
         # Cooldown either way — a failing decomposer must not be hammered
-        # every step (the record_failure clock-advance lesson).
+        # every step.
         self.last_decompose_step = t
         record = {
             "episode": episode, "t": t, "call_type": "decompose",
@@ -763,7 +762,7 @@ class VillagerController:
 
     def _sync_state_mirror(self, state: OrchestratorState) -> None:
         """Mirror current assignments into state.directives (the DAG stays
-        authoritative; the mirror keeps debugging uniform across variants)."""
+        authoritative; the mirror is what the per-call logs record)."""
         mirror = {}
         for task in self.dag.running_tasks():
             for agent in task.assigned:

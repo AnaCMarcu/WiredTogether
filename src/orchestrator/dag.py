@@ -1,4 +1,4 @@
-"""Task DAG for the VillagerAgent-style orchestrator variant.
+"""Task DAG for the VillagerAgent-style orchestrator.
 
 The graph represents SUBTASK DEPENDENCIES, not agent-agent relationships
 (the deliberate contrast with the Hebbian W). Each node is a CentralTask;

@@ -20,8 +20,7 @@ from orchestrator import events as oevents
 from orchestrator import prompt as oprompt
 from orchestrator import villager as ovillager
 from orchestrator.curriculum_hook import (
-    ASSIGNED_OBJECTIVE_PLACEHOLDER, PLAN_SUFFIX, VILLAGER_SUFFIX,
-    apply_plan_suffix, apply_villager_suffix,
+    ASSIGNED_OBJECTIVE_PLACEHOLDER, VILLAGER_SUFFIX, apply_villager_suffix,
 )
 from orchestrator.dag import CentralTask, TaskDAG, ingest_decomposition
 from orchestrator.logging import OrchestratorLogger
@@ -140,9 +139,9 @@ def test_config_villager_defaults_and_validation():
     assert cfg.node_timeout_steps == 60
     assert cfg.max_open_tasks == 0
     assert cfg.decompose_min_interval == 8
-    _cfg().validate()                                    # advisory OK
+    _cfg().validate()
     with pytest.raises(ValueError):
-        _cfg(mode="bias").validate()                     # bias invalid
+        _cfg(variant="task").validate()                  # removed variant
     with pytest.raises(ValueError):
         _cfg(node_timeout_steps=0).validate()
     with pytest.raises(ValueError):
@@ -445,13 +444,11 @@ def test_villager_suffix_identity_and_idempotence():
     assert out.startswith(base)
     assert out.count(ASSIGNED_OBJECTIVE_PLACEHOLDER) == 1
     assert apply_villager_suffix(out, True) == out
-    # Hard wording, distinct from the advisory plan suffix.
+    # Hard wording: an assignment, not advice.
     assert "not advice" in VILLAGER_SUFFIX and "MUST" in VILLAGER_SUFFIX
-    assert "ADVICE" in PLAN_SUFFIX
     assert VILLAGER_SUFFIX.format(assigned_objective="X").count("X") == 1
     # Legacy templates (no placeholder) ignore the extra kwarg.
     assert "PLAIN".format(assigned_objective="ignored") == "PLAIN"
-    assert apply_plan_suffix(base, True) != out           # separate chains
 
 
 def test_decompose_prompt_examples_use_real_ids():

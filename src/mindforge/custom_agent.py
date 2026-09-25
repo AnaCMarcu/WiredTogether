@@ -156,7 +156,6 @@ class CustomAgent(BaseChatAgent):
         bond_deltas=None,
         social_returns=None,
         orchestrator_directive=None,
-        orchestrator_plan_note=None,
         orchestrator_assigned_objective=None,
         comm_budget_text=None,
         comm_budget_locked=False,
@@ -294,21 +293,12 @@ class CustomAgent(BaseChatAgent):
                 completed_milestones=completed_milestones,
                 milestone_progress=milestone_progress,
                 do_question_answers=False,
-                # O-plan orchestrator variant: the coordinator's standing
-                # plan note for THIS agent, consumed at task-generation time
-                # via the {team_plan_note} curriculum-prompt suffix. Empty/
-                # None in every other configuration (str.format ignores it).
-                team_plan_note=orchestrator_plan_note or "",
-                # Villager variant: the HARD assigned objective this task
-                # must advance ({assigned_objective} suffix). Same inertness
-                # everywhere else.
+                # Orchestrator: the HARD assigned objective this task must
+                # advance ({assigned_objective} curriculum-prompt suffix).
+                # Empty/None in every other configuration (str.format
+                # ignores it).
                 assigned_objective=orchestrator_assigned_objective or "",
             )
-            if orchestrator_plan_note:
-                self.metric.log(
-                    f"Agent {self.name}: curriculum consumed team plan "
-                    f"note: {orchestrator_plan_note}"
-                )
             if orchestrator_assigned_objective:
                 self.metric.log(
                     f"Agent {self.name}: curriculum constrained by assigned "
