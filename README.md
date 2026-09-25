@@ -98,19 +98,19 @@ their layout.
 
 | Paper | Script |
 |---|---|
-| Tables 1, 2, 14; Table 3 except the bond-implied column | `analysis/make_agent_completion_tables.py` |
+| Tables 1, 2, 12; Table 3 except the bond-implied column | `analysis/make_agent_completion_tables.py` |
 | Table 9 | `analysis/make_steps_table_pct.py` |
 | Table 10 | `analysis/make_bond_behaviour_rho.py` |
-| Table 13 | `analysis/make_transplant_tables.py` |
-| Figure 4, 10, 11 | `analysis/make_counterfactual_compact_n6.py`, `analysis/make_counterfactual_n6.py` |
-| Figure 5 | `analysis/make_chamber_gallery.py` |
-| Figures 6–8 | `analysis/make_agent_completion_figs.py` |
-| Figure 9 | `analysis/make_final_figures.py` |
-| Figures 12, 13 | `analysis/make_counterfactual_story.py` |
-| Figure 14 | `analysis/make_team_tenure.py` |
+| Table 11 | `analysis/make_transplant_tables.py` |
+| Figures 4, 11, 12 | `analysis/make_counterfactual_compact_n6.py`, `analysis/make_counterfactual_n6.py` |
+| Figure 5 | `analysis/make_rq3_dynamics_fig.py` |
+| Figure 6 | `analysis/make_chamber_gallery.py` |
+| Figures 7–9 | `analysis/make_agent_completion_figs.py` |
+| Figure 10 | `analysis/make_final_figures.py` |
+| Figures 13, 14 | `analysis/make_counterfactual_story.py` |
+| Figure 15 | `analysis/make_team_tenure.py` |
 
-The bond-implied preference in Table 3, Tables 11 and 12, and the switch-press odds ratio in
-Section 5.3 are not yet produced by a script in this repository.
+The bond-implied preference column of Table 3 is not yet produced by a script in this repository.
 
 [analysis/README.md](analysis/README.md) gives the inputs of each script.
 

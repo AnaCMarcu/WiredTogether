@@ -111,6 +111,7 @@ COLS = {
     "heb": dict(
         run=HEB_RUN, exp=HEB_EXP, seed=456, ep=2, win=(330, 410),
         killer=5, partner=0, trio=(5, 0, 2), kill=396,
+        outcome=("Cooperative milestone completed: a0–a5", "#2E7D4F", "#e3f1e8"),
         # "hits" only where the footage shows the blow land (a2's view at
         # t=391 flashes red); a0's swing at t=394 is at 4-5 blocks from the
         # zombie and no frame shows it connect, so it stays a swing
@@ -134,6 +135,8 @@ COLS = {
     "orch": dict(
         run=ORCH_RUN, exp=ORCH_EXP, seed=42, ep=1, win=(600, 700),
         killer=5, kill=682, timeouts=[665], ticks=[625, 650, 675, 700],
+        outcome=("Only a5 completed the milestone: cooperation failed",
+                 "#B23A3A", "#f7e3e3"),
         # a5 680: zombie centred, a0 a1 a3 a4 named; a0 682: the red door,
         # a1 beside it; a5 684: the zombie flashing red under the hits, a0
         # named; a0 688: a2 a3 a5 in the lit room, no zombie
@@ -195,8 +198,7 @@ def swings_near(run_dir, ep, lo, hi, killer, radius=5.0):
 def strip_heb(ax, c, lo, hi):
     """The three bonds among the agents that fought, in colour, with each
     agent's first swing in reach of the killer marked on its bond to the
-    killer; the killer's other three bonds in grey, unlabelled (the caption
-    names them)."""
+    killer."""
     run = load_run(c["run"])
     off = run["_ep_bounds"][c["ep"] - 1][0]
     W = load_bond_series(dict(run=c["run"], lane="bonds_snap"))
@@ -207,11 +209,6 @@ def strip_heb(ax, c, lo, hi):
         return (W[off + xs, i, j] + W[off + xs, j, i]) / 2
 
     ends = []
-    for b in range(N):
-        if b == k or b in trio:
-            continue
-        ys = wbar(k, b)
-        ax.plot(xs, ys, color=CROSS, lw=0.8, alpha=0.8, zorder=2)
     for i, j in combinations(sorted(trio), 2):
         col = TRIO_C[(i, j)]
         ys = wbar(i, j)
@@ -387,7 +384,17 @@ def build_panel(key: str, stem: str):
                      bbox=dict(facecolor=AGENT_C[a] + "e0", edgecolor="none",
                                pad=1.0))
 
-        y = top - 2 * (fh + 0.016) - 0.034
+        # outcome banner in the gap between the frames and the dialogue
+        fb = top - 2 * (fh + 0.016) + 0.016          # frames' bottom edge
+        txt, fg, bg = c["outcome"]
+        bh = 0.030
+        fig.add_artist(Rectangle((L, fb - 0.012 - bh), R - L, bh,
+                                 transform=fig.transFigure, facecolor=bg,
+                                 edgecolor=fg, linewidth=0.6))
+        fig.text((L + R) / 2, fb - 0.012 - bh / 2, txt, fontsize=FS["chat"] + 0.5,
+                 color=fg, fontweight="bold", ha="center", va="center")
+
+        y = fb - 0.012 - bh - 0.022
         for t_, src, dst, txt in c["chat"]:
             fig.text(L, y, f"a{src}→a{dst}", fontsize=FS["chat"],
                      color=AGENT_C[src], va="top", fontweight="bold",
