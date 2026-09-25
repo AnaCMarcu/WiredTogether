@@ -29,6 +29,8 @@ echo "[build] tmp:       $BUILD_TMP"
 echo "[build] start:     $(date)"
 echo
 
+# %files paths in the recipe are relative to the repo root.
+cd "$(dirname "$DEF_FILE")/../.."
 apptainer build --fakeroot --force "$IMG_FILE" "$DEF_FILE"
 
 echo
