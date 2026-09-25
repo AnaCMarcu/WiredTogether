@@ -14,10 +14,10 @@ disagree about how a milestone counts.
 
 | Paper | Script | Run groups it reads |
 |---|---|---|
-| Tables 1–3, 12 | `make_agent_completion_tables.py` | `medium_runs`, `new_exp_0_gemma`, `gemma4`, `orchestrator`, `social_replay_3f_{qwen,gemma4}`, `cofiring_bidi_3f`, `pair_bonding_3f`, `medium_2k` |
+| Tables 1, 2, 14; Table 3 except the bond-implied column | `make_agent_completion_tables.py` | `medium_runs`, `new_exp_0_gemma`, `gemma4`, `orchestrator`, `social_replay_3f_{qwen,gemma4}`, `cofiring_bidi_3f`, `pair_bonding_3f`, `medium_2k` |
 | Table 9 | `make_steps_table_pct.py` | as Table 1 |
 | Table 10 | `make_bond_behaviour_rho.py` | `medium_runs` (exp34, exp35), `new_exp_0_gemma` (hebbian3f) |
-| Table 11 | `make_transplant_tables.py` | `pair_bonding_3f` |
+| Table 13 | `make_transplant_tables.py` | `pair_bonding_3f` |
 | Figures 4, 10, 11 | `make_counterfactual_compact_n6.py`, `make_counterfactual_n6.py` | `agent_scaling_orch`, `agent_scaling_3f` |
 | Figure 5 | `make_chamber_gallery.py` | frames written by `make_final_figures.py` |
 | Figure 6 | `make_agent_completion_figs.py` | `new_exp_0_gemma`, `pareto_social_3f` |
