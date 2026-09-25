@@ -69,7 +69,7 @@ WANDB_PROJECT="${WANDB_PROJECT:-transplant_wired_together}"
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,9b,hebbian,social_prompt,pair_bonding,phaseB,transplant,three_factor}"
 
 run_exp "expB_merged_transplant_3f" "$MODEL_9B" \
-    --hebbian \
+    --hebbian --hebbian-rho 0.0 \
     --hebbian-mode three_factor \
     --hebbian-eta-0 0.001 \
     --hebbian-reward-norm 50 \

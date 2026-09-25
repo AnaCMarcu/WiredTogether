@@ -58,7 +58,7 @@ WANDB_PROJECT="${WANDB_PROJECT:-transplant_wired_together}"
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,9b,hebbian,social_prompt,pair_bonding,phaseB,neither,cellD,floor}"
 
 run_exp "expB_neither" "$MODEL_9B" \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-death-ltd 0.0 --hebbian-rho 0.0 \
     --hebbian-eta-0 0.005 \
     --hebbian-reward-norm 50 \
     --hebbian-decay 0.005 \

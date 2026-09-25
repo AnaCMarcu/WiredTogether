@@ -24,7 +24,7 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,9b,hebbian,social_prompt,final}
 
 # 9B LLM + Hebbian + SocialModule (prompt coupling). 9B companion to exp07.
 run_exp "exp08_llm_9b_social_prompt" "$MODEL_9B" \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-death-ltd 0.0 --hebbian-rho 0.0 \
     --hebbian-eta-0 0.005 \
     --hebbian-reward-norm 50 \
     --hebbian-decay 0.005 \

@@ -28,7 +28,7 @@ python -u multi_agent_craftium.py \
     --episodes 3 \
     --max-steps 1000 \
     --warmup-time 300 \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-eta-0 0.01 --hebbian-reward-norm 300 --hebbian-death-ltd 0.0 \
     --hebbian-ltp 0.01 \
     --hebbian-ltd 0.005 \
     --hebbian-decay 0.005 \

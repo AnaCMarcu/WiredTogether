@@ -65,8 +65,8 @@ Four rules are selectable with `--hebbian-mode`:
 
 | Mode | Growth term | Notes |
 |---|---|---|
-| `reward_modulated` | `(η₀ + η₊·\|r_bond\|/R)·c·(1−W)` | The paper's Eq. 7. Reward acts on the step it arrives. |
-| `three_factor` | `η₀·c·(1−W) + η₊·(\|r_bond\|/R)·e·(1−W)` | Eligibility trace `e ← ρ_e·e + c` (~10-step memory), so a milestone credits the work that preceded it. Optionally routes death blame through the same trace (`eta_minus_death`). |
+| `three_factor` (default) | `η₀·c·(1−W) + η₊·(\|r_bond\|/R)·e·(1−W)` | The paper's rule (Eqs. 6–8). Eligibility trace `e ← ρ_e·e + c` (~10-step memory), so a milestone credits the work that preceded it; death and would-die penalties weaken bonds through the same trace (`--hebbian-death-ltd`). |
+| `reward_modulated` | `(η₀ + η₊·\|r_bond\|/R)·c·(1−W)` | Single-timescale: reward acts on the step it arrives. The imposed-topology arms and the Phase A pair runs used it; their launchers pin it. |
 | `coactivity` | `η₊·c·(1−W)` | Ablation: no reward modulation at all. |
 | `legacy` | advantage-modulated LTP/LTD with a failure-grace window | The first implementation; kept so old runs stay reproducible. |
 

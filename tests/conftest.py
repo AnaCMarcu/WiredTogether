@@ -87,9 +87,13 @@ def lua_root() -> Path:
 
 @pytest.fixture
 def hcfg():
-    """HebbianConfig factory with decay=0 so hand computations are exact.
+    """HebbianConfig factory for the single-timescale rule, decay=0 so hand
+    computations are exact.
 
-    Tests that exercise the homeostatic decay pass ``decay=...`` explicitly.
+    Pins the rule's own constants (η₀ = 0.01, R = 300, no death term, no
+    experience sharing) rather than inheriting the package defaults, which
+    are the paper's three-factor settings. Tests that exercise the
+    homeostatic decay pass ``decay=...`` explicitly.
     """
     from hebbian import HebbianConfig
 
@@ -99,6 +103,10 @@ def hcfg():
             mode="reward_modulated",
             num_agents=num_agents,
             decay=0.0,
+            eta_0=0.01,
+            reward_norm_R=300.0,
+            eta_minus_death=0.0,
+            social_replay_rho=0.0,
         )
         defaults.update(overrides)
         return HebbianConfig(**defaults)

@@ -72,7 +72,7 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,hebbian,three_fac
 # NEW-rule hyper-parameters: byte-identical to exp_qwen_three_factor_fdecay
 # (exp34/35) — the interval is the ONLY difference between sweep points.
 HEBBIAN_ARGS=(
-    --hebbian
+    --hebbian --hebbian-rho 0.0
     --hebbian-mode three_factor
     --hebbian-eta-0 0.001
     --hebbian-reward-norm 50

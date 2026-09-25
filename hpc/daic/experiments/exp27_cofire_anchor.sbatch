@@ -47,7 +47,7 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,hebbian,cofiring,legacy,anchor}
 # NOTE: no --social-act-mode flag — legacy is the default, and that IS the
 # condition (mandatory per-step communication, historical co-firing rule).
 run_exp "exp27_cofire_anchor" "$MODEL_LLM" \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-death-ltd 0.0 --hebbian-rho 0.0 \
     --hebbian-eta-0 0.005 \
     --hebbian-reward-norm 50 \
     --hebbian-decay 0.005 \

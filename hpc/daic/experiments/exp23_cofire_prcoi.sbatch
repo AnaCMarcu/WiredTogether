@@ -47,7 +47,7 @@ WANDB_PROJECT="${WANDB_PROJECT:-cofiring_final_wired_together}"
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,hebbian,cofiring,choice,prcoi}"
 
 run_exp "exp23_cofire_prcoi" "$MODEL_LLM" \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-death-ltd 0.0 --hebbian-rho 0.0 \
     --hebbian-eta-0 0.005 \
     --hebbian-reward-norm 50 \
     --hebbian-decay 0.005 \

@@ -14,7 +14,7 @@ source "/scratch/acmarcu/WiredTogether/hpc/delft_blue/experiments/_common.sh"
 
 # 9B LLM + Hebbian + SocialModule (prompt coupling). 9B companion to exp9.
 run_exp "exp11_llm_9b_social_prompt" "$MODEL_9B" \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-eta-0 0.01 --hebbian-reward-norm 300 --hebbian-death-ltd 0.0 \
     --hebbian-ltp 0.01 \
     --hebbian-ltd 0.005 \
     --hebbian-decay 0.005 \

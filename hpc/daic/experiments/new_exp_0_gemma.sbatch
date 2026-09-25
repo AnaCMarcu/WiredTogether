@@ -80,7 +80,7 @@ if [ "$HEBBIAN" = "1" ]; then
     EXP_NAME="new_exp_0_gemma_hebbian"
     export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,hebbian,${SOCIAL_MODULE},new_exp_0}"
     HEBBIAN_ARGS=(
-        --hebbian
+        --hebbian --hebbian-mode reward_modulated --hebbian-death-ltd 0.0 --hebbian-rho 0.0
         --hebbian-eta-0 0.005
         --hebbian-reward-norm 50
         --hebbian-decay 0.005

@@ -78,7 +78,7 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,hebbian,${SOCIAL_
 # Hebbian hyper-parameters: byte-identical to new_exp_0_gemma.sbatch's
 # HEBBIAN=1 arm — the interval is the ONLY difference between sweep points.
 HEBBIAN_ARGS=(
-    --hebbian
+    --hebbian --hebbian-mode reward_modulated --hebbian-death-ltd 0.0 --hebbian-rho 0.0
     --hebbian-eta-0 0.005
     --hebbian-reward-norm 50
     --hebbian-decay 0.005

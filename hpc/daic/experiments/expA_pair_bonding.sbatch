@@ -52,7 +52,7 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,9b,hebbian,social_prompt,pair_b
 # Same condition as exp08 (9B + Hebbian + SocialModule prompt coupling),
 # just 2 agents capped at Ch2.
 run_exp "expA_pair_bonding" "$MODEL_9B" \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-death-ltd 0.0 --hebbian-rho 0.0 \
     --hebbian-eta-0 0.005 \
     --hebbian-reward-norm 50 \
     --hebbian-decay 0.005 \

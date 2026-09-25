@@ -70,7 +70,7 @@ if [ "$HEBBIAN" = "1" ]; then
     EXP_NAME="scale_gemma_hebbian_n${NUM_AGENTS}"
     export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,hebbian,scaling,n${NUM_AGENTS}}"
     HEBBIAN_ARGS=(
-        --hebbian
+        --hebbian --hebbian-mode reward_modulated --hebbian-death-ltd 0.0 --hebbian-rho 0.0
         --hebbian-eta-0 0.005
         --hebbian-reward-norm 50
         --hebbian-decay 0.005

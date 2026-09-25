@@ -66,7 +66,7 @@ fi
 echo "── exp_qwen_three_factor: QWEN=$QWEN → $EXP_NAME ($MODEL, seed=${SEED:-unset}) ──"
 
 run_exp "$EXP_NAME" "$MODEL" \
-    --hebbian \
+    --hebbian --hebbian-death-ltd 0.0 --hebbian-rho 0.0 \
     --hebbian-mode three_factor \
     --hebbian-eta-0 0.001 \
     --hebbian-reward-norm 50 \

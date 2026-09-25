@@ -18,7 +18,7 @@ class HebbianConfig:
     enabled: bool = False
 
     # ── Update-rule selector ───────────────────────────────────────────
-    mode: str = "reward_modulated"
+    mode: str = "three_factor"
 
     # ── Population ──
     num_agents: int = 3
@@ -66,7 +66,7 @@ class HebbianConfig:
     base_ltp: float = 0.005
 
     # ── Decay — passive bond flexibility ──
-    decay: float = 0.0003  # λ
+    decay: float = 0.001  # λ (paper Table 8)
 
     # ── Modulation sensitivity ──
     modulation_beta: float = 1.0  # β
@@ -81,10 +81,10 @@ class HebbianConfig:
     failure_ltp_lr: float = 0.015         # bonus LTP rate (3× ltd_lr by default)
 
     # ── Social replay (Eq. 7 weight-gated experience sharing) ──
-    # 0.0 = off (the evaluated-system default; exp30/exp31 opt in at 0.3).
-    # Off-policy correction is PPO's clipped ratio π_i/π_j — see
+    # 0.3 = the paper's value (Table 8); only read by the PPO update, so it
+    # has no effect without the RL layer. 0.0 = off. Off-policy correction is PPO's clipped ratio π_i/π_j — see
     # rl_layer.ppo_update._collect_social_replay for the full argument.
-    social_replay_rho: float = 0.0
+    social_replay_rho: float = 0.3
 
     # ── Reward diffusion (Eq. 9) ── (shared by ALL modes)
     reward_diffusion_gamma: float = 0.2  # γ_d
@@ -92,7 +92,7 @@ class HebbianConfig:
     # ── Reward-modulated update (Eq. 7; mode = "reward_modulated") ──────
     # ΔW = (η₀ + η₊·|r_bond|/R)·c_ij·(1−W) − η₋·φ_ij·W − λ·W
     eta_plus: float = 0.05      # η₊  reward-modulated growth rate
-    eta_0: float = 0.01         # η₀  association floor: growth on a zero-reward
+    eta_0: float = 0.001        # η₀  association floor: growth on a zero-reward
                                 #     step, so repeated co-firing alone wires
     eta_minus: float = 0.025    # η₋  failure-gated decay rate
     coop_eps: float = 0.05      # ε   co-activity floor; below it a pair counts
@@ -101,7 +101,7 @@ class HebbianConfig:
                                 #     gate looks back over
     neg_theta: float = 5.0      # θ   windowed loss below −θ marks agent i as
                                 #     having a negative outcome
-    reward_norm_R: float = 300.0  # R  salience normaliser for |r_bond|
+    reward_norm_R: float = 50.0   # R  salience normaliser for |r_bond|
 
     # ── Three-factor variant (mode = "three_factor") ────────────────────
     # Eligibility-trace decay ρ_e: e_ij ← ρ_e·e_ij + c_ij, so co-activity
@@ -120,8 +120,8 @@ class HebbianConfig:
     # the partners the dying agent was recently co-active with — the live
     # replacement for the coop<ε ∧ neg_i branch, which the closed-loop audit
     # showed never fires (comm keeps coop ≥ ε through failure episodes).
-    # 0.0 = off: every existing three_factor arm is byte-identical.
-    eta_minus_death: float = 0.0
+    # 0.05 = the paper's value (Table 8); 0.0 = off.
+    eta_minus_death: float = 0.05
     # Cap on |death signal| before /R: would-die (−10) and real death (−50)
     # carry equal blame, and one death cannot wipe a strong bond outright.
     death_cap: float = 10.0

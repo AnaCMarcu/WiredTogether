@@ -25,7 +25,7 @@ run_exp "exp4_mappo_hebbian" "$MODEL_2B" \
     --rl-model-path "$MODEL_2B" \
     --rl-update-interval 64 \
     --rl-lr 3e-4 \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-eta-0 0.01 --hebbian-reward-norm 300 --hebbian-death-ltd 0.0 \
     --hebbian-ltp 0.01 \
     --hebbian-ltd 0.005 \
     --hebbian-decay 0.005 \

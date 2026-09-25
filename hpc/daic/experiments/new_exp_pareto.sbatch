@@ -117,7 +117,7 @@ if [ "$HEBBIAN" = "1" ]; then
     EXP_NAME="pareto_${MODEL_SIZE}_hebbian"
     export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,${MODEL_FAMILY},vision,pareto,${MODEL_SIZE},hebbian,${SOCIAL_MODULE}}"
     HEBBIAN_ARGS=(
-        --hebbian
+        --hebbian --hebbian-mode reward_modulated --hebbian-death-ltd 0.0 --hebbian-rho 0.0
         --hebbian-eta-0 0.005
         --hebbian-reward-norm 50
         --hebbian-decay 0.005

@@ -57,7 +57,7 @@ EXP_NAME="new_exp_0_gemma_hebbian3f"
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,hebbian,three_factor,${SOCIAL_MODULE},new_exp_0}"
 
 HEBBIAN_ARGS=(
-    --hebbian
+    --hebbian --hebbian-death-ltd 0.0 --hebbian-rho 0.0
     --hebbian-mode three_factor
     --hebbian-eta-0 0.001
     --hebbian-reward-norm 50

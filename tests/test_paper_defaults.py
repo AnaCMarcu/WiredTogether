@@ -56,25 +56,73 @@ def test_rlconfig_actions_tuple():
     )
 
 
-def test_hebbian_table7_defaults():
-    """HebbianConfig() defaults match paper Table 7 field-by-field."""
+# The paper's social-plasticity hyperparameters (Table 8), by config field.
+TABLE8 = {
+    "mode": "three_factor",
+    "interaction_radius": 5.0,           # d
+    "engagement_reward_weight": 0.5,     # α
+    "communication_coactivity_bonus": 0.5,  # δ_k
+    "coact_floor": 0.25,                 # c_0
+    "coop_eps": 0.05,                    # ε_c
+    "init_weight": 0.1,                  # W_0
+    "eligibility_rho": 0.9,              # ρ_e
+    "eta_0": 0.001,                      # η_0
+    "eta_plus": 0.05,                    # η_+
+    "reward_norm_R": 50.0,               # R
+    "eta_minus_death": 0.05,             # η_-^d
+    "death_cap": 10.0,                   # r_cap
+    "decay": 0.001,                      # λ
+    "reward_diffusion_gamma": 0.2,       # γ_d
+    "social_replay_rho": 0.3,            # ρ
+}
+
+# CLI flag -> config field, for the settings the paper's launchers vary.
+CLI_TO_FIELD = {
+    "hebbian_mode": "mode",
+    "hebbian_radius": "interaction_radius",
+    "hebbian_alpha": "engagement_reward_weight",
+    "hebbian_coact_floor": "coact_floor",
+    "hebbian_coop_eps": "coop_eps",
+    "hebbian_init_weight": "init_weight",
+    "hebbian_eligibility_rho": "eligibility_rho",
+    "hebbian_eta_0": "eta_0",
+    "hebbian_eta_plus": "eta_plus",
+    "hebbian_reward_norm": "reward_norm_R",
+    "hebbian_death_ltd": "eta_minus_death",
+    "hebbian_death_cap": "death_cap",
+    "hebbian_decay": "decay",
+    "hebbian_gamma": "reward_diffusion_gamma",
+    "hebbian_rho": "social_replay_rho",
+}
+
+
+def test_hebbian_defaults_match_paper_table8():
+    """HebbianConfig() defaults are the paper's rule, field by field."""
     cfg = HebbianConfig()
-    assert cfg.interaction_radius == pytest.approx(5.0)
-    assert cfg.engagement_reward_weight == pytest.approx(0.5)
-    assert cfg.communication_coactivity_bonus == pytest.approx(0.5)
-    assert cfg.eta_0 == pytest.approx(0.01)
-    assert cfg.eta_plus == pytest.approx(0.05)
-    assert cfg.eta_minus == pytest.approx(0.025)
-    assert cfg.reward_norm_R == pytest.approx(300.0)
-    assert cfg.coop_eps == pytest.approx(0.05)
-    assert cfg.coop_window == 50
-    assert cfg.neg_theta == pytest.approx(5.0)
-    assert cfg.reward_diffusion_gamma == pytest.approx(0.2)
-    assert cfg.decay == pytest.approx(0.0003)
-    assert cfg.social_replay_rho == pytest.approx(0.0)
-    assert cfg.mode == "reward_modulated"
-    assert cfg.init_weight == pytest.approx(0.1)
+    for field, value in TABLE8.items():
+        got = getattr(cfg, field)
+        if isinstance(value, str):
+            assert got == value, field
+        else:
+            assert got == pytest.approx(value), field
     assert cfg.init_preset == "none"
+
+
+def test_cli_defaults_match_config_defaults(monkeypatch):
+    """`--hebbian` with no other flag runs the Table 8 rule: every CLI
+    default equals the config default (they had drifted apart on λ)."""
+    import sys
+    from mindforge import cli
+
+    monkeypatch.setattr(sys, "argv", ["x"])
+    args = cli.parse_args()
+    for flag, field in CLI_TO_FIELD.items():
+        want = TABLE8[field]
+        got = getattr(args, flag)
+        if isinstance(want, str):
+            assert got == want, flag
+        else:
+            assert got == pytest.approx(want), flag
 
 
 def test_configs_disabled_by_default():

@@ -29,15 +29,18 @@ Paper symbols in the first column; `HebbianConfig` field names match the flag na
 | Symbol | Flag | Default | Meaning |
 |---|---|---|---|
 | — | `--hebbian` | off | Master switch; required by every coupling below |
-| — | `--hebbian-mode` | `reward_modulated` | `reward_modulated` \| `three_factor` \| `coactivity` \| `legacy` |
+| — | `--hebbian-mode` | `three_factor` | `three_factor` (the paper's rule) \| `reward_modulated` (single-timescale; imposed-topology and Phase A runs) \| `coactivity` \| `legacy` |
 | `d` | `--hebbian-radius` | 5.0 | Interaction radius, world units |
 | `α` | `--hebbian-alpha` | 0.5 | Weight of reward vs social activity in engagement `g_i` |
 | `δ_k` | `--hebbian-delta` | None → 0.5 | Co-activity value of one social act, all channels alike |
-| `η₀` | `--hebbian-eta-0` | 0.01 | Association floor: growth on a zero-reward step |
+| `η₀` | `--hebbian-eta-0` | 0.001 | Association floor: growth on a zero-reward step |
 | `η₊` | `--hebbian-eta-plus` | 0.05 | Reward-modulated growth rate |
 | `η₋` | `--hebbian-eta-minus` | 0.025 | Failure-gated decay rate |
-| `λ` | `--hebbian-decay` | 0.005 | Homeostatic decay |
-| `R` | `--hebbian-reward-norm` | 300.0 | Salience normaliser (the paper's runs use 50) |
+| `λ` | `--hebbian-decay` | 0.001 | Homeostatic decay |
+| `R` | `--hebbian-reward-norm` | 50.0 | Salience normaliser |
+| `η₋ᵈ` | `--hebbian-death-ltd` | 0.05 | Failure-gated decay through the trace (`three_factor` only) |
+| `r_cap` | `--hebbian-death-cap` | 10.0 | Cap on the failure signal |
+| `c₀` | `--hebbian-coact-floor` | 0.25 | Co-activity floor for co-located pairs |
 | `ε` | `--hebbian-coop-eps` | 0.05 | Co-activity floor for the failure gate |
 | `n` | `--hebbian-coop-window` | 50 | Co-activity / loss window, steps |
 | `θ` | `--hebbian-neg-theta` | 5.0 | Windowed loss marking a negative outcome |
@@ -49,7 +52,7 @@ Couplings:
 | Symbol | Flag | Default | Meaning |
 |---|---|---|---|
 | `γ_d` | `--hebbian-gamma` | 0.2 | Reward-diffusion strength |
-| `ρ` | `--hebbian-rho` | 0.0 | Weight-gated experience sharing; 0.3 in the opt-in arms |
+| `ρ` | `--hebbian-rho` | 0.3 | Bond-gated experience sharing; acts only with `--rl` |
 | — | `--social-module` | `none` | `prompt` renders the directive; `bias` also overrides routing |
 | — | `--social-interval` | 8 | Steps between deliberations; the directive is cached in between |
 

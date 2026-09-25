@@ -18,7 +18,7 @@ source "/scratch/acmarcu/WiredTogether/hpc/delft_blue/experiments/_common.sh"
 run_exp "exp14_llm_hebbian_roles" "$MODEL_2B" \
     --team-mode heterogeneous \
     --roles hunter,harvester,scouter \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-eta-0 0.01 --hebbian-reward-norm 300 --hebbian-death-ltd 0.0 \
     --hebbian-ltp 0.01 \
     --hebbian-ltd 0.005 \
     --hebbian-decay 0.005 \

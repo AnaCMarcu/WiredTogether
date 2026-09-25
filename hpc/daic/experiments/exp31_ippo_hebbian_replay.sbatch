@@ -31,7 +31,7 @@ run_exp "exp31_ippo_hebbian_replay" "$MODEL_2B" \
     --rl-model-path "$MODEL_2B" \
     --rl-update-interval 64 \
     --rl-lr 3e-4 \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-death-ltd 0.0 \
     --hebbian-eta-0 0.005 \
     --hebbian-reward-norm 50 \
     --hebbian-decay 0.005 \

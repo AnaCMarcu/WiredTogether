@@ -95,7 +95,7 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,${MODEL_FAMILY},vision,pareto,$
 # NEW-rule hyper-parameters: byte-identical to exp_qwen_three_factor_fdecay —
 # across the size sweep the only thing that varies is the backbone.
 HEBBIAN_ARGS=(
-    --hebbian
+    --hebbian --hebbian-rho 0.0
     --hebbian-mode three_factor
     --hebbian-eta-0 0.001
     --hebbian-reward-norm 50

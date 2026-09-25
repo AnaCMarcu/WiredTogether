@@ -15,7 +15,7 @@ source "/scratch/acmarcu/WiredTogether/hpc/delft_blue/experiments/_common.sh"
 # 2B LLM + Hebbian + SocialModule (prompt coupling). Weakest coupling rung
 # of the social-module ablation — text-only directive into the action prompt.
 run_exp "exp9_llm_2b_social_prompt" "$MODEL_2B" \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-eta-0 0.01 --hebbian-reward-norm 300 --hebbian-death-ltd 0.0 \
     --hebbian-ltp 0.01 \
     --hebbian-ltd 0.005 \
     --hebbian-decay 0.005 \

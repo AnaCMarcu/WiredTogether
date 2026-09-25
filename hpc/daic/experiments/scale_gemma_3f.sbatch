@@ -60,7 +60,7 @@ EXP_NAME="scale_gemma_hebbian_n${NUM_AGENTS}"
 export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,hebbian,three_factor,fdecay,scaling,n${NUM_AGENTS}}"
 # NEW-rule hyper-parameters: byte-identical to exp_qwen_three_factor_fdecay.
 HEBBIAN_ARGS=(
-    --hebbian
+    --hebbian --hebbian-rho 0.0
     --hebbian-mode three_factor
     --hebbian-eta-0 0.001
     --hebbian-reward-norm 50

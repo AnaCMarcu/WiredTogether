@@ -75,7 +75,7 @@ if [ "$ARM" = "hebbian" ]; then
     export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,hebbian,three_factor,fdecay,comm_budget,b${COMM_BUDGET},n${NUM_AGENTS}}"
     # Hebbian 2.0: byte-identical to scale_gemma_3f.sbatch / exp_qwen_three_factor_fdecay.
     HEBBIAN_ARGS=(
-        --hebbian
+        --hebbian --hebbian-rho 0.0
         --hebbian-mode three_factor
         --hebbian-eta-0 0.001
         --hebbian-reward-norm 50

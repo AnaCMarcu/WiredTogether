@@ -43,7 +43,7 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,9b,hebbian,frozen,allied_none,n
 # ───────────────────────────────────────────────────────────────────────────
 
 run_exp "exp11_llm_9b_allied_none" "$MODEL_9B" \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-eta-0 0.01 --hebbian-reward-norm 300 --hebbian-decay 0.005 --hebbian-death-ltd 0.0 --hebbian-rho 0.0 \
     --hebbian-freeze \
     --hebbian-preset uniform \
     --hebbian-bond-strong 0.0 \

@@ -165,11 +165,13 @@ def parse_args():
     # ── Hebbian social plasticity ──
     parser.add_argument("--hebbian", action="store_true",
                         help="Enable Hebbian social plasticity graph")
-    parser.add_argument("--hebbian-mode", type=str, default="reward_modulated",
+    parser.add_argument("--hebbian-mode", type=str, default="three_factor",
                         choices=["legacy", "coactivity", "reward_modulated",
                                  "three_factor"],
-                        help="Graph-update rule. 'reward_modulated' (default, "
-                             "Variant B): growth (η0 + η+·|r_bond|/R)·c·(1−W). "
+                        help="Graph-update rule. 'three_factor' (default; the "
+                             "paper's rule, Eqs. 6-8). 'reward_modulated' ("
+                             "single-timescale, used by the imposed-topology "
+                             "and Phase A launchers): growth (η0 + η+·|r_bond|/R)·c·(1−W). "
                              "'coactivity' (Variant A): flat η+·c·(1−W). "
                              "'three_factor': eligibility trace e←ρe+c with "
                              "growth η0·c·(1−W) + η+·(|r_bond|/R)·e·(1−W) and "
@@ -181,8 +183,8 @@ def parse_args():
     parser.add_argument("--hebbian-eta-plus", type=float, default=0.05,
                         help="η+ growth rate (Variant A flat rate / Variant B "
                              "salience scale)")
-    parser.add_argument("--hebbian-eta-0", type=float, default=0.01,
-                        help="η0 association floor (Variant B only)")
+    parser.add_argument("--hebbian-eta-0", type=float, default=0.001,
+                        help="η0 association floor (paper: 0.001)")
     parser.add_argument("--hebbian-eta-minus", type=float, default=0.025,
                         help="η- failure-gated decay rate")
     parser.add_argument("--hebbian-coop-eps", type=float, default=0.05,
@@ -199,20 +201,20 @@ def parse_args():
                         help="three_factor mode: co-location counts at least "
                              "this much co-activity even for a silent pair; "
                              "0 restores the engagement-gated spatial term")
-    parser.add_argument("--hebbian-death-ltd", type=float, default=0.0,
+    parser.add_argument("--hebbian-death-ltd", type=float, default=0.05,
                         help="three_factor mode: η₋ᵈ signed death LTD rate — "
                              "a drained death/would-die penalty converts the "
                              "eligibility trace into bond WEAKENING "
                              "(ΔW⁻ = η₋ᵈ·(min(|death|,cap)/R)·e·W) on the "
-                             "dying agent's outgoing row. 0 (default) = off, "
-                             "byte-identical to the audited three_factor rule")
+                             "dying agent's outgoing row. Default 0.05 "
+                             "(paper); 0 = off")
     parser.add_argument("--hebbian-death-cap", type=float, default=10.0,
                         help="cap on |death signal| before /R in the death-LTD "
                              "term: would-die (−10) and real death (−50) "
                              "blame equally")
-    parser.add_argument("--hebbian-reward-norm", type=float, default=300.0,
-                        help="R fixed bondable-reward normalizer (Variant B); "
-                             "default = largest milestone reward (m27=300)")
+    parser.add_argument("--hebbian-reward-norm", type=float, default=50.0,
+                        help="R salience reward normaliser for |r_bond| "
+                             "(paper: 50)")
     parser.add_argument("--hebbian-alpha", type=float, default=0.5,
                         help="α engagement reward/comm mix in g_i")
     parser.add_argument("--hebbian-radius", type=float, default=5.0,
@@ -221,16 +223,15 @@ def parse_args():
                         help="η_+ LTP learning rate")
     parser.add_argument("--hebbian-ltd", type=float, default=0.005,
                         help="η_- LTD learning rate")
-    parser.add_argument("--hebbian-decay", type=float, default=0.005,
-                        help="λ passive decay rate")
+    parser.add_argument("--hebbian-decay", type=float, default=0.001,
+                        help="λ homeostatic decay rate (paper: 0.001)")
     parser.add_argument("--hebbian-beta", type=float, default=1.0,
                         help="β modulation sensitivity")
-    parser.add_argument("--hebbian-rho", type=float, default=0.0,
-                        help="ρ social replay blend factor (Eq. 7 weight-gated "
-                             "experience sharing). 0 = off (paper default; "
-                             "matches HebbianConfig). Requires --rl and "
-                             "--hebbian; e.g. 0.3 makes ~30%% of each PPO "
-                             "pool bond-weighted neighbour transitions.")
+    parser.add_argument("--hebbian-rho", type=float, default=0.3,
+                        help="ρ bond-gated experience sharing (Eq. 10): the "
+                             "share of each PPO batch drawn from bonded "
+                             "teammates' buffers. Default 0.3 (paper); only "
+                             "acts with --rl and --hebbian; 0 = off.")
     parser.add_argument("--hebbian-gamma", type=float, default=0.2,
                         help="γ reward diffusion strength")
     parser.add_argument("--hebbian-init-weight", type=float, default=0.1,

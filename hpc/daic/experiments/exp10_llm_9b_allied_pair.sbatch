@@ -43,7 +43,7 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,9b,hebbian,frozen,allied_pair,s
 WEAK="${WEAK:-0.0}"   # 0.0 = agent 2 fully excluded; 0.1 = weakly bonded
 
 run_exp "exp10_llm_9b_allied_pair" "$MODEL_9B" \
-    --hebbian \
+    --hebbian --hebbian-mode reward_modulated --hebbian-eta-0 0.01 --hebbian-reward-norm 300 --hebbian-decay 0.005 --hebbian-death-ltd 0.0 --hebbian-rho 0.0 \
     --hebbian-freeze \
     --hebbian-preset pair \
     --hebbian-bond-strong 0.8 \
