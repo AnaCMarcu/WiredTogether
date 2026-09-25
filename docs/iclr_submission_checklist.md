@@ -403,5 +403,5 @@ Steps:
 ## 6. Order of work
 
 1. §1 commit pending edits → 2. §3.2–3.7 prune (one commit per directory, tests after each) →
-3. §2 scrub + `craftium.patch` → 4. §4 dataset bundle + `results/` → 5. README/docs rewrite →
+3. §2 scrub + `craftium.patch` → 4. §4 dataset bundle → 5. README/docs rewrite →
 6. §5 gate → 7. orphan snapshot, private repo, Anonymous GitHub, OSF → 8. links into the paper.
