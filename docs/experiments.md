@@ -2,7 +2,7 @@
 
 ## The arms
 
-Every condition in the paper is one launcher under `hpc/daic/experiments/`, and every launcher
+Every condition in the paper is one launcher under `hpc/slurm/experiments/`, and every launcher
 sources `_common.sh` (container, model paths, headless rendering, `CRAFTIUM_ENV_DIR`, seeds, W&B)
 and calls `multi_agent_craftium.py` with a fixed configuration. Seeds come from a SLURM array.
 Results land in `runs/<group>/<arm>/seed_<N>/`. Synced off the cluster, groups are filed under the

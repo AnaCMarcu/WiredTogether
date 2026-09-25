@@ -50,7 +50,7 @@ drawn under the points; --no-fit omits it.
 
 Usage:
     python analysis/make_scaling_fig.py                # runs/agent_scaling → paper_assets/scaling/
-    python analysis/make_scaling_fig.py --runs-root runs_from_daic/agent_scaling \
+    python analysis/make_scaling_fig.py --runs-root runs/agent_scaling \
         --out paper_assets/scaling --n-eff 4.5e9
 """
 
@@ -233,7 +233,7 @@ def parse_alias(spec: str):
 
     Lets a team size be supplied from a run group that does not follow the
     sweep's naming, e.g. reusing the 3-agent 1000-step runs as the N=3
-    point:  ``--alias 3=runs_from_daic/new_exp_0_gemma,new_exp_0_gemma``
+    point:  ``--alias 3=runs/new_exp_0_gemma,new_exp_0_gemma``
     resolves to ``<root>/new_exp_0_gemma_{base,hebbian}/seed_*``.
 
     '=' and ',' rather than ':' so Windows drive letters survive.
@@ -531,7 +531,7 @@ def main():
     ap.add_argument("--alias", action="append", default=[],
                     metavar="N=ROOT,PREFIX",
                     help="source team size N from another run group, e.g. "
-                         "3=runs_from_daic/new_exp_0_gemma,new_exp_0_gemma "
+                         "3=runs/new_exp_0_gemma,new_exp_0_gemma "
                          "(repeatable). Such points are marked N=x* on the "
                          "figure and source=alias in the CSV.")
     args = ap.parse_args()

@@ -283,7 +283,7 @@ def cmd_bundle(args) -> int:
         "".join(f"{a['sha256']}  {a['file']}\n" for a in manifest["archives"]), encoding="utf-8")
     total = sum(a["bytes"] for a in manifest["archives"])
     print(f"\n{len(manifest['archives'])} archives, {human(total)} total -> {out}")
-    print("Extract into runs_from_daic/ to reproduce; MANIFEST.json lists what each holds.")
+    print("Extract into runs/ to reproduce; MANIFEST.json lists what each holds.")
     return 0
 
 
@@ -308,7 +308,7 @@ def cmd_verify(args) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--runs", type=Path, default=RUNS, help="run root (default: runs_from_daic/)")
+    ap.add_argument("--runs", type=Path, default=RUNS, help="run root (default: runs/)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("plan", help="show the grouping and what each layer weighs").set_defaults(fn=cmd_plan)

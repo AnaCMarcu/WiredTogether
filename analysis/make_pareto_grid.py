@@ -47,8 +47,8 @@ Default --ys is coop_pct,milestone_pct,reward, so a bare run emits the three
 paper figures + the composite + the two-panel --paper variant.
 
 Usage:
-    python analysis/make_pareto_grid.py runs_from_daic/pareto_gemma4 \
-        runs_from_daic/new_exp_0_gemma --out-dir paper_assets/pareto/grid --paper
+    python analysis/make_pareto_grid.py runs/pareto_gemma4 \
+        runs/new_exp_0_gemma --out-dir paper_assets/pareto/grid --paper
     python analysis/make_pareto_grid.py ... --beliefs analysis/qualitative/out_pareto/tables/beliefs.csv
     python analysis/make_pareto_grid.py ... --families gemma --ys coop_pct --xs flops
 

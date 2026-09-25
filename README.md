@@ -35,7 +35,7 @@ are specified in [docs/environment.md](docs/environment.md).
 | `src/marl_craftium/` | PettingZoo wrapper over Craftium and the WIRE world |
 | `src/orchestrator/` | The centralised orchestration baseline (VillagerAgent-style) |
 | `third_party/craftium/` | Two patched Craftium files and their license |
-| `hpc/daic/` | Container recipes and one SLURM launcher per experimental condition |
+| `hpc/slurm/` | Container recipes and one SLURM launcher per experimental condition |
 | `analysis/` | The scripts that produce every table and figure in the paper |
 | `docs/` | Reference documentation, one file per component |
 | `tests/` | Unit tests; no game binary or model weights needed |
@@ -51,7 +51,7 @@ python third_party/craftium/install.py
 pip install -e .            # or: poetry install
 ```
 
-The recipes in `hpc/daic/*.def` build an Apptainer image with exactly this setup.
+The recipes in `hpc/slurm/*.def` build an Apptainer image with exactly this setup.
 
 Point the wrapper at the WIRE world and at a model before running:
 
@@ -88,11 +88,11 @@ their inputs. Runs are written to `runs/<group>/<tag>/seed_<N>/`.
 
 [docs/configuration.md](docs/configuration.md) lists every flag with its default and the paper
 symbol it sets. [docs/experiments.md](docs/experiments.md) maps each condition in the paper to its
-launcher under `hpc/daic/experiments/`, which records the exact flags of the reported runs.
+launcher under `hpc/slurm/experiments/`, which records the exact flags of the reported runs.
 
 ## Reproduce the paper
 
-The analysis scripts read run directories from `runs_from_daic/` and write to `paper_assets/`. The
+The analysis scripts read run directories from `runs/` and write to `paper_assets/`. The
 run artifacts of the paper are released separately; [docs/dataset.md](docs/dataset.md) describes
 their layout.
 

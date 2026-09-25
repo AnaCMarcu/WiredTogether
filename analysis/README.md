@@ -1,7 +1,7 @@
 # Analysis
 
 Every table and figure in the paper is produced by a script here. The scripts read run
-directories from `runs_from_daic/<question>/<group>/<arm>/seed_<N>/` (see
+directories from `runs/<question>/<group>/<arm>/seed_<N>/` (see
 [../docs/dataset.md](../docs/dataset.md)) and write to `paper_assets/`. Run them from anywhere:
 `paths.py` anchors inputs and outputs to the repository root, puts `src/` and the qualitative
 pipeline on `sys.path`, and resolves run groups by name through `paths.group()`.

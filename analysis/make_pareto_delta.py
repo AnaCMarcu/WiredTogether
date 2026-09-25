@@ -21,8 +21,8 @@ NOT the converse. Both axes are measured outcomes of the same runs -- a
 relationship, not a controlled sweep.
 
 Usage (from the repo root):
-    python analysis/make_pareto_delta.py runs_from_daic/pareto_gemma4 \
-        runs_from_daic/new_exp_0_gemma runs_from_daic/medium_runs \
+    python analysis/make_pareto_delta.py runs/pareto_gemma4 \
+        runs/new_exp_0_gemma runs/medium_runs \
         --out-dir paper_assets/pareto/grid_perception_x_qwen
 """
 

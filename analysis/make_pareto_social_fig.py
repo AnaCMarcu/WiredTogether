@@ -39,9 +39,9 @@ Seeds without final_metrics.json (still running / died) are skipped
 automatically; points annotate their n when below 3.
 
 Usage:
-    python analysis/make_pareto_social_fig.py            # runs_from_daic/* → paper_assets/pareto_social/
-    python analysis/make_pareto_social_fig.py --anchors-root runs_from_daic/new_exp_0_gemma \
-        --sweep-root runs_from_daic/pareto_social --out paper_assets/pareto_social
+    python analysis/make_pareto_social_fig.py            # runs/* → paper_assets/pareto_social/
+    python analysis/make_pareto_social_fig.py --anchors-root runs/new_exp_0_gemma \
+        --sweep-root runs/pareto_social --out paper_assets/pareto_social
 """
 
 from __future__ import annotations

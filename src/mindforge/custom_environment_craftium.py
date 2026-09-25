@@ -1000,7 +1000,7 @@ class CraftiumEnvironmentInterface(ChamberStateMixin, LuaEventsMixin):
         runs ``warmup_noop()`` for 300 s. Lua's globalstep keeps ticking at
         20 Hz the whole time, so by the time Python issues step 0, the
         lua-tick counter has already exceeded ``CH1_TIMEOUT_TICKS`` (default
-        1200 ≈ 60 s; thesis runs override to 400 ≈ 20 s) and the timeout
+        1200 ≈ 60 s; the paper's runs override to 400 ≈ 20 s) and the timeout
         fallback has already teleported agents to the Ch2 fallback spawn.
         Result: agents start at ``z=19`` (Ch2) instead of ``z=1`` (Ch1) and
         every Ch1 milestone is unreachable.

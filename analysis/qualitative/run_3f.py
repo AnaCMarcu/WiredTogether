@@ -14,9 +14,9 @@ at import time, so all four have to be rebuilt, not just the list.
 Every argument is passed through, so usage mirrors run.py:
 
   python analysis/qualitative/run_3f.py parse \\
-      --runs-root runs_from_daic/compute/pareto_social_3f --out out_3f_social
+      --runs-root runs/compute/pareto_social_3f --out out_3f_social
   python analysis/qualitative/run_3f.py metrics \\
-      --runs-root runs_from_daic/compute/pareto_social_3f --out out_3f_social
+      --runs-root runs/compute/pareto_social_3f --out out_3f_social
 """
 
 from __future__ import annotations

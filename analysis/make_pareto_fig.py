@@ -23,8 +23,8 @@ Encoding (dataviz skill):
               the across-seed standard deviation
 
 Usage:
-    python analysis/make_pareto_fig.py runs_from_daic/pareto_gemma4 \
-        runs_from_daic/new_exp_0_gemma --out-dir paper_assets/pareto
+    python analysis/make_pareto_fig.py runs/pareto_gemma4 \
+        runs/new_exp_0_gemma --out-dir paper_assets/pareto
     python analysis/make_pareto_fig.py ... --metric return
     python analysis/make_pareto_fig.py ... --theme dark
 
@@ -426,7 +426,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("roots", nargs="+", type=Path,
                     help="run-group dirs holding <exp>/<seed>/ (e.g. "
-                         "runs_from_daic/pareto_gemma4 runs_from_daic/new_exp_0_gemma)")
+                         "runs/pareto_gemma4 runs/new_exp_0_gemma)")
     ap.add_argument("--out-dir", type=Path, default=ASSETS / "pareto")
     ap.add_argument("--metric", default="milestone_pct",
                     choices=list(METRIC_LABEL))

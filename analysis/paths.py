@@ -11,6 +11,7 @@ have to be run from the repo root to find their inputs and outputs.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -19,8 +20,9 @@ REPO = ANALYSIS.parent
 SRC = REPO / "src"
 QUALITATIVE = ANALYSIS / "qualitative"
 
-#: Run artifacts synced off the cluster (git-ignored; see docs/experiments.md).
-RUNS = REPO / "runs_from_daic"
+#: Run artifacts (git-ignored; see docs/dataset.md). Defaults to runs/, where
+#: both fresh runs and the extracted dataset land; WIRE_RUNS points elsewhere.
+RUNS = Path(os.environ.get("WIRE_RUNS", REPO / "runs")).resolve()
 #: Generated tables and figures, one sub-directory per experiment family.
 ASSETS = REPO / "paper_assets"
 

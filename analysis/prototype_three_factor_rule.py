@@ -256,7 +256,7 @@ def build_split(inp, variants, out_dir: Path, seed: int,
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--runs-root", type=Path, default=Path("runs_from_daic"))
+    ap.add_argument("--runs-root", type=Path, default=Path("runs"))
     ap.add_argument("--arm", default="new_exp_0_gemma/new_exp_0_gemma_hebbian")
     ap.add_argument("--seed", type=int, default=456)
     ap.add_argument("--out", type=Path, default=Path("paper_assets/hebbian_terms"))

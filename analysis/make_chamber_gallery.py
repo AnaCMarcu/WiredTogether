@@ -3,7 +3,7 @@ of the WIRE curriculum, each showing hand-picked first-person
 frames sampled around real milestone events across many runs (not a single
 episode) so each row shows different agents/seeds/moments.
 
-Frame sources: real gameplay mp4s under runs_from_daic/ (1 frame per env
+Frame sources: real gameplay mp4s under runs/ (1 frame per env
 step). Step numbers are the per-episode milestone step from
 episode_summary.json plus a small fixed offset, resolved directly against
 that episode's own video (no cumulative-episode-offset arithmetic needed).

@@ -15,8 +15,8 @@ rows for the per-model analysis table (tab:pareto_perception) so the paper's
 numbers come from the same collect()/load_beliefs() the figure uses.
 
 Usage (from the repo root):
-    python analysis/make_pareto_perception_fig.py runs_from_daic/pareto_gemma4 \
-        runs_from_daic/new_exp_0_gemma runs_from_daic/medium_runs \
+    python analysis/make_pareto_perception_fig.py runs/pareto_gemma4 \
+        runs/new_exp_0_gemma runs/medium_runs \
         --out-dir paper_assets/pareto/paper \
         --copy-to "C:/.../paper/figures"      # optional: drop the PNG there
 """

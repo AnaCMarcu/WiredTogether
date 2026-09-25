@@ -44,7 +44,7 @@ def parse_args():
                         help="Number of episodes to run")
     parser.add_argument("--max-steps", type=int, default=1500,
                         help="Maximum steps per episode (default 1500 — fits the "
-                             "DAIC 36h SLURM budget). Each chamber timeout fires at "
+                             "36 h SLURM budget). Each chamber timeout fires at "
                              "20%% of this budget (Ch1->Ch2 at step ~300 of 1500), "
                              "so the five chambers get a 20%% window apiece. "
                              "Override with a larger value (e.g. 2500) when "
@@ -286,7 +286,7 @@ def parse_args():
                              "produced by merge_pair_runs.py. Imported into "
                              "the fresh per-agent vector DBs after agent "
                              "construction. Mutually exclusive with --resume.")
-    # ── Phase B+ thesis comparison: interpretability sidecar ──
+    # ── Interpretability sidecar ──
     # (`--reward-propagation` was removed alongside the deleted rlvr module
     #  that provided per_teammate_contributions / attribute_source_events /
     #  format_propagation_prompt. Reintroduce here if a local replacement

@@ -188,16 +188,15 @@ marimo/_lsp/
 __marimo__/
 
 
-# Run artifacts. runs/ is written locally; runs_from_daic/ holds the runs
-# synced off the cluster and is what the analysis/ scripts read.
+# Run artifacts: runs/ holds fresh runs and the extracted dataset, which is
+# what analysis/ reads (override with WIRE_RUNS); runs_*/ covers local copies.
 runs/
-runs_from_hpc/
-runs_from_daic/
+runs_*/
 
 slurm_logs/
 
-hpc/daic/slurm_*.out
-hpc/daic/slurm_*.err
+hpc/slurm/slurm_*.out
+hpc/slurm/slurm_*.err
 
 craftium/
 
@@ -205,8 +204,6 @@ craftium/
 .claude/
 
 *.stackdump
-
-hpc/delft_blue/analysis/out/
 
 # LaTeX paper sources synced into the repo; not part of the code release.
 wired_together_iclr2027*/

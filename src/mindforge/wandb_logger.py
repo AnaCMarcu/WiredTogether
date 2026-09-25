@@ -15,8 +15,7 @@ experiment+seed continues the same wandb run via resume="allow".
 That resume is deliberate WITHIN a suite and wrong ACROSS suites: the
 run_id is only "<tag>/seed_<N>", so a fresh suite re-running the same
 exp+seed used to silently reopen the previous suite's run instead of
-creating a new one (it already cost the 2000-step exp11 runs — see the
-note in wandb_compute_budget.py). ``group`` namespaces the id to keep
+creating a new one. ``group`` namespaces the id to keep
 suites apart; see :func:`_scoped_id`.
 """
 from __future__ import annotations

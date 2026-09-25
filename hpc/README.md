@@ -1,36 +1,31 @@
 # Cluster launchers
 
-Every experiment in the paper was run on **DAIC** (`daic/`); the other two directories are
-launchers kept for the clusters this project also ran on at earlier stages.
+Every experiment in the paper ran on a SLURM cluster inside an Apptainer image. `slurm/` holds the
+image recipes and one launcher per experimental condition.
 
-| Directory | Runtime | Status |
-|---|---|---|
-| `daic/` | Apptainer image built from `wiredtogether*.def` | The suite behind the paper |
-| `delft_blue/` | conda environment, 8-hour chunked chains (`chain_jobs.sh`) | Earlier generation of the same arms |
-| `snellius/` | The DAIC image, rsynced; W&B offline | Smoke test only |
-
-## DAIC
-
-`experiments/_common.sh` does everything shared: picks the Apptainer image, exports `PYTHONPATH`,
+`slurm/experiments/_common.sh` does everything shared: picks the image, exports `PYTHONPATH`,
 `CRAFTIUM_ENV_DIR` and the model paths, masks `/dev/dri` so rendering stays on the CPU, allocates a
 per-job Luanti server port from `SLURM_JOB_ID`, cleans the node's `/tmp` on exit, and calls
-`multi_agent_craftium.py`. A per-experiment `.sbatch` only sets the arm's flags.
+`multi_agent_craftium.py`. A per-experiment `.sbatch` only sets the condition's flags.
+
+Set `WT_WORKSPACE` to a directory that holds this repository as `WiredTogether/`, the images in
+`images/` and the model weights in `models/`. Then:
 
 ```bash
-sbatch hpc/daic/experiments/exp05_mappo_hebbian.sbatch   # one arm, seeds from the array
-bash  hpc/daic/experiments/submit_all.sh                 # a whole family
+export WT_WORKSPACE=/path/to/workspace
+sbatch hpc/slurm/build_image_gemma4.sbatch                  # once; build_image.sbatch for the Qwen image
+sbatch hpc/slurm/experiments/exp03_mappo.sbatch             # one condition, one seed (SEED=...)
+bash   hpc/slurm/experiments/submit_orchestrator.sh         # a whole family across seeds
 ```
 
-Build the image once with `build_image.sbatch` (or `build_image_gemma4*.sbatch` for the Gemma
-runs); `download_gemma4.sbatch` fetches the weights.
+[../docs/experiments.md](../docs/experiments.md) maps each condition in the paper to its launcher.
 
 Two things to know before submitting:
 
-- Use `QOS=long TIME=72:00:00` for the long arms. Successful `pareto_social` runs took 19–35 h, and
-  seed 123 needs roughly 20% more LLM calls than any other seed.
+- Long conditions need a 72 h wall time (`QOS=long TIME=72:00:00`); the deliberation-interval runs
+  took 19–35 h.
 - Move a failed run's directory aside before re-running it. `log.txt` and `llm_logs/*.log` are
   append-mode, so a rerun in place doubles the token counts the FLOPs accounting reports.
 
-`experiments/bad_gpu_nodes.txt` + `experiments/gpu_filter.sh` exclude nodes whose GPU is too small for the action-selection
-model; `probe_nan.sbatch` is the diagnostic for the NaN-logits failure seen on the largest
-checkpoints under two-GPU sharding.
+`experiments/bad_gpu_nodes.txt` and `experiments/gpu_filter.sh` exclude nodes whose GPU is too
+small for the action-selection model; the list ships empty.

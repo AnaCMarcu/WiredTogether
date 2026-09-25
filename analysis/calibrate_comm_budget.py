@@ -1,6 +1,6 @@
 """Calibrate the communication-budget ladder against the served tokenizer.
 
-The ladder in hpc/daic/experiments/submit_comm_budget.sh is defined in
+The ladder in hpc/slurm/experiments/submit_comm_budget.sh is defined in
 MESSAGES (50 / 200 / 800 per agent per 1000-step episode) but charged in
 TOKENS. The token values (800 / 3200 / 12800) assume ~16 tokens per short
 message. This script measures the real cost of the messages agents actually
@@ -14,7 +14,7 @@ ladder to pin before the first submission.
     python analysis/calibrate_comm_budget.py
 
     # a different reference suite / message-count ladder
-    python analysis/calibrate_comm_budget.py --runs-root runs_from_daic/compute/agent_scaling_3f \
+    python analysis/calibrate_comm_budget.py --runs-root runs/compute/agent_scaling_3f \
         --msg-counts 50 200 800 --json paper_assets/comm_budget/calibration.json
 
 Prints tokens-per-message percentiles, the tokens-per-word ratio, the share
@@ -154,7 +154,7 @@ def main() -> int:
         f"{n} msgs -> {v}" for n, v in rec["ladder"].items()))
     print("submit with    : BUDGETS=\"0 "
           + " ".join(str(v) for v in rec["ladder"].values())
-          + "\" bash hpc/daic/experiments/submit_comm_budget.sh")
+          + "\" bash hpc/slurm/experiments/submit_comm_budget.sh")
 
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)

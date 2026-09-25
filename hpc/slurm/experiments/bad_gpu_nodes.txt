@@ -1,0 +1,2 @@
+# One SLURM node name per line: nodes whose GPU is too small for the action-selection
+# model. gpu_filter.sh and _common.sh add them to --exclude. Empty by default.

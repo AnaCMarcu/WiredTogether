@@ -38,8 +38,8 @@ Decode tokens are exact; prefill carries the char-ratio approximation. On a
 log-scale compute axis the residual error (single-digit percent) is invisible.
 
 Usage:
-    python analysis/compute_flops.py runs_from_daic/new_exp_0_gemma
-    python analysis/compute_flops.py runs_from_daic/new_exp_0_gemma \
+    python analysis/compute_flops.py runs/new_exp_0_gemma
+    python analysis/compute_flops.py runs/new_exp_0_gemma \
         --n-eff 4.5e9 --image-tokens 280 --csv flops_summary.csv
 
 Defaults are Gemma-4-E4B: N_eff = 4.5e9 (effective params -- PLE tables are

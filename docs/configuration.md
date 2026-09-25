@@ -2,7 +2,7 @@
 
 Three layers of settings, in increasing precedence: dataclass defaults (`HebbianConfig`,
 `RLConfig`), the CLI (`mindforge/cli.py`), and the launcher overrides in
-`hpc/daic/experiments/*.sbatch`. The CLI defaults reproduce the zero-shot LLM condition; a run
+`hpc/slurm/experiments/*.sbatch`. The CLI defaults reproduce the zero-shot LLM condition; a run
 becomes an experiment arm by adding flags. `--help` lists everything; this page covers the knobs
 that carry meaning in the paper.
 

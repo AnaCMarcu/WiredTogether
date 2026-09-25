@@ -60,7 +60,7 @@ ORCHESTRATOR = group("orchestrator")
 
 # Which arms stand for "+Heb" in the RL rows of the paper table:
 #   "replay"    — exp30/exp31: reward diffusion + weight-gated experience
-#                 sharing (Eq. 7, rho=0.3), runs_from_daic/social_replay_qwen
+#                 sharing (Eq. 7, rho=0.3), runs/social_replay_qwen
 #   "diffusion" — exp05/exp06: reward diffusion only (the original rows)
 # Both use the same medium config (3 agents, 3 eps x 1000 steps, Qwen3.5-2B),
 # so the baselines (exp03/exp04) are shared.

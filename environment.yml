@@ -10,7 +10,7 @@ dependencies:
   - matplotlib>=3.8.0
   - gymnasium=0.29.1
   - pettingzoo=1.24.3
-  # pytorch: use 'module load py-torch' on DelftBlue instead
+  # pytorch: install the CUDA build that matches your driver
   - wandb
   - pip:
       - imageio==2.37.2

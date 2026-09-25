@@ -1,4 +1,4 @@
-"""Regression-pin config defaults against thesis paper Tables 6 & 7.
+"""Regression-pin config defaults against the paper's hyperparameter tables.
 
 These tests freeze the *source* defaults of RLConfig, HebbianConfig and the
 communication-reward constants so any drift between the codebase and the

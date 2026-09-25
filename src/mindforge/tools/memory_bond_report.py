@@ -252,7 +252,7 @@ def build(args):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--phaseb-base",
-                    default="runs_from_daic/rq3_topology_transfer/pair_bonding")
+                    default="runs/rq3_topology_transfer/pair_bonding")
     ap.add_argument("--seeds", type=int, nargs="+", default=[42, 123, 456])
     ap.add_argument("--dir-suffix", default="",
                     help="rule-variant suffix on the run dirs, e.g. _3f for "

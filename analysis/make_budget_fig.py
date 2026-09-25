@@ -1,7 +1,7 @@
 """Communication-budget sweep: outcome curves, budget utilisation, per-cell table.
 
 Reads the ``comm_budget`` run group (``budget_gemma_<arm>_n<N>_b<B>/seed_*``,
-see hpc/daic/experiments/submit_comm_budget.sh) and writes, under
+see hpc/slurm/experiments/submit_comm_budget.sh) and writes, under
 ``paper_assets/comm_budget/`` by default:
 
   budget_outcomes.{png,pdf}     one column per team size N; rows = cooperative
@@ -29,7 +29,7 @@ sets as every paper table); budget numbers come from the per-episode
 ``messages.jsonl`` records, and the ``comm_budget_exhausted`` events.
 
     python analysis/make_budget_fig.py
-    python analysis/make_budget_fig.py --runs-root runs_from_daic/comm_budget --ns 3 5 7 \
+    python analysis/make_budget_fig.py --runs-root runs/comm_budget --ns 3 5 7 \
         --budgets 0 800 3200 12800
 """
 

@@ -52,7 +52,7 @@ from mindforge.env.comm_budget import (
 
 REPO = Path(__file__).resolve().parents[1]
 PROMPT_DIR = REPO / "src" / "mindforge" / "prompts"
-HPC = REPO / "hpc" / "daic" / "experiments"
+HPC = REPO / "hpc" / "slurm" / "experiments"
 
 
 @pytest.fixture(autouse=True)

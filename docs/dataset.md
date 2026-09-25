@@ -1,7 +1,7 @@
 # Run artifacts
 
 Every number in the paper comes from a run directory. The collected runs are 46 GB, so they are
-not in this repository — `runs_from_daic/` is git-ignored, and the released dataset is built from
+not in this repository — `runs/` is git-ignored, and the released dataset is built from
 it by `analysis/runs_dataset.py`.
 
 ## Layout
@@ -10,7 +10,7 @@ The cluster wrote one directory per submission wave. Those groups are filed unde
 they answer:
 
 ```
-runs_from_daic/<question>/<group>/<arm>/seed_<N>/
+runs/<question>/<group>/<arm>/seed_<N>/
 ```
 
 | Question | Groups |
@@ -79,7 +79,7 @@ python analysis/runs_dataset.py verify dist/runs_dataset
 
 `bundle` writes one `<question>__<layer>.tar.gz` per pair, plus `MANIFEST.json` (what each archive
 holds, per-group descriptions and arm lists) and `SHA256SUMS`. `--layers core` builds just the
-small tier; `--include-smoke` adds the smoke groups. Extract the archives into `runs_from_daic/`
+small tier; `--include-smoke` adds the smoke groups. Extract the archives into `runs/`
 and the analysis scripts find them.
 
 ## Excluded runs

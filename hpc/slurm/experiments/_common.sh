@@ -1,0 +1,422 @@
+#!/bin/bash
+# ────────────────────────────────────────────────────────────────────────────
+# Shared cluster setup for WiredTogether experiments.
+#
+# Runs every experiment inside the Apptainer image built from
+# hpc/slurm/wiredtogether*.def. Set WT_WORKSPACE to a directory holding
+# WiredTogether/ (this repository), images/ and models/.
+#
+# Source from per-experiment sbatch files:
+#     source "$(dirname "$0")/_common.sh"
+#     run_exp "exp1_llm" "$MODEL_2B" <extra python args...>
+# ────────────────────────────────────────────────────────────────────────────
+
+WORKSPACE="${WT_WORKSPACE:?set WT_WORKSPACE to your cluster workspace (it holds WiredTogether/, images/ and models/)}"
+# Gemma 4 needs a transformers release that knows its architecture, which the
+# original image predates — hence a SECOND image built from
+# wiredtogether_gemma4.def. WT_IMAGE lets a submit script pick which one runs
+# without editing any sbatch file; the default stays the old image so nothing
+# that already worked changes silently.
+IMG="${WT_IMAGE:-$WORKSPACE/images/wiredtogether.sif}"
+REPO="$WORKSPACE/WiredTogether"
+
+# ── Reasoning core ────────────────────────────────────────────────────────
+# ONE model for the whole suite: Gemma 4 E4B instruction-tuned (4.5B effective
+# / 8B total, multimodal, Apache-2.0). Override to run something else, e.g. to
+# reproduce the earlier Qwen3.5 numbers:
+#     MODEL_LLM=$WORKSPACE/models/Qwen3.5-2B sbatch hpc/slurm/experiments/exp01_llm_2b.sbatch
+MODEL_LLM="${MODEL_LLM:-$WORKSPACE/models/gemma-4-E4B-it}"
+
+# Back-compat: every exp*.sbatch still names MODEL_2B / MODEL_9B from the old
+# Qwen size ablation. Both now resolve to the single MODEL_LLM, which makes
+# exp01≡exp02 and exp07≡exp08 duplicates — submit_gemma4.sh drops the "9b"
+# twins. Setting either var explicitly restores a genuine two-model sweep.
+MODEL_2B="${MODEL_2B:-$MODEL_LLM}"
+MODEL_9B="${MODEL_9B:-$MODEL_LLM}"
+
+# Seed resolution: SLURM array index → SEED env var → 42.
+SEEDS=(42 123 456)
+if [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
+    SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
+elif [ -z "${SEED:-}" ]; then
+    SEED=123
+fi
+
+# ── Weights & Biases ──────────────────────────────────────────────────────
+# Enabled by default. Opt out with `WANDB=0 sbatch ...`.
+#
+# Auth lives in ~/.netrc (per-user, chmod-able, auto-mounted into the
+# container by apptainer). To set it up once:
+#     cat > ~/.netrc <<EOF
+#     machine api.wandb.ai
+#       login user
+#       password <YOUR-KEY>
+#     EOF
+#     chmod 600 ~/.netrc
+#
+# wandb.init() reads ~/.netrc automatically — we don't need to pass
+# WANDB_API_KEY via env. If ~/.netrc is missing or the key is invalid,
+# wandb's own init throws and our python-side wrapper catches it; the
+# end-of-job salvage hook below will still capture any offline-mode
+# dirs and auto-sync them so the data survives.
+WANDB="${WANDB:-1}"
+WANDB_PROJECT="${WANDB_PROJECT:-final_wired_together}"
+WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-}"  # comma-separated, appended to auto tags
+WANDB_MODE="${WANDB_MODE:-online}"        # default online; offline if env-forced
+
+# Usage: run_exp <EXP_NAME> <LLM_MODEL_PATH> [extra python args...]
+run_exp() {
+    local EXP_NAME="$1"
+    local LLM_MODEL="$2"
+    shift 2
+
+    # RUN_GROUP selects the runs/<group>/ subtree. The final experiment suite
+    # sets RUN_GROUP=final in each sbatch file so results land in
+    # runs/final/<exp>/seed_<N>/.
+    #
+    # It is forwarded into the container as WIREDTOGETHER_RUN_GROUP (see the
+    # --env block below) so PYTHON writes there too. Before that it was a
+    # shell-only variable: RUN_DIR/ARTIFACTS_DIR honoured it but
+    # RunPaths.create_tagged() hardcoded runs/legacy/, so every suite's
+    # episodes/, final_metrics.json and plots overwrote the previous one in
+    # runs/legacy/ while the submit scripts' "already complete" check looked
+    # in a runs/<group>/ tree that never filled up. It also namespaces the
+    # W&B run id, so a new group no longer resumes the old suite's run.
+    local RUN_GROUP="${RUN_GROUP:-legacy}"
+    local RUN_DIR="$REPO/runs/${RUN_GROUP}/${EXP_NAME}/seed_${SEED}"
+    # Heavy artifacts (craftium debug.txt, wandb offline-runs, intermediate
+    # per-100-step gifs) live in a PARALLEL tree so the runs/ dir stays
+    # small and fast to scp. Mirror the same exp/seed structure for easy
+    # cross-referencing.
+    local ARTIFACTS_DIR="$REPO/run_artifacts/${RUN_GROUP}/${EXP_NAME}/seed_${SEED}"
+    local WORK_DIR="/tmp/$USER/${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
+    # Apptainer's own squashfuse/session files + any in-container tempfiles —
+    # kept OUT of WORK_DIR so the salvage rsync doesn't copy them to PRB, but
+    # still under /tmp/$USER so the cleanup below removes them with the rest.
+    local TMP_ROOT="/tmp/$USER/tmp_${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
+    export APPTAINER_TMPDIR="$TMP_ROOT/apptainer"
+    export TMPDIR="$TMP_ROOT"
+    mkdir -p "$RUN_DIR" "$ARTIFACTS_DIR" "$WORK_DIR" "$APPTAINER_TMPDIR"
+    # Empty dir bind-mounted OVER /dev/dri (below) to hide all GPU render nodes
+    # so Mesa is forced onto CPU/llvmpipe on every node — see the apptainer block.
+    mkdir -p "$WORK_DIR/empty_dri"
+
+    # HPC-support requirement: a job MUST clean up everything it writes to the
+    # node's /tmp — orphaned WORK_DIR (craftium minetest-* run dirs, worlds,
+    # wandb, gifs) plus Apptainer's FUSE/session files, which their monitoring
+    # flags as un-cleanable. Remove both on ANY exit: normal finish, error, or a
+    # SLURM cancel/timeout (which sends SIGTERM, firing the EXIT trap; only a
+    # hard SIGKILL can escape). Paths are expanded NOW (double quotes) because
+    # they are function locals that no longer exist when the trap fires.
+    # Tradeoff: on a timeout/cancel this deletes WORK_DIR before the salvage
+    # rsync below runs, so that job's artifacts are lost but /tmp is left clean.
+    trap "rm -rf '$WORK_DIR' '$TMP_ROOT' 2>/dev/null || true" EXIT INT TERM
+
+    # The node-wide `pkill -9 -u $USER -f minetest/luanti` pre-flight was
+    # REMOVED. It cleared stale procs from crashed jobs, but it ALSO killed the
+    # Minetest server + clients of any OTHER of this user's jobs on the same
+    # node — causing both startup collisions ("2 jobs, same node fails") and
+    # mid-run "Connection closed by peer: is MT down?" deaths at random points
+    # (whenever a sibling job happened to start). SLURM's cgroup cleanup already
+    # reaps a job's own procs when it ends, and each job now uses a UNIQUE
+    # mt_server_port (openworld_multi_agents.py) + a unique /tmp work dir, so a
+    # lingering stale proc can no longer block or collide with a new job. If
+    # genuinely orphaned procs ever pile up, reap them by hand from an
+    # interactive session on that node: `pkill -9 -u $USER -f luanti`.
+    echo "── pre-flight: (node-wide minetest/luanti pkill intentionally skipped — would kill sibling jobs) ──"
+
+    # Compose wandb flags. Tags include exp name + seed automatically;
+    # WANDB_EXTRA_TAGS can append more (e.g., "ablation_A,prompt_v2").
+    local WANDB_FLAGS=()
+    if [ "$WANDB" = "1" ]; then
+        local tags="exp_${EXP_NAME},seed_${SEED}"
+        if [ -n "$WANDB_EXTRA_TAGS" ]; then
+            tags="${tags},${WANDB_EXTRA_TAGS}"
+        fi
+        WANDB_FLAGS=(
+            --wandb
+            --wandb-project "$WANDB_PROJECT"
+            --wandb-tags "$tags"
+            --wandb-upload-artifacts
+        )
+    fi
+
+    echo "== $EXP_NAME =="
+    echo "Host:      $(hostname)"
+    echo "Image:     $IMG"
+    echo "Repo:      $REPO"
+    echo "Run group: $RUN_GROUP"
+    echo "Run dir:   $RUN_DIR"
+    echo "Work dir:  $WORK_DIR"
+    echo "Model:     $LLM_MODEL"
+    echo "Seed:      $SEED"
+    if [ "$WANDB" = "1" ]; then
+        echo "wandb:     project=$WANDB_PROJECT tags=exp_${EXP_NAME},seed_${SEED}${WANDB_EXTRA_TAGS:+,${WANDB_EXTRA_TAGS}} mode=${WANDB_MODE:-online}"
+    else
+        echo "wandb:     disabled (set WANDB=1 to enable)"
+    fi
+    nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || true
+    echo "============================"
+
+    # ── GPU capacity preflight ────────────────────────────────────────────
+    # WHY THIS EXISTS: six RL runs (exp04/1011+1213, exp05/1011,
+    # exp06/789+1011+1213) landed on an 11 GB card (10.75 GiB usable). Action
+    # selection needs ~8.5 GiB resident plus a 3.34 GiB transient allocation,
+    # so EVERY step raised `CUDA out of memory` — which the driver's blanket
+    # `except Exception` (multi_agent_craftium.py:1863) swallowed, substituting
+    # NoOp. The jobs ran their full 20+ hours, wrote complete-looking
+    # final_metrics.json files, and the 99.8%-NoOp result was read as an RL
+    # finding for weeks. The OOM was only ever visible in log.txt, never in
+    # run.log or the slurm .out.
+    #
+    # So: refuse to start on a GPU that cannot hold the model. A dead job is a
+    # far better outcome than a plausible one. Set MIN_GPU_MEM_MIB=0 to bypass
+    # (e.g. a CPU-only smoke test).
+    local MIN_GPU_MEM_MIB="${MIN_GPU_MEM_MIB:-15000}"
+    local NODE_NAME="${SLURMD_NODENAME:-$(hostname -s)}"
+    local BAD_NODE_FILE="${BAD_NODE_FILE:-$REPO/hpc/slurm/experiments/bad_gpu_nodes.txt}"
+    if [ "$MIN_GPU_MEM_MIB" -gt 0 ]; then
+        # Smallest visible GPU — with --gres=gpu:1 there is one, but take the
+        # min so a mixed allocation can never sneak a small card through.
+        local GPU_MIB
+        GPU_MIB=$(nvidia-smi --query-gpu=memory.total \
+                      --format=csv,noheader,nounits 2>/dev/null \
+                  | tr -dc '0-9\n' | grep -v '^$' | sort -n | head -1)
+        if [ -z "$GPU_MIB" ]; then
+            echo "!! GPU PREFLIGHT: nvidia-smi returned nothing on $NODE_NAME." >&2
+            echo "   Refusing to run blind — a CPU fallback silently produces" >&2
+            echo "   all-NoOp data. Set MIN_GPU_MEM_MIB=0 to override." >&2
+            exit 1
+        fi
+        if [ "$GPU_MIB" -lt "$MIN_GPU_MEM_MIB" ]; then
+            echo "!! GPU PREFLIGHT FAILED on $NODE_NAME:" >&2
+            echo "   ${GPU_MIB} MiB available < ${MIN_GPU_MEM_MIB} MiB required." >&2
+            echo "   This node cannot hold the model; every action-selection" >&2
+            echo "   step would OOM and be silently replaced by NoOp." >&2
+            echo "   Aborting instead of producing 99.8%-NoOp data." >&2
+            # Record the node so submit_*.sh excludes it from here on.
+            if ! grep -qxF "$NODE_NAME" "$BAD_NODE_FILE" 2>/dev/null; then
+                echo "$NODE_NAME" >> "$BAD_NODE_FILE" 2>/dev/null \
+                    && echo "   recorded $NODE_NAME in $(basename "$BAD_NODE_FILE")" >&2
+            fi
+            # Opt-in requeue (GPU_REQUEUE=1). Off by default: the header's
+            # --exclude is fixed at submit time, so a requeued job can land on
+            # the same node again — bounded by SLURM_RESTART_COUNT either way.
+            if [ "${GPU_REQUEUE:-0}" = "1" ] && [ -n "${SLURM_JOB_ID:-}" ] \
+               && [ "${SLURM_RESTART_COUNT:-0}" -lt "${MAX_GPU_REQUEUE:-3}" ]; then
+                echo "   requeueing (restart $((${SLURM_RESTART_COUNT:-0} + 1))/${MAX_GPU_REQUEUE:-3})" >&2
+                scontrol requeue "$SLURM_JOB_ID" || true
+                sleep 20
+            fi
+            exit 1
+        fi
+        echo "GPU check: ${GPU_MIB} MiB on $NODE_NAME (>= ${MIN_GPU_MEM_MIB} MiB) — OK"
+    fi
+
+    # Headless-display strategy:
+    # Luanti renders frames through Irrlicht → EGL, independently of SDL.
+    # SDL_VIDEODRIVER=offscreen silences the SDL side but Irrlicht still
+    # tries to grab /dev/dri/renderD* for EGL hardware acceleration.
+    # On nodes where the user lacks the `render` / `video` group on
+    # those devices ("Permission denied" + "Not allowed to force software
+    # rendering when API explicitly selects a hardware device"), MT client 0
+    # exits with code 1 and the run dies with `Server socket listen timeout
+    # reached`. Observed pattern: 13/14 experiments in the 2026-05-30
+    # batch failed this way; the lone survivor (exp15) landed on a node
+    # where the user happened to have render-device permissions.
+    #
+    # Fix is two layered:
+    #   1. --bind /dev/dri so the container sees the host's render nodes
+    #      when SLURM grants access.
+    #   2. xvfb-run wrapper around python so Irrlicht/EGL has a working
+    #      software X surface (llvmpipe) even on nodes where GPU device
+    #      access is denied. Xvfb owns its own framebuffer; EGL can render
+    #      into it without ever touching /dev/dri.
+    # Mask /dev/dri with an EMPTY directory so Luanti/Mesa never sees a GPU
+    # render node. On the cluster, GPU jobs get CUDA (/dev/nvidia* via --nv) but NOT
+    # render-device permission on /dev/dri/renderD* (per the docs, GPUs are
+    # compute-only). Apptainer mounts the host /dev by DEFAULT, so simply not
+    # binding /dev/dri is NOT enough — on some nodes the render nodes are still
+    # visible, Mesa grabs one, fails to open it ("Permission denied"), and
+    # refuses software fallback ("Not allowed to force software rendering when
+    # API explicitly selects a hardware device") -> Luanti can't create a GL
+    # context and the run dies at reset() with "Server socket listen timeout".
+    # Bind-mounting an empty dir OVER /dev/dri hides every render node on EVERY
+    # node, so Mesa falls back to CPU llvmpipe (LIBGL_ALWAYS_SOFTWARE=1 +
+    # GALLIUM_DRIVER=llvmpipe below). CUDA is unaffected — it uses /dev/nvidia*.
+    #
+    # --pid: give the container its OWN pid namespace. Craftium leaves the
+    # Minetest server + clients running after python exits; in the default
+    # (shared host) pid namespace they linger, hold the squashfuse FUSE mount
+    # open, and Apptainer hangs on teardown ("Terminating squashfuse_ll after
+    # timeout … running background process") until the wall limit — which is
+    # ALSO what leaves the un-cleanable FUSE orphans. With --pid, python is
+    # pid 1, so when it exits the kernel reaps every other process in the ns
+    # (MT + Xvfb), the FUSE unmounts, and exec returns cleanly so the cleanup
+    # below can run. Pid-only isolation; networking is untouched so the
+    # localhost MT server↔client sockets still work.
+    apptainer exec --nv \
+        --pid \
+        --bind /tmp:/tmp \
+        --bind "$WORKSPACE:$WORKSPACE" \
+        --bind "$WORK_DIR/empty_dri:/dev/dri" \
+        --env PYTHONPATH="$REPO/src" \
+        --env PYTHONUNBUFFERED=1 \
+        --env PYTHONIOENCODING=utf-8 \
+        --env TMPDIR="$TMPDIR" \
+        --env LANG=C.UTF-8 \
+        --env LC_ALL=C.UTF-8 \
+        --env LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/craftium.libs \
+        --env LLM_MODEL_PATH="$LLM_MODEL" \
+        --env LLM_ENABLE_THINKING=0 \
+        --env LLM_VISION_MODE="${LLM_VISION_MODE:-auto}" \
+        --env ST_MODEL_NAME="$WORKSPACE/models/all-MiniLM-L6-v2" \
+        --env SENTENCE_TRANSFORMERS_HOME="$WORKSPACE/models" \
+        --env HF_HUB_OFFLINE=1 \
+        --env TRANSFORMERS_OFFLINE=1 \
+        --env CRAFTIUM_ENV_DIR="$REPO/src/marl_craftium/craftium-envs/wire" \
+        --env WIREDTOGETHER_RUNS_ROOT="$REPO/runs" \
+        --env WIREDTOGETHER_RUN_GROUP="$RUN_GROUP" \
+        --env SDL_VIDEODRIVER=dummy \
+        --env SDL_AUDIODRIVER=dummy \
+        --env LIBGL_ALWAYS_SOFTWARE=1 \
+        --env MESA_GL_VERSION_OVERRIDE=3.3 \
+        --env GALLIUM_DRIVER=llvmpipe \
+        --env MESA_LOADER_DRIVER_OVERRIDE=llvmpipe \
+        --env EGL_PLATFORM=surfaceless \
+        --env __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json \
+        --env WANDB_MODE="${WANDB_MODE:-online}" \
+        --env WANDB_DIR="$WORK_DIR" \
+        --env WANDB_SILENT=true \
+        --env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+        --env WIREDTOGETHER_INTERMEDIATE_GIF_DIR="$WORK_DIR/intermediate_gifs" \
+        --pwd "$WORK_DIR" \
+        "$IMG" \
+        sh -c '
+            # Resolve Xvfb invocation. xvfb-run is the convenient wrapper
+            # (auto-picks a free display, cleans up on exit) but some
+            # apptainer images only ship the raw Xvfb binary. Try both
+            # in order; fall back to no-wrapper as last resort so we at
+            # least produce a diagnostic in run.log rather than a silent
+            # hang on missing-binary.
+            # POSIX sh, not bash — the container has no bash on PATH.
+            # xvfb-run also requires xauth at runtime; if xauth is missing
+            # (the Debian xvfb package does NOT pull it in by default), we
+            # MUST skip the xvfb-run branch even though it exists, because
+            # it will exit with "xauth command not found" before ever
+            # starting Xvfb. The manual-Xvfb branch below has no such
+            # dependency and works fine without xauth.
+            if command -v xvfb-run >/dev/null 2>&1 && command -v xauth >/dev/null 2>&1; then
+                exec xvfb-run -a -s "-screen 0 1024x768x24 -nolisten tcp" "$@"
+            elif command -v Xvfb >/dev/null 2>&1; then
+                # Display number was hardcoded to :99, which COLLIDES whenever
+                # two jobs of the same user share a node — routine for SLURM
+                # array tasks (expA_pair_bonding), and possible for any two
+                # jobs. The second Xvfb dies with "Fatal server error: Server
+                # is already active for display 99" and its Luanti clients
+                # silently fall back to the X server of the other job. /tmp is
+                # bind-mounted from the host, so the .X<n>-lock files are
+                # visible across jobs: probe upward from :99 for a free one and
+                # verify Xvfb actually stayed up before adopting it. A job
+                # running alone still gets :99 — unchanged from before.
+                _disp=99
+                _xvfb_pid=""
+                while [ "$_disp" -lt 160 ]; do
+                    if [ ! -e "/tmp/.X${_disp}-lock" ]; then
+                        Xvfb ":$_disp" -screen 0 1024x768x24 -nolisten tcp &
+                        _cand=$!
+                        sleep 2
+                        if kill -0 "$_cand" 2>/dev/null; then
+                            _xvfb_pid=$_cand
+                            break
+                        fi
+                    fi
+                    _disp=$((_disp + 1))
+                done
+                if [ -n "$_xvfb_pid" ]; then
+                    trap "kill $_xvfb_pid 2>/dev/null || true" EXIT
+                    export DISPLAY=":$_disp"
+                    echo "[XVFB] using display :$_disp (pid $_xvfb_pid)"
+                else
+                    echo "[XVFB][WARN] no free display in :99-:159 — continuing without DISPLAY (EGL surfaceless only)" >&2
+                    unset DISPLAY
+                fi
+                # Belt-and-braces for Luanti builds compiled EGL-only that
+                # ignore DISPLAY and try to grab /dev/dri/renderD* directly:
+                # force EGL to use the surfaceless platform (CPU-side via
+                # llvmpipe) so the renderer succeeds without GPU device
+                # permissions even when it bypasses Xvfb.
+                export EGL_PLATFORM=surfaceless
+                export __EGL_VENDOR_LIBRARY_FILENAMES="${__EGL_VENDOR_LIBRARY_FILENAMES:-/usr/share/glvnd/egl_vendor.d/50_mesa.json}"
+                exec "$@"
+            else
+                echo "[WARN] Neither xvfb-run+xauth nor Xvfb found in image — Luanti will need real GPU access (/dev/dri permissions) on this node." >&2
+                unset DISPLAY
+                export EGL_PLATFORM=surfaceless
+                exec "$@"
+            fi
+        ' sh \
+        python -u "$REPO/src/mindforge/multi_agent_craftium.py" \
+            --num-agents "${NUM_AGENTS:-3}" \
+            --episodes "${EPISODES:-3}" \
+            --max-steps "${MAX_STEPS:-1000}" \
+            --warmup-time 300 \
+            --seed "$SEED" \
+            --experiment-id "$EXP_NAME" \
+            --tag "$EXP_NAME" \
+            "${WANDB_FLAGS[@]}" \
+            "$@" \
+        2>&1 | tee "$RUN_DIR/run.log"
+
+    local EXIT_CODE=${PIPESTATUS[0]}
+
+    # Salvage craftium's per-run dirs (debug.txt, gifs, etc.) back to PRB.
+    # If wandb ran in offline mode, this also captures wandb/offline-run-*
+    # which you can later upload with `wandb sync <dir>`.
+    # Split salvage:
+    #   - $WORK_DIR/intermediate_gifs/ → $ARTIFACTS_DIR/intermediate_gifs/
+    #     (separately so they're easy to find / delete)
+    #   - everything else (craftium debug.txt, wandb offline-runs, etc.)
+    #     → $ARTIFACTS_DIR/work_artifacts/
+    # The runs/<exp>/seed_<N>/ tree stays small (just plots, episodes/,
+    # gifs/ with FINAL per-episode gifs only, config.json, log.txt).
+    if [ -d "$WORK_DIR/intermediate_gifs" ]; then
+        echo "── archiving intermediate gifs -> $ARTIFACTS_DIR/intermediate_gifs/ ──"
+        mkdir -p "$ARTIFACTS_DIR/intermediate_gifs"
+        rsync -r --no-perms --no-owner --no-group --no-times \
+            "$WORK_DIR/intermediate_gifs/" "$ARTIFACTS_DIR/intermediate_gifs/" \
+            2>&1 | tail -3 || true
+    fi
+    echo "── archiving $WORK_DIR -> $ARTIFACTS_DIR/work_artifacts/ ──"
+    mkdir -p "$ARTIFACTS_DIR/work_artifacts"
+    rsync -r --no-perms --no-owner --no-group --no-times \
+        --exclude='intermediate_gifs/' \
+        "$WORK_DIR/" "$ARTIFACTS_DIR/work_artifacts/" 2>&1 | tail -5 || true
+
+    # Auto-sync any offline-mode wandb runs to wandb.ai. Two cases this
+    # catches:
+    #   1. The whole job ran in offline mode (e.g. login node had no key,
+    #      or network was unreachable when wandb.init fired).
+    #   2. The job started online, lost the network mid-run, fell back to
+    #      offline for the remainder.
+    # In both cases an offline-run-* dir lands under $WORK_DIR/wandb/ and
+    # we just rsync'd it into work_artifacts/wandb/. python -m wandb sync
+    # reads ~/.netrc the same way wandb.init() does, so the auth is
+    # already in place — no env-pass needed.
+    if [ "$WANDB" = "1" ] && ls "$ARTIFACTS_DIR/work_artifacts/wandb/offline-run-"* >/dev/null 2>&1; then
+        echo "── auto-syncing offline wandb runs to wandb.ai ──"
+        apptainer exec --nv \
+            --bind "$WORKSPACE:$WORKSPACE" \
+            "$IMG" \
+            python -m wandb sync "$ARTIFACTS_DIR/work_artifacts/wandb/offline-run-"* \
+            2>&1 | tail -20 || echo "[wandb] auto-sync failed (will need a manual retry)"
+    fi
+
+    # Free the node's /tmp now that artifacts are salvaged to PRB. The EXIT
+    # trap is the backstop for abnormal exits; this is the normal-path cleanup.
+    echo "── cleaning node /tmp: $WORK_DIR + $TMP_ROOT ──"
+    rm -rf "$WORK_DIR" "$TMP_ROOT" 2>/dev/null || true
+
+    echo "── $EXP_NAME (seed=$SEED) python exit: $EXIT_CODE ──"
+    return "$EXIT_CODE"
+}

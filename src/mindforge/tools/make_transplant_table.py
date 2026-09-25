@@ -50,7 +50,7 @@ N_AGENTS = 6
 PAIRS = [(0, 1), (2, 3), (4, 5)]
 
 MODELS = [
-    ("Gemma 4 E4B", Path("runs_from_daic/rq3_topology_transfer/pair_bonding")),
+    ("Gemma 4 E4B", Path("runs/rq3_topology_transfer/pair_bonding")),
 ]
 ARMS = [("Transplant", "expB_merged_transplant"),
         ("Shuffled", "expB_merged_shuffled")]

@@ -357,7 +357,7 @@ def main():
     # ── coverage & caveats ─────────────────────────────────────────────
     w("## Coverage, provenance, caveats\n")
     prov = json.loads((A / "bond_asymmetry_provenance.json").read_text())
-    w(f"- **Included**: every non-smoke run group under `runs_from_daic/` "
+    w(f"- **Included**: every non-smoke run group under `runs/` "
       f"carrying a Hebbian graph — {', '.join(prov['included_groups'])} "
       f"({prov['usable_runs']} of {prov['discovered_runs']} discovered runs).\n")
     skipped_arms = sorted({a for arms_ in prov["skipped_no_W"].values()

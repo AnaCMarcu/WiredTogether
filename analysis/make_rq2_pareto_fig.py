@@ -38,7 +38,7 @@ Usage (from the repo root):
     python analysis/make_rq2_pareto_fig.py
     python analysis/make_rq2_pareto_fig.py --metric return --with-anchor
     python analysis/make_rq2_pareto_fig.py \
-        --copy-to "C:/Users/marcu/Downloads/WIRED_TOGETHER_revised/figures"
+        --copy-to path/to/paper/figures
 """
 
 from __future__ import annotations

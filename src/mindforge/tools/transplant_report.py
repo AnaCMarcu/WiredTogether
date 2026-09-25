@@ -5,7 +5,7 @@ generation time — nothing is hand-entered — so the report can be regenerated
 whenever new runs land:
 
     PYTHONPATH=src python src/mindforge/tools/transplant_report.py \
-        --out runs_from_daic/rq3_topology_transfer/pair_bonding/TRANSPLANT_REPORT.md
+        --out runs/rq3_topology_transfer/pair_bonding/TRANSPLANT_REPORT.md
 
 Inputs (defaults match the repo layout):
   * Phase A run dirs   (Gemma): ranked via pair_transplant.rank_pair_runs
@@ -636,9 +636,9 @@ memory volume?
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--phaseb-base",
-                    default="runs_from_daic/rq3_topology_transfer/pair_bonding")
+                    default="runs/rq3_topology_transfer/pair_bonding")
     ap.add_argument("--phasea-glob",
-                    default="runs_from_daic/rq3_topology_transfer/pair_bonding/expA_pair_bonding/seed_*")
+                    default="runs/rq3_topology_transfer/pair_bonding/expA_pair_bonding/seed_*")
     ap.add_argument("--seeds", type=int, nargs="+", default=[42, 123, 456])
     ap.add_argument("--out",
                     default="paper_assets/transplant/TRANSPLANT_REPORT.md")

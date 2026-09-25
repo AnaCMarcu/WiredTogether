@@ -61,7 +61,7 @@ ROWS = [
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--runs", type=Path, default=None,
-                    help="dataset root (default: runs_from_daic)")
+                    help="dataset root (default: runs)")
     ap.add_argument("--out", type=Path, default=None,
                     help="also write table_rows.tex + summary here")
     ap.add_argument("--tex", action="store_true", help="print LaTeX only")

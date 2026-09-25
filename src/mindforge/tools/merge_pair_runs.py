@@ -256,7 +256,7 @@ def cmd_uniform_w(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    # No required=True: the DAIC login node runs Python 3.6, where
+    # No required=True: the cluster login node runs Python 3.6, where
     # add_subparsers() does not accept it. Enforced manually below.
     sub = parser.add_subparsers(dest="command")
 

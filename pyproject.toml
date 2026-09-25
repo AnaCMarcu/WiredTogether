@@ -2,7 +2,7 @@
 name = "wiredtogether"
 version = "1.0.0"
 description = "Reward-modulated Hebbian social plasticity for multi-agent systems, and the WIRE environment"
-authors = ["Ana Cristiana Marcu"]
+authors = ["Anonymous"]
 license = "MIT"
 readme = "README.md"
 packages = [

@@ -65,7 +65,7 @@ ARM_SETS = {
 # Extra directories not in the registry, addressed as "<root>::<dir>".
 EXTRA_DIRS = {
     "Gemma-E4B si3f8": (
-        "runs_from_daic/compute/pareto_social_3f", "new_exp_0_gemma_si3f8"),
+        "runs/compute/pareto_social_3f", "new_exp_0_gemma_si3f8"),
 }
 
 

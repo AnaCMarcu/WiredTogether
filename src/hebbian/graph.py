@@ -1,4 +1,4 @@
-"""Hebbian Social Plasticity graph — the core thesis contribution.
+"""Hebbian Social Plasticity graph — the core contribution.
 
 Implements a reward-modulated Hebbian update rule over a social graph
 W(t) ∈ [0,1]^{N×N}.  Each agent is a neuron, each weighted edge is a
@@ -46,7 +46,7 @@ def _sanitize_reward(value: float) -> float:
 class HebbianSocialGraph:
     """Adaptive social graph modelling inter-agent bonds.
 
-    Implements the neuron-agent isomorphism described in the thesis:
+    Implements the neuron-agent isomorphism described in the paper:
     each agent is a neuron, each bond wij is a synapse, and the team
     reward signal modulates Hebbian plasticity (LTP/LTD).
 
@@ -181,7 +181,7 @@ class HebbianSocialGraph:
     ) -> np.ndarray:
         """Compute the co-activity matrix cij(t).
 
-        Implements refined Eq. 2 from the thesis proposal:
+        Implements refined Eq. 2 from the paper:
         soft engagement score gi(t), spatial gate, and communication
         co-activity bonus for agents that communicate across distance.
 

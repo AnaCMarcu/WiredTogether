@@ -24,7 +24,7 @@ def _chromadb_base_dir() -> str:
     """Return a fast-local directory for ChromaDB persistence.
 
     SQLite (used by ChromaDB) requires POSIX file locks that Lustre/GPFS
-    (DelftBlue /scratch) does not reliably support → SQLITE_IOERR (code 5898).
+    (some cluster /scratch file systems) does not reliably support → SQLITE_IOERR (code 5898).
     Use /tmp on the compute node (local SSD) when running under SLURM.
     Each job gets an isolated subdirectory via $SLURM_JOB_ID.
     """

@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from qual_lib import (registry, episode_io, log_parser, turns, provenance,  # noqa: E402
                       stepclock)
 
-DEFAULT_RUNS_ROOT = registry.REPO / "runs_from_daic" / "medium_runs"
+DEFAULT_RUNS_ROOT = registry.REPO / "runs" / "medium_runs"
 DEFAULT_OUT = registry.QUALITATIVE / "out"
 
 

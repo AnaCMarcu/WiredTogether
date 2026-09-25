@@ -34,7 +34,7 @@ means. Interval 200 (one seed) is dropped from the social figure by default.
 Usage:
     python analysis/make_agent_completion_figs.py --err
     python analysis/make_agent_completion_figs.py --paper --err \
-        --copy-to "C:/Users/marcu/Downloads/WIRED_TOGETHER_revised/figures"
+        --copy-to path/to/paper/figures
     python analysis/make_agent_completion_figs.py --only social --drop -1
 """
 
