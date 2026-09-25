@@ -47,6 +47,5 @@ dataset includes that CSV, so the figure does not require re-running the pipelin
 ## Qualitative pipeline
 
 `qualitative/` is a staged CLI (`parse`, `metrics`, `sample`, `validate`, `cases`, `collab`,
-`report`) over the per-module LLM logs. It produces the belief and message tables used above. The
-annotation labels under `qualitative/out/annotations/` are kept because they were produced by an
-LLM annotator and cannot be regenerated deterministically. See `qualitative/README.md`.
+`report`) over the per-module LLM logs. It produces the belief and message tables used above. See
+`qualitative/README.md`.

@@ -19,8 +19,9 @@ python analysis/qualitative/run.py collab     # collaboration success/failure ca
 python analysis/qualitative/run.py report     # out/report/qual_report.md
 ```
 
-The annotations are the one input here that is not derived from the logs — they are model-produced
-labels, so `out/annotations/` is version-controlled while the rest of `out/` is not.
+The annotations are the one input here that is not derived from the logs: they are model-produced
+labels, written by the annotator into `out/annotations/`. They are not distributed; `validate` and
+`report` need them, while `parse`, `metrics`, `cases` and `collab` do not.
 
 `collab` (needs `parse` outputs only) mines per-interaction collaboration episodes — fulfilled and
 ignored requests, real (non-timer) cooperative milestones, Ch3 mutual deadlocks, Ch2 anvil neglect

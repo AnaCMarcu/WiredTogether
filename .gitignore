@@ -212,10 +212,8 @@ paper/
 # Generated tables and figures. Every one is reproducible from analysis/.
 paper_assets/
 
-# Qualitative pipeline outputs: derived from the run logs, except the
-# annotation labels, which are produced by an LLM annotator and kept.
-analysis/qualitative/out/*
-!analysis/qualitative/out/annotations/
+# Qualitative pipeline outputs, including the annotation labels.
+analysis/qualitative/out/
 analysis/qualitative/out_*/
 
 # Release bundles built by analysis/runs_dataset.py.
