@@ -1,99 +1,115 @@
 # Wired Together
 
-**Reward-Modulated Hebbian Social Plasticity for Emergent Social Intelligence in Multi-Agent Systems**
+**Learning Persistent Relationships through Reward-Modulated Social Plasticity**
 
-Multi-agent systems coordinate through communication, shared policies or centralised
-orchestration, but they usually keep no explicit representation of *who has worked with whom*.
-This work adds one. A multi-agent system is modelled as an adaptive network: agents are *neurons*,
-the social bonds between them are *synapses*, and reward is the *modulatory signal*. A
-reward-modulated Hebbian rule learns a directed bond matrix `W(t) ∈ [0,1]^{N×N}` online from
-social co-firing and outcome salience, then couples that graph back to behaviour — through reward
-diffusion and weight-gated experience sharing for RL agents, and a bond-conditioned social module
-at inference time for LLM agents.
+Coordination in multi-agent systems is usually specified per task: by a fixed topology, a dialogue
+protocol, or a planner that assigns work. This repository studies a second axis of design: *with
+whom* agents have a relationship. A team is modelled as an adaptive social network whose directed
+bonds `W(t) ∈ [0,1]^{N×N}` evolve online. Social co-activity marks a pair as eligible for change
+through an eligibility trace, and later outcomes consolidate or weaken the bond. The learned graph
+then feeds back into learning, through reward diffusion and bond-gated experience sharing, and into
+inference, through bond-conditioned deliberation.
 
-![Overview of Hebbian social plasticity](figures/overview_social_plasticity_loop.png)
-
-Social interactions and spatial engagement define pairwise co-firing signals, which drive
-reward-modulated updates to `W(t)`. The learned graph is coupled back to the agents, closing an
-interaction–plasticity–behaviour loop.
+![Learning and using persistent social relationships](docs/img/method_overview.png)
 
 ## WIRE
 
-Everything runs in **WIRE** (Wired Inter-agent Reasoning Evaluation), a five-chamber cooperative
-environment built on Craftium/Luanti and shipped in this repo.
+All experiments run in **WIRE** (Wired Inter-agent Reasoning Evaluation), an embodied environment
+of five one-way chambers built on Craftium and the Luanti voxel engine. Inter-agent dependence
+increases from chamber to chamber: solo skill acquisition, simultaneous cooperative resource
+acquisition, communication under partial observability, team combat, and a cooperative boss fight
+with permanent death. Each chamber has a time budget, after which the team is moved forward.
 
-![The WIRE environment](figures/wire_five_chambers.png)
+![The five WIRE chambers](docs/img/wire_chambers.png)
 
-Agents progress through five chambers, each targeting a distinct coordination competency: solo
-skill acquisition (Ch1), cooperative resource acquisition under joint-action requirements (Ch2),
-targeted communication under partial observability (Ch3), team combat (Ch4), and a cooperative
-boss fight (Ch5). Episodes end on boss defeat or full team death.
+The world ships as Lua mods under `src/marl_craftium/craftium-envs/wire/`. Milestones and rewards
+are specified in [docs/environment.md](docs/environment.md).
 
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `src/hebbian/` | The bond matrix `W`: co-firing, the update rule and its variants, reward diffusion, replay indices |
-| `src/rl_layer/` | LoRA-PPO over a frozen LLM actor; MAPPO shared critic or IPPO value heads |
-| `src/mindforge/` | The per-agent cognitive stack, the episode loop, the environment adapter |
-| `src/marl_craftium/` | PettingZoo wrapper over Craftium plus the WIRE world as Lua mods |
-| `src/orchestrator/` | Centralised orchestration baselines |
-| `analysis/` | Every table and figure in the paper |
-| `figures/` | The paper's figures |
-| `hpc/` | SLURM launchers, one per experiment arm |
-| `docs/` | Code reference, one document per layer |
+| `src/hebbian/` | The bond graph: co-firing signal, the three-factor update rule, reward diffusion, experience-sharing indices |
+| `src/rl_layer/` | LoRA-PPO over a frozen vision-language model; MAPPO shared critic or IPPO local critics |
+| `src/mindforge/` | The per-agent cognitive stack, the social module, the episode loop, the CLI |
+| `src/marl_craftium/` | PettingZoo wrapper over Craftium and the WIRE world |
+| `src/orchestrator/` | The centralised orchestration baseline (VillagerAgent-style) |
+| `third_party/craftium/` | Two patched Craftium files and their license |
+| `hpc/daic/` | Container recipes and one SLURM launcher per experimental condition |
+| `analysis/` | The scripts that produce every table and figure in the paper |
+| `docs/` | Reference documentation, one file per component |
+| `tests/` | Unit tests; no game binary or model weights needed |
 
 ## Install
 
-The engine is a patched Craftium/Luanti fork that compiles per platform, so it is not vendored
-here. The game itself (VoxeLibre) *is* vendored, under `src/marl_craftium/craftium-envs/`.
+WIRE needs Linux with Python 3.12. The engine comes from the Craftium v0.0.1 wheel, with two of its
+Python files replaced (see [third_party/craftium/README.md](third_party/craftium/README.md)):
 
 ```bash
-git clone https://github.com/AnaCMarcu/craftium_wired_together.git craftium
-pip install -e ./craftium          # builds the Luanti binary; see that repo's README
-poetry install                     # or: conda env create -f environment.yml
+pip install https://github.com/mikelma/craftium/releases/download/v0.0.1/craftium-0.0.1-cp312-cp312-manylinux_2_28_x86_64.whl
+python third_party/craftium/install.py
+pip install -e .            # or: poetry install
 ```
 
-Anything that touches the game is Linux-only; the code and the test suite run anywhere.
+The recipes in `hpc/daic/*.def` build an Apptainer image with exactly this setup.
 
-Point the wrapper at the WIRE world before running. Without it Craftium falls back to its stock
-world, which has no chambers and no milestones — the usual cause of a run that reports zero
-cooperative progress.
+Point the wrapper at the WIRE world and at a model before running:
 
 ```bash
 export CRAFTIUM_ENV_DIR="$PWD/src/marl_craftium/craftium-envs/wire"
 export PYTHONPATH="$PWD/src"
-export LLM_MODEL_PATH=/path/to/Qwen3.5-2B   # or LLM_BASE_URL for an OpenAI-compatible endpoint
+export LLM_MODEL_PATH=/path/to/gemma-4-E4B-it   # or LLM_BASE_URL for an OpenAI-compatible endpoint
+export LLM_VISION_MODE=vision
 ```
+
+Without `CRAFTIUM_ENV_DIR`, Craftium falls back to its stock world, which has no chambers and no
+milestones.
 
 ## Run
 
+Every run is one call to `src/mindforge/multi_agent_craftium.py`. The defaults are the paper's
+settings (Tables 7 and 8), so the conditions differ only in the switches below.
+
 ```bash
-python src/mindforge/multi_agent_craftium.py \
-    --num-agents 3 --episodes 3 --max-steps 100 --simultaneous
+RUN="python src/mindforge/multi_agent_craftium.py --num-agents 3 --episodes 3 --max-steps 1000 --simultaneous"
+
+$RUN                                          # zero-shot baseline
+$RUN --hebbian --social-module prompt         # + social plasticity at inference time
+$RUN --orchestrator                           # centralised orchestration baseline
+RL="--rl --rl-model-path $LLM_MODEL_PATH --rl-critic-mode centralized"   # MAPPO; `independent` for IPPO
+$RUN $RL                                      # RL fine-tuning baseline
+$RUN $RL --hebbian                            # + reward diffusion and experience sharing
 ```
 
-`--hebbian` turns on the bond matrix and is the prerequisite for every coupling above it
-(`--hebbian-mode`, `--hebbian-gamma`, `--hebbian-rho`, `--social-module`); `--rl` adds the PPO
-layer over a frozen actor; `--orchestrator` selects the centralised baselines instead. Runs land in
-`runs/<run_id>/`.
+`--social-act-mode choice --social-acts comm,obs,imit` enables the social acts compared in RQ2.
+`--start-chamber 3 --hebbian-init-file ... --agent-state-init ...` starts the team-recomposition
+runs of RQ3 from transplanted bonds and memories; `src/mindforge/tools/pair_transplant.py` builds
+their inputs. Runs are written to `runs/<group>/<tag>/seed_<N>/`.
 
 [docs/configuration.md](docs/configuration.md) lists every flag with its default and the paper
-symbol it carries. [docs/experiments.md](docs/experiments.md) maps each condition in the paper to
-its launcher under `hpc/`.
+symbol it sets. [docs/experiments.md](docs/experiments.md) maps each condition in the paper to its
+launcher under `hpc/daic/experiments/`, which records the exact flags of the reported runs.
 
-## Reproduce
+## Reproduce the paper
 
-Analysis scripts read run directories under `runs_from_daic/` and write into `paper_assets/`. The
-run artifacts live outside this repo; [docs/dataset.md](docs/dataset.md) covers how they are
-grouped and packaged.
+The analysis scripts read run directories from `runs_from_daic/` and write to `paper_assets/`. The
+run artifacts of the paper are released separately; [docs/dataset.md](docs/dataset.md) describes
+their layout.
 
-```bash
-python analysis/make_final_table.py        # Table 2: cross-model comparison
-python analysis/make_pareto_social_fig.py  # Figure 3a: deliberation interval vs compute
-```
+| Paper | Script |
+|---|---|
+| Tables 1–3, 12 | `analysis/make_agent_completion_tables.py` |
+| Table 9 | `analysis/make_steps_table_pct.py` |
+| Table 10 | `analysis/make_bond_behaviour_rho.py` |
+| Table 11 | `analysis/make_transplant_tables.py` |
+| Figure 4, 10, 11 | `analysis/make_counterfactual_compact_n6.py`, `analysis/make_counterfactual_n6.py` |
+| Figure 5 | `analysis/make_chamber_gallery.py` |
+| Figures 6–8 | `analysis/make_agent_completion_figs.py` |
+| Figure 9 | `analysis/make_final_figures.py` |
+| Figures 12, 13 | `analysis/make_counterfactual_story.py` |
+| Figure 14 | `analysis/make_team_tenure.py` |
 
-[analysis/README.md](analysis/README.md) maps every script to the table or figure it produces.
+[analysis/README.md](analysis/README.md) gives the inputs of each script.
 
 ## Tests
 
@@ -101,9 +117,13 @@ python analysis/make_pareto_social_fig.py  # Figure 3a: deliberation interval vs
 python -m pytest tests -q
 ```
 
-600 tests, no game binary or model weights required. They pin the hyperparameter defaults against
-the paper's tables, the Hebbian update arithmetic, the reward ledger, and the Lua and Python
-milestone tables against each other.
+The tests pin the configuration defaults to the paper's hyperparameter tables and check the
+plasticity update arithmetic, the reward ledger, and the agreement between the Lua and Python
+milestone definitions.
 
-MIT licensed. Built on [Craftium](https://github.com/mikelma/craftium),
-[VoxeLibre](https://git.minetest.land/VoxeLibre/VoxeLibre) and the MindForge agent stack.
+## License
+
+MIT, except `third_party/craftium/` (LGPL-2.1, from Craftium) and the vendored VoxeLibre game under
+`src/marl_craftium/craftium-envs/`, which keeps its own licenses. Built on
+[Craftium](https://github.com/mikelma/craftium), [Luanti](https://www.luanti.org),
+[VoxeLibre](https://git.minetest.land/VoxeLibre/VoxeLibre) and the MindForge agent architecture.
