@@ -63,7 +63,6 @@ publish from `/` or `/docs`, and `docs/` already holds the code documentation.
 
 ## After acceptance
 
-
 Move to the TeamCraft pattern: an organization site at `https://<org>.github.io/`. Creating the
 organization now from a neutral account (below) also works during review and keeps one URL
 throughout; Anonymous GitHub is the simpler option for review alone.
@@ -87,13 +86,9 @@ that account, even if the page itself names nobody. So:
    at `https://github.com/wire-bench`. Organization membership defaults to private; leave it so.
 3. Only that account pushes to the site repository during review.
 
-Anonymous GitHub (anonymous.4open.science) can also serve a mirrored repository's static pages,
-which is a fallback if a separate account is not wanted. Its URLs are opaque and expire, so it is
-less suitable as the long-term address.
+## Steps for the organization site
 
-## Steps
-
-1. **Prepare the content** (in this repository, where `site/` is git-ignored):
+1. **Prepare the content** (also required before the Anonymous GitHub route) (in this repository, where `site/` is git-ignored):
    - Replace `site/assets/paper.pdf` with the v6 anonymous build. The current file has 46 pages;
      v6 has 48.
    - Thin the clip gallery: `site/assets/videos/candidates/` holds 701 files and has no
