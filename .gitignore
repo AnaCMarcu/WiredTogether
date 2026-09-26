@@ -1,4 +1,4 @@
-# Secrets — LLM/API keys (e.g. TULIP). Never commit these.
+# Secrets — LLM/API keys. Never commit these.
 api.key
 *.key
 
