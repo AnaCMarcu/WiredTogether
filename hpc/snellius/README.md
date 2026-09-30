@@ -83,8 +83,8 @@ relative:
 
 ```bash
 cd $WT_WORKSPACE/WiredTogether
-EPISODES=1 MAX_STEPS=60 RUN_GROUP=smoke WANDB=0 \
-    sbatch --time=01:00:00 --job-name=wt-smoke hpc/slurm/experiments/exp01_llm_2b.sbatch
+EPISODES=1 MAX_STEPS=20 RUN_GROUP=smoke WANDB=0 \
+    sbatch --time=01:30:00 --job-name=wt-smoke hpc/slurm/experiments/exp01_llm_2b.sbatch
 
 squeue -u $USER                                   # PD = queued, R = running
 grep -E "python exit|Traceback|PREFLIGHT" slurm_logs/exp01_llm_2b_*.out
