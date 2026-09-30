@@ -89,11 +89,14 @@ run_exp() {
     # small and fast to scp. Mirror the same exp/seed structure for easy
     # cross-referencing.
     local ARTIFACTS_DIR="$REPO/run_artifacts/${RUN_GROUP}/${EXP_NAME}/seed_${SEED}"
-    local WORK_DIR="/tmp/$USER/${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
+    # WT_SCRATCH moves the node-local work dirs off /tmp — e.g. to a cluster's
+    # per-job scratch ($TMPDIR on Snellius, set by hpc/snellius/bin/sbatch).
+    local SCRATCH_ROOT="${WT_SCRATCH:-/tmp/$USER}"
+    local WORK_DIR="$SCRATCH_ROOT/${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
     # Apptainer's own squashfuse/session files + any in-container tempfiles —
     # kept OUT of WORK_DIR so the salvage rsync doesn't copy them to the shared workspace, but
-    # still under /tmp/$USER so the cleanup below removes them with the rest.
-    local TMP_ROOT="/tmp/$USER/tmp_${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
+    # still under the scratch root so the cleanup below removes them with the rest.
+    local TMP_ROOT="$SCRATCH_ROOT/tmp_${EXP_NAME}_${SLURM_JOB_ID:-nojob}"
     export APPTAINER_TMPDIR="$TMP_ROOT/apptainer"
     export TMPDIR="$TMP_ROOT"
     mkdir -p "$RUN_DIR" "$ARTIFACTS_DIR" "$WORK_DIR" "$APPTAINER_TMPDIR"
@@ -255,10 +258,26 @@ run_exp() {
     # (MT + Xvfb), the FUSE unmounts, and exec returns cleanly so the cleanup
     # below can run. Pid-only isolation; networking is untouched so the
     # localhost MT server↔client sockets still work.
+    # Extra binds: the scratch root when it is not under /tmp, plus WT_BIND
+    # (comma-separated host paths) for anything the workspace symlinks into,
+    # e.g. images/ and models/ shared from a project directory.
+    local EXTRA_BINDS=()
+    case "$SCRATCH_ROOT" in
+        /tmp|/tmp/*) ;;
+        *) EXTRA_BINDS+=(--bind "$SCRATCH_ROOT:$SCRATCH_ROOT") ;;
+    esac
+    if [ -n "${WT_BIND:-}" ]; then
+        local _b
+        for _b in ${WT_BIND//,/ }; do
+            EXTRA_BINDS+=(--bind "$_b:$_b")
+        done
+    fi
+
     apptainer exec --nv \
         --pid \
         --bind /tmp:/tmp \
         --bind "$WORKSPACE:$WORKSPACE" \
+        ${EXTRA_BINDS[@]+"${EXTRA_BINDS[@]}"} \
         --bind "$WORK_DIR/empty_dri:/dev/dri" \
         --env PYTHONPATH="$REPO/src" \
         --env PYTHONUNBUFFERED=1 \
@@ -403,7 +422,10 @@ run_exp() {
     # we just rsync'd it into work_artifacts/wandb/. python -m wandb sync
     # reads ~/.netrc the same way wandb.init() does, so the auth is
     # already in place — no env-pass needed.
-    if [ "$WANDB" = "1" ] && ls "$ARTIFACTS_DIR/work_artifacts/wandb/offline-run-"* >/dev/null 2>&1; then
+    # WANDB_AUTOSYNC=0 skips this on clusters whose compute nodes have no
+    # internet (Snellius); sync from a login node instead.
+    if [ "$WANDB" = "1" ] && [ "${WANDB_AUTOSYNC:-1}" = "1" ] \
+       && ls "$ARTIFACTS_DIR/work_artifacts/wandb/offline-run-"* >/dev/null 2>&1; then
         echo "── auto-syncing offline wandb runs to wandb.ai ──"
         apptainer exec --nv \
             --bind "$WORKSPACE:$WORKSPACE" \

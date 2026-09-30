@@ -1,0 +1,161 @@
+#!/bin/bash
+# ────────────────────────────────────────────────────────────────────────────
+# sbatch shim for Snellius (SURF).
+#
+# The launchers in hpc/slurm/ carry a generic cluster's SLURM header
+# (--partition=general, --qos=long, --gres=gpu:1, up to 168 h). This shim sits
+# in front of the real sbatch (hpc/snellius/env.sh puts its directory first on
+# PATH) and rewrites every submission for Snellius, so the SAME .sbatch files
+# and submit_*.sh scripts work unchanged:
+#
+#   * drops header lines/flags Snellius rejects or that name other clusters'
+#     nodes: --qos, --gres, --exclude, --nodelist
+#   * forces --partition=$WT_SN_PARTITION (gpu_a100), --gpus=1,
+#     --cpus-per-task=$WT_SN_CPUS, and --account=$WT_SN_ACCOUNT when set
+#   * caps --time at $WT_SN_MAX_TIME (120 h = the partition limit); a --time
+#     given on the command line wins over the file's header but is capped too
+#   * points the job's scratch (WT_SCRATCH) at Snellius' per-job $TMPDIR
+#
+# Anything else (--mem, --job-name, --array, --parsable, --dependency, ...)
+# passes through untouched. WT_SN_DRY_RUN=1 prints the rewritten script and
+# the final sbatch command instead of submitting.
+# ────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+PARTITION="${WT_SN_PARTITION:-gpu_a100}"
+ACCOUNT="${WT_SN_ACCOUNT:-}"
+MAX_TIME="${WT_SN_MAX_TIME:-120:00:00}"
+# One A100 is billed as a quarter node whatever you ask for, and a quarter of
+# a gpu_a100 node is 18 cores. Take them all: Luanti renders on the CPU.
+CPUS="${WT_SN_CPUS:-18}"
+
+# ── locate the real sbatch (first one on PATH that is not this file) ──────
+self="$(readlink -f "$0")"
+REAL_SBATCH="${WT_REAL_SBATCH:-}"
+if [ -z "$REAL_SBATCH" ]; then
+    while IFS= read -r cand; do
+        if [ "$(readlink -f "$cand")" != "$self" ]; then
+            REAL_SBATCH="$cand"
+            break
+        fi
+    done < <(type -ap sbatch)
+fi
+if [ -z "$REAL_SBATCH" ]; then
+    echo "[snellius-sbatch] no real sbatch found on PATH" >&2
+    exit 1
+fi
+
+# ── SLURM time string -> minutes (rounds seconds up) ──────────────────────
+# Formats: M, M:S, H:M:S, D-H, D-H:M, D-H:M:S
+to_min() {
+    local t="$1" d=0 f1 f2 f3
+    if [[ "$t" == *-* ]]; then
+        d="${t%%-*}"
+        t="${t#*-}"
+        IFS=: read -r f1 f2 f3 <<<"$t"
+        echo $(( 10#$d * 1440 + 10#${f1:-0} * 60 + 10#${f2:-0} + (10#${f3:-0} > 0) ))
+        return
+    fi
+    IFS=: read -r f1 f2 f3 <<<"$t"
+    if [ -n "${f3:-}" ]; then
+        echo $(( 10#$f1 * 60 + 10#$f2 + (10#$f3 > 0) ))
+    elif [ -n "${f2:-}" ]; then
+        echo $(( 10#$f1 + (10#$f2 > 0) ))
+    else
+        echo $(( 10#$f1 ))
+    fi
+}
+fmt_min() { printf '%d:%02d:00' $(( $1 / 60 )) $(( $1 % 60 )); }
+
+# ── split argv: sbatch options | script | script args ─────────────────────
+opts=()
+script=""
+script_args=()
+cli_time=""
+skip_next=0
+for a in "$@"; do
+    if [ -n "$script" ]; then
+        script_args+=("$a")
+        continue
+    fi
+    if [ "$skip_next" = 1 ]; then
+        skip_next=0
+        continue
+    fi
+    if [ "$skip_next" = 2 ]; then
+        cli_time="$a"
+        skip_next=0
+        continue
+    fi
+    case "$a" in
+        --qos=*|--gres=*|--exclude=*|--nodelist=*|--partition=*|--gpus=*|--cpus-per-task=*)
+            ;;
+        --qos|--gres|--exclude|--nodelist|--partition|--gpus|--cpus-per-task|-q|-x|-w|-p|-G|-c)
+            skip_next=1 ;;
+        --time=*)
+            cli_time="${a#--time=}" ;;
+        --time|-t)
+            skip_next=2 ;;
+        -*)
+            opts+=("$a") ;;
+        *)
+            if [ -f "$a" ]; then
+                script="$a"
+            else
+                opts+=("$a")   # value of a pass-through option, e.g. -J name
+            fi
+            ;;
+    esac
+done
+
+# ── rewrite the script header ─────────────────────────────────────────────
+tmp=""
+file_time=""
+if [ -n "$script" ]; then
+    file_time="$(grep -E '^#SBATCH[[:space:]]+(--time[= ]|-t[[:space:]])' "$script" \
+                 | tail -1 | sed -E 's/^#SBATCH[[:space:]]+(--time[= ]|-t[[:space:]]+)//; s/[[:space:]].*//' || true)"
+    tmp_dir="${WT_WORKSPACE:-$HOME}/slurm_logs/.snellius_submit"
+    mkdir -p "$tmp_dir"
+    tmp="$(mktemp "$tmp_dir/$(basename "$script").XXXXXX")"
+    body="$(tail -n +2 "$script" | tr -d '\r')"
+    {
+        head -n 1 "$script" | tr -d '\r'
+        # Directives must precede the first command line, or SLURM ignores them.
+        grep -E '^#SBATCH' <<<"$body" \
+            | grep -vE '^#SBATCH[[:space:]]+(--(qos|gres|exclude|nodelist|partition|gpus|cpus-per-task|time)([= ]|$)|-[qxwpGct][[:space:]])' \
+            || true
+        # Per-job scratch: inside a job SLURM points $TMPDIR at node-local
+        # /scratch-local and wipes it when the job ends.
+        echo 'export WT_SCRATCH="${WT_SCRATCH:-${TMPDIR:-/tmp/$USER}}"'
+        grep -vE '^#SBATCH' <<<"$body" || true
+    } > "$tmp"
+fi
+
+req_time="${cli_time:-${file_time:-$MAX_TIME}}"
+req_min="$(to_min "$req_time")"
+max_min="$(to_min "$MAX_TIME")"
+if [ "$req_min" -gt "$max_min" ]; then
+    echo "[snellius-sbatch] --time $req_time > $MAX_TIME limit, capping" >&2
+    req_min="$max_min"
+fi
+
+final=(--partition="$PARTITION" --gpus=1 --cpus-per-task="$CPUS" --time="$(fmt_min "$req_min")")
+[ -n "$ACCOUNT" ] && final+=(--account="$ACCOUNT")
+final+=(${opts[@]+"${opts[@]}"})
+[ -n "$tmp" ] && final+=("$tmp")
+final+=(${script_args[@]+"${script_args[@]}"})
+
+if [ "${WT_SN_DRY_RUN:-0}" = "1" ]; then
+    [ -n "$tmp" ] && { echo "── rewritten $script ──" >&2; cat "$tmp" >&2; echo >&2; }
+    echo "$REAL_SBATCH ${final[*]}" >&2
+    [ -n "$tmp" ] && rm -f "$tmp"
+    exit 0
+fi
+
+set +e
+"$REAL_SBATCH" "${final[@]}"
+rc=$?
+set -e
+# SLURM copies the script at submit time; the temp file is no longer needed.
+[ -n "$tmp" ] && rm -f "$tmp"
+exit "$rc"

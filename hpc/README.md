@@ -29,3 +29,6 @@ Two things to know before submitting:
 
 `experiments/bad_gpu_nodes.txt` and `experiments/gpu_filter.sh` exclude nodes whose GPU is too
 small for the action-selection model; the list ships empty.
+
+On Snellius (SURF), follow [snellius/README.md](snellius/README.md): an sbatch shim adapts these
+same launchers, so nothing in `slurm/` needs editing.
