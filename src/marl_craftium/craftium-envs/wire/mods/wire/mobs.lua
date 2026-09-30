@@ -92,6 +92,33 @@ local CH4_SPAWN_POSITIONS = {
     {x=9, y=11, z=50},
 }
 
+-- More than 6 zombies (the scaling suite without a --ch4-mob-count pin,
+-- or a pin above 6) take the north part of the interior, x=2..10,
+-- z=53..56, skipping the hand-placed tiles: 34 more, 40 in all. Agents
+-- are teleported in at z<=52 (util.ch4_fallback_spawn_pos), so no zombie
+-- starts on an agent. Only under TEAM_SCALING: every other suite keeps
+-- the 6-zombie cap. Python mirror: chamber_facts.CH4_MAX_ZOMBIES_SCALING.
+local CH4_EXTRA_SPAWN_POSITIONS = {}
+do
+    local taken = {}
+    for _, p in ipairs(CH4_SPAWN_POSITIONS) do taken[p.x .. "," .. p.z] = true end
+    for z = 56, 53, -1 do
+        for x = 2, 10 do
+            if not taken[x .. "," .. z] then
+                table.insert(CH4_EXTRA_SPAWN_POSITIONS, {x=x, y=11, z=z})
+            end
+        end
+    end
+end
+
+local function ch4_spawn_positions()
+    if not wire.TEAM_SCALING then return CH4_SPAWN_POSITIONS end
+    local all = {}
+    for _, p in ipairs(CH4_SPAWN_POSITIONS) do table.insert(all, p) end
+    for _, p in ipairs(CH4_EXTRA_SPAWN_POSITIONS) do table.insert(all, p) end
+    return all
+end
+
 -- active_ch1_mobs: list of {obj=ObjectRef, last_puncher=name|nil}
 -- Populated by spawn_ch1_animals(); checked each globalstep for deaths.
 -- Do NOT clear the list here — reset_mob_state() does that, and is called
@@ -247,9 +274,10 @@ function wire.spawn_ch4_mobs()
     -- config.lua) pins the count so agent-count scaling runs keep the
     -- chamber identical across team sizes.
     local want = wire.CH4_MOB_COUNT or wire.NUM_AGENTS
-    local n = math.min(want, #CH4_SPAWN_POSITIONS)
+    local positions = ch4_spawn_positions()
+    local n = math.min(want, #positions)
     for i = 1, n do
-        local pos = CH4_SPAWN_POSITIONS[i]
+        local pos = positions[i]
         local obj = minetest.add_entity(pos, "mobs_mc:zombie")
         if obj then
             table.insert(wire.mob_state.ch4_mobs, {

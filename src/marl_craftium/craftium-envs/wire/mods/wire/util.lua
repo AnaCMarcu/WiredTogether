@@ -64,6 +64,16 @@ function wire.cell_teleport_pos(i)
     }
 end
 
+-- Label of cell/switch i (0-based): "A".."Z", then "AA", "AB", ... so
+-- teams past 26 agents get distinct labels. i<26 is the single letter it
+-- always was. Python mirror: chamber_facts._cell_letter.
+function wire.cell_label(i)
+    if i < 26 then
+        return string.char(65 + i)
+    end
+    return string.char(65 + math.floor(i / 26) - 1) .. string.char(65 + i % 26)
+end
+
 -- Deterministic, collision-free placement of agent i (0-based) inside a
 -- rectangle: scan z-rows south→north and x west→east, skip every tile in
 -- `blocked`, and return the i-th free tile.
@@ -128,6 +138,15 @@ function wire.ch1_spawn_pos(i)
     -- WT_TEAM_SCALING) so legacy suites are bit-for-bit unchanged.
     local frac = (N == 1) and 0.5 or (i / (N - 1))
     local y = (wire.CH1_DIRT_Y or 11) + 1
+    if wire.TEAM_SCALING and N > 9 then
+        -- Past 9 agents the z=10 row below runs out of distinct columns.
+        -- Grow it into a grid over the same resource-free band: z=10..13
+        -- (every trunk, stone and animal sits at z<=9) and x=2..13 (two
+        -- blocks from both side walls, as for the row) = 48 tiles. N<=9
+        -- keeps the row exactly.
+        local slot = grid_slot(i, 2, 13, 10, 13, nil)
+        return {x = slot.x, y = y, z = slot.z}
+    end
     if wire.TEAM_SCALING then
         -- Scaling suite: z=10, x in [2,10]. This row satisfies the same
         -- three criteria CH1_SPAWNS_3 was hand-tuned for:
@@ -176,7 +195,10 @@ function wire.ch2_fallback_spawn_pos(i)
         -- N>7. Three rows (z=19..21) give 21 tiles minus the Row-A anvil
         -- pedestal, comfortably covering N=9, and keep the team clustered
         -- around the anvils they have to co-dig.
-        local slot = grid_slot(i, c.x0 + 1, c.x1 - 1, c.z0 + 2, c.z0 + 4,
+        -- Past the 3-row band's 20 free tiles, extend north to z1-2
+        -- (5 rows, 33 free tiles); N<=20 keeps the 3-row order exactly.
+        local z_max = (N > 20) and (c.z1 - 2) or (c.z0 + 4)
+        local slot = grid_slot(i, c.x0 + 1, c.x1 - 1, c.z0 + 2, z_max,
                                ch2_blocked_tiles())
         return {x = slot.x, y = wire.FLOOR_Y + 1, z = slot.z}
     end
@@ -202,7 +224,11 @@ function wire.ch4_fallback_spawn_pos(i)
         -- spread stacked two pairs at N=9. Zombies are entities, not
         -- blocks, and only spawn once an agent is detected in Ch4 (i.e.
         -- after this teleport), so no tiles are excluded.
-        local slot = grid_slot(i, c.x0 + 1, c.x1 - 1, c.z0 + 2, c.z0 + 4, nil)
+        -- Past 27 agents, add a 4th row (z=52, 36 tiles). It stops there
+        -- so the extra zombies (z=53..56, mobs.lua) never start on top of
+        -- an agent. N<=27 keeps the 3-row order exactly.
+        local z_max = (N > 27) and (c.z0 + 5) or (c.z0 + 4)
+        local slot = grid_slot(i, c.x0 + 1, c.x1 - 1, c.z0 + 2, z_max, nil)
         return {x = slot.x, y = wire.FLOOR_Y + 1, z = slot.z}
     end
     -- Legacy: single-row linear spread (duplicates columns for N>=9).
@@ -227,7 +253,11 @@ function wire.ch5_fallback_spawn_pos(i)
         -- four pairs at N=9. Rows z=61..63 give 21 tiles; the boss's spawn
         -- tile is skipped so nobody materialises inside it.
         local boss_z = math.floor((c.z0 + c.z1) / 2)
-        local slot = grid_slot(i, c.x0 + 1, c.x1 - 1, c.z0 + 2, c.z0 + 4,
+        -- The 3-row band holds 20 agents (the boss tile (6,63) is in it).
+        -- Past that, extend north to z1-2 (5 rows, 34 free tiles); N<=20
+        -- keeps the 3-row order exactly.
+        local z_max = (N > 20) and (c.z1 - 2) or (c.z0 + 4)
+        local slot = grid_slot(i, c.x0 + 1, c.x1 - 1, c.z0 + 2, z_max,
                                {{x = 6, z = boss_z}})
         return {x = slot.x, y = wire.FLOOR_Y + 1, z = slot.z}
     end

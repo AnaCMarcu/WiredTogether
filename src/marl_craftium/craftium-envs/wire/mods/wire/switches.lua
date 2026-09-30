@@ -53,8 +53,8 @@ minetest.register_node("wire:switch", {
         wire.open_cell_door(target)
 
         -- 2. Emit switch event for Python polling.
-        local sw_label   = string.char(65 + sw_i)    -- "A", "B", "C"
-        local door_label = string.char(65 + target)  -- "B", "C", "A"
+        local sw_label   = wire.cell_label(sw_i)    -- "A", "B", "C"
+        local door_label = wire.cell_label(target)  -- "B", "C", "A"
         wire.emit_switch_event(sw_label, door_label, presser)
 
         -- 3. M17: switch pressed (for the presser).

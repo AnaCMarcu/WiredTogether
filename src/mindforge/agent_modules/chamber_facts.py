@@ -73,12 +73,23 @@ _CHAMBER_FACTS = {
 
 
 def _cell_letter(i: int) -> str:
-    return chr(ord("A") + i)
+    """Cell/switch label: "A".."Z", then "AA", "AB", ... (mirrors Lua's
+    wire.cell_label, so teams past 26 agents keep distinct labels)."""
+    if i < 26:
+        return chr(ord("A") + i)
+    return chr(ord("A") + i // 26 - 1) + chr(ord("A") + i % 26)
+
+
+#: Ch4 zombie spawn slots in mobs.lua: 6 hand-placed, plus 34 more that only
+#: the agent-count scaling suite (WT_TEAM_SCALING=1) unlocks.
+CH4_MAX_ZOMBIES = 6
+CH4_MAX_ZOMBIES_SCALING = 40
 
 
 def _zombie_count(num_agents: int) -> int:
     # Mirrors Lua's spawn_ch4_mobs: min(CH4_MOB_COUNT or NUM_AGENTS,
-    # #CH4_SPAWN_POSITIONS) with 6 spawn positions defined in mobs.lua.
+    # #positions), where positions are the 6 hand-placed ones, or 40 under
+    # WT_TEAM_SCALING (mobs.lua ch4_spawn_positions).
     # FC_CH4_MOB_COUNT is the agent-count-scaling pin (set by
     # --ch4-mob-count via multi_agent_craftium.py, read here at call time
     # so prompt text always matches what the Lua server actually spawns).
@@ -87,9 +98,12 @@ def _zombie_count(num_agents: int) -> int:
         pinned = int(os.environ.get("FC_CH4_MOB_COUNT", ""))
     except ValueError:
         pinned = 0
+    cap = (CH4_MAX_ZOMBIES_SCALING
+           if os.environ.get("WT_TEAM_SCALING", "") == "1"
+           else CH4_MAX_ZOMBIES)
     if pinned > 0:
-        return min(pinned, 6)
-    return min(num_agents, 6)
+        return min(pinned, cap)
+    return min(num_agents, cap)
 
 
 def ch4_zombie_count(num_agents: int) -> int:

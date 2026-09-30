@@ -29,7 +29,7 @@ Imports chamber_facts (stdlib-only) + os — safe to import anywhere.
 
 import os
 
-from mindforge.agent_modules.chamber_facts import ch4_zombie_count
+from mindforge.agent_modules.chamber_facts import _cell_letter, ch4_zombie_count
 
 # Frozen pre-placeholder text (the original 3-agent wording, byte-exact —
 # note switch_rotation carries the original line wrap of the role files).
@@ -59,7 +59,7 @@ def num_word(n: int) -> str:
 
 
 def cell_letter(i: int) -> str:
-    return chr(ord("A") + i)
+    return _cell_letter(i)
 
 
 def cell_letters_slash(n: int) -> str:
@@ -106,7 +106,7 @@ def scaling_placeholders(num_agents: int) -> dict:
 
     ``ch4_zombies`` honors the ``FC_CH4_MOB_COUNT`` pin (set by
     ``--ch4-mob-count``); with the pin unset it mirrors the Lua default
-    ``min(NUM_AGENTS, 6)``.
+    ``min(NUM_AGENTS, cap)``, cap 6, or 40 under ``WT_TEAM_SCALING``.
     """
     n = num_agents
     zombies = ch4_zombie_count(n)
