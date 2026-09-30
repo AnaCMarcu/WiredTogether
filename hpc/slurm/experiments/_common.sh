@@ -278,7 +278,7 @@ run_exp() {
     # loading it into the python process; RemoteModelClient
     # (LLM_BACKEND=vllm) sends it the exact in-process requests. LLM-only
     # arms only: --rl trains LoRA on the in-process weights.
-    local VLLM_ENV=() VLLM_ARGS=() VLLM_PID=""
+    local VLLM_ENV=() VLLM_ARGS=() VLLM_PID="" VLLM_TMP=""
     if [ "${LLM_SERVER:-}" = "vllm" ]; then
         case " $* " in
             *" --rl "*)
@@ -298,11 +298,19 @@ run_exp() {
         local VLLM_KEY
         VLLM_KEY="$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
         mkdir -p "$TMP_ROOT/vllm_home"
+        # vLLM's processes talk over unix sockets created in TMPDIR, and a
+        # socket path may not exceed 107 characters. TMP_ROOT embeds the
+        # experiment name (tmp_budget_gemma_hebbian_n7_b10400_<jobid> under
+        # /scratch-local/...), which overflowed it. Give vLLM a short one.
+        VLLM_TMP="/tmp/wtv_${SLURM_JOB_ID:-$$}"
+        mkdir -p "$VLLM_TMP"
         echo "── starting vLLM ($VLLM_IMG) on port $VLLM_PORT ──"
         apptainer exec --nv \
+            --bind /tmp:/tmp \
             --bind "$WORKSPACE:$WORKSPACE" \
             ${EXTRA_BINDS[@]+"${EXTRA_BINDS[@]}"} \
             --bind "$TMP_ROOT:$TMP_ROOT" \
+            --env TMPDIR="$VLLM_TMP" \
             --env HF_HUB_OFFLINE=1 \
             --env HOME="$TMP_ROOT/vllm_home" \
             --env XDG_CACHE_HOME="$TMP_ROOT/vllm_home/cache" \
@@ -315,7 +323,7 @@ run_exp() {
                 --gpu-memory-utilization "${VLLM_GPU_UTIL:-0.80}" \
             > "$RUN_DIR/vllm_server.log" 2>&1 &
         VLLM_PID=$!
-        trap "kill $VLLM_PID 2>/dev/null; rm -rf '$WORK_DIR' '$TMP_ROOT' 2>/dev/null || true" EXIT INT TERM
+        trap "kill $VLLM_PID 2>/dev/null; rm -rf '$WORK_DIR' '$TMP_ROOT' '$VLLM_TMP' 2>/dev/null || true" EXIT INT TERM
         local _ok=0 _i
         for _i in $(seq 1 120); do        # up to 20 min (first start compiles)
             if curl -sf "http://127.0.0.1:$VLLM_PORT/health" >/dev/null 2>&1; then _ok=1; break; fi
@@ -462,6 +470,7 @@ run_exp() {
     local EXIT_CODE=${PIPESTATUS[0]}
     if [ -n "$VLLM_PID" ]; then
         kill "$VLLM_PID" 2>/dev/null; wait "$VLLM_PID" 2>/dev/null
+        rm -rf "$VLLM_TMP" 2>/dev/null || true
     fi
 
     # Salvage craftium's per-run dirs (debug.txt, gifs, etc.) back to the shared workspace.
