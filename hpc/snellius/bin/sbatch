@@ -141,6 +141,16 @@ fi
 
 final=(--partition="$PARTITION" --gpus=1 --cpus-per-task="$CPUS" --time="$(fmt_min "$req_min")")
 [ -n "$ACCOUNT" ] && final+=(--account="$ACCOUNT")
+# The launchers are configured through environment variables (MAX_STEPS,
+# EPISODES, RUN_GROUP, SEED, WANDB, ...). SLURM only forwards the submitting
+# shell's environment under --export=ALL, and Snellius does not guarantee
+# that default, so a `MAX_STEPS=20 sbatch ...` smoke test silently ran the
+# full 2500-step config. Force it unless the caller chose an --export.
+has_export=0
+for o in ${opts[@]+"${opts[@]}"}; do
+    case "$o" in --export|--export=*) has_export=1 ;; esac
+done
+[ "$has_export" = 0 ] && final+=(--export=ALL)
 final+=(${opts[@]+"${opts[@]}"})
 [ -n "$tmp" ] && final+=("$tmp")
 final+=(${script_args[@]+"${script_args[@]}"})
