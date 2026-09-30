@@ -50,6 +50,15 @@ export WT_SN_CPUS="${WT_SN_CPUS:-18}"
 export WT_IMAGE="${WT_IMAGE:-$WT_WORKSPACE/images/wiredtogether_gemma4.sif}"
 export MODEL_LLM="${MODEL_LLM:-$WT_WORKSPACE/models/gemma-4-E4B-it}"
 
+# The image built on the other cluster bakes that cluster's storage path into
+# its %environment as the Hugging Face cache (HF_HOME etc.), which does not
+# exist here, so any cache write fails with "Read-only file system". The
+# APPTAINERENV_ prefix overrides %environment inside every container.
+export APPTAINERENV_HF_HOME="$WT_WORKSPACE/models/.hf_home"
+export APPTAINERENV_HF_HUB_CACHE="$WT_WORKSPACE/models/.hf_home/hub"
+export APPTAINERENV_TRANSFORMERS_CACHE="$WT_WORKSPACE/models/.hf_home/transformers"
+mkdir -p "$WT_WORKSPACE/models/.hf_home" 2>/dev/null || true
+
 # Compute nodes have no internet: log W&B offline and skip the end-of-job
 # upload. Sync later from a login node with hpc/snellius/sync_wandb.sh.
 export WANDB_MODE="${WANDB_MODE:-offline}"
