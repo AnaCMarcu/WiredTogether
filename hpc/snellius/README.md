@@ -138,6 +138,26 @@ tail -15 slurm_logs/bench_vllm_*.out            # the comparison table
 spent. In the job, all files are checked first, and the vLLM half runs before the HF baseline. If
 the server still fails to start, the job stops within minutes and prints the server log.
 
+## Running LLM-only arms on vLLM (experimental)
+
+`LLM_SERVER=vllm` starts a vLLM server inside the job, on the same GPU, and the agents send it the
+same requests they would make to the in-process model (`src/mindforge/agent_modules/remote_model_client.py`):
+same prompts, sampling and post-processing, and the same log lines. Only the random draws differ.
+It refuses `--rl` arms, which train LoRA on the in-process weights. Agents' calls run concurrently,
+so vLLM can batch them, only in a checkout whose CLI has `--llm-batch`. Otherwise they stay
+sequential and gain only the faster decode and the prefix cache.
+
+```bash
+# 1. no GPU, no budget: the client against a fake server, inside the image on the login node
+apptainer exec --bind $WT_WORKSPACE $WT_IMAGE env PYTHONPATH=$WT_WORKSPACE/WiredTogether/src     python hpc/snellius/check_remote_client.py $MODEL_LLM          # must end "N/N checks passed"
+
+# 2. a 20-step in-game run on vLLM (compare with the smoke test's run.log / log.txt)
+LLM_SERVER=vllm EPISODES=1 MAX_STEPS=20 RUN_GROUP=smoke_vllm WANDB=0     sbatch --time=01:30:00 --job-name=wt-smoke-vllm hpc/slurm/experiments/exp01_llm_2b.sbatch
+```
+
+The server log is written to `runs/<group>/<arm>/seed_<N>/vllm_server.log`. Tunables:
+`VLLM_GPU_UTIL` (default 0.80), `VLLM_MAX_MODEL_LEN` (default 16384) and `VLLM_IMAGE`.
+
 ## Things that differ from other clusters
 
 - **The walltime limit is 120 h.** The shim caps longer requests. A capped arm that does not finish

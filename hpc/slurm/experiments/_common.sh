@@ -273,6 +273,76 @@ run_exp() {
         done
     fi
 
+    # ── Optional vLLM server (LLM_SERVER=vllm) ────────────────────────────
+    # Serves the same model from a vLLM server on the same GPU instead of
+    # loading it into the python process; RemoteModelClient
+    # (LLM_BACKEND=vllm) sends it the exact in-process requests. LLM-only
+    # arms only: --rl trains LoRA on the in-process weights.
+    local VLLM_ENV=() VLLM_ARGS=() VLLM_PID=""
+    if [ "${LLM_SERVER:-}" = "vllm" ]; then
+        case " $* " in
+            *" --rl "*)
+                echo "!! LLM_SERVER=vllm cannot run an --rl arm (LoRA training needs the in-process model)" >&2
+                return 1 ;;
+        esac
+        local VLLM_IMG="${VLLM_IMAGE:-}"
+        if [ -z "$VLLM_IMG" ]; then
+            if [ -d "$WORKSPACE/images/vllm" ]; then VLLM_IMG="$WORKSPACE/images/vllm"
+            else VLLM_IMG="$WORKSPACE/images/vllm.sif"; fi
+        fi
+        [ -e "$VLLM_IMG" ] || { echo "!! LLM_SERVER=vllm: no vLLM image at $VLLM_IMG" >&2; return 1; }
+        command -v curl >/dev/null || { echo "!! LLM_SERVER=vllm needs curl on the node" >&2; return 1; }
+        # Game servers use 49152 + JOBID % 16000; keep clear of that range.
+        local VLLM_PORT=$(( 30000 + ${SLURM_JOB_ID:-$$} % 16000 ))
+        # Per-job key: on a shared node, 127.0.0.1 is reachable by other users' jobs.
+        local VLLM_KEY
+        VLLM_KEY="$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+        mkdir -p "$TMP_ROOT/vllm_home"
+        echo "── starting vLLM ($VLLM_IMG) on port $VLLM_PORT ──"
+        apptainer exec --nv \
+            --bind "$WORKSPACE:$WORKSPACE" \
+            ${EXTRA_BINDS[@]+"${EXTRA_BINDS[@]}"} \
+            --bind "$TMP_ROOT:$TMP_ROOT" \
+            --env HF_HUB_OFFLINE=1 \
+            --env HOME="$TMP_ROOT/vllm_home" \
+            --env XDG_CACHE_HOME="$TMP_ROOT/vllm_home/cache" \
+            --env VLLM_CACHE_ROOT="$TMP_ROOT/vllm_home/vllm_cache" \
+            "$VLLM_IMG" vllm serve "$LLM_MODEL" \
+                --served-model-name wt \
+                --host 127.0.0.1 --port "$VLLM_PORT" \
+                --api-key "$VLLM_KEY" \
+                --max-model-len "${VLLM_MAX_MODEL_LEN:-16384}" \
+                --gpu-memory-utilization "${VLLM_GPU_UTIL:-0.80}" \
+            > "$RUN_DIR/vllm_server.log" 2>&1 &
+        VLLM_PID=$!
+        trap "kill $VLLM_PID 2>/dev/null; rm -rf '$WORK_DIR' '$TMP_ROOT' 2>/dev/null || true" EXIT INT TERM
+        local _ok=0 _i
+        for _i in $(seq 1 120); do        # up to 20 min (first start compiles)
+            if curl -sf "http://127.0.0.1:$VLLM_PORT/health" >/dev/null 2>&1; then _ok=1; break; fi
+            kill -0 "$VLLM_PID" 2>/dev/null || break
+            sleep 10
+        done
+        if [ "$_ok" != 1 ]; then
+            echo "!! vLLM did not come up — see $RUN_DIR/vllm_server.log. Last lines:" >&2
+            tail -30 "$RUN_DIR/vllm_server.log" >&2
+            kill "$VLLM_PID" 2>/dev/null
+            return 1
+        fi
+        echo "── vLLM healthy after ~$(( _i * 10 )) s ──"
+        VLLM_ENV=(
+            --env LLM_BACKEND=vllm
+            --env LLM_BASE_URL="http://127.0.0.1:$VLLM_PORT/v1"
+            --env LLM_SERVER_KEY="$VLLM_KEY"
+        )
+        # Concurrent agent calls are what the server batches. Pass the
+        # switch only where this checkout's CLI has it.
+        if grep -q -- '"--llm-batch"' "$REPO/src/mindforge/cli.py" 2>/dev/null; then
+            VLLM_ARGS=(--llm-batch)
+        else
+            echo "   (no --llm-batch in this checkout: agents' calls stay sequential)"
+        fi
+    fi
+
     apptainer exec --nv \
         --pid \
         --bind /tmp:/tmp \
@@ -309,6 +379,7 @@ run_exp() {
         --env WANDB_SILENT=true \
         --env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
         --env WIREDTOGETHER_INTERMEDIATE_GIF_DIR="$WORK_DIR/intermediate_gifs" \
+        ${VLLM_ENV[@]+"${VLLM_ENV[@]}"} \
         --pwd "$WORK_DIR" \
         "$IMG" \
         sh -c '
@@ -384,10 +455,14 @@ run_exp() {
             --experiment-id "$EXP_NAME" \
             --tag "$EXP_NAME" \
             "${WANDB_FLAGS[@]}" \
+            ${VLLM_ARGS[@]+"${VLLM_ARGS[@]}"} \
             "$@" \
         2>&1 | tee "$RUN_DIR/run.log"
 
     local EXIT_CODE=${PIPESTATUS[0]}
+    if [ -n "$VLLM_PID" ]; then
+        kill "$VLLM_PID" 2>/dev/null; wait "$VLLM_PID" 2>/dev/null
+    fi
 
     # Salvage craftium's per-run dirs (debug.txt, gifs, etc.) back to the shared workspace.
     # If wandb ran in offline mode, this also captures wandb/offline-run-*

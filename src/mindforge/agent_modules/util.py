@@ -349,9 +349,19 @@ def _resolve_api_key(key_path: str) -> str:
 def create_model_client(response_format, key_path="api.key"):
     """Build a ChatCompletionClient.
 
+    - LLM_BACKEND=vllm: the same requests as the in-process model, sent to the
+      vLLM server the launcher started (LLM_SERVER=vllm); see
+      remote_model_client.py. LLM_MODEL_PATH still names the model, for its
+      tokenizer.
     - Local in-process model if LLM_MODEL_PATH is set.
     - Otherwise an OpenAI-compatible HTTP client (vLLM, SGLang, OpenRouter…).
     """
+    if os.environ.get("LLM_BACKEND", "") == "vllm":
+        from mindforge.agent_modules.remote_model_client import RemoteModelClient
+        return RemoteModelClient(
+            model_path=local_model_path,
+            response_format=response_format,
+        )
     if local_model_path:
         from mindforge.agent_modules.local_model_client import LocalModelClient
         return LocalModelClient(
