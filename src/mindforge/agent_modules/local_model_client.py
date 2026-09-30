@@ -14,6 +14,8 @@ import logging
 import os
 import re
 import threading
+import time
+from dataclasses import dataclass
 from typing import Any, List, Optional, Sequence, Tuple
 
 import PIL.Image
@@ -28,6 +30,8 @@ from autogen_core.models import (
     SystemMessage,
     UserMessage,
 )
+
+from mindforge.agent_modules.llm_batch import MicroBatcher, llm_batch_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -432,6 +436,139 @@ def _inject_json_instruction(chat_messages: list, response_format) -> list:
     return chat_messages
 
 
+# ─── Batched generation (--llm-batch) ──────────────────────────────────
+# Only reached with the WT_LLM_BATCH switch on (see agent_modules/llm_batch.py).
+# One MicroBatcher per process owns the shared model: concurrent create()
+# calls queue a _GenRequest and the batcher serves everything pending as one
+# left-padded generate() per compatible group.
+
+@dataclass
+class _GenRequest:
+    chat_messages: list
+    images: list
+    max_new: int
+    enable_thinking: bool
+    temperature: float
+    top_p: float
+
+
+_batcher: Optional[MicroBatcher] = None
+
+
+def _get_batcher() -> MicroBatcher:
+    global _batcher
+    if _batcher is None:
+        _batcher = MicroBatcher(_run_group, _group_key)
+    return _batcher
+
+
+def _group_key(req: _GenRequest):
+    """Requests may share a generate() only if these all match."""
+    return (bool(_shared_is_vision and req.images), req.max_new,
+            req.enable_thinking, req.temperature, req.top_p)
+
+
+def _eos_token_ids(tok) -> set:
+    """Every id that ends a row: the generation config's EOS list + the tokenizer's."""
+    ids = set()
+    eos = getattr(getattr(_shared_model, "generation_config", None), "eos_token_id", None)
+    for value in (eos if isinstance(eos, (list, tuple)) else [eos]):
+        if value is not None:
+            ids.add(int(value))
+    if getattr(tok, "eos_token_id", None) is not None:
+        ids.add(int(tok.eos_token_id))
+    return ids
+
+
+def _trim_at_eos(new_tokens, eos_ids: set):
+    """Cut a batched row after its first EOS (inclusive, as the single path counts it).
+
+    In a batch a finished row is padded until the longest row ends; everything
+    past its own EOS is padding, not output.
+    """
+    for i, token in enumerate(new_tokens.tolist()):
+        if token in eos_ids:
+            return new_tokens[: i + 1]
+    return new_tokens
+
+
+def _is_oom(exc: BaseException) -> bool:
+    return isinstance(exc, torch.cuda.OutOfMemoryError) or "out of memory" in str(exc).lower()
+
+
+def _run_group(reqs: List[_GenRequest]) -> list:
+    """Serve one compatible group; on a CUDA OOM halve the batch and retry."""
+    try:
+        return _generate_batch(reqs)
+    except Exception as exc:
+        if len(reqs) == 1 or not _is_oom(exc):
+            raise
+        logger.warning("[LocalModel batch] OOM at batch size %d — splitting", len(reqs))
+        torch.cuda.empty_cache()
+        half = len(reqs) // 2
+        return _run_group(reqs[:half]) + _run_group(reqs[half:])
+
+
+def _generate_batch(reqs: List[_GenRequest]) -> list:
+    """Tokenize → generate → decode for a whole group.
+
+    Returns one ``(text, prompt_tokens, completion_tokens, batch_size, secs)``
+    per request, in order. ``prompt_tokens`` is the row's own (unpadded)
+    prompt length, so the usage accounting matches the single-call path.
+    """
+    first = reqs[0]
+    tok = _inner_tokenizer(_shared_tokenizer)
+    tok.padding_side = "left"            # decoder-only generation pads on the left
+    _ensure_pad_token(_shared_tokenizer)
+    prompts = [
+        _apply_chat_template(_shared_tokenizer, r.chat_messages,
+                             tokenize=False, enable_thinking=r.enable_thinking)
+        for r in reqs
+    ]
+    with_images = bool(_shared_is_vision and first.images)
+    if with_images:
+        inputs = _shared_tokenizer(
+            text=prompts, images=[r.images for r in reqs],
+            padding=True, return_tensors="pt",
+        ).to(_shared_model.device)
+    else:
+        if _shared_is_vision:
+            tokenized = _shared_tokenizer(text=prompts, padding=True, return_tensors="pt")
+        else:
+            tokenized = _shared_tokenizer(prompts, padding=True, return_tensors="pt")
+        inputs = {
+            "input_ids": tokenized["input_ids"].to(_shared_model.device),
+            "attention_mask": tokenized["attention_mask"].to(_shared_model.device),
+        }
+
+    padded_len = inputs["input_ids"].shape[1]
+    prompt_lens = inputs["attention_mask"].sum(dim=1).tolist()
+    t0 = time.perf_counter()
+    with torch.no_grad():
+        outputs = _shared_model.generate(
+            **inputs,
+            max_new_tokens=first.max_new,
+            temperature=max(first.temperature, 0.01),
+            top_p=first.top_p,
+            do_sample=first.temperature > 0.01,
+            pad_token_id=tok.pad_token_id or tok.eos_token_id,
+        )
+    secs = time.perf_counter() - t0
+
+    eos_ids = _eos_token_ids(tok)
+    results = []
+    for row, n_prompt in zip(outputs, prompt_lens):
+        new_tokens = _trim_at_eos(row[padded_len:], eos_ids)
+        text = _shared_tokenizer.decode(new_tokens, skip_special_tokens=True)
+        logger.info("[LocalModel RAW output] (%d tokens): %s", len(new_tokens), text[:500])
+        results.append((text, int(n_prompt), len(new_tokens), len(reqs), secs))
+    logger.info(
+        "[LocalModel batch] size=%d images=%s padded_prompt=%d new_tokens=%d secs=%.2f",
+        len(reqs), with_images, padded_len, outputs.shape[1] - padded_len, secs,
+    )
+    return results
+
+
 # ─── Main client ───────────────────────────────────────────────────────
 
 class LocalModelClient(ChatCompletionClient):
@@ -479,14 +616,30 @@ class LocalModelClient(ChatCompletionClient):
         enable_thinking = os.environ.get("LLM_ENABLE_THINKING", "0") == "1"
         max_new = self._max_tokens * 4 if enable_thinking else self._max_tokens
 
-        text, input_len, completion_tokens = self._generate(
-            chat_messages, images, max_new, enable_thinking
-        )
-        # input_len counts the full tokenized prompt, image soft tokens and
-        # chat template included — analysis/compute_flops.py prefers this line
-        # over its char-based prefill estimate when present.
-        logger.info("[LocalModel usage] prompt_tokens=%d completion_tokens=%d",
-                    input_len, completion_tokens)
+        if llm_batch_enabled():
+            # --llm-batch: the batcher owns the model; this call shares one
+            # generate() with whatever else is pending right now.
+            text, input_len, completion_tokens, batch_size, batch_secs = (
+                await _get_batcher().submit(_GenRequest(
+                    chat_messages, images, max_new, enable_thinking,
+                    self._temperature, self._top_p,
+                ))
+            )
+            # Same leading fields as the single-call line (compute_flops.py
+            # parses those); the batch fields let profile_run.py split the
+            # shared generate() time across its rows.
+            logger.info("[LocalModel usage] prompt_tokens=%d completion_tokens=%d "
+                        "batch=%d batch_secs=%.2f",
+                        input_len, completion_tokens, batch_size, batch_secs)
+        else:
+            text, input_len, completion_tokens = self._generate(
+                chat_messages, images, max_new, enable_thinking
+            )
+            # input_len counts the full tokenized prompt, image soft tokens and
+            # chat template included — analysis/compute_flops.py prefers this line
+            # over its char-based prefill estimate when present.
+            logger.info("[LocalModel usage] prompt_tokens=%d completion_tokens=%d",
+                        input_len, completion_tokens)
         text = _strip_thinking_and_extract_json(text)
         logger.info("[LocalModel PARSED output]: %s", text[:300])
 

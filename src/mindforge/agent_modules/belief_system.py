@@ -1,4 +1,5 @@
 import os
+from mindforge.agent_modules.llm_batch import gather_or_sequential
 from mindforge.agent_modules.llm_call import llm_call
 from mindforge.agent_modules.util import (
     BeliefResponse,
@@ -87,11 +88,7 @@ class BeliefSystem:
         cancellation_token,
     ):
 
-        # for each partner agent
-        for i, previous_partner_belief in self.partner_beliefs.items():
-            if not conversations or i >= len(conversations):
-                continue
-            convo = conversations[i]
+        async def _update_partner(i, convo, previous_partner_belief):
             # create prompt
             response = await llm_call(
                 self.belief_model_client,
@@ -106,6 +103,19 @@ class BeliefSystem:
             self.partner_beliefs[i] = coerce_belief_text(
                 response.get("beliefs"), previous_partner_belief
             )
+
+        # for each partner agent — the updates are independent of one another
+        # (each reads and writes only its own slot), so under --llm-batch they
+        # are issued together and share one generate(); otherwise one by one,
+        # in the original order.
+        jobs = [
+            (i, conversations[i], previous_partner_belief)
+            for i, previous_partner_belief in self.partner_beliefs.items()
+            if conversations and i < len(conversations)
+        ]
+        await gather_or_sequential(
+            [lambda job=job: _update_partner(*job) for job in jobs]
+        )
         return self.partner_beliefs
 
     async def update_interaction_beliefs(

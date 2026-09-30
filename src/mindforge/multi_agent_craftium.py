@@ -208,6 +208,29 @@ async def run(args):
               f"(messaging optional, muted in code once spent)")
     comm_budget = None   # per-episode ledger, rebuilt at each episode start
 
+    # ── LLM call batching (--llm-batch) ────────────────────────────────
+    # Off (default) = legacy: one generate() per call, agents' cognition
+    # strictly sequential. On: concurrent calls share one generate() on the
+    # shared in-process model (see mindforge/agent_modules/llm_batch.py). The
+    # WT_LLM_BATCH switch tells LocalModelClient and the belief system,
+    # which never see `args`.
+    from mindforge.agent_modules.llm_batch import (
+        set_env_switch as _set_llm_batch_switch,
+    )
+    llm_batch = bool(getattr(args, "llm_batch", False))
+    llm_batch_max = int(getattr(args, "llm_batch_max", 16) or 16)
+    _set_llm_batch_switch(llm_batch, llm_batch_max)
+    if llm_batch:
+        if os.environ.get("LLM_BACKEND", "") == "vllm":
+            # The calls go to the job's vLLM server (RemoteModelClient), which
+            # batches whatever arrives together; the in-process batcher and
+            # --llm-batch-max are unused.
+            print("[FEATURES] LLM batching:     ON  (vLLM server batches the "
+                  "concurrent calls; agents' cognition runs concurrently)")
+        else:
+            print(f"[FEATURES] LLM batching:     ON  (max batch {llm_batch_max}; "
+                  f"agents' cognition runs concurrently in the simultaneous pre-pass)")
+
     # ── Choice-mode social acts (Experiment 2) ─────────────────────────
     # legacy (default): everything below stays inert and the run is
     # bit-for-bit the historical behavior. choice: the agent picks at most
@@ -1319,9 +1342,20 @@ async def run(args):
                 # tokenizer state and yields NaN logits (CUDA assert). The
                 # in-process LLM serializes on one GPU regardless, so this
                 # costs no speed and matches the turn-based order that works.
+                #
+                # --llm-batch lifts that restriction the safe way: every
+                # LocalModelClient.create() queues its request and ONE batcher
+                # task runs the model, so the interleaved coroutines never
+                # reach it concurrently — and the agents' calls that are
+                # pending together share one generate().
                 _sim_results = []
-                for _i in _sim_alive:
-                    _sim_results.append(await _sim_select(_i))
+                if llm_batch:
+                    _sim_results = list(await asyncio.gather(
+                        *(_sim_select(_i) for _i in _sim_alive)
+                    ))
+                else:
+                    for _i in _sim_alive:
+                        _sim_results.append(await _sim_select(_i))
                 _sim_actions = {}
                 for _i, _content in _sim_results:
                     _sim_contents[_i] = _content

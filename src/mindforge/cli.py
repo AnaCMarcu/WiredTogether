@@ -378,6 +378,24 @@ def parse_args():
                              "observed Gemma-E4B message lengths, so "
                              "budget/cap is the number of messages an agent "
                              "can always afford.")
+    parser.add_argument("--llm-batch", action="store_true",
+                        help="Batch concurrent LLM calls into one generate() "
+                             "on the shared in-process model (see "
+                             "agent_modules/llm_batch.py). The simultaneous "
+                             "pre-pass then runs the agents' cognition "
+                             "concurrently and the per-partner belief updates "
+                             "are issued together, so their calls share a "
+                             "batch. Speed only: prompts, sampling settings "
+                             "and token caps are unchanged. Default off = the "
+                             "historical one-call-at-a-time path. Not "
+                             "validated with --rl. With LLM_BACKEND=vllm "
+                             "the concurrent calls go to the vLLM server, "
+                             "which batches them itself.")
+    parser.add_argument("--llm-batch-max", type=int, default=16,
+                        help="Largest batch one generate() may carry under "
+                             "--llm-batch; more pending calls are split. "
+                             "Lower it if the GPU runs out of memory (a CUDA "
+                             "OOM already halves the batch and retries).")
     parser.add_argument("--comm-reward-scale", type=float, default=1.0,
                         help="Scale on every communication PAYOUT (base msg "
                              "reward + chamber comm milestones). 0.0 = the "
@@ -606,3 +624,10 @@ def validate_args(args) -> None:
         raise SystemExit("--comm-budget-tokens must be >= 0")
     if args.comm_budget_msg_cap <= 0:
         raise SystemExit("--comm-budget-msg-cap must be positive")
+    if args.llm_batch and args.rl:
+        # The RL layer runs its own forward passes on the shared model between
+        # the LLM calls; interleaving those with a batched generate() has not
+        # been validated.
+        raise SystemExit("--llm-batch is not validated with --rl; drop one")
+    if args.llm_batch_max <= 0:
+        raise SystemExit("--llm-batch-max must be positive")
