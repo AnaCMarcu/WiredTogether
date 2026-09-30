@@ -74,9 +74,11 @@ machine api.wandb.ai
   password <your-wandb-key>
 ```
 
-## First job: a smoke test (~1 GPU-hour)
+## First job: a smoke test (~30 GPU-minutes)
 
-Run it before any real run. Submit from the repository root, because the `slurm_logs/` paths are
+Run it before any real run. A Gemma step takes about 45 s with 3 agents, so 20 steps plus about
+10 min of warm-up and model loading finish in about 30 min. The 1.5 h limit is only a ceiling;
+you pay for the time the job actually runs. Submit from the repository root, because the `slurm_logs/` paths are
 relative:
 
 ```bash
@@ -126,13 +128,15 @@ prompt tokens plus a frame, 150 out) and a belief update (about 470 in, 55 out).
 for rounds of 1, 3 and 9 agents.
 
 ```bash
-bash hpc/snellius/setup.sh vllm                 # once: pulls docker://vllm/vllm-openai (login node)
+bash hpc/snellius/setup.sh vllm                 # once, login node, no budget: unpacks the image
+bash hpc/snellius/setup.sh vllm-check           # login node, no budget: must print OK
 sbatch hpc/snellius/bench_vllm.sbatch
 tail -15 slurm_logs/bench_vllm_*.out            # the comparison table
 ```
 
-If the vLLM server fails to start, the last lines of its log are printed. A likely cause is a vLLM
-version that does not support Gemma 4 yet. Pin a newer tag with `setup.sh vllm <tag>`.
+`vllm-check` catches the likely failure, a vLLM that does not know Gemma 4, before any GPU time is
+spent. In the job, all files are checked first, and the vLLM half runs before the HF baseline. If
+the server still fails to start, the job stops within minutes and prints the server log.
 
 ## Things that differ from other clusters
 

@@ -7,6 +7,7 @@
 #   bash hpc/snellius/setup.sh image [gemma4|qwen] [--from FILE.sif]
 #   bash hpc/snellius/setup.sh models [gemma4|qwen|all]
 #   bash hpc/snellius/setup.sh vllm   [TAG]          (optional: vLLM benchmark image)
+#   bash hpc/snellius/setup.sh vllm-check            (does that vLLM support the model?)
 #   bash hpc/snellius/setup.sh check
 #
 # See hpc/snellius/README.md for the full walkthrough.
@@ -120,19 +121,65 @@ cmd_image() {
 }
 
 # ── vllm: the official vLLM server image (for bench_vllm.sbatch) ──────────
+# Built as a SANDBOX (an unpacked directory), not a .sif: packing a ~10 GB
+# .sif runs mksquashfs, which login nodes kill for exceeding their per-user
+# CPU/memory limits. Unpacking needs neither, so this runs on the login node
+# and costs no budget. apptainer runs a sandbox directory like a .sif.
 cmd_vllm() {
     load_env
     local tag="${1:-latest}"
-    local out="$WT_WORKSPACE/images/vllm.sif"
+    local out="$WT_WORKSPACE/images/vllm"
     local tmp="$WT_WORKSPACE/.apptainer_pull_$$"
     mkdir -p "$tmp" "$(dirname "$out")"
     trap "rm -rf '$tmp'" EXIT
     export APPTAINER_TMPDIR="$tmp" APPTAINER_CACHEDIR="$tmp/cache"
-    info "pulling docker://vllm/vllm-openai:$tag -> $out (several GB, 10-30 min)"
-    apptainer pull --force "$out" "docker://vllm/vllm-openai:$tag"
-    info "vLLM version in the image:"
-    apptainer exec "$out" python3 -c "import vllm; print(vllm.__version__)" | tee "$out.version"
-    sha256sum "$out" | tee "$out.sha256"
+    [ -e "$out" ] && { info "removing the previous $out"; chmod -R u+w "$out" 2>/dev/null; rm -rf "$out"; }
+    info "unpacking docker://vllm/vllm-openai:$tag -> $out/ (~10 GB download, 15-40 min)"
+    info "the 'EPERM on setxattr' warnings during extraction are harmless"
+    apptainer build --sandbox "$out" "docker://vllm/vllm-openai:$tag" \
+        || die "build failed — paste the output above"
+    local ver
+    ver="$(apptainer exec "$out" python3 -c "import vllm; print(vllm.__version__)" 2>/dev/null | tail -1 || true)"
+    printf 'tag=%s\nvllm=%s\n' "$tag" "$ver" | tee "$out.version"
+    info "next: bash hpc/snellius/setup.sh vllm-check"
+}
+
+# ── vllm-check: does this vLLM support the model? (login node, no GPU) ────
+cmd_vllm_check() {
+    load_env
+    local img="$WT_WORKSPACE/images/vllm"
+    [ -d "$img" ] || img="$WT_WORKSPACE/images/vllm.sif"
+    [ -e "$img" ] || die "no vLLM image — run '$0 vllm' first"
+    [ -f "$MODEL_LLM/config.json" ] || die "no model at $MODEL_LLM — run '$0 models' first"
+    info "image $img, model $MODEL_LLM"
+    apptainer exec --bind "$WT_WORKSPACE:$WT_WORKSPACE" \
+        ${WT_BIND:+--bind "$WT_BIND"} --env HF_HUB_OFFLINE=1 \
+        "$img" python3 - "$MODEL_LLM" <<'PY'
+import json, sys
+path = sys.argv[1]
+archs = json.load(open(f"{path}/config.json")).get("architectures", [])
+import vllm
+from vllm import ModelRegistry
+print(f"vLLM {vllm.__version__}; model architectures: {archs}")
+supported = set(ModelRegistry.get_supported_archs())
+hit = [a for a in archs if a in supported]
+from transformers import AutoConfig
+try:
+    AutoConfig.from_pretrained(path)
+    cfg_ok = True
+except Exception as exc:
+    cfg_ok = False
+    print(f"  transformers in the vLLM image cannot read the config: {exc}")
+if hit and cfg_ok:
+    print(f"OK - vLLM supports {hit[0]}; safe to submit bench_vllm.sbatch")
+    sys.exit(0)
+if not hit:
+    close = sorted(a for a in supported if "gemma" in a.lower())
+    print(f"NOT SUPPORTED - {archs} is not in this vLLM's registry.")
+    print(f"  Gemma architectures it does know: {close}")
+print("Do NOT submit the benchmark; pull a newer vLLM: setup.sh vllm <tag>")
+sys.exit(1)
+PY
 }
 
 # ── models: download weights from the Hugging Face Hub ────────────────────
@@ -208,6 +255,7 @@ case "${1:-}" in
     image)  shift; cmd_image "$@" ;;
     models) shift; cmd_models "$@" ;;
     vllm)   shift; cmd_vllm "$@" ;;
+    vllm-check) shift; cmd_vllm_check "$@" ;;
     check)  shift; cmd_check "$@" ;;
-    *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+    *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
