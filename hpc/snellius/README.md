@@ -9,6 +9,7 @@ in `hpc/slurm/experiments/` is copied or edited for it. Three pieces adapt the l
 | `bin/sbatch` | Rewrites each submission for Snellius. It sets `--partition=gpu_a100 --gpus=1 --cpus-per-task=18`, your `--account`, and caps `--time` at 120 h. It drops `--qos`, `--gres` and `--exclude`, and puts job scratch on `$TMPDIR`. Everything else passes through. |
 | `setup.sh` | One-time setup, in four steps: `init`, `image`, `models`, `check`. |
 | `sync_wandb.sh` | Uploads offline W&B runs from a login node. |
+| `bench_vllm.sbatch` | Optional benchmark: in-process HF `generate()` vs a vLLM server on the same A100. |
 
 Every `sbatch hpc/slurm/experiments/<arm>.sbatch` and every `submit_*.sh` family script works as
 documented in [../../docs/experiments.md](../../docs/experiments.md).
@@ -116,6 +117,22 @@ rsync -avP <login>@snellius.surf.nl:/projects/<project-id>/<user>/wt/WiredTogeth
 
 To send the W&B logs, run `bash hpc/snellius/sync_wandb.sh [<group>]` on a login node after the jobs
 finish.
+
+## Optional: benchmark vLLM against today's inference path
+
+This checks whether serving the model with vLLM would speed up the LLM calls. It costs one job of
+about 1 GPU-hour. It uses the same two call shapes as real runs: action selection (about 4,500
+prompt tokens plus a frame, 150 out) and a belief update (about 470 in, 55 out). Each shape is timed
+for rounds of 1, 3 and 9 agents.
+
+```bash
+bash hpc/snellius/setup.sh vllm                 # once: pulls docker://vllm/vllm-openai (login node)
+sbatch hpc/snellius/bench_vllm.sbatch
+tail -15 slurm_logs/bench_vllm_*.out            # the comparison table
+```
+
+If the vLLM server fails to start, the last lines of its log are printed. A likely cause is a vLLM
+version that does not support Gemma 4 yet. Pin a newer tag with `setup.sh vllm <tag>`.
 
 ## Things that differ from other clusters
 

@@ -6,6 +6,7 @@
 #   bash hpc/snellius/setup.sh init  [--account ACC] [--shared DIR]
 #   bash hpc/snellius/setup.sh image [gemma4|qwen] [--from FILE.sif]
 #   bash hpc/snellius/setup.sh models [gemma4|qwen|all]
+#   bash hpc/snellius/setup.sh vllm   [TAG]          (optional: vLLM benchmark image)
 #   bash hpc/snellius/setup.sh check
 #
 # See hpc/snellius/README.md for the full walkthrough.
@@ -118,6 +119,22 @@ cmd_image() {
     sha256sum "$out" | tee "$out.sha256"
 }
 
+# ── vllm: the official vLLM server image (for bench_vllm.sbatch) ──────────
+cmd_vllm() {
+    load_env
+    local tag="${1:-latest}"
+    local out="$WT_WORKSPACE/images/vllm.sif"
+    local tmp="$WT_WORKSPACE/.apptainer_pull_$$"
+    mkdir -p "$tmp" "$(dirname "$out")"
+    trap "rm -rf '$tmp'" EXIT
+    export APPTAINER_TMPDIR="$tmp" APPTAINER_CACHEDIR="$tmp/cache"
+    info "pulling docker://vllm/vllm-openai:$tag -> $out (several GB, 10-30 min)"
+    apptainer pull --force "$out" "docker://vllm/vllm-openai:$tag"
+    info "vLLM version in the image:"
+    apptainer exec "$out" python3 -c "import vllm; print(vllm.__version__)" | tee "$out.version"
+    sha256sum "$out" | tee "$out.sha256"
+}
+
 # ── models: download weights from the Hugging Face Hub ────────────────────
 cmd_models() {
     load_env
@@ -190,6 +207,7 @@ case "${1:-}" in
     init)   shift; cmd_init "$@" ;;
     image)  shift; cmd_image "$@" ;;
     models) shift; cmd_models "$@" ;;
+    vllm)   shift; cmd_vllm "$@" ;;
     check)  shift; cmd_check "$@" ;;
-    *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+    *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
