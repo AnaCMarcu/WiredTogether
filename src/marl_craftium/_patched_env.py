@@ -16,6 +16,12 @@ Six concerns layered on top of upstream:
    ``server_listen()`` which races with the client's ``connect()`` call.
 6. **Server-ready polling** — upstream ``time.sleep(5)`` is far too short for
    VoxeLibre on HPC; we poll the server's stderr for ``"listening on"``.
+7. **Client recovery at episode reset** — a client occasionally exits at the
+   episode boundary ("Connection closed by peer: is MT down?" in the soft
+   reset; about 1 reset in 10 with 7–10 agents on Snellius), which used to
+   end the run. The state and log tail of every MT process are printed to
+   the run log, the client is restarted and soft-reset again, and the run
+   continues. ``WT_MT_RECOVER=0`` restores the old fail-fast behaviour.
 
 All of these wrap upstream rather than fork it, so we stay forward-compatible
 with the upstream package.
@@ -25,6 +31,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import signal
 import socket as socket_mod
 import time
 
@@ -212,7 +219,7 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
                 observations.append(self._start_client_and_collect_init_obs(i))
         else:
             for i in range(self.num_agents):
-                observations.append(self._soft_reset_client(i))
+                observations.append(self._soft_reset_with_recovery(i))
 
         infos = self._get_info()
         observations = np.vstack([np.expand_dims(obs, 0) for obs in observations])
@@ -313,6 +320,114 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
             observation = observation[:, :, 0]
         self.last_observations[i] = observation
         return observation
+
+    # ─── Client recovery at episode reset ─────────────────────────────
+
+    #: Seconds to wait before each restart attempt. The server keeps a dead
+    #: client's session until it times out and refuses the same player name
+    #: meanwhile ("Another client is connected with this name"), so the
+    #: waits grow.
+    _MT_RECOVER_WAITS_S = (20, 45, 90)
+    #: Accept timeout (ms) while a restarted client connects. The default
+    #: listen_timeout is minutes, and a refused client never connects.
+    _MT_RECOVER_LISTEN_MS = 180_000
+
+    def _soft_reset_with_recovery(self, i: int):
+        """``_soft_reset_client``, restarting client ``i`` if it has died.
+
+        Recovery happens only at an episode boundary, where every agent is
+        placed back at its spawn anyway, so no trajectory is cut short. A
+        rejoining player spawns at its Ch1 tile (wire on_joinplayer), and the
+        second soft reset gives it the same clean state as everyone else.
+        """
+        try:
+            return self._soft_reset_client(i)
+        except ConnectionError as exc:
+            if os.environ.get("WT_MT_RECOVER", "1") == "0":
+                raise
+            self._report_mt_state(i, exc)
+            server = self.mt_server.proc
+            if server is None or server.poll() is not None:
+                raise  # the server itself is gone: nothing to reconnect to
+
+        last_exc = None
+        for attempt, wait_s in enumerate(self._MT_RECOVER_WAITS_S, start=1):
+            print(f"[MT-RECOVER] client {i}: restart attempt {attempt} in {wait_s} s",
+                  flush=True)
+            time.sleep(wait_s)
+            try:
+                self._restart_client(i)
+                observation = self._soft_reset_client(i)
+            except (ConnectionError, RuntimeError) as exc:
+                last_exc = exc
+                print(f"[MT-RECOVER] client {i}: attempt {attempt} failed: "
+                      f"{str(exc)[:500]}", flush=True)
+                continue
+            self.mt_recoveries = getattr(self, "mt_recoveries", 0) + 1
+            print(f"[MT-RECOVER] client {i} restarted and reset "
+                  f"(recoveries in this run: {self.mt_recoveries})", flush=True)
+            return observation
+        raise ConnectionError(
+            f"MT client {i} could not be restarted after "
+            f"{len(self._MT_RECOVER_WAITS_S)} attempts"
+        ) from last_exc
+
+    def _restart_client(self, i: int) -> None:
+        """Kill what is left of client ``i`` and start it again on its channel.
+
+        The channel's listening socket outlives the client, so the new process
+        connects to the same port.
+        """
+        client, chan = self.mt_clients[i], self.mt_channs[i]
+        if client.proc is not None and client.proc.poll() is None:
+            try:  # the whole process group, as upstream close() does
+                os.killpg(os.getpgid(client.proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            except AttributeError:  # no process groups (not Linux)
+                client.proc.kill()
+            client.proc.wait()
+        chan.close_conn()
+        client.close_pipes()
+        saved_timeout = chan.listen_timeout
+        chan.listen_timeout = self._MT_RECOVER_LISTEN_MS
+        try:
+            self._start_client_and_collect_init_obs(i)
+        finally:
+            chan.listen_timeout = saved_timeout
+
+    def _report_mt_state(self, i: int, exc: BaseException) -> None:
+        """Print every MT process's state, and the log tails of the ones that
+        matter, to the run log. craftium deletes the run dirs on close, so
+        this is the only copy that survives the job."""
+        print(f"[MT-RECOVER] client {i} lost at episode reset: {exc}", flush=True)
+        procs = [("server", self.mt_server)] + [
+            (f"client {k}", c) for k, c in enumerate(self.mt_clients)
+        ]
+        for name, mt in procs:
+            code = None if mt.proc is None else mt.proc.poll()
+            state = "running" if code is None else f"exited with code {code}"
+            print(f"[MT-RECOVER]   {name}: {state}  ({mt.run_dir})", flush=True)
+        for name, mt in procs:
+            exited = mt.proc is not None and mt.proc.poll() is not None
+            if name in ("server", f"client {i}") or exited:
+                for fname in ("stderr.txt", "debug.txt"):
+                    tail = self._tail(os.path.join(mt.run_dir, fname))
+                    if tail:
+                        print(f"[MT-RECOVER] --- {name} {fname}, last lines ---",
+                              flush=True)
+                        print(tail, flush=True)
+
+    @staticmethod
+    def _tail(path: str, n_bytes: int = 3000) -> str:
+        """Last ``n_bytes`` of a text file, or '' if it is missing."""
+        try:
+            with open(path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                f.seek(max(0, f.tell() - n_bytes))
+                return f.read().decode("utf-8", errors="ignore").strip()
+        except OSError:
+            return ""
 
     @staticmethod
     def _read_stderr(run_dir: str) -> str:
