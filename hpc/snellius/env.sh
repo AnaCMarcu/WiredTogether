@@ -69,4 +69,9 @@ case ":$PATH:" in
     *) export PATH="$WT_WORKSPACE/WiredTogether/hpc/snellius/bin:$PATH" ;;
 esac
 
-echo "[wt-snellius] workspace=$WT_WORKSPACE partition=$WT_SN_PARTITION account=${WT_SN_ACCOUNT:-<default>} max_time=$WT_SN_MAX_TIME"
+# Only in interactive shells: ~/.bashrc sources this file, and any output in
+# a non-interactive login (scp, sftp, rsync) corrupts the transfer
+# ("Received message too long").
+case $- in
+    *i*) echo "[wt-snellius] workspace=$WT_WORKSPACE partition=$WT_SN_PARTITION account=${WT_SN_ACCOUNT:-<default>} max_time=$WT_SN_MAX_TIME" ;;
+esac
