@@ -23,7 +23,14 @@ trap 'rm -rf "$STAGE"' EXIT
 
 if [ ! -f "$TGZ" ]; then
     echo "Fetching wt_snellius_pull.tgz (one password prompt)..."
-    scp "$SNELLIUS:~/wt_snellius_pull.tgz" "$TGZ"
+    # A relative remote path is the home directory; "~/" is not expanded by
+    # every scp (newer ones use the SFTP protocol).
+    if ! scp "$SNELLIUS:wt_snellius_pull.tgz" "$TGZ"; then
+        rm -f "$TGZ"
+        echo "scp failed. Download it from PowerShell instead, then re-run this script:" >&2
+        echo "    scp $SNELLIUS:wt_snellius_pull.tgz \"$(cygpath -w "$TGZ" 2>/dev/null || echo "$TGZ")\"" >&2
+        exit 1
+    fi
 else
     echo "Reusing already-downloaded $TGZ"
 fi
