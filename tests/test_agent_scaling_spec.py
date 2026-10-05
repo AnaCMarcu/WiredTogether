@@ -62,7 +62,13 @@ def test_spawn_ch4_mobs_uses_pin_with_legacy_fallback(lua_root):
         r"local want = wire\.CH4_MOB_COUNT or wire\.NUM_AGENTS",
         text,
     )
-    assert re.search(r"math\.min\(want, #CH4_SPAWN_POSITIONS\)", text)
+    # The cap is the 6 hand-placed positions, or 40 under TEAM_SCALING
+    # (ch4_spawn_positions; capacities pinned in test_world_capacity.py).
+    assert re.search(r"local positions = ch4_spawn_positions\(\)", text)
+    assert re.search(r"math\.min\(want, #positions\)", text)
+    assert re.search(
+        r"if not wire\.TEAM_SCALING then return CH4_SPAWN_POSITIONS end", text
+    )
 
 
 # ── 3. util.lua: generic Ch1 spawn row is collision-free ────────────────
