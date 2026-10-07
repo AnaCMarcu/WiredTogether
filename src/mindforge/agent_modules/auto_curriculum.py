@@ -236,6 +236,20 @@ class AutoCurriculum:
         )
         return self.current_task, self.current_context
 
+    async def adopt_task(self, task: str, frame,
+                         cancellation_token: CancellationToken,
+                         communications=None):
+        """Take ``task`` as the current task without choosing one (the hmas2
+        orchestrator PINS the curriculum to its assignment). Skips only the
+        task-choice LLM call and its fallback validation — the coordinator
+        validates assignments itself — and then runs the usual
+        ``get_task_context`` so the rest of the worker stack is unchanged."""
+        self.current_task = str(task).strip()
+        self.current_context = await self.get_task_context(
+            frame, cancellation_token, communications=communications
+        )
+        return self.current_task, self.current_context
+
     def _validate_or_fallback(self, task: str, current_chamber: str = "") -> str:
         """Replace unachievable/wrong-chamber/blocklisted tasks with a role default."""
         if _is_achievable_task(task, current_chamber=current_chamber):

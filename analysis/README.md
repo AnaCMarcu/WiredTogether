@@ -41,6 +41,7 @@ dataset includes that CSV, so the figure does not require re-running the pipelin
 | `make_final_table.py`, `make_final_table_extended.py`, `make_final_table_latex.py` | Condition rows behind Tables 1 and 9 |
 | `cofire_table.py` | Per-cue act use, attributed bond growth and ρ behind Table 2 |
 | `compute_flops.py` | Inference FLOPs per run, for the deliberation-interval sweep |
+| `make_hmas2_load.py` | Hard-orchestrator (hmas2) protocol load per run: rounds, objection rate, syntax re-prompts, latency and tokens per step, reassignment churn, message delivery, compliance |
 | `replay_hebbian_terms.py`, `prototype_three_factor_rule.py` | Offline replay of the plasticity rule from logged inputs; reproduces the stored `W` |
 | `make_directive_timelines.py`, `make_counterfactual_table.py` | Loaders and layout shared by the timeline figures |
 | `runs_dataset.py` | Groups the run tree by research question and builds the released archives |

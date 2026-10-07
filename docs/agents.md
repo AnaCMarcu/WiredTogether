@@ -50,7 +50,7 @@ overrides the action model's `communication_target` with `ask_target` at the rou
 ## Orchestration baselines
 
 `src/orchestrator/` replaces the graph with a central coordinator (mutually exclusive with
-`--hebbian`), in the style of VillagerAgent: a decomposer LLM breaks the remaining objective into
+`--hebbian`). The default, `--orchestrator-variant villager`, is in the style of VillagerAgent: a decomposer LLM breaks the remaining objective into
 milestone-verified subtasks held in a dependency graph, and an allocator LLM assigns ready subtasks
 to free agents. Assignments bind the objective, not the primitives — the agent's auto-curriculum
 must propose tasks that advance it, and reasoning, actions and messages stay the agent's own.
@@ -59,3 +59,75 @@ Subtasks complete only when a real WIRE milestone fires — the coordinator neve
 self-report success — and failures are retired rather than retried. Decomposition is event-driven
 and rate-limited by `--orchestrator-decompose-min-interval` (default 8, the social module's
 interval), which is what makes the compute comparison fair. The graph is rebuilt every episode.
+
+### The hard orchestrator (`hmas2`)
+
+The VillagerAgent coordinator above is a *soft* orchestrator: it decides who does what, but
+agents still message each other and the coordinator never reads those messages. `hmas2` is the *hard* one — a centralised
+hub-and-spoke system. It is a port of a published embodied baseline, HMAS-2 (Chen, Arkin, Zhang,
+Roy, Fan, "Scalable Multi-Robot Collaboration with Large Language Models: Centralized or
+Decentralized Systems?", ICRA 2024; code github.com/yongchao98/multi-agent-framework), not a new
+design. Its protocol, loop bounds and prompt sentences come from that code (BoxNet2):
+
+1. **Plan.** The central planner gets the task, the state–action history (the paper's
+   `_w_only_state_action_history` setting, newest pairs within 3,000 tokens), the current state and
+   each agent's possible actions, and returns a JSON plan. "Include an agent only if it has a task
+   next."
+2. **Syntactic check.** Invalid entries are sent back with HMAS-2's wording ("Your assigned task
+   for agent_k is not in the doable action list; … Please replan for all the agents again with the
+   same ouput format:"), up to 6 re-prompts.
+3. **Local check, ≤ 3 rounds.** Each agent in the plan answers `I Agree` or an objection.
+   Objections return to the planner as a multi-turn follow-up ("This is the feedback from local
+   agents. If you find some errors in your previous plan, try to modify it. Otherwise, output the
+   same plan as before…"), and the revised plan is checked again.
+4. **Execute.**
+
+Documented adaptations (state them with the results):
+
+| | HMAS-2 | `hmas2` |
+|---|---|---|
+| Assignment | a primitive action per robot | a subtask (`"task"`) the MindForge worker executes; its curriculum task is **pinned** to it (no task-choice call) |
+| Worker information | own state + every robot's state + the joint plan | own observations and memory, own assignment, and the planner's message to it — nothing else |
+| Worker → coordinator | check replies | check replies + per-step reports (an agent's `communication` goes to the orchestrator) |
+| Persistence | a new action every step | an assignment stays until the planner changes it; "has a task next" = a new task or a message |
+| Syntactic failure | ends the trial | keeps the valid entries and the previous assignments |
+| History budget | 3,000 tokens for the whole prompt | 3,000 tokens for the history alone (WIRE's base prompt is larger) |
+
+The planner sees the whole team, as in HMAS-2. A worker gets teammate information only through
+the planner's message (delivered by replacing its inbox, header "Message from the orchestrator"),
+so selective, message-borne information — the property the Hebbian comparison is about — holds in
+both conditions. Agents cannot message each other: the routing site sends every message to the
+orchestrator (`messages.jsonl`: `receiver: "orchestrator"`, `routing: "hub"`), and the prompts say
+so (`agent_modules/hub_prompts.py`, the `WT_COMM_TOPOLOGY=hub` wording in `env/comm_budget.py`).
+
+The planner runs inside the per-step tick, before the agents read their inboxes, so a report sent
+at step t is answered at step t+1 — the same delay as a peer message under `--simultaneous`.
+
+Under `--comm-budget-tokens`, reports are charged to the sender, the planner's messages to the
+recipient and objections to the objector; an exhausted agent is not checked and receives nothing.
+At budget 0 the protocol reduces to CMAS with history (central planning, no feedback).
+
+Prompt port, original → `hmas2` (templates in `src/orchestrator/prompts/hmas2_*.txt`, verbatim
+re-prompt strings in `src/orchestrator/hmas2.py`; `tests/test_orchestrator_hmas2.py` pins them):
+
+| HMAS-2 (BoxNet2) | `hmas2` |
+|---|---|
+| "You are a central planner directing agents in a grid-like field to move colored boxes." + grid mechanics | "…directing agents in a five-chamber cooperative dungeon to complete milestones." + the chamber facts |
+| "Actions are like: move(box_red, target_red)…" | "Actions are like: "Dig anvil A1 together with agent_1"…" |
+| "Your task is to instruct each agent to match all boxes to their color-coded targets. After each move, agents provide updates… optimally." | "…to complete the open milestones and progress through all five chambers." — rest verbatim |
+| "The previous state and action pairs at each step are:" + "Please learn from previous steps…" | verbatim |
+| "Hence, the current state is {state}, with the possible actions: {actions}" | verbatim; state = doors, anvils, cells, milestones; one "agent_k: I am in …, I can observe …, I can do …" line per agent |
+| — | **added:** the agents' latest reports; the budget left (budget runs) |
+| "Specify your action plan in this format: {…}. Include an agent only if it has a task next. Now, plan the next step:" | verbatim, format `{"agent_0":{"task":…,"message":…}}`; **added:** persistence rule and "tell that agent only what it needs to know about the other agents" |
+| Local: "You're a box-moving agent in a multi-agent system… A central planner coordinates all agents to achieve the goal: …" | "You're agent_k, an agent in a five-chamber cooperative dungeon, in a multi-agent system…" — rest verbatim |
+| Local: "The current states and possible actions of all other agents are: …", "The current state is {global state}" | **removed** (selective information) |
+| Local: "The central planner's current action plan is: {joint plan}." | "…action plan for you is: {own task}." |
+| Local: "If you agree with it, respond 'I Agree', without any extra words. If not, briefly explain your objections to the central planner. Your response:" | verbatim |
+
+Logs: `orchestrator/hmas2.jsonl` (one row per step: rounds, objections, syntax re-prompts, final
+plan, reassignments, reports, message deliveries, tokens, latency) and `calls.jsonl` rows with
+`call_type` plan / revise / syntax / check. `analysis/make_hmas2_load.py` summarises them. Known
+asymmetries: the protocol adds serial LLM calls to every step; a hub inbox holds one entry (fewer
+partner-belief calls than in mesh); Hebbian/co-firing `comm_events` stay empty. Information the
+environment itself provides — `{milestone_progress}` (team completions), `{chamber_state}` (anvil
+punchers, switch wiring), teammate names — is the same in every arm.

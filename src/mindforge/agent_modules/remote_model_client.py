@@ -134,6 +134,7 @@ class RemoteModelClient(ChatCompletionClient):
         top_p: float = 0.9,
         max_tokens: int = 1024,
         timeout: float = 900.0,
+        extract_json: bool = True,
         **kwargs,
     ):
         from openai import AsyncOpenAI
@@ -150,6 +151,8 @@ class RemoteModelClient(ChatCompletionClient):
         self._temperature = temperature
         self._top_p = top_p
         self._max_tokens = max_tokens
+        # False = raw-text client (no brace slicing), as in LocalModelClient.
+        self._extract_json = extract_json
         self._total_usage = RequestUsage(prompt_tokens=0, completion_tokens=0)
         # The server is local to the job; its key (if any) only keeps other
         # users on a shared node out.
@@ -195,7 +198,7 @@ class RemoteModelClient(ChatCompletionClient):
         # Same leading fields as the in-process line (compute_flops.py parses them).
         logger.info("[LocalModel usage] prompt_tokens=%d completion_tokens=%d backend=vllm",
                     input_len, completion_tokens)
-        text = lmc._strip_thinking_and_extract_json(raw)
+        text = lmc._strip_thinking_and_extract_json(raw, self._extract_json)
         logger.info("[LocalModel PARSED output]: %s", text[:300])
 
         self._total_usage = RequestUsage(

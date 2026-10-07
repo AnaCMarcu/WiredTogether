@@ -56,19 +56,43 @@ export WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT
 
 source "$WORKSPACE/WiredTogether/hpc/slurm/experiments/_common.sh"
 
-# The arm name predates the removal of the other orchestrator variants and
-# modes; it is kept so reruns land beside the reported runs.
-EXP_NAME="new_exp_0_gemma_orch_villager_advisory"
-export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,orchestrator,villager,new_exp_0}"
+# ORCH_VARIANT selects the orchestrator:
+#   villager (default) — the SOFT orchestrator above (peer messaging left on).
+#   hmas2              — the HARD orchestrator: HMAS-2 (Chen et al., ICRA
+#                        2024) adapted to WIRE — every step a central planner
+#                        assigns subtasks, assigned agents check them ('I
+#                        Agree' or an objection), <= 3 revision rounds;
+#                        hub-and-spoke comms (no agent-to-agent messages);
+#                        curriculum pinned to the assignment. Writes
+#                        orchestrator/hmas2.jsonl. A planner call + checks run
+#                        every step: give it a longer --time (the submit
+#                        script asks for 96 h; the Snellius shim caps 120 h).
+ORCH_VARIANT="${ORCH_VARIANT:-villager}"
+case "$ORCH_VARIANT" in
+    villager|hmas2) ;;
+    *)
+        echo "ERROR: ORCH_VARIANT must be 'villager' or 'hmas2' (got '${ORCH_VARIANT}')." >&2
+        exit 1
+        ;;
+esac
 
-# Node timeout. Default 60 suits the 1000-step runs (chamber phases of ~200
-# steps); a 150-step smoke teleports every 30 steps, so pass
-# ORCH_NODE_TIMEOUT=20 there or every Ch1 node outlives its chamber.
+# The arm name predates the removal of the other orchestrator variants and
+# modes; it is kept (…_<variant>_advisory) so villager reruns land beside the
+# reported runs.
+EXP_NAME="new_exp_0_gemma_orch_${ORCH_VARIANT}_advisory"
+export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,orchestrator,${ORCH_VARIANT},new_exp_0}"
+
 ORCH_ARGS=(
     --orchestrator
-    --orchestrator-node-timeout-steps "${ORCH_NODE_TIMEOUT:-60}"
+    --orchestrator-variant "$ORCH_VARIANT"
 )
+# Villager only — node timeout. Default 60 suits the 1000-step runs (chamber
+# phases of ~200 steps); a 150-step smoke teleports every 30 steps, so pass
+# ORCH_NODE_TIMEOUT=20 there or every Ch1 node outlives its chamber.
+if [ "$ORCH_VARIANT" = "villager" ]; then
+    ORCH_ARGS+=(--orchestrator-node-timeout-steps "${ORCH_NODE_TIMEOUT:-60}")
+fi
 
-echo "── new_exp_orchestrator: node_timeout=${ORCH_NODE_TIMEOUT:-60} → $EXP_NAME ──"
+echo "── new_exp_orchestrator: variant=$ORCH_VARIANT → $EXP_NAME ──"
 
 run_exp "$EXP_NAME" "$MODEL_LLM"     "${ORCH_ARGS[@]}"     --simultaneous

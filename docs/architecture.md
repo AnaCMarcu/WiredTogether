@@ -24,7 +24,7 @@ out and tested on their own — which is what most of `tests/` does.
 | `src/rl_layer` | PPO actor over LoRA, centralised critic, rollout buffer, token-level mode | `RLLayer`, `CentralizedCritic`, `RLConfig` |
 | `src/mindforge` | Agent stack (`agent_modules/`), env-side accounting (`env/`), prompts, episode loop | `multi_agent_craftium.py` |
 | `src/marl_craftium` | PettingZoo wrapper over the patched Craftium env + the WIRE world | `OpenWorldMultiAgentEnv` |
-| `src/orchestrator` | Centralised orchestration baseline (VillagerAgent-style) | `orchestrator.core`, `orchestrator.villager` |
+| `src/orchestrator` | Centralised orchestration baselines: VillagerAgent-style (soft) and HMAS-2 (hard, hub-and-spoke) | `orchestrator.core`, `orchestrator.villager`, `orchestrator.hmas2`, `orchestrator.hub` |
 
 Inside `src/mindforge`:
 

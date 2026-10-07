@@ -219,10 +219,15 @@ def _apply_chat_template(tokenizer, chat_messages, *, tokenize, enable_thinking)
         return _render(_merge_system_into_first_user(chat_messages))
 
 
-def _strip_thinking_and_extract_json(text: str) -> str:
-    """Remove <think>...</think> blocks; if text has a JSON object, keep from its opening brace."""
+def _strip_thinking_and_extract_json(text: str, extract_json: bool = True) -> str:
+    """Remove <think>...</think> blocks; if text has a JSON object, keep from its opening brace.
+
+    ``extract_json=False`` (raw-text clients) only strips the think blocks:
+    the brace slice keeps the LAST ``{``, which turns a nested object with
+    leading prose into its innermost fragment, and mangles free text that
+    happens to contain a brace."""
     text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-    if not text.startswith('{') and '{' in text:
+    if extract_json and not text.startswith('{') and '{' in text:
         text = text[text.rfind('{'):]
     return text
 
@@ -583,11 +588,15 @@ class LocalModelClient(ChatCompletionClient):
         temperature: float = 0.7,
         top_p: float = 0.9,
         max_tokens: int = 1024,
+        extract_json: bool = True,
         **kwargs,
     ):
         self._model_path = model_path or os.environ.get("LLM_MODEL_PATH", "")
         self._dtype = dtype
         self._response_format = response_format
+        # False = raw-text client (no brace slicing of the output); every
+        # existing client keeps the default.
+        self._extract_json = extract_json
         self._temperature = temperature
         self._top_p = top_p
         self._max_tokens = max_tokens
@@ -640,7 +649,7 @@ class LocalModelClient(ChatCompletionClient):
             # over its char-based prefill estimate when present.
             logger.info("[LocalModel usage] prompt_tokens=%d completion_tokens=%d",
                         input_len, completion_tokens)
-        text = _strip_thinking_and_extract_json(text)
+        text = _strip_thinking_and_extract_json(text, self._extract_json)
         logger.info("[LocalModel PARSED output]: %s", text[:300])
 
         self._total_usage = RequestUsage(

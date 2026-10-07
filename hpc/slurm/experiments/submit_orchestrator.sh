@@ -17,6 +17,12 @@
 #
 #   SEEDS="42 123 456 789 1011 1213" bash submit_orchestrator.sh
 #
+# The HARD orchestrator (hmas2: HMAS-2 adapted, hub-and-spoke comms) lands
+# beside it in runs/orchestrator/new_exp_0_gemma_orch_hmas2_advisory/:
+#   SMOKE=1 VARIANTS=hmas2 TIME=6:00:00 bash submit_orchestrator.sh
+#   VARIANTS=hmas2 bash submit_orchestrator.sh      # 3 seeds, 96 h each
+#   (smoke check: python analysis/make_hmas2_load.py --group orchestrator_smoke)
+#
 # QOS: this account tops out at medium, so everything (smoke included)
 # submits under the sbatch file's qos=medium; the smoke just asks for a 4 h
 # walltime. QOS=short works too if the account has it: QOS=short SMOKE=1 ...
@@ -54,6 +60,15 @@ REPO="$WORKSPACE/WiredTogether"
 export MODEL_LLM WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT
 
 SEEDS=(${SEEDS:-42 123 456})
+# Orchestrators: villager (the SOFT one, default) and hmas2 (the HARD one —
+# HMAS-2 adapted, hub-and-spoke comms). E.g. VARIANTS="villager hmas2".
+VARIANTS=(${VARIANTS:-villager})
+for _v in "${VARIANTS[@]}"; do
+    case "$_v" in
+        villager|hmas2) ;;
+        *) echo "ERROR: VARIANTS may only contain 'villager' and 'hmas2' (got '$_v')" >&2; exit 1 ;;
+    esac
+done
 
 # Smoke: one seed, one short episode — proves the decomposer and allocator
 # calls fire on Gemma 4 (JSON validates, assignments reach the prompts,
@@ -90,6 +105,7 @@ echo "  run_group : $RUN_GROUP"
 echo "  episodes  : $EPISODES"
 echo "  max_steps : $MAX_STEPS"
 echo "  wandb     : ${WANDB:-1} (project=$WANDB_PROJECT)"
+echo "  variants  : ${VARIANTS[*]}"
 echo "  seeds     : ${SEEDS[*]}"
 [ ${#SBATCH_OVERRIDES[@]} -gt 0 ] && echo "  overrides : ${SBATCH_OVERRIDES[*]}"
 [ "${SMOKE:-0}" = "1" ]   && echo "  mode      : SMOKE"
@@ -120,7 +136,15 @@ n_skipped=0
 n_inqueue=0
 n_failed=0
 # Arm name mirrors the sbatch file.
-exp="new_exp_0_gemma_orch_villager_advisory"
+for variant in "${VARIANTS[@]}"; do
+    exp="new_exp_0_gemma_orch_${variant}_advisory"
+    # hmas2 runs a planner call + per-agent checks every step (~1.2-1.4x the
+    # wall time), which does not fit the sbatch file's 36 h. Ask for 96 h
+    # unless TIME was set explicitly (the smoke sets its own).
+    VARIANT_OVERRIDES=()
+    if [ "$variant" = "hmas2" ] && [ -z "${TIME:-}" ]; then
+        VARIANT_OVERRIDES=(--qos=long --time=96:00:00)
+    fi
     for seed in "${SEEDS[@]}"; do
         if [ -f "$REPO/runs/$RUN_GROUP/$exp/seed_$seed/final_metrics.json" ]; then
             n_skipped=$((n_skipped + 1))
@@ -138,12 +162,13 @@ exp="new_exp_0_gemma_orch_villager_advisory"
             continue
         fi
         if [ "${DRY_RUN:-0}" = "1" ]; then
-            echo "would queue  $exp  seed_$seed"
+            echo "would queue  $exp  seed_$seed  ${VARIANT_OVERRIDES[*]:-}"
             n_queued=$((n_queued + 1))
         else
-            jobid=$(SEED=$seed \
+            jobid=$(SEED=$seed ORCH_VARIANT=$variant \
                 sbatch --parsable --job-name="$jobname" \
                 ${SBATCH_OVERRIDES[@]:+"${SBATCH_OVERRIDES[@]}"} \
+                ${VARIANT_OVERRIDES[@]:+"${VARIANT_OVERRIDES[@]}"} \
                 new_exp_orchestrator.sbatch)
             if [ -n "$jobid" ]; then
                 echo "queued  $exp  seed_$seed  →  job $jobid"
@@ -155,10 +180,11 @@ exp="new_exp_0_gemma_orch_villager_advisory"
                 # drains; dedup makes that safe.
                 echo "FAILED  $exp  seed_$seed  — sbatch rejected the job" >&2
                 n_failed=$((n_failed + 1))
-                break
+                break 2
             fi
         fi
     done
+done
 echo "── done: $n_queued submitted, $n_skipped already complete, $n_inqueue in queue, $n_failed failed ──"
 [ "$n_failed" -gt 0 ] && exit 1
 echo "Track with:   squeue -u \$USER"

@@ -1,0 +1,15 @@
+You are a central planner directing agents in a five-chamber cooperative dungeon to complete milestones. The chambers work as follows:
+{chamber_facts}
+
+The agents are identified by their names, e.g., agent_0. Actions are like: "Dig anvil A1 together with agent_1" or "Face the blue switch in your cell and dig it".
+
+Your task is to instruct each agent to complete the open milestones and progress through all five chambers. After each move, agents provide updates for the next sequence of actions. Your job is to coordinate the agents optimally.
+
+The previous state and action pairs at each step are:
+{state_action_prompt}
+Please learn from previous steps. Not purely repeat the actions but learn why the state changes or remains in a dead loop. Avoid being stuck in action loops.
+
+Hence, the current state is {current_state}, with the possible actions:
+{possible_actions}
+{reports_block}{budget_block}
+Specify your action plan in this format: {format_example}. Include an agent only if it has a task next. An agent has a task next when its task changes or it needs a message; an agent you leave out keeps its current task, and every agent without a current task must be included. In "message", tell that agent only what it needs to know about the other agents for its task, or "" if nothing. Each agent sees only its own task and message. Now, plan the next step:
