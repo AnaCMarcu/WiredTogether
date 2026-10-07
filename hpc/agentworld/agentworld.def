@@ -1,0 +1,43 @@
+# Apptainer image for the AgentWorld (Kaetram) game server.
+#
+# Build (needs network: on DAIC use the build_image.sbatch pattern, on
+# Snellius a login/cbuild node; fall back to --sandbox if mksquashfs is killed):
+#     apptainer build $WT_WORKSPACE/images/agentworld.sif hpc/agentworld/agentworld.def
+#
+# Base: bookworm (glibc 2.36), which the prebuilt uWebSockets.js binary needs.
+# node_modules are baked in, so jobs need no network. The commit below must
+# match hpc/agentworld/AGENTWORLD_COMMIT.
+Bootstrap: docker
+From: node:20-bookworm-slim
+
+%arguments
+    SHA=681b0e66ffd8b07db3a4f1a7ce1aea620c3156ee
+
+%environment
+    export AGENTWORLD_HOME=/opt/agentworld
+    export HUSKY=0
+
+%post
+    apt-get update
+    apt-get install -y --no-install-recommends git ca-certificates curl
+    rm -rf /var/lib/apt/lists/*
+    git clone --filter=blob:none https://github.com/openagents-org/agentworld.git /opt/agentworld
+    cd /opt/agentworld
+    git checkout {{ SHA }}
+    export HUSKY=0
+    # The checkout vendors its Yarn release (.yarnrc.yml yarnPath); nodeLinker
+    # is node-modules. Yarn needs git for the uws (uWebSockets.js) dependency.
+    node .yarn/releases/yarn-*.cjs install
+    [ -f .env ] || cp .env.defaults .env
+    chmod -R a+rX /opt/agentworld
+    chmod a+rx /usr/local/bin/run_world.sh
+
+%files
+    hpc/agentworld/run_world.sh /usr/local/bin/run_world.sh
+
+%test
+    cd /opt/agentworld/packages/server
+    node -e "require('uws'); console.log('uws ok')"
+
+%runscript
+    exec /usr/local/bin/run_world.sh "$@"

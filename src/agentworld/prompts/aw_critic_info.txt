@@ -1,0 +1,8 @@
+Sub-task: {task}
+Last action: {last_action}
+Its result: {last_result}
+Team progress: {progress}
+Observation:
+{observation}
+
+Is the sub-task done? Reply with the JSON object only.

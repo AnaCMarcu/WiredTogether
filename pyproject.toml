@@ -11,6 +11,10 @@ packages = [
     {include = "mindforge", from = "src"},
     {include = "marl_craftium", from = "src"},
     {include = "orchestrator", from = "src"},
+    # AgentWorld harness (scaling chapter). Uses httpx and pyyaml, which arrive
+    # transitively (openai, transformers); listed here once poetry.lock is
+    # regenerated.
+    {include = "agentworld", from = "src"},
 ]
 
 [tool.poetry.dependencies]

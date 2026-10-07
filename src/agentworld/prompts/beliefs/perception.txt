@@ -1,0 +1,9 @@
+In one to three sentences, state what in this observation matters for your sub-task (resources, mobs, nearby players, what your inventory lets you craft or give).
+
+Sub-task: {task}
+Observation:
+{observation}
+Messages: {communications}
+Last error: {error}
+
+Respond with ONE JSON object: {{"beliefs": "<your summary>"}}

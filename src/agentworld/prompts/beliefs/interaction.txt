@@ -1,0 +1,8 @@
+In one or two sentences, summarise how the coordination is going: who is doing what, what is blocked, and who you should work with next.
+
+Sub-task: {task}
+Recent messages:
+{conversations}
+Previous summary: {previous_interaction_beliefs}
+
+Respond with ONE JSON object: {{"beliefs": "<your summary>"}}

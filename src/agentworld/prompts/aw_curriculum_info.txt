@@ -1,0 +1,16 @@
+TEAM OBJECTIVE: {objective}
+
+TASK GUIDE:
+{game_context}
+
+---
+Agent: {agent_name}
+Team progress: {progress}
+Observation:
+{observation}
+Recent messages: {communications}
+Last sub-task: {last_task} (critique: {critique})
+Completed sub-tasks: {completed_tasks}
+Failed sub-tasks: {failed_tasks}
+
+What should {agent_name} do next? Reply with the JSON object only.

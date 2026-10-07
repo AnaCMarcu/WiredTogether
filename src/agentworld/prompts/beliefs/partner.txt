@@ -1,0 +1,7 @@
+Update your belief about player {partner}: what they have, what they need, what they are doing, and whether they seem to be on your team. One or two sentences.
+
+Previous belief about {partner}: {previous_partner_belief}
+Their recent messages to you or on the board:
+{convo}
+
+Respond with ONE JSON object: {{"beliefs": "<your updated belief>"}}

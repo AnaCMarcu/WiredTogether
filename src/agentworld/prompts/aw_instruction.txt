@@ -1,0 +1,32 @@
+TEAM OBJECTIVE: {objective}
+
+TASK GUIDE:
+{game_context}
+
+---
+Round {round}. You are {agent_name}.
+Team progress (from the task checker): {progress}
+Your current sub-task: {task}
+
+YOUR OBSERVATION:
+{observation}
+
+Your last action: {last_action}
+Its result: {last_result}
+Critic on your sub-task: {critique}
+
+DIRECT MESSAGES TO YOU:
+{inbox}
+
+BOARD POSTS YOU CAN SEE:
+{board}
+
+PLAYERS YOU KNOW OF: {contacts}
+{bonds}
+What you believe about the surroundings: {perception_beliefs}
+What you believe about the players you talk to: {partner_beliefs}
+What you believe about the coordination so far: {interaction_beliefs}
+Actions that worked for similar sub-tasks: {skill_memory}
+Relevant past experience: {episode_summary}
+
+Decide now. Reply with the JSON object only.
