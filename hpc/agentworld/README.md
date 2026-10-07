@@ -76,11 +76,16 @@ cd $WT_WORKSPACE/WiredTogether && git fetch origin
 git worktree add $WT_WORKSPACE/WiredTogether-agentworld agentworld
 cd $WT_WORKSPACE/WiredTogether-agentworld && git pull && mkdir -p slurm_logs
 source hpc/snellius/env.sh
-export PATH="$PWD/hpc/snellius/bin:$PATH"   # env.sh points at the MAIN checkout's sbatch shim
 export WT_REPO=$PWD                         # the AgentWorld scripts run from this checkout
-type sbatch                                 # must print .../WiredTogether-agentworld/hpc/snellius/bin/sbatch
+type -a sbatch                              # exactly ONE .../hpc/snellius/bin/sbatch, then the real one
 sbatch hpc/agentworld/aw_smoke.sbatch       # the shim exports WT_REPO into the job
 ```
+
+env.sh puts the MAIN checkout's sbatch shim on PATH. Only if `type -a sbatch`
+shows no shim at all (the main checkout is on a branch without
+hpc/snellius/bin) add this worktree's: `export PATH="$PWD/hpc/snellius/bin:$PATH"`.
+Never have two shims on PATH: each takes the other for the real sbatch and they
+recurse until mktemp fails with "File name too long" (nothing is submitted).
 
 Passed if the log ends with `python exit: 0` and
 `runs_aw/smoke/hebbian_task_01_magic_staff_x1/seed_42/episode_1/` holds
