@@ -120,7 +120,8 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
                  social_module_mode: str = "none", social_interval: int = 8,
                  social_act_mode: str = "legacy",
                  social_act_channels: tuple = (),
-                 orchestrator_villager: bool = False):
+                 orchestrator_villager: bool = False,
+                 comm_topology: str = "peer"):
     """Initialize all Mindforge agents.
 
     ``centralized_critic`` (when not None) is shared by all agents' RLLayers
@@ -134,7 +135,15 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
     "choice" mode agents are built with the PARALLEL choice-mode prompt
     templates + the SocialAgentResponse schema; "legacy" (default) keeps the
     original templates and AgentResponse byte-for-byte.
+
+    ``comm_topology="hub"`` (the hmas2 orchestrator) applies the hub prompt
+    rewrites to the module-level templates this function owns (the action
+    USER template and the curriculum info template); the load_prompts()
+    entries are rewritten by the caller. "peer" leaves everything untouched.
     """
+    _hub = comm_topology == "hub"
+    if _hub:
+        from mindforge.agent_modules.hub_prompts import apply_hub_rewrites
     # Orchestrator: curriculum USER template with the HARD assignment block
     # ({assigned_objective}) appended. None in every other configuration →
     # AutoCurriculum falls back to its module-level default, byte-identical
@@ -144,6 +153,13 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
         from mindforge.agent_modules.auto_curriculum import curriculum_info as _cur_info
         from orchestrator.curriculum_hook import apply_villager_suffix
         _task_info_override = apply_villager_suffix(_cur_info, True)
+    if _hub:
+        # Hub topology: the curriculum's "communications received" header
+        # names the orchestrator (only used before the first assignment —
+        # the hmas2 curriculum is otherwise pinned).
+        from mindforge.agent_modules.auto_curriculum import curriculum_info as _cur_info
+        _task_info_override = apply_hub_rewrites(
+            _task_info_override or _cur_info, "curriculum_info.txt")
 
     # Choice-mode template/client setup — built once, shared by all agents.
     _choice_action_kwargs = {}
@@ -212,6 +228,15 @@ def build_agents(role_configs, system_prompt, prompts, num_agents, communication
             _action_selection = ActionSelection(
                 action_model_client=_cmc2(response_format=_SAR),
                 **_choice_action_kwargs,
+            )
+        elif _hub:
+            from mindforge.agent_modules.action_selection import (
+                instruction_prompt_p2 as _instr_p2,
+            )
+            _action_selection = ActionSelection(
+                system_prompt=agent_system_prompt,
+                user_prompt_template=apply_hub_rewrites(
+                    _instr_p2, "instruction_prompt_p2.txt"),
             )
         else:
             _action_selection = ActionSelection(system_prompt=agent_system_prompt)

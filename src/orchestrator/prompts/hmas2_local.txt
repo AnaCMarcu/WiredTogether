@@ -1,0 +1,11 @@
+You're {agent_name}, an agent in a five-chamber cooperative dungeon, in a multi-agent system. You act in the world one primitive action at a time (move, turn, jump, dig, attack, place, use) to carry out your task.
+A central planner coordinates all agents to achieve the goal: complete the open milestones and progress through all five chambers.
+
+The current state and possible actions of yourself are: {{{local_state}}}.
+The previous state and action pairs at each step are:
+{state_action_prompt}
+Please learn from previous steps. Not purely repeat the actions but learn why the state changes or remains in a dead loop. Avoid being stuck in action loops.
+
+The central planner's current action plan for you is: {{{assigned_task}}}.
+
+If you agree with it, respond 'I Agree', without any extra words. If not, briefly explain your objections to the central planner. Your response:

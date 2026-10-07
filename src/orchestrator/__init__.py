@@ -9,6 +9,11 @@ assigned objective constrains each agent's auto-curriculum.
 Runs INSTEAD of the Hebbian coupling (mutually exclusive at startup); the DAG
 resets at every episode start, in deliberate contrast with W(t).
 
+A second variant, ``hmas2`` (``orchestrator.hmas2`` + ``orchestrator.hub``),
+is the HARD orchestrator: the HMAS-2 protocol with hub-and-spoke
+communication. See config.py for the variant groups the training loop gates
+on.
+
 Kept import-light: the training loop imports ``orchestrator.core`` /
 ``orchestrator.villager`` (and ``orchestrator.logging``) explicitly; this
 package root only exposes the dependency-free config/state pieces.

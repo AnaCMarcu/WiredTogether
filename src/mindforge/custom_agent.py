@@ -92,6 +92,10 @@ class CustomAgent(BaseChatAgent):
         self._call_count = 0  # incremented each on_messages call
         self._step_log = deque(maxlen=CRITIC_HISTORY_WINDOW)
         self._initialized = False
+        # hmas2 orchestrator (pinned task): the current pin's success has been
+        # recorded — the cached critic verdict repeats for up to
+        # critic_interval-1 steps and must count once per adoption.
+        self._pin_success_logged = False
 
         self.action_selection = (
             action_selection if action_selection else ActionSelection()
@@ -159,6 +163,7 @@ class CustomAgent(BaseChatAgent):
         orchestrator_assigned_objective=None,
         comm_budget_text=None,
         comm_budget_locked=False,
+        orchestrator_pinned_task=None,
     ):
 
         self._call_count += 1
@@ -264,7 +269,12 @@ class CustomAgent(BaseChatAgent):
             and current_chamber != self._last_chamber
         )
         self._last_chamber = current_chamber
-        if (success or self.auto_curriculum.current_task is None
+        if orchestrator_pinned_task:
+            if await self._apply_pinned_task(
+                    orchestrator_pinned_task, success, last_frame,
+                    cancellation_token, communication):
+                error_count = 0
+        elif (success or self.auto_curriculum.current_task is None
                 or error_count > 10 or _chamber_changed):
             if success:
                 self.auto_curriculum.completed_tasks.append(
@@ -535,6 +545,33 @@ class CustomAgent(BaseChatAgent):
         self.last_response = content
         return content, error_count
 
+    async def _apply_pinned_task(self, pinned: str, success, last_frame,
+                                 cancellation_token, communication) -> bool:
+        """hmas2 orchestrator: the task is PINNED to the coordinator's
+        assignment — no task-choice call, and no regeneration on success,
+        errors or a chamber change (the coordinator replans every step and
+        its check rejects assignments that are no longer doable).
+
+        A critic success is recorded ONCE per adoption: the cached verdict
+        repeats for up to critic_interval-1 steps. Returns True when a new
+        pin was adopted (the caller resets its error count)."""
+        cur = self.auto_curriculum.current_task
+        if success and cur is not None and not self._pin_success_logged:
+            self.auto_curriculum.completed_tasks.append(cur)
+            self.auto_curriculum.save_context(self.belief_system.task_beliefs)
+            self._pin_success_logged = True
+        if pinned == cur:
+            return False
+        task, context = await self.auto_curriculum.adopt_task(
+            pinned, last_frame, cancellation_token,
+            communications=communication,
+        )
+        self.metric.log(f"Agent {self.name}: New task: {task} "
+                        f"(pinned by the orchestrator)")
+        self.belief_system.task_beliefs = context
+        self._pin_success_logged = False
+        return True
+
     async def on_reset(self, cancellation_token: CancellationToken) -> None:
         """Reset per-episode WORKING memory between episodes; keep LONG-TERM memory.
 
@@ -567,3 +604,4 @@ class CustomAgent(BaseChatAgent):
         self._cached_success = None
         self._cached_critique = None
         self._step_log.clear()
+        self._pin_success_logged = False

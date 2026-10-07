@@ -78,8 +78,20 @@ export WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT NUM_A
 
 source "$WORKSPACE/WiredTogether/hpc/slurm/experiments/_common.sh"
 
-EXP_NAME="scale_gemma_orch_villager_n${NUM_AGENTS}"
-export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,orchestrator,villager,scaling,n${NUM_AGENTS}}"
+# ORCH_VARIANT: villager (default, the SOFT orchestrator) or hmas2 (the
+# HARD one: HMAS-2 adapted — per-step central planning + per-agent checks,
+# hub-and-spoke comms, pinned curriculum; ~1.4x the wall time).
+ORCH_VARIANT="${ORCH_VARIANT:-villager}"
+case "$ORCH_VARIANT" in
+    villager|hmas2) ;;
+    *)
+        echo "ERROR: ORCH_VARIANT must be 'villager' or 'hmas2' (got '${ORCH_VARIANT}')." >&2
+        exit 1
+        ;;
+esac
+
+EXP_NAME="scale_gemma_orch_${ORCH_VARIANT}_n${NUM_AGENTS}"
+export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,orchestrator,${ORCH_VARIANT},scaling,n${NUM_AGENTS}}"
 
 # Node timeout: 60 is the published setting for 1000-step runs. NOTE
 # (measured): at N=3 a 60-step timeout dissolves nearly every staffed team
@@ -88,10 +100,13 @@ export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,orchestrator,vill
 # meant to show teams persisting.
 ORCH_ARGS=(
     --orchestrator
-    --orchestrator-node-timeout-steps "${ORCH_NODE_TIMEOUT:-60}"
+    --orchestrator-variant "$ORCH_VARIANT"
 )
+if [ "$ORCH_VARIANT" = "villager" ]; then
+    ORCH_ARGS+=(--orchestrator-node-timeout-steps "${ORCH_NODE_TIMEOUT:-60}")
+fi
 
-echo "── scale_gemma_orch: NUM_AGENTS=$NUM_AGENTS node_timeout=${ORCH_NODE_TIMEOUT:-60} → $EXP_NAME ──"
+echo "── scale_gemma_orch: NUM_AGENTS=$NUM_AGENTS variant=$ORCH_VARIANT → $EXP_NAME ──"
 
 run_exp "$EXP_NAME" "$MODEL_LLM" \
     "${ORCH_ARGS[@]}" \

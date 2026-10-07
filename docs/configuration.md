@@ -93,10 +93,20 @@ mini-batch 4, entropy 0.05 → 0.001 — live in `RLConfig` and are pinned by
 | Flag | Default | Meaning |
 |---|---|---|
 | `--orchestrator` | off | Enable the central coordinator (excludes `--hebbian`) |
-| `--orchestrator-variant` | `villager` | Only `villager`; recorded in the run config |
+| `--orchestrator-variant` | `villager` | `villager` (soft) \| `hmas2` (hard: HMAS-2 protocol, hub-and-spoke comms) |
 | `--orchestrator-decompose-min-interval` | 8 | Minimum steps between decompositions — matched to `--social-interval` (T_soc) |
 | `--orchestrator-node-timeout-steps` | 60 | Steps before an unfinished subtask is failed |
 | `--orchestrator-max-open-tasks` | 0 | Cap on open + running subtasks; 0 = 2 × agents |
+| `--orchestrator-hmas2-max-rounds` | 3 | hmas2: check → revise rounds per step (HMAS-2's bound) |
+| `--orchestrator-hmas2-syntax-retries` | 6 | hmas2: syntactic re-prompts per plan (HMAS-2's bound) |
+| `--orchestrator-hmas2-history-tokens` | 3000 | hmas2: state–action history budget (HMAS-2's `input_prompt_token_limit`) |
+| `--orchestrator-hmas2-message-words` | 24 | hmas2: word cap per planner message |
+| `--orchestrator-hmas2-report-cap` | 2 | hmas2: reports kept per agent between steps |
+| `--orchestrator-hmas2-check-max-tokens` | 96 | hmas2: generation cap of an agent's check |
+
+`hmas2` requires `--simultaneous` and is rejected with `--no-communication`, `--rl` and
+`--social-act-mode choice`; it combines with `--comm-budget-tokens`. With `LLM_SERVER=vllm`
+(or `--llm-batch`) the per-agent checks of a round run concurrently.
 
 ## Environment variables
 

@@ -427,9 +427,19 @@ def parse_args():
                              "replans on reassignment; no communication "
                              "routing). Runs INSTEAD of the Hebbian coupling.")
     parser.add_argument("--orchestrator-variant", type=str, default="villager",
-                        choices=["villager"],
-                        help="Orchestrator implementation (only 'villager'; "
-                             "recorded in the run config).")
+                        choices=["villager", "hmas2"],
+                        help="'villager' (default) = the soft orchestrator "
+                             "above (agents keep messaging each other). "
+                             "'hmas2' = the HARD orchestrator: the HMAS-2 "
+                             "protocol (Chen et al., ICRA 2024) adapted to "
+                             "WIRE — every step a central planner assigns "
+                             "subtasks, assigned agents check their own "
+                             "assignment ('I Agree' or an objection) and the "
+                             "planner revises (<= 3 rounds); hub-and-spoke "
+                             "communication (agent messages are reports to "
+                             "the planner, which sends each agent only the "
+                             "teammate information it chooses); curriculum "
+                             "task pinned to the assignment.")
     parser.add_argument("--orchestrator-node-timeout-steps", type=int,
                         default=60,
                         help="A running DAG task fails after this many steps "
@@ -444,6 +454,31 @@ def parse_args():
                              "the cooldown after a failed allocator call "
                              "(default 8 = the social module's T_soc, "
                              "--social-interval)")
+    parser.add_argument("--orchestrator-hmas2-max-rounds", type=int,
+                        default=3,
+                        help="hmas2 only: check -> revise rounds per step "
+                             "(default 3, as in the HMAS-2 code)")
+    parser.add_argument("--orchestrator-hmas2-syntax-retries", type=int,
+                        default=6,
+                        help="hmas2 only: syntactic re-prompts per plan "
+                             "(default 6, as in the HMAS-2 code)")
+    parser.add_argument("--orchestrator-hmas2-history-tokens", type=int,
+                        default=3000,
+                        help="hmas2 only: token budget for the state-action "
+                             "history (default 3000, HMAS-2's "
+                             "input_prompt_token_limit)")
+    parser.add_argument("--orchestrator-hmas2-message-words", type=int,
+                        default=24,
+                        help="hmas2 only: word cap per coordinator message "
+                             "(default 24)")
+    parser.add_argument("--orchestrator-hmas2-report-cap", type=int,
+                        default=2,
+                        help="hmas2 only: reports kept per agent between "
+                             "steps (overflow logged as dropped)")
+    parser.add_argument("--orchestrator-hmas2-check-max-tokens", type=int,
+                        default=96,
+                        help="hmas2 only: generation cap of a local check "
+                             "(default 96)")
     parser.add_argument("--orchestrator-model", type=str, default=None,
                         help="LLM for the orchestrator (default None = reuse "
                              "the agents' backbone/client). Only supported "
@@ -612,6 +647,28 @@ def validate_args(args) -> None:
             "--orchestrator and --social-module both write the "
             "{social_directive} action-prompt slot; disable one"
         )
+    if args.orchestrator and args.orchestrator_variant == "hmas2":
+        # hmas2 replaces the peer channel with a hub; each exclusion below
+        # would either remove the channel it routes or break the timing of
+        # the per-step plan (it runs before agents read their inboxes, which
+        # only the simultaneous loop guarantees).
+        if args.no_communication:
+            raise SystemExit(
+                "--orchestrator-variant hmas2 routes messages through the "
+                "orchestrator; it cannot be combined with --no-communication "
+                "(use --comm-budget-tokens 0 for the silent cell)")
+        if args.rl:
+            raise SystemExit(
+                "--orchestrator-variant hmas2 is LLM-only; it cannot be "
+                "combined with --rl")
+        if not args.simultaneous:
+            raise SystemExit(
+                "--orchestrator-variant hmas2 requires --simultaneous (the "
+                "per-step plan must run before every agent reads its inbox)")
+        if args.social_act_mode == "choice":
+            raise SystemExit(
+                "--orchestrator-variant hmas2 cannot be combined with "
+                "--social-act-mode choice")
     if args.comm_budget_tokens is not None and args.no_communication:
         # A budget meters a channel that must exist; the zero arm is
         # --comm-budget-tokens 0 (same prompts, every message blocked),

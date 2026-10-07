@@ -35,6 +35,19 @@ WHAT STAYS BYTE-IDENTICAL
   A budget of 0 is the "zero" arm: same code path, same prompt structure,
   every message blocked from the first step.
 
+COMMUNICATION TOPOLOGY (the hub-and-spoke orchestrator, hmas2)
+  A second, orthogonal switch — ``WT_COMM_TOPOLOGY`` ("peer" by default,
+  "hub" under ``--orchestrator-variant hmas2``) — selects the wording of the
+  same three static placeholders: in hub mode agents cannot message
+  teammates; every message is a report to the orchestrator, which assigns
+  tasks and passes on the teammate information it chooses. The two switches
+  combine (legacy/budget x peer/hub = four renderings) inside ONE resolver,
+  so no second module ever substitutes the same keys. In hub + budget runs
+  the orchestrator's messages are charged to the RECIPIENT's budget
+  (``charge_incoming``), so a team's total communication stays <= N*B just as
+  with sender-pays peer messaging. Peer renderings and the peer ledger output
+  are unchanged.
+
 Pure stdlib; safe to import anywhere (tests included).
 """
 
@@ -51,6 +64,11 @@ ENV_SWITCH = "WT_COMM_BUDGET"
 #: Per-message cap forwarded to the static prompt text (same source of truth
 #: as the ledger's cap; set next to ENV_SWITCH).
 ENV_MSG_CAP = "WT_COMM_BUDGET_MSG_CAP"
+#: Communication topology switch ("peer" when unset; "hub" = hub-and-spoke).
+ENV_TOPOLOGY = "WT_COMM_TOPOLOGY"
+TOPOLOGY_PEER = "peer"
+TOPOLOGY_HUB = "hub"
+VALID_TOPOLOGIES = (TOPOLOGY_PEER, TOPOLOGY_HUB)
 
 #: Hard cap on the tokens ONE message may cost (~p99 of the observed
 #: 12-word Gemma-E4B messages). Keeps tokens and message counts
@@ -110,6 +128,50 @@ COMM_FIELD_HINT_BUDGET = (
 
 STATIC_PLACEHOLDERS = ("comm_rule", "comm_target_rule", "comm_field_hint")
 
+# ── Hub-topology fragments (hub-and-spoke: every message is a report to the
+# orchestrator). Only rendered when WT_COMM_TOPOLOGY=hub. ──
+
+COMM_RULE_HUB_LEGACY = (
+    "HUB COMMUNICATION (REQUIRED EVERY STEP — you CANNOT message teammates directly):\n"
+    "- Every message you write goes to the ORCHESTRATOR, a non-embodied central planner that\n"
+    "  sees the whole team. Set \"communication_target\" to \"orchestrator\" — never a teammate's\n"
+    "  name.\n"
+    "- The orchestrator assigns your task and passes on whatever teammate information it judges\n"
+    "  you need; its message is the only message you receive.\n"
+    "- Make your report ACTIONABLE: what you observed, a scheme you just confirmed, what you need\n"
+    "  from a teammate, or what you commit to do. Vary reports — sub-5-char or repeated identical\n"
+    "  reports are treated as spam."
+)
+
+COMM_RULE_HUB_BUDGET = (
+    "HUB COMMUNICATION (OPTIONAL and BUDGETED — you CANNOT message teammates directly):\n"
+    "- Every message you write goes to the ORCHESTRATOR, a non-embodied central planner that\n"
+    "  assigns your task and passes on whatever teammate information it judges you need.\n"
+    "  Messages the orchestrator sends YOU, and objections you raise to your assignment, are\n"
+    "  charged to your budget too.\n"
+    "- You have a fixed per-episode budget of message tokens; the amount left is shown in your\n"
+    "  per-step context. When it reaches 0 you can neither send nor receive anything for the\n"
+    "  rest of the episode.\n"
+    "- Report ONLY what a teammate can act on: a request for help, a commitment, or a discovery.\n"
+    "  On most steps leave \"communication\" and \"communication_target\" EMPTY — silence costs\n"
+    "  nothing.\n"
+    "- When you do report: set \"communication_target\" to \"orchestrator\"; keep it short (it is\n"
+    "  cut at {cap} tokens); never repeat a report you already sent."
+)
+
+COMM_TARGET_RULE_HUB_LEGACY = "never a teammate's name, never empty."
+COMM_TARGET_RULE_HUB_BUDGET = (
+    "never a teammate's name; leave it empty on steps where you send no report."
+)
+
+COMM_FIELD_HINT_HUB_LEGACY = (
+    " — an observation, request, or commitment the team needs; never empty"
+)
+COMM_FIELD_HINT_HUB_BUDGET = (
+    " — ONLY when you choose to spend communication budget this step (a request, "
+    "commitment or discovery a teammate can act on); otherwise the empty string"
+)
+
 
 # ── Master switch ───────────────────────────────────────────────────────
 
@@ -135,12 +197,43 @@ def set_env_switch(enabled: bool, msg_cap: int = DEFAULT_MSG_CAP) -> None:
         os.environ.pop(ENV_MSG_CAP, None)
 
 
+def comm_topology() -> str:
+    """The communication topology as seen via the environment."""
+    value = os.environ.get(ENV_TOPOLOGY, TOPOLOGY_PEER)
+    return value if value in VALID_TOPOLOGIES else TOPOLOGY_PEER
+
+
+def set_comm_topology(topology: str) -> None:
+    """Set the topology switch for this process ("peer" clears it)."""
+    if topology not in VALID_TOPOLOGIES:
+        raise ValueError(f"topology must be one of {VALID_TOPOLOGIES}, "
+                         f"got {topology!r}")
+    if topology == TOPOLOGY_HUB:
+        os.environ[ENV_TOPOLOGY] = TOPOLOGY_HUB
+    else:
+        os.environ.pop(ENV_TOPOLOGY, None)
+
+
 # ── Static prompt substitution ──────────────────────────────────────────
 
-def static_placeholders(enabled: bool, msg_cap: int) -> Dict[str, str]:
+def static_placeholders(enabled: bool, msg_cap: int,
+                        topology: str = TOPOLOGY_PEER) -> Dict[str, str]:
+    cap = str(int(msg_cap))
+    if topology == TOPOLOGY_HUB:
+        if enabled:
+            return {
+                "comm_rule": COMM_RULE_HUB_BUDGET.replace("{cap}", cap),
+                "comm_target_rule": COMM_TARGET_RULE_HUB_BUDGET,
+                "comm_field_hint": COMM_FIELD_HINT_HUB_BUDGET,
+            }
+        return {
+            "comm_rule": COMM_RULE_HUB_LEGACY,
+            "comm_target_rule": COMM_TARGET_RULE_HUB_LEGACY,
+            "comm_field_hint": COMM_FIELD_HINT_HUB_LEGACY,
+        }
     if enabled:
         return {
-            "comm_rule": COMM_RULE_BUDGET.replace("{cap}", str(int(msg_cap))),
+            "comm_rule": COMM_RULE_BUDGET.replace("{cap}", cap),
             "comm_target_rule": COMM_TARGET_RULE_BUDGET,
             "comm_field_hint": COMM_FIELD_HINT_BUDGET,
         }
@@ -152,32 +245,38 @@ def static_placeholders(enabled: bool, msg_cap: int) -> Dict[str, str]:
 
 
 def apply_comm_budget_static(text: str, enabled: Optional[bool] = None,
-                             msg_cap: Optional[int] = None) -> str:
+                             msg_cap: Optional[int] = None,
+                             topology: Optional[str] = None) -> str:
     """Literal-substitute the STATIC comm-budget placeholders in ``text``.
 
     Plain ``str.replace`` (no ``str.format``), so the JSON ``{{...}}`` escapes
     and the per-step placeholders (``{comm_budget}``, ``{task}``, ...) survive
-    for the per-step formatting. ``enabled=None`` reads the master switch.
+    for the per-step formatting. ``enabled=None`` reads the master switch and
+    ``topology=None`` the topology switch.
     """
     if enabled is None:
         enabled = comm_budget_enabled()
     if msg_cap is None:
         msg_cap = msg_cap_from_env()
-    for key, value in static_placeholders(enabled, msg_cap).items():
+    if topology is None:
+        topology = comm_topology()
+    for key, value in static_placeholders(enabled, msg_cap, topology).items():
         text = text.replace("{" + key + "}", value)
     return text
 
 
 def apply_comm_budget_to_prompts(prompts: dict, enabled: Optional[bool] = None,
-                                 msg_cap: Optional[int] = None) -> dict:
+                                 msg_cap: Optional[int] = None,
+                                 topology: Optional[str] = None) -> dict:
     """Substitute across the load_prompts() dict (one level of nesting)."""
     out = {}
     for key, value in prompts.items():
         if isinstance(value, str):
-            out[key] = apply_comm_budget_static(value, enabled, msg_cap)
+            out[key] = apply_comm_budget_static(value, enabled, msg_cap,
+                                                topology)
         elif isinstance(value, dict):
             out[key] = {
-                k: (apply_comm_budget_static(v, enabled, msg_cap)
+                k: (apply_comm_budget_static(v, enabled, msg_cap, topology)
                     if isinstance(v, str) else v)
                 for k, v in value.items()
             }
@@ -251,6 +350,11 @@ class AgentBudgetState:
     truncated: int = 0
     blocked: int = 0
     exhausted_step: Optional[int] = None
+    # Hub topology only: orchestrator messages charged to this agent as RECIPIENT.
+    received: int = 0
+    received_tokens: int = 0
+    received_truncated: int = 0
+    received_blocked: int = 0
 
     @property
     def left(self) -> int:
@@ -260,13 +364,21 @@ class AgentBudgetState:
     def locked(self) -> bool:
         return self.left <= 0
 
-    def as_dict(self) -> dict:
-        return {
+    def as_dict(self, include_received: bool = False) -> dict:
+        out = {
             "budget": int(self.total), "spent": int(self.spent),
             "left": int(self.left), "sent": int(self.sent),
             "truncated": int(self.truncated), "blocked": int(self.blocked),
             "exhausted_step": self.exhausted_step,
         }
+        if include_received:
+            out.update({
+                "received": int(self.received),
+                "received_tokens": int(self.received_tokens),
+                "received_truncated": int(self.received_truncated),
+                "received_blocked": int(self.received_blocked),
+            })
+        return out
 
 
 class CommBudgetLedger:
@@ -278,13 +390,17 @@ class CommBudgetLedger:
 
     def __init__(self, agent_ids: Iterable[int], budget_tokens: int,
                  msg_cap: int = DEFAULT_MSG_CAP,
-                 token_counter: Optional[Callable[[str], int]] = None):
+                 token_counter: Optional[Callable[[str], int]] = None,
+                 topology: str = TOPOLOGY_PEER):
         if budget_tokens is None or int(budget_tokens) < 0:
             raise ValueError("budget_tokens must be a non-negative integer")
         if int(msg_cap) <= 0:
             raise ValueError("msg_cap must be positive")
+        if topology not in VALID_TOPOLOGIES:
+            raise ValueError(f"topology must be one of {VALID_TOPOLOGIES}")
         self.budget_tokens = int(budget_tokens)
         self.msg_cap = int(msg_cap)
+        self.topology = topology
         self._count = token_counter or fallback_token_count
         self._state: Dict[int, AgentBudgetState] = {
             int(a): AgentBudgetState(total=self.budget_tokens) for a in agent_ids
@@ -309,14 +425,27 @@ class CommBudgetLedger:
         for a in list(self._state):
             self._state[a] = AgentBudgetState(total=self.budget_tokens)
 
-    # ── the one mutating operation ──
+    # ── the mutating operations ──
     def charge(self, agent_id: int, text, step: int) -> ChargeResult:
-        st = self.state(agent_id)
+        """Charge a message the agent SENDS."""
+        return self._charge(self.state(agent_id), text, step, incoming=False)
+
+    def charge_incoming(self, agent_id: int, text, step: int) -> ChargeResult:
+        """Charge a hub message the agent RECEIVES (hub topology,
+        recipient-pays). Same budget, cap and locking as ``charge``, but
+        counted under ``received*`` so ``sent`` keeps meaning agent-sent."""
+        return self._charge(self.state(agent_id), text, step, incoming=True)
+
+    def _charge(self, st: AgentBudgetState, text, step: int,
+                incoming: bool) -> ChargeResult:
         original = str(text or "")
         n = self.count_tokens(original)
 
         if st.locked:
-            st.blocked += 1
+            if incoming:
+                st.received_blocked += 1
+            else:
+                st.blocked += 1
             first = st.exhausted_step is None
             if first:
                 st.exhausted_step = int(step)   # zero-budget arm: first attempt
@@ -333,16 +462,25 @@ class CommBudgetLedger:
                 # Not even one word fits in what is left: the remainder is
                 # unusable, so spend it and lock.
                 st.spent = st.total
-                st.blocked += 1
+                if incoming:
+                    st.received_blocked += 1
+                else:
+                    st.blocked += 1
                 st.exhausted_step = int(step)
                 return ChargeResult(text="", status=STATUS_BLOCKED,
                                     tokens_model=n, charged=0, budget_left=0,
                                     exhausted_now=True)
 
         st.spent += int(charged)
-        st.sent += 1
-        if truncated:
-            st.truncated += 1
+        if incoming:
+            st.received += 1
+            st.received_tokens += int(charged)
+            if truncated:
+                st.received_truncated += 1
+        else:
+            st.sent += 1
+            if truncated:
+                st.truncated += 1
         exhausted_now = st.locked and st.exhausted_step is None
         if exhausted_now:
             st.exhausted_step = int(step)
@@ -371,6 +509,8 @@ class CommBudgetLedger:
 
     def render_action_line(self, agent_id: int, steps_left: int) -> str:
         st = self.state(agent_id)
+        if self.topology == TOPOLOGY_HUB:
+            return self._render_hub_action_line(st, steps_left)
         if st.total <= 0:
             return (
                 "\nCommunication budget: NONE this episode. Leave \"communication\" "
@@ -391,6 +531,33 @@ class CommBudgetLedger:
             "for the rest of the episode. Spend it only on a request, commitment "
             "or discovery a specific teammate can act on; otherwise leave "
             "\"communication\" and \"communication_target\" empty."
+        )
+
+    def _render_hub_action_line(self, st: AgentBudgetState,
+                                 steps_left: int) -> str:
+        if st.total <= 0:
+            return (
+                "\nCommunication budget: NONE this episode. You cannot report to "
+                "the orchestrator and it cannot message you; leave "
+                "\"communication\" and \"communication_target\" empty and "
+                "coordinate by moving to teammates and working the same target."
+            )
+        if st.locked:
+            return (
+                f"\nCommunication budget: EXHAUSTED (0 of {st.total} tokens left). "
+                "You can neither report to nor hear from the orchestrator for the "
+                "rest of this episode; leave \"communication\" and "
+                "\"communication_target\" empty and coordinate by moving to "
+                "teammates and working the same target."
+            )
+        return (
+            f"\nCommunication budget: {st.left} of {st.total} tokens left this "
+            f"episode (about {self._approx_msgs(st.left)} short messages), about "
+            f"{max(0, int(steps_left))} steps to go. Your reports AND the "
+            "orchestrator's messages to you are charged; at 0 you can neither "
+            "send nor receive. Report only a request, commitment or discovery a "
+            "teammate can act on; otherwise leave \"communication\" and "
+            "\"communication_target\" empty."
         )
 
     def render_social_line(self, agent_id: int) -> str:
@@ -422,6 +589,8 @@ class CommBudgetLedger:
             "budget_tokens": self.budget_tokens,
             "msg_cap": self.msg_cap,
             "per_agent": {
-                f"agent_{a}": st.as_dict() for a, st in sorted(self._state.items())
+                f"agent_{a}": st.as_dict(
+                    include_received=self.topology == TOPOLOGY_HUB)
+                for a, st in sorted(self._state.items())
             },
         }
