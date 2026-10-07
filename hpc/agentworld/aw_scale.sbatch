@@ -11,7 +11,7 @@
 # One scaling-sweep cell. Submit through submit_aw_scaling.sh (from the repo
 # root), which sets ARM, REPLICAS and TASK; the seed comes from the array index.
 # Optional: ROUNDS, EPISODES, TEAM_SPACING, VIDEO, MAX_IN_FLIGHT.
-source "$WORKSPACE/WiredTogether/hpc/agentworld/aw_common.sh"
+source "${WT_REPO:-$WORKSPACE/WiredTogether}/hpc/agentworld/aw_common.sh"
 : "${ARM:?}" "${REPLICAS:?}" "${TASK:?}"
 EXTRA=()
 [ -n "${ROUNDS:-}" ] && EXTRA+=(--rounds "$ROUNDS")

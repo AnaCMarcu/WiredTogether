@@ -2,11 +2,15 @@
 # ────────────────────────────────────────────────────────────────────────────
 # Shared setup for AgentWorld runs (Snellius-first; DAIC works the same way).
 #
-#     source "$WORKSPACE/WiredTogether/hpc/agentworld/aw_common.sh"
+#     source "${WT_REPO:-$WORKSPACE/WiredTogether}/hpc/agentworld/aw_common.sh"
 #     run_aw <run name> <args for python -m mindforge.multi_agent_agentworld ...>
 #
-# (Source it through $WORKSPACE, not $(dirname "$0"): inside a SLURM job $0 is
-# the spooled copy of the script, not the file in the repository.)
+# (Source it through $WT_REPO / $WORKSPACE, not $(dirname "$0"): inside a SLURM
+# job $0 is the spooled copy of the script, not the file in the repository.)
+#
+# WT_REPO: the checkout to run from (default $WORKSPACE/WiredTogether). Set it
+# when AgentWorld runs from a second checkout (git worktree) so the main one
+# can stay on another branch with jobs of its own.
 #
 # One job = one vLLM server (same launch as hpc/slurm/experiments/_common.sh,
 # plus prefix caching) + one game server, supervised on the host and restarted
@@ -21,7 +25,7 @@
 #   $WORKSPACE/images/agentworld.sif    self-contained image (agentworld.def)
 # ────────────────────────────────────────────────────────────────────────────
 WORKSPACE="${WT_WORKSPACE:-${WORKSPACE:?set WT_WORKSPACE (source hpc/snellius/env.sh)}}"
-REPO="$WORKSPACE/WiredTogether"
+REPO="${WT_REPO:-$WORKSPACE/WiredTogether}"
 IMG="${WT_IMAGE:-$WORKSPACE/images/wiredtogether_gemma4.sif}"
 AW_ROOT="${AGENTWORLD_ROOT:-$WORKSPACE/agentworld}"
 MODEL_LLM="${MODEL_LLM:-$WORKSPACE/models/gemma-4-E4B-it}"

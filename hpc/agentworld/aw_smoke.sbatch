@@ -20,7 +20,7 @@
 # runs_aw/smoke/<name>/seed_42/episode_1/ holds summary.json, trajectories/,
 # replay/state.jsonl and videos/team_t00.mp4.
 # ────────────────────────────────────────────────────────────────────────────
-source "$WORKSPACE/WiredTogether/hpc/agentworld/aw_common.sh"
+source "${WT_REPO:-$WORKSPACE/WiredTogether}/hpc/agentworld/aw_common.sh"
 RUN_GROUP="${RUN_GROUP:-smoke}"
 TASK="${TASK:-task_01_magic_staff}"
 ARM="${ARM:-hebbian}"

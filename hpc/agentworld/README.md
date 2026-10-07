@@ -68,6 +68,20 @@ squeue -u $USER
 tail -f slurm_logs/aw_smoke_*.out
 ```
 
+**If the main checkout is busy on another branch** (jobs running from it), run
+AgentWorld from a second checkout instead of switching branches under those jobs:
+
+```bash
+cd $WT_WORKSPACE/WiredTogether && git fetch origin
+git worktree add $WT_WORKSPACE/WiredTogether-agentworld agentworld
+cd $WT_WORKSPACE/WiredTogether-agentworld && git pull && mkdir -p slurm_logs
+source hpc/snellius/env.sh
+export PATH="$PWD/hpc/snellius/bin:$PATH"   # env.sh points at the MAIN checkout's sbatch shim
+export WT_REPO=$PWD                         # the AgentWorld scripts run from this checkout
+type sbatch                                 # must print .../WiredTogether-agentworld/hpc/snellius/bin/sbatch
+sbatch hpc/agentworld/aw_smoke.sbatch       # the shim exports WT_REPO into the job
+```
+
 Passed if the log ends with `python exit: 0` and
 `runs_aw/smoke/hebbian_task_01_magic_staff_x1/seed_42/episode_1/` holds
 `summary.json`, `trajectories/`, `replay/state.jsonl`, `hebbian_W.npy` and
