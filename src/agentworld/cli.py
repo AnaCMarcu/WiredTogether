@@ -171,7 +171,8 @@ async def run(args) -> List[dict]:
         cmd = args.server_cmd or local_command(vendor.root)
         server = KaetramServer(ServerConfig(command=cmd, game_port=game_port, api_port=api_port,
                                             max_players=max(200, n + 8),
-                                            log_path=args.out / "server.log"))
+                                            log_path=args.out / "server.log",
+                                            agentworld_root=vendor.root))
         logging.info("game server up in %.1fs", server.start())
         api_url = server.api_url
 

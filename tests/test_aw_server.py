@@ -2,6 +2,7 @@
 
 import threading
 import time
+from pathlib import Path
 
 import httpx
 import pytest
@@ -68,3 +69,39 @@ def test_supervised_restart_times_out_if_server_never_returns(tmp_path, monkeypa
     s = srv.SupervisedServer("http://x", restart, ready_timeout_s=0.3)
     with pytest.raises(TimeoutError):
         s.restart()
+
+
+def test_port_override_file_selected_through_node_env(tmp_path):
+    """Kaetram ignores PORT/API_PORT in the process env; it reads .env.$NODE_ENV."""
+    s = srv.KaetramServer(srv.ServerConfig(command=["true"], game_port=21000, api_port=21001,
+                                           max_players=300, agentworld_root=tmp_path))
+    env = s.env()
+    assert env["NODE_ENV"] == "aw21001"
+    text = (tmp_path / ".env.aw21001").read_text()
+    lines = text.splitlines()
+    assert "PORT=21000" in lines and "API_PORT=21001" in lines
+    assert "SKIP_DATABASE=true" in text and "MAX_PLAYERS=300" in text
+
+
+def test_run_world_sh_writes_the_same_override(tmp_path):
+    import shutil
+    import subprocess
+    sh = shutil.which("sh") or shutil.which("bash")
+    if sh is None:
+        pytest.skip("no POSIX shell")
+    server_dir = tmp_path / "packages" / "server"
+    server_dir.mkdir(parents=True)
+    script = Path(__file__).resolve().parents[1] / "hpc" / "agentworld" / "run_world.sh"
+    # Replace the final exec with a probe so the test needs no Node.
+    body = script.read_text().replace(
+        "exec npx --no-install tsx --preserve-symlinks ./src/main.ts",
+        'echo "NODE_ENV=$NODE_ENV"')
+    probe = tmp_path / "run_world_probe.sh"
+    probe.write_bytes(body.replace("\r\n", "\n").encode())
+    out = subprocess.run([sh, str(probe)], capture_output=True, text=True,
+                         env={"AGENTWORLD_HOME": str(tmp_path), "PORT": "21000",
+                              "API_PORT": "21001", "PATH": "/usr/bin:/bin"})
+    assert out.returncode == 0, out.stderr
+    assert "NODE_ENV=aw21001" in out.stdout
+    text = (tmp_path / ".env.aw21001").read_text()
+    assert "PORT=21000" in text and "API_PORT=21001" in text

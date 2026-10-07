@@ -7,9 +7,13 @@ so a restart is the episode reset: characters, the chat buffer, mobs, ground
 items and harvested resources all start fresh.
 
 The server command is whatever ``hpc/agentworld/run_world.sh`` (inside the
-Apptainer image) or a local ``yarn`` invocation provides; Kaetram reads
-``PORT``, ``API_PORT``, ``SKIP_DATABASE`` and ``MAX_PLAYERS`` from the
-environment (P0: confirm the process env overrides its ``.env``).
+Apptainer image) or a local ``yarn`` invocation provides.
+
+Ports: Kaetram builds its config from ``.env`` files only and IGNORES the
+process environment (confirmed on Snellius 2026-10-07: PORT/API_PORT were
+ignored and the server took the default 7030/7031). It does layer
+``.env.$NODE_ENV`` (in the checkout root) on top, so each server gets its own
+override file, see :func:`write_port_override`.
 """
 
 from __future__ import annotations
@@ -33,6 +37,19 @@ def job_ports(job_id: Optional[int] = None) -> tuple[int, int]:
     return game, game + 1
 
 
+def write_port_override(agentworld_root: Path, game_port: int, api_port: int,
+                        max_players: int = 200, host: str = "127.0.0.1") -> str:
+    """Write ``<root>/.env.aw<api_port>`` and return its NODE_ENV name.
+
+    Same file ``hpc/agentworld/run_world.sh`` writes on the cluster.
+    """
+    name = f"aw{api_port}"
+    Path(agentworld_root, f".env.{name}").write_text(
+        f"PORT={game_port}\nAPI_PORT={api_port}\nAPI_ENABLED=true\nSKIP_DATABASE=true\n"
+        f"MAX_PLAYERS={max_players}\nHOST={host}\n", encoding="utf-8")
+    return name
+
+
 @dataclass
 class ServerConfig:
     command: Sequence[str]
@@ -44,6 +61,7 @@ class ServerConfig:
     log_path: Optional[Path] = None
     ready_timeout_s: float = 300.0     # VoxeLibre-scale startups were 45–120 s on DAIC
     extra_env: Optional[Dict[str, str]] = None
+    agentworld_root: Optional[Path] = None   # where the .env.aw<port> override goes
 
 
 class KaetramServer:
@@ -67,6 +85,10 @@ class KaetramServer:
             "HOST": self.cfg.host,
             "HUSKY": "0",
         })
+        if self.cfg.agentworld_root is not None:
+            env["NODE_ENV"] = write_port_override(
+                self.cfg.agentworld_root, self.cfg.game_port, self.cfg.api_port,
+                self.cfg.max_players, self.cfg.host)
         env.update(self.cfg.extra_env or {})
         return env
 

@@ -46,12 +46,14 @@ step_install() {
     [ -d "$NODE_IMG" ] || [ -e "$NODE_IMG" ] || { echo "!! run: $0 node" >&2; exit 1; }
     local cache="$WS/.cache/yarn"
     mkdir -p "$cache"
+    # Cypress (e2e tests) and @sentry/cli download large binaries the game
+    # server never uses; skip them.
     apptainer exec "${BINDS[@]}" \
         --env HUSKY=0 --env YARN_CACHE_FOLDER="$cache" --env YARN_ENABLE_GLOBAL_CACHE=0 \
-        --env HOME="$WS/.cache/home" \
+        --env YARN_ENABLE_TELEMETRY=0 --env CYPRESS_INSTALL_BINARY=0 \
+        --env SENTRYCLI_SKIP_DOWNLOAD=1 \
         "$NODE_IMG" sh -c "
             set -e
-            mkdir -p \"$WS/.cache/home\"
             cd \"$AW_ROOT\"
             YARN=\$(ls .yarn/releases/yarn-*.cjs | head -1)
             node \"\$YARN\" install
@@ -78,7 +80,8 @@ step_check() {
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
     if [ "$ok" = 1 ]; then
-        echo "OK: game server answered /ai/world-status after $(( SECONDS - t0 )) s"
+        echo "OK: game server answered /ai/world-status on port $api after $(( SECONDS - t0 )) s"
+        rm -f "$AW_ROOT/.env.aw$api"
     else
         echo "!! game server did not answer; last log lines:" >&2
         tail -30 "$log" >&2
