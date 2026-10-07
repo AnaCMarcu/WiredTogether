@@ -18,7 +18,10 @@ WORKSPACE="${WT_WORKSPACE:?set WT_WORKSPACE to your cluster workspace (it holds 
 # without editing any sbatch file; the default stays the old image so nothing
 # that already worked changes silently.
 IMG="${WT_IMAGE:-$WORKSPACE/images/wiredtogether.sif}"
-REPO="$WORKSPACE/WiredTogether"
+# WT_REPO: the checkout to run from (default $WORKSPACE/WiredTogether). Set
+# it to run from a second checkout (git worktree) while the main one stays on
+# another branch; the Snellius sbatch shim exports it into the job.
+REPO="${WT_REPO:-$WORKSPACE/WiredTogether}"
 
 # ── Reasoning core ────────────────────────────────────────────────────────
 # ONE model for the whole suite: Gemma 4 E4B instruction-tuned (4.5B effective
@@ -265,6 +268,11 @@ run_exp() {
     case "$SCRATCH_ROOT" in
         /tmp|/tmp/*) ;;
         *) EXTRA_BINDS+=(--bind "$SCRATCH_ROOT:$SCRATCH_ROOT") ;;
+    esac
+    # A WT_REPO checkout outside the workspace needs its own bind.
+    case "$REPO/" in
+        "$WORKSPACE"/*) ;;
+        *) EXTRA_BINDS+=(--bind "$REPO:$REPO") ;;
     esac
     if [ -n "${WT_BIND:-}" ]; then
         local _b

@@ -54,7 +54,7 @@ WORKSPACE="${WT_WORKSPACE:?set WT_WORKSPACE to your cluster workspace (it holds 
 : "${WANDB_PROJECT:=orchestrator_wired_together}"
 export WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT
 
-source "$WORKSPACE/WiredTogether/hpc/slurm/experiments/_common.sh"
+source "${WT_REPO:-$WORKSPACE/WiredTogether}/hpc/slurm/experiments/_common.sh"
 
 # ORCH_VARIANT selects the orchestrator:
 #   villager (default) — the SOFT orchestrator above (peer messaging left on).

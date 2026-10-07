@@ -76,7 +76,7 @@ esac
 : "${CH4_MOBS:=3}"
 export WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT NUM_AGENTS
 
-source "$WORKSPACE/WiredTogether/hpc/slurm/experiments/_common.sh"
+source "${WT_REPO:-$WORKSPACE/WiredTogether}/hpc/slurm/experiments/_common.sh"
 
 # ORCH_VARIANT: villager (default, the SOFT orchestrator) or hmas2 (the
 # HARD one: HMAS-2 adapted — per-step central planning + per-agent checks,

@@ -64,7 +64,7 @@ esac
 : "${COMM_MSG_CAP:=32}"
 export WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT NUM_AGENTS
 
-source "$WORKSPACE/WiredTogether/hpc/slurm/experiments/_common.sh"
+source "${WT_REPO:-$WORKSPACE/WiredTogether}/hpc/slurm/experiments/_common.sh"
 
 SOCIAL_MODULE="${SOCIAL_MODULE:-prompt}"
 ORCH_ARGS=()

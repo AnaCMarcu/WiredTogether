@@ -53,7 +53,9 @@ cd "$(dirname "$0")"
 mkdir -p slurm_logs
 
 WORKSPACE="${WT_WORKSPACE:?set WT_WORKSPACE to your cluster workspace (it holds WiredTogether/, images/ and models/)}"
-REPO="$WORKSPACE/WiredTogether"
+# WT_REPO: the checkout the jobs run from (default $WORKSPACE/WiredTogether),
+# e.g. a git worktree when the main checkout is on another branch.
+REPO="${WT_REPO:-$WORKSPACE/WiredTogether}"
 
 _EXPLICIT_RUN_GROUP="${RUN_GROUP:+1}"
 _EXPLICIT_EPISODES="${EPISODES:+1}"
