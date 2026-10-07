@@ -401,7 +401,7 @@ def parse_args():
                              "issues per-agent comm_target/help directives. "
                              "Runs INSTEAD of the Hebbian coupling.")
     parser.add_argument("--orchestrator-variant", type=str, default="task",
-                        choices=["task", "social", "plan", "villager"],
+                        choices=["task", "social", "plan", "villager", "hmas2"],
                         help="'task' (default) = the O2 task-ledger "
                              "orchestrator (map + event digest in, "
                              "comm_target/help out, relational content "
@@ -423,7 +423,16 @@ def parse_args():
                              "graph, an allocator LLM HARD-assigns ready "
                              "tasks to free agents (curriculum constrained "
                              "to the objective; replans on reassignment); "
-                             "no communication routing.")
+                             "no communication routing. 'hmas2' = the HMAS-2 "
+                             "protocol (Chen et al., ICRA 2024) adapted to "
+                             "WIRE: every step a central planner assigns "
+                             "subtasks, assigned agents check their own "
+                             "assignment ('I Agree' or an objection) and the "
+                             "planner revises (<= 3 rounds); hub-and-spoke "
+                             "communication (agent messages are reports to "
+                             "the planner, which sends each agent only the "
+                             "teammate information it chooses); curriculum "
+                             "task pinned to the assignment.")
     parser.add_argument("--orchestrator-node-timeout-steps", type=int,
                         default=60,
                         help="Villager only: a running DAG task fails after "
@@ -437,6 +446,31 @@ def parse_args():
                         help="Villager only: minimum steps between "
                              "decomposer calls, and the cooldown after a "
                              "failed allocator call (default 8)")
+    parser.add_argument("--orchestrator-hmas2-max-rounds", type=int,
+                        default=3,
+                        help="hmas2 only: check -> revise rounds per step "
+                             "(default 3, as in the HMAS-2 code)")
+    parser.add_argument("--orchestrator-hmas2-syntax-retries", type=int,
+                        default=6,
+                        help="hmas2 only: syntactic re-prompts per plan "
+                             "(default 6, as in the HMAS-2 code)")
+    parser.add_argument("--orchestrator-hmas2-history-tokens", type=int,
+                        default=3000,
+                        help="hmas2 only: token budget for the state-action "
+                             "history (default 3000, HMAS-2's "
+                             "input_prompt_token_limit)")
+    parser.add_argument("--orchestrator-hmas2-message-words", type=int,
+                        default=24,
+                        help="hmas2 only: word cap per coordinator message "
+                             "(default 24)")
+    parser.add_argument("--orchestrator-hmas2-report-cap", type=int,
+                        default=2,
+                        help="hmas2 only: reports kept per agent between "
+                             "steps (overflow logged as dropped)")
+    parser.add_argument("--orchestrator-hmas2-check-max-tokens", type=int,
+                        default=96,
+                        help="hmas2 only: generation cap of a local check "
+                             "(default 96)")
     parser.add_argument("--orchestrator-mode", type=str, default="advisory",
                         choices=["advisory", "bias"],
                         help="'advisory' = directives rendered into the same "
@@ -639,13 +673,35 @@ def validate_args(args) -> None:
             "--orchestrator and --social-module both write the "
             "{social_directive} action-prompt slot; disable one"
         )
-    if (args.orchestrator and args.orchestrator_variant == "villager"
+    if (args.orchestrator and args.orchestrator_variant in ("villager", "hmas2")
             and args.orchestrator_mode == "bias"):
         raise SystemExit(
-            "the villager variant issues task assignments, not comm "
-            "directives — there is no comm_target to bias; use "
-            "--orchestrator-mode advisory"
+            f"the {args.orchestrator_variant} variant issues task "
+            "assignments, not comm directives — there is no comm_target to "
+            "bias; use --orchestrator-mode advisory"
         )
+    if args.orchestrator and args.orchestrator_variant == "hmas2":
+        # hmas2 replaces the peer channel with a hub; each exclusion below
+        # would either remove the channel it routes or break the timing of
+        # the per-step plan (it runs before agents read their inboxes, which
+        # only the simultaneous loop guarantees).
+        if args.no_communication:
+            raise SystemExit(
+                "--orchestrator-variant hmas2 routes messages through the "
+                "orchestrator; it cannot be combined with --no-communication "
+                "(use --comm-budget-tokens 0 for the silent cell)")
+        if args.rl:
+            raise SystemExit(
+                "--orchestrator-variant hmas2 is LLM-only; it cannot be "
+                "combined with --rl")
+        if not args.simultaneous:
+            raise SystemExit(
+                "--orchestrator-variant hmas2 requires --simultaneous (the "
+                "per-step plan must run before every agent reads its inbox)")
+        if args.social_act_mode == "choice":
+            raise SystemExit(
+                "--orchestrator-variant hmas2 cannot be combined with "
+                "--social-act-mode choice")
     if args.comm_budget_tokens is not None and args.no_communication:
         # A budget meters a channel that must exist; the zero arm is
         # --comm-budget-tokens 0 (same prompts, every message blocked),

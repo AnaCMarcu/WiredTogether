@@ -90,10 +90,19 @@ mini-batch 4, entropy 0.05 → 0.001 — live in `RLConfig` and are pinned by
 | Flag | Default | Meaning |
 |---|---|---|
 | `--orchestrator` | off | Enable the central coordinator (excludes `--hebbian`) |
-| `--orchestrator-variant` | `task` | `task` \| `social` \| `plan` \| `villager` |
+| `--orchestrator-variant` | `task` | `task` \| `social` \| `plan` \| `villager` \| `hmas2` |
 | `--orchestrator-mode` | `advisory` | `advisory` writes a directive; `bias` also routes messages |
 | `--orchestrator-cadence` | 8 | Minimum steps between decompositions — matched to `--social-interval` |
 | `--orchestrator-node-timeout-steps` | 60 | Steps before an unfinished subtask is failed |
+| `--orchestrator-hmas2-max-rounds` | 3 | hmas2: check → revise rounds per step (HMAS-2's bound) |
+| `--orchestrator-hmas2-syntax-retries` | 6 | hmas2: syntactic re-prompts per plan (HMAS-2's bound) |
+| `--orchestrator-hmas2-history-tokens` | 3000 | hmas2: state–action history budget (HMAS-2's `input_prompt_token_limit`) |
+| `--orchestrator-hmas2-message-words` | 24 | hmas2: word cap per planner message |
+| `--orchestrator-hmas2-report-cap` | 2 | hmas2: reports kept per agent between steps |
+| `--orchestrator-hmas2-check-max-tokens` | 96 | hmas2: generation cap of an agent's check |
+
+`hmas2` requires `--simultaneous` and is rejected with `--no-communication`, `--rl`, bias mode and
+`--social-act-mode choice`; it combines with `--comm-budget-tokens`.
 
 ## Environment variables
 

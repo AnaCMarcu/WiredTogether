@@ -52,6 +52,12 @@ from mindforge.env.cooperation_metric import CooperationMetric
 from mindforge.env.episode_logger import EpisodeLogger
 from mindforge.recording import _frames_to_mp4
 from mindforge.run_layout import RunPaths
+from orchestrator.config import (
+    ASSIGNED_OBJECTIVE_VARIANTS,
+    CONTROLLER_VARIANTS,
+    HUB_VARIANTS,
+    PINNED_TASK_VARIANTS,
+)
 from rl_layer import HebbianConfig, HebbianSocialGraph, RLConfig
 
 
@@ -84,8 +90,13 @@ async def agent_do_action(
     orchestrator_assigned_objective=None,
     comm_budget_text=None,
     comm_budget_locked=False,
+    comm_header="Communications from other agents",
+    orchestrator_pinned_task=None,
 ):
     """Have one agent observe and choose an action.
+
+    ``comm_header`` labels the inbox in the prompt ("Message from the
+    orchestrator" under the hub orchestrator, hmas2).
 
     Returns:
         (content_dict, last_action_str, error_count)
@@ -99,7 +110,7 @@ async def agent_do_action(
     # Don't pre-fill the instruction template here — action_selection.select_action()
     # will fill it once with real cognitive data (beliefs, skills, episodes) via llm_call.
     # Only pass communication context as the message content.
-    comm_text = f"Communications from other agents: {formatted_communication}.\n"
+    comm_text = f"{comm_header}: {formatted_communication}.\n"
 
     multi_modal_message = MultiModalMessage(
         content=[comm_text, Image.from_pil(frame_image)],
@@ -131,6 +142,7 @@ async def agent_do_action(
         orchestrator_assigned_objective=orchestrator_assigned_objective,
         comm_budget_text=comm_budget_text,
         comm_budget_locked=comm_budget_locked,
+        orchestrator_pinned_task=orchestrator_pinned_task,
     )
 
     last_action = "NoOp"
@@ -161,6 +173,8 @@ async def agent_do_action(
                 orchestrator_assigned_objective=orchestrator_assigned_objective,
                 comm_budget_text=comm_budget_text,
                 comm_budget_locked=comm_budget_locked,
+                comm_header=comm_header,
+                orchestrator_pinned_task=orchestrator_pinned_task,
             )
         else:
             logging.error(f"Agent {agent_id} exceeded retry limit, using NoOp")
@@ -201,9 +215,29 @@ async def run(args):
         CommBudgetLedger,
         apply_comm_budget_to_prompts,
         make_token_counter,
+        set_comm_topology,
         set_env_switch,
     )
     set_env_switch(comm_budget_enabled, comm_budget_msg_cap)
+
+    # ── Communication topology (hub-and-spoke orchestrator, hmas2) ──────
+    # Hub: agents cannot message each other; every message is a report to
+    # the orchestrator, whose message is the only one an agent receives. The
+    # WT_COMM_TOPOLOGY switch (like WT_COMM_BUDGET) tells the prompt loaders
+    # and chamber_facts which wording to render; "peer" (every other
+    # condition) changes nothing.
+    _hub_mode = bool(args.orchestrator
+                     and args.orchestrator_variant in HUB_VARIANTS)
+    set_comm_topology("hub" if _hub_mode else "peer")
+    from mindforge.agent_modules.hub_prompts import (
+        HUB_COMM_HEADER,
+        PEER_COMM_HEADER,
+        apply_hub_rewrites_to_prompts,
+    )
+    _comm_header = HUB_COMM_HEADER if _hub_mode else PEER_COMM_HEADER
+    if _hub_mode:
+        print("[FEATURES] Comm topology:    hub (agent -> orchestrator -> "
+              "agent; no agent-to-agent messages)")
     _comm_token_counter = make_token_counter() if comm_budget_enabled else None
     if comm_budget_enabled:
         print(f"[FEATURES] Comm budget:      {int(comm_budget_tokens)} tokens/"
@@ -333,14 +367,18 @@ async def run(args):
     # regardless of N. Must happen before build_role_configs (whose .format
     # would otherwise trip on the placeholders) and before any template
     # reaches llm_call.
+    # Hub orchestrator: the peer-channel wording is rewritten on the RAW
+    # text first (exact substrings of the files; identity otherwise).
     from mindforge.agent_modules.team_scaling import apply_team_scaling_to_prompts
     prompts = apply_team_scaling_to_prompts(
-        load_prompts(), num_agents, enabled=team_scaling)
+        apply_hub_rewrites_to_prompts(load_prompts(), enabled=_hub_mode),
+        num_agents, enabled=team_scaling)
     # Communication-budget sweep: resolve the static comm placeholders in
     # the system template ({comm_rule}) BEFORE safe_format below would
     # default them to "N/A". Legacy renders the original bytes.
     prompts = apply_comm_budget_to_prompts(
-        prompts, enabled=comm_budget_enabled, msg_cap=comm_budget_msg_cap)
+        prompts, enabled=comm_budget_enabled, msg_cap=comm_budget_msg_cap,
+        topology="hub" if _hub_mode else "peer")
     environment_prompt = prompts["environment"]
 
     from mindforge.agent_modules.util import safe_format
@@ -466,7 +504,9 @@ async def run(args):
                              and args.orchestrator_variant == "plan"),
                          orchestrator_villager=(
                              args.orchestrator
-                             and args.orchestrator_variant == "villager"))
+                             and args.orchestrator_variant
+                             in ASSIGNED_OBJECTIVE_VARIANTS),
+                         comm_topology="hub" if _hub_mode else "peer")
 
     if args.agent_state_init:
         # Transplant memories into the freshly-constructed agents. Must run
@@ -562,6 +602,11 @@ async def run(args):
     _orch_events = None
     _orch_pair_acc = None
     villager_controller = None
+    # Hub variant (hmas2): the same controller object under a second name,
+    # so every hub hook is guarded on `_hub_ctrl is not None` and reads as
+    # hub logic.
+    _hub_ctrl = None
+    _orch_hub = None
     if args.orchestrator:
         from orchestrator import core as _orch_core
         from orchestrator import events as _orch_events
@@ -584,6 +629,12 @@ async def run(args):
             node_timeout_steps=args.orchestrator_node_timeout_steps,
             max_open_tasks=args.orchestrator_max_open_tasks,
             decompose_min_interval=args.orchestrator_decompose_min_interval,
+            hmas2_max_rounds=args.orchestrator_hmas2_max_rounds,
+            hmas2_syntax_retries=args.orchestrator_hmas2_syntax_retries,
+            hmas2_history_tokens=args.orchestrator_hmas2_history_tokens,
+            hmas2_message_words=args.orchestrator_hmas2_message_words,
+            hmas2_report_cap=args.orchestrator_hmas2_report_cap,
+            hmas2_check_max_tokens=args.orchestrator_hmas2_check_max_tokens,
         )
         orchestrator_config.validate()
         orchestrator_state = OrchestratorState()
@@ -591,7 +642,30 @@ async def run(args):
             run_dir=str(run_paths.root),
             dir_name=orchestrator_config.log_dir_name,
         )
-        if orchestrator_config.variant == "villager":
+        if orchestrator_config.variant in HUB_VARIANTS:
+            # hmas2: the HMAS-2 protocol (plan -> per-agent check -> revise)
+            # every step, on two PLAIN clients: the prompts are ported
+            # verbatim from the paper's code, so no JSON-schema instruction
+            # is injected and the output is parsed by HMAS-2's own regex.
+            from orchestrator import hmas2 as _orch_hmas2
+            from orchestrator import hub as _orch_hub
+            villager_controller = _orch_hmas2.HMAS2Controller(
+                orchestrator_config, num_agents,
+                planner_client=_orch_core.create_orchestrator_client(
+                    orchestrator_config, response_format=None,
+                    max_tokens=max(1024, 200 + 120 * num_agents),
+                    raw_text=True,
+                ),
+                check_client=_orch_core.create_orchestrator_client(
+                    orchestrator_config, response_format=None,
+                    max_tokens=orchestrator_config.hmas2_check_max_tokens,
+                    raw_text=True,
+                ),
+                orch_logger=orch_logger,
+                token_counter=make_token_counter(),
+            )
+            _hub_ctrl = villager_controller
+        elif orchestrator_config.variant in CONTROLLER_VARIANTS:
             # Villager: an event-driven controller with two dedicated
             # clients (distinct response schemas on the shared backbone —
             # same pattern as the curriculum/critic/social clients). The
@@ -626,8 +700,17 @@ async def run(args):
             f"max_open={orchestrator_config.max_open_tasks or 2 * num_agents}  "
             f"decompose_min_interval="
             f"{orchestrator_config.decompose_min_interval}  "
-            if orchestrator_config.variant == "villager" else ""
+            if orchestrator_config.variant in ASSIGNED_OBJECTIVE_VARIANTS
+            else ""
         )
+        if orchestrator_config.variant in HUB_VARIANTS:
+            _villager_info = (
+                f"max_rounds={orchestrator_config.hmas2_max_rounds}  "
+                f"syntax_retries={orchestrator_config.hmas2_syntax_retries}  "
+                f"history_tokens={orchestrator_config.hmas2_history_tokens}  "
+                f"message_words={orchestrator_config.hmas2_message_words}  "
+                f"report_cap={orchestrator_config.hmas2_report_cap}  "
+            )
         print(f"[FEATURES] Orchestrator:     ENABLED "
               f"[{orchestrator_config.variant}/{orchestrator_config.mode}]  "
               f"cadence={orchestrator_config.cadence}  "
@@ -639,7 +722,8 @@ async def run(args):
               f"model={orchestrator_config.model or 'backbone'}  "
               f"log_dir={orch_logger.dir}")
 
-    comm_mode = "off" if not communication else "targeted"
+    comm_mode = ("off" if not communication
+                 else "hub" if _hub_mode else "targeted")
     print(f"\nConfig: {num_agents} agents, {num_episodes} episodes, "
           f"{max_steps} max steps, comm={comm_mode}, "
           f"seed={seed}")
@@ -776,8 +860,10 @@ async def run(args):
         _orch_prev_tasks: dict = {}
         if orchestrator_state is not None:
             # Only social/plan keep memory across episodes (W(t)'s horizon);
-            # task AND villager start fresh — explicit variant set, not
-            # `!= "task"`, so a new variant never inherits the wrong horizon.
+            # task, villager AND star start fresh (star's report buffers and
+            # ledger reset in villager_controller.reset()) — explicit variant
+            # set, not `!= "task"`, so a new variant never inherits the
+            # wrong horizon.
             orchestrator_state.reset(
                 keep_ledger=(orchestrator_config.variant
                              in ("social", "plan"))
@@ -883,6 +969,7 @@ async def run(args):
                 budget_tokens=int(comm_budget_tokens),
                 msg_cap=comm_budget_msg_cap,
                 token_counter=_comm_token_counter,
+                topology="hub" if _hub_mode else "peer",
             ) if comm_budget_enabled else None
         )
         # Act-reward symmetry suite: obs/imit acts paid like messages.
@@ -1173,11 +1260,69 @@ async def run(args):
                 if _ch:
                     _visited_chambers[_i].add(_ch)
 
+            # ── chamber_state text for this step's prompts ──
+            # get_chamber_state() MUTATES env state (pops the invalid-action
+            # warning, appends anvil-HP history), so it must run once per
+            # agent per step. The hub orchestrator also needs it for its
+            # per-agent check prompts BEFORE the agents act, so in hub mode
+            # (simultaneous-only) it is computed once here and reused by the
+            # action prompts; every other run keeps computing it at call
+            # time, exactly as before.
+            def _chamber_state_now(_ci):
+                return (
+                    environment.get_chamber_state(_ci)
+                    + (
+                        "\n" + environment.get_voxel_summary(_ci)
+                        if args.voxel_obs
+                        and environment.get_voxel_summary(_ci)
+                        else ""
+                    )
+                )
+
+            _chamber_state_cache = (
+                {_ci: _chamber_state_now(_ci) for _ci in range(num_agents)}
+                if _hub_ctrl is not None else None
+            )
+
+            def _chamber_state_for(_ci):
+                if _chamber_state_cache is not None:
+                    return _chamber_state_cache[_ci]
+                return _chamber_state_now(_ci)
+
+            def _hmas2_local_state(_name):
+                """The hub's view of ONE agent for its own check prompt and
+                the planner's possible-actions line (own state only)."""
+                _li = int(str(_name).rsplit("_", 1)[-1])
+                _lag = agents[_li]
+                _status = environment.get_player_status_text(_li) or ""
+                _health = None
+                if "Health:" in _status:
+                    _health = _status.split("Health:")[1].split("|")[0].strip()
+                _cached = getattr(_lag, "_cached_success", None)
+                if _cached is True:
+                    _check = "done"
+                elif _cached is False:
+                    _check = ("not done — "
+                              + str(getattr(_lag, "_cached_critique", "")
+                                    or "")[:200]).rstrip(" —")
+                else:
+                    _check = "not checked yet"
+                return {
+                    "chamber": environment.get_chamber(_li),
+                    "position": environment.get_position_text(_li),
+                    "observe": _chamber_state_for(_li),
+                    "holding": environment.pickedup_object(agentId=_li),
+                    "health": _health,
+                    "task": _lag.auto_curriculum.current_task,
+                    "last_check": _check,
+                }
+
             # ── Orchestrator (O2): chamber events, scheduled call, and
             # per-agent directive text for this step's action prompts ──
             _orch_directives_text: dict = {}
             _orch_plan_notes: dict = {}
             _orch_assigned_objectives: dict = {}
+            _orch_pinned_tasks: dict = {}
             if orchestrator_state is not None:
                 _orch_new_chambers = set()
                 for _i in range(num_agents):
@@ -1194,37 +1339,50 @@ async def run(args):
                     f"agent_{_i}" for _i in range(num_agents)
                     if not environment._terminations.get(f"agent_{_i}", False)
                 ]
-                if orchestrator_config.variant == "villager":
-                    # ── Villager: event-driven controller tick ──
-                    # Deterministic scheduling every step (event drain,
-                    # timeouts, cascades); LLM decompose/allocate calls only
-                    # when due. Short-circuits the cadence-based should_call
-                    # path entirely. tick() also runs on a team wipe (fails
-                    # running nodes, no LLM calls).
+                if orchestrator_config.variant in CONTROLLER_VARIANTS:
+                    # ── Per-step controller tick (villager / hmas2) ──
+                    # Villager: deterministic scheduling every step (event
+                    # drain, timeouts, cascades); LLM decompose/allocate
+                    # calls only when due. hmas2: the HMAS-2 plan -> check
+                    # -> revise protocol every step. Both short-circuit the
+                    # cadence-based should_call path and run BEFORE the
+                    # agents read their inboxes this step, so step-t reports
+                    # are answered with the same one-step latency as peer
+                    # messages. tick() also runs on a team wipe.
+                    _v_tick = None
+                    _tick_kwargs = {}
+                    if _hub_ctrl is not None:
+                        _tick_kwargs = {
+                            "local_state_fn": _hmas2_local_state,
+                            "comm_budget": comm_budget,
+                        }
                     try:
                         _v_tick = await villager_controller.tick(
                             state=orchestrator_state,
                             living_agents=_orch_living,
                             episode=episode + 1, t=step,
                             environment=environment, agents=agents,
-                            metric=metric,
+                            metric=metric, **_tick_kwargs,
                         )
-                        # HARD enforcement: a reassigned agent's curriculum
-                        # replans immediately under the new objective (the
-                        # _initialized guard makes clearing current_task a
-                        # pure replan, never a DB wipe).
-                        for _nm in _v_tick.reassigned:
-                            try:
-                                _ri = int(str(_nm).rsplit("_", 1)[-1])
-                            except (ValueError, IndexError):
-                                continue
-                            if 0 <= _ri < num_agents:
-                                agents[_ri].auto_curriculum.current_task = None
+                        # HARD enforcement (villager): a reassigned agent's
+                        # curriculum replans immediately under the new
+                        # objective (the _initialized guard makes clearing
+                        # current_task a pure replan, never a DB wipe).
+                        # Pinned variants adopt the new task in on_messages.
+                        if (orchestrator_config.variant
+                                not in PINNED_TASK_VARIANTS):
+                            for _nm in _v_tick.reassigned:
+                                try:
+                                    _ri = int(str(_nm).rsplit("_", 1)[-1])
+                                except (ValueError, IndexError):
+                                    continue
+                                if 0 <= _ri < num_agents:
+                                    agents[_ri].auto_curriculum.current_task = None
                     except (KeyboardInterrupt, SystemExit):
                         raise
                     except Exception as _orch_exc:
                         logging.error(
-                            "Villager tick crashed at ep=%d step=%d: %s "
+                            "Orchestrator tick crashed at ep=%d step=%d: %s "
                             "— keeping previous assignments",
                             episode + 1, step, _orch_exc,
                         )
@@ -1236,6 +1394,46 @@ async def run(args):
                             villager_controller.assigned_objective(
                                 f"agent_{_i}")
                         )
+                        if (orchestrator_config.variant
+                                in PINNED_TASK_VARIANTS):
+                            _orch_pinned_tasks[_i] = (
+                                villager_controller.pinned_task(
+                                    f"agent_{_i}")
+                            )
+                    # ── Hub: deliver this step's orchestrator messages ──
+                    # Each recipient's inbox is REPLACED by the message (the
+                    # only message it receives); recipient-pays whenever a
+                    # comm budget is active.
+                    if (_hub_ctrl is not None and _v_tick is not None
+                            and _v_tick.hub is not None):
+                        try:
+                            _hub_delivery = _orch_hub.deliver_hub_messages(
+                                agent_communications,
+                                _v_tick.hub.get("messages") or {},
+                                living=_orch_living, step=step,
+                                make_message=lambda _c: TextMessage(
+                                    content=_c,
+                                    source=_orch_hub.HUB_SOURCE),
+                                comm_budget=comm_budget,
+                            )
+                            _hub_ctrl.record_delivery(_v_tick.hub,
+                                                      _hub_delivery)
+                            for _ag, _d in _hub_delivery.items():
+                                if _d.get("status") == "blocked":
+                                    ep_logger.log_event({
+                                        "step": step,
+                                        "type": "hub_message_blocked",
+                                        "agent": _ag,
+                                        "budget_left": _d.get("budget_left"),
+                                    })
+                        except (KeyboardInterrupt, SystemExit):
+                            raise
+                        except Exception as _hub_exc:
+                            logging.error(
+                                "Hub delivery crashed at ep=%d step=%d: %s "
+                                "— inboxes keep their previous message",
+                                episode + 1, step, _hub_exc,
+                            )
                 elif _orch_living and _orch_core.should_call(
                         orchestrator_state, step, orchestrator_config):
                     if orchestrator_config.variant == "task":
@@ -1284,8 +1482,8 @@ async def run(args):
                             and orchestrator_state.failed_calls
                             == _orch_fails_before):
                         _orch_pair_acc.clear()
-                if orchestrator_config.variant != "villager":
-                    # (villager filled its directives inside its own branch)
+                if orchestrator_config.variant not in CONTROLLER_VARIANTS:
+                    # (villager/hmas2 filled their directives in their branch)
                     for _i in range(num_agents):
                         if orchestrator_config.variant == "task":
                             _orch_directives_text[_i] = (
@@ -1372,7 +1570,7 @@ async def run(args):
                         ]
                         _mm = MultiModalMessage(
                             content=[
-                                f"Communications from other agents: {_formatted}.\n",
+                                f"{_comm_header}: {_formatted}.\n",
                                 Image.from_pil(_frame),
                             ],
                             source="user",
@@ -1399,15 +1597,7 @@ async def run(args):
                             visited_chambers=sorted(_visited_chambers[_i]),
                             completed_milestones=_ag_done,
                             milestone_progress=_mp,
-                            chamber_state=(
-                                environment.get_chamber_state(_i)
-                                + (
-                                    "\n" + environment.get_voxel_summary(_i)
-                                    if args.voxel_obs
-                                    and environment.get_voxel_summary(_i)
-                                    else ""
-                                )
-                            ),
+                            chamber_state=_chamber_state_for(_i),
                             bond_weights=_bond_weights.get(_i),
                             bond_deltas=_bond_deltas.get(_i),
                             social_returns=(
@@ -1430,6 +1620,9 @@ async def run(args):
                             comm_budget_locked=(
                                 comm_budget.is_locked(_i)
                                 if comm_budget is not None else False
+                            ),
+                            orchestrator_pinned_task=(
+                                _orch_pinned_tasks.get(_i)
                             ),
                         )
                         return _i, _content
@@ -1511,15 +1704,7 @@ async def run(args):
                         visited_chambers=sorted(_visited_chambers[agent_id]),
                         completed_milestones=_agent_done,
                         milestone_progress=_milestone_progress,
-                        chamber_state=(
-                            environment.get_chamber_state(agent_id)
-                            + (
-                                "\n" + environment.get_voxel_summary(agent_id)
-                                if args.voxel_obs
-                                and environment.get_voxel_summary(agent_id)
-                                else ""
-                            )
-                        ),
+                        chamber_state=_chamber_state_for(agent_id),
                         bond_weights=_bond_weights.get(agent_id),
                         bond_deltas=_bond_deltas.get(agent_id),
                         social_returns=(
@@ -1542,6 +1727,10 @@ async def run(args):
                         comm_budget_locked=(
                             comm_budget.is_locked(agent_id)
                             if comm_budget is not None else False
+                        ),
+                        comm_header=_comm_header,
+                        orchestrator_pinned_task=(
+                            _orch_pinned_tasks.get(agent_id)
                         ),
                     )
                     agents_error_count[agent_id] = error_count
@@ -1619,8 +1808,62 @@ async def run(args):
                             "spent": comm_budget.state(agent_id).spent,
                         })
 
-                # Handle communication (collect comm_events for Hebbian)
+                # ── Hub orchestrator (hmas2): every message goes to the HUB ──
+                # No peer inbox write and no comm_events (agents never talk
+                # directly); the hub reads the full text at the next tick and
+                # replies before the agents act again. The record keeps the
+                # usual messages.jsonl shape with receiver "orchestrator" and
+                # routing "hub". (No `continue` on a malformed name:
+                # the rest of this agent's step must still run.)
                 if (
+                    _hub_ctrl is not None
+                    and content
+                    and content.get("communication")
+                    and content["communication"] not in ("", "None")
+                    and communication
+                ):
+                    msg_text = content["communication"]
+                    comm_target = (content.get("communication_target")
+                                   or _orch_hub.HUB_SOURCE)
+                    _sender_chamber = environment.get_chamber(agent_id) or "?"
+                    metric.record_communication(agent.name, msg_text,
+                                                target=_orch_hub.HUB_SOURCE)
+                    step_comm_count += 1
+                    try:
+                        sender_idx = int(agent.name.split("_")[1])
+                    except (IndexError, ValueError):
+                        sender_idx = -1
+                    if sender_idx >= 0:
+                        _hub_ctrl.receive_report(
+                            t=step, sender=f"agent_{sender_idx}",
+                            text=msg_text, chamber=_sender_chamber,
+                        )
+                        _msg_rec = {
+                            "t": step,
+                            "sender": f"agent_{sender_idx}",
+                            "receiver": _orch_hub.HUB_SOURCE,
+                            "text": msg_text,
+                            "tokens": len(msg_text.split()),
+                            "routing": "hub",
+                            "model_target": comm_target,
+                            "model_target_canonical": (
+                                _orch_hub.HUB_SOURCE
+                                if _orch_hub.HUB_SOURCE
+                                in str(comm_target).strip().lower()
+                                else None),
+                        }
+                        _cb_rec = _comm_budget_charge.get(agent_id)
+                        if _cb_rec is not None:
+                            _msg_rec.update({
+                                "tokens_model": _cb_rec.tokens_model,
+                                "charged": _cb_rec.charged,
+                                "budget_left": _cb_rec.budget_left,
+                                "truncated": _cb_rec.status == "truncated",
+                            })
+                        _messages_this_step.append(_msg_rec)
+
+                # Handle communication (collect comm_events for Hebbian)
+                elif (
                     content
                     and content.get("communication")
                     and content["communication"] not in ("", "None")
@@ -2122,9 +2365,10 @@ async def run(args):
                             _msg["text"],
                         )
                     )
-                    # Villager issues task assignments, not comm directives —
-                    # a compliance stream would be all-None noise rows.
-                    if orchestrator_config.variant != "villager":
+                    # Villager/hmas2 issue task assignments, not comm
+                    # directives — a compliance stream would be all-None
+                    # noise rows.
+                    if orchestrator_config.variant not in CONTROLLER_VARIANTS:
                         _o_directed = _orch_core.directive_comm_target(
                             orchestrator_state, _msg["sender"]
                         )
@@ -2144,13 +2388,17 @@ async def run(args):
             # note; villager: the HARD assigned objective) — the raw
             # material for scoring whether central guidance shapes plans.
             if (orchestrator_state is not None
-                    and orchestrator_config.variant in ("plan", "villager")):
+                    and orchestrator_config.variant
+                    in ("plan",) + CONTROLLER_VARIANTS):
                 for _i in range(num_agents):
                     _cur_task = agents[_i].auto_curriculum.current_task
                     if _cur_task != _orch_prev_tasks.get(_i):
                         _active_note = (
                             _orch_plan_notes.get(_i)
                             if orchestrator_config.variant == "plan"
+                            else _orch_pinned_tasks.get(_i)
+                            if orchestrator_config.variant
+                            in PINNED_TASK_VARIANTS
                             else _orch_assigned_objectives.get(_i)
                         )
                         orch_logger.log_task_compliance({
@@ -2888,6 +3136,11 @@ async def run(args):
                 _wb_episode_payload["ep/hebbian/max_bond"] = float(_W[_mask].max())
             except Exception:
                 pass
+        _hub_stats = (_hub_ctrl.episode_stats()
+                      if _hub_ctrl is not None else None)
+        if _hub_stats is not None:
+            for _k, _v in _hub_stats.items():
+                _wb_episode_payload[f"ep/hmas2/{_k}"] = _v
         _wb.log(_wb_episode_payload, step=global_step)
         _ep_summary = {
             "episode": episode + 1,
@@ -2899,6 +3152,10 @@ async def run(args):
             # Comm-budget sweep: per-agent spend / sent / truncated /
             # blocked / exhaustion step for this episode.
             _ep_summary["comm_budget"] = comm_budget.summary()
+        if _hub_stats is not None:
+            # hmas2 orchestrator: protocol load for this episode (plan/check
+            # calls, rounds, objections, syntax re-prompts, latency).
+            _ep_summary["hmas2"] = _hub_stats
         ep_logger.finalize(_ep_summary)
 
         # Append Hebbian snapshot to run-level JSONL stream.

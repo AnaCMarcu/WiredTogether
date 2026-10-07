@@ -44,6 +44,15 @@
 # by simply re-running the same command once the queue has drained.
 #   NS="3" BUDGETS="0 800" ARMS="hebbian" bash submit_comm_budget.sh  # subset
 #
+# Orchestrator arms (not in the default ARMS; submit them explicitly):
+#   ARMS="villager hmas2" bash submit_comm_budget.sh
+#   villager  the SOFT orchestrator; its b=0 cell is villager-SILENT
+#             (central assignment, no communication at all).
+#   hmas2     the HARD orchestrator (HMAS-2 adapted, hub-and-spoke comms);
+#             its b=0 cell is CMAS with history (central planning, no
+#             feedback). Budgeted at 1.4x wall time (planner call + checks
+#             every step).
+#
 # Idempotent: a cell whose final_metrics.json already exists on PRB is
 # skipped, and one already sitting in the Slurm queue (same job name) is not
 # resubmitted.
@@ -94,7 +103,7 @@ fi
 
 # Per-N resources — identical policy to submit_agent_scaling_3f.sh.
 resources_for_n() {
-    local n="$1"
+    local n="$1" arm="${2:-base}"
     if   [ "$n" -le 3 ]; then R_MEM=32GB;  R_CPUS=8
     elif [ "$n" -le 5 ]; then R_MEM=48GB;  R_CPUS=8
     elif [ "$n" -le 6 ]; then R_MEM=64GB;  R_CPUS=10
@@ -102,7 +111,10 @@ resources_for_n() {
     fi
 
     local steps=$(( EPISODES * MAX_STEPS ))
-    local centi=$(( 14 + 19 * n ))
+    # hmas2 runs a planner call + per-agent checks every step: 1.4x.
+    local time_pct=100
+    [ "$arm" = "hmas2" ] && time_pct=140
+    local centi=$(( (14 + 19 * n) * time_pct / 100 ))
     R_EST_H=$(( centi * steps / 6000 ))
     local req_h=$(( R_EST_H * 3 / 2 ))
     [ "$req_h" -lt 8 ] && req_h=8
@@ -157,9 +169,9 @@ n_queued=0
 n_skipped=0
 n_failed=0
 for n in "${NS_LIST[@]}"; do
-    resources_for_n "$n"
     for b in "${BUDGET_LIST[@]}"; do
         for arm in "${ARM_LIST[@]}"; do
+            resources_for_n "$n" "$arm"
             exp="budget_gemma_${arm}_n${n}_b${b}"
             for seed in "${SEEDS_LIST[@]}"; do
                 jobname="${RUN_GROUP}-${exp}_s${seed}"

@@ -95,17 +95,26 @@ esac
 #                      allocator LLMs, HARD task assignments constraining
 #                      the auto-curriculum; no comm routing. Produces
 #                      dag.jsonl/assignments.jsonl instead of compliance/maps.
+#   hmas2            — the HARD orchestrator: HMAS-2 (Chen et al., ICRA 2024)
+#                      adapted to WIRE — every step a central planner assigns
+#                      subtasks, assigned agents check them ('I Agree' or an
+#                      objection), <= 3 revision rounds; hub-and-spoke comms
+#                      (no agent-to-agent messages); curriculum pinned to the
+#                      assignment. Produces hmas2.jsonl. One extra planner
+#                      call + checks per step: submit with --qos=long
+#                      --time=96:00:00 (submit_orchestrator.sh does).
 ORCH_VARIANT="${ORCH_VARIANT:-task}"
 case "$ORCH_VARIANT" in
-    task|social|plan|villager) ;;
+    task|social|plan|villager|hmas2) ;;
     *)
-        echo "ERROR: ORCH_VARIANT must be 'task', 'social', 'plan' or 'villager' (got '${ORCH_VARIANT}')." >&2
+        echo "ERROR: ORCH_VARIANT must be 'task', 'social', 'plan', 'villager' or 'hmas2' (got '${ORCH_VARIANT}')." >&2
         echo "       e.g. SEED=42 ORCH_VARIANT=villager sbatch new_exp_orchestrator.sbatch" >&2
         exit 1
         ;;
 esac
-if [ "$ORCH_VARIANT" = "villager" ] && [ "$ORCH_MODE" = "bias" ]; then
-    echo "ERROR: villager issues task assignments, not comm directives — bias mode is invalid; use ORCH_MODE=advisory." >&2
+if { [ "$ORCH_VARIANT" = "villager" ] || [ "$ORCH_VARIANT" = "hmas2" ]; } \
+        && [ "$ORCH_MODE" = "bias" ]; then
+    echo "ERROR: $ORCH_VARIANT issues task assignments, not comm directives — bias mode is invalid; use ORCH_MODE=advisory." >&2
     exit 1
 fi
 

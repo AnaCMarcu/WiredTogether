@@ -10,6 +10,9 @@ Everything lands under ``<run_dir>/<orchestrator.log_dir_name>/``:
                      enabled {episode, t, agent, directed_comm_target,
                       actual_comm_target, complied}
   maps/              one schematic-map PNG per call (audit artifact)
+  hmas2.jsonl        hmas2 variant: one record per step's plan -> check ->
+                     revise protocol (rounds, objections, final plan,
+                     message deliveries, latency)
 
 Token counts also go to the run log as a tagged line
 ``[Orchestrator usage] prompt_tokens=... completion_tokens=...`` so the
@@ -44,6 +47,11 @@ class OrchestratorLogger:
         # and per-agent assignment lifecycle rows (allocate / freed_*).
         self.dag_path = os.path.join(self.dir, "dag.jsonl")
         self.assignments_path = os.path.join(self.dir, "assignments.jsonl")
+        # hmas2 variant only: one record per step's planning protocol —
+        # {episode, t, rounds, syntax_reprompts, objections, checked,
+        # plan/check tokens + latency, final plan, reassigned, reports_in,
+        # reports_dropped, messages{agent: delivery}, ...}.
+        self.hmas2_path = os.path.join(self.dir, "hmas2.jsonl")
 
     @staticmethod
     def _append(path: str, record: dict) -> None:
@@ -74,6 +82,9 @@ class OrchestratorLogger:
 
     def log_assignment(self, record: dict) -> None:
         self._append(self.assignments_path, record)
+
+    def log_hmas2(self, record: dict) -> None:
+        self._append(self.hmas2_path, record)
 
     def map_path(self, episode: int, t: int) -> str:
         return os.path.join(self.maps_dir, f"ep{episode:04d}_t{t:06d}.png")

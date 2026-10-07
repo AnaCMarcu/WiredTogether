@@ -157,7 +157,9 @@ def parse_orchestrator_json(raw: str) -> dict:
 # ── Client construction ──────────────────────────────────────────────────
 
 def create_orchestrator_client(cfg: OrchestratorConfig,
-                               response_format=OrchestratorResponse):
+                               response_format=OrchestratorResponse,
+                               max_tokens: Optional[int] = None,
+                               raw_text: bool = False):
     """Build the orchestrator's LLM client.
 
     ``cfg.model is None`` (default) reuses the agents' backbone via the same
@@ -170,13 +172,23 @@ def create_orchestrator_client(cfg: OrchestratorConfig,
     plan variants; the villager variant passes its decompose/allocate
     schemas — without this the HTTP structured-output path would coerce
     those responses into the wrong shape).
+
+    ``max_tokens`` raises the local client's generation cap (default 1024)
+    for calls whose output grows with N (the hmas2 planner writes one entry
+    per agent). ``response_format=None`` + ``raw_text=True`` is a plain
+    client: no JSON-schema instruction injected and no brace slicing of the
+    output — the hmas2 variant ports HMAS-2's prompts verbatim and parses
+    their output itself. The defaults leave the client exactly as before.
     """
     import os
 
     from mindforge.agent_modules.util import create_model_client
 
     if cfg.model is None:
-        return create_model_client(response_format=response_format)
+        if max_tokens is None and not raw_text:
+            return create_model_client(response_format=response_format)
+        return create_model_client(response_format=response_format,
+                                   max_tokens=max_tokens, raw_text=raw_text)
 
     if os.environ.get("LLM_MODEL_PATH", ""):
         raise ValueError(

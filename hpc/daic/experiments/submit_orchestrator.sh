@@ -60,7 +60,9 @@ SEEDS=(${SEEDS:-42 123 456})
 # Arm families: task (O2 task-ledger), social (Hebbian-matched centralized
 # deliberation), plan (social + curriculum plan notes; upper baseline),
 # villager (VillagerAgent-style DAG task orchestration; hard assignments,
-# advisory mode only). Smoke example: SMOKE=1 VARIANTS=villager
+# advisory mode only), hmas2 (the HARD orchestrator: HMAS-2 adapted —
+# per-step central planning + per-agent checks, hub-and-spoke comms; long
+# QoS, see below). Smoke example: SMOKE=1 VARIANTS="villager hmas2"
 VARIANTS=(${VARIANTS:-task})
 
 # Smoke: one advisory seed, one short episode — proves the orchestrator call
@@ -155,13 +157,22 @@ for mode in "${MODES[@]}"; do
             n_inqueue=$((n_inqueue + 1))
             continue
         fi
+        # hmas2 (the HARD orchestrator) adds a planner call + per-agent checks
+        # every step: ~1.2-1.4x the wall time, which does not fit the sbatch
+        # file's medium/36 h. Request long/96 h unless QOS/TIME were set
+        # explicitly (the smoke sets its own).
+        VARIANT_OVERRIDES=()
+        if [ "$variant" = "hmas2" ] && [ -z "${QOS:-}" ] && [ -z "${TIME:-}" ]; then
+            VARIANT_OVERRIDES=(--qos=long --time=96:00:00)
+        fi
         if [ "${DRY_RUN:-0}" = "1" ]; then
-            echo "would queue  $exp  seed_$seed"
+            echo "would queue  $exp  seed_$seed  ${VARIANT_OVERRIDES[*]:-}"
             n_queued=$((n_queued + 1))
         else
             jobid=$(SEED=$seed ORCH_MODE=$mode ORCH_VARIANT=$variant \
                 sbatch --parsable --job-name="$jobname" \
                 ${SBATCH_OVERRIDES[@]:+"${SBATCH_OVERRIDES[@]}"} \
+                ${VARIANT_OVERRIDES[@]:+"${VARIANT_OVERRIDES[@]}"} \
                 new_exp_orchestrator.sbatch)
             if [ -n "$jobid" ]; then
                 echo "queued  $exp  seed_$seed  →  job $jobid"

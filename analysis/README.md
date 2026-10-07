@@ -45,6 +45,7 @@ builds the released archives (`plan`, `regroup`, `bundle`, `verify`); see
 | `make_qualitative_figure.py`, `make_story_timelines_multi.py` | Earlier timeline variants kept for the appendix |
 | `make_directive_timelines.py`, `make_coordination_timelines.py` | Team formation over time: base vs orchestrator vs Hebbian |
 | `make_team_comparison.py`, `make_team_tenure.py`, `make_plan_vs_completion.py` | Planned vs realised teams, team tenure, when cooperation actually starts |
+| `make_hmas2_load.py` | Hard-orchestrator (hmas2) protocol load per run: rounds, objection rate, syntax re-prompts, latency and tokens per step, reassignment churn, message delivery, compliance — text table / CSV |
 | `make_social_dynamics.py` | Standalone communication-rate and bond-strength figures |
 | `make_qwen_hebbian_analysis.py` | Why the 9B backbone loses under the social module |
 | `make_chamber_gallery.py` | Environment gallery, one row per chamber |

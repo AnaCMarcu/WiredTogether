@@ -50,6 +50,12 @@
 #   for s in 42 123 456; do
 #       NUM_AGENTS=6 SEED=$s sbatch scale_gemma_orch.sbatch
 #   done
+#
+# ORCH_VARIANT=hmas2 is the HARD orchestrator (HMAS-2 adapted: per-step
+# central planning + per-agent checks, hub-and-spoke comms, pinned
+# curriculum). It runs a planner call + checks every step — budget ~1.4x
+# villager's wall time. Normally submitted through
+# submit_agent_scaling_orch.sh, which sizes resources per N and variant.
 # ───────────────────────────────────────────────────────────────────────────
 
 WORKSPACE=/tudelft.net/staff-groups/ewi/insy/PRB/Students/acmarcu
@@ -84,9 +90,9 @@ source "$WORKSPACE/WiredTogether/hpc/daic/experiments/_common.sh"
 # on a typo'd arm name.
 ORCH_VARIANT="${ORCH_VARIANT:-villager}"
 case "$ORCH_VARIANT" in
-    task|social|plan|villager) ;;
+    task|social|plan|villager|hmas2) ;;
     *)
-        echo "ERROR: ORCH_VARIANT must be 'task', 'social', 'plan' or 'villager' (got '${ORCH_VARIANT}')." >&2
+        echo "ERROR: ORCH_VARIANT must be 'task', 'social', 'plan', 'villager' or 'hmas2' (got '${ORCH_VARIANT}')." >&2
         exit 1
         ;;
 esac
@@ -98,8 +104,9 @@ case "$ORCH_MODE" in
         exit 1
         ;;
 esac
-if [ "$ORCH_VARIANT" = "villager" ] && [ "$ORCH_MODE" = "bias" ]; then
-    echo "ERROR: villager issues task assignments, not comm directives — bias mode is invalid; use ORCH_MODE=advisory." >&2
+if { [ "$ORCH_VARIANT" = "villager" ] || [ "$ORCH_VARIANT" = "hmas2" ]; } &&
+        [ "$ORCH_MODE" = "bias" ]; then
+    echo "ERROR: $ORCH_VARIANT issues task assignments, not comm directives — bias mode is invalid; use ORCH_MODE=advisory." >&2
     exit 1
 fi
 # Cadence 8 = the Hebbian anchor's social-interval default (matched call

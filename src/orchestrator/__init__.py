@@ -12,6 +12,11 @@ site (bias mode) — mirroring the Hebbian couplings exactly.
 Runs INSTEAD of the Hebbian coupling (mutually exclusive at startup); the
 ledger resets at every episode start, in deliberate contrast with W(t).
 
+Variants: task (the above), social, plan, villager (VillagerAgent DAG,
+orchestrator/villager.py) and hmas2 (the HMAS-2 hub-and-spoke protocol,
+orchestrator/hmas2.py + orchestrator/hub.py). See config.py for the variant
+groups the training loop gates on.
+
 Kept import-light: the training loop imports ``orchestrator.core`` (and
 ``orchestrator.logging``) explicitly; this package root only exposes the
 dependency-free config/state/events pieces.

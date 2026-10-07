@@ -346,17 +346,27 @@ def _resolve_api_key(key_path: str) -> str:
         return "no-key-needed"
 
 
-def create_model_client(response_format, key_path="api.key"):
+def create_model_client(response_format, key_path="api.key", max_tokens=None,
+                        raw_text=False):
     """Build a ChatCompletionClient.
 
     - Local in-process model if LLM_MODEL_PATH is set.
     - Otherwise an OpenAI-compatible HTTP client (vLLM, SGLang, OpenRouter…).
+
+    ``max_tokens`` overrides the local client's generation cap (default
+    1024); ``raw_text=True`` turns off the local client's brace slicing of
+    the output (for prompts ported verbatim that parse their own output).
+    The defaults keep every existing caller unchanged.
     """
     if local_model_path:
         from mindforge.agent_modules.local_model_client import LocalModelClient
+        kwargs = {} if max_tokens is None else {"max_tokens": int(max_tokens)}
+        if raw_text:
+            kwargs["extract_json"] = False
         return LocalModelClient(
             model_path=local_model_path,
             response_format=response_format,
+            **kwargs,
         )
     return OpenAIChatCompletionClient(
         model=model,

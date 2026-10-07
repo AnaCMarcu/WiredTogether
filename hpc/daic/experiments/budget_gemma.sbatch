@@ -46,8 +46,8 @@ for _req in NUM_AGENTS COMM_BUDGET ARM; do
     fi
 done
 case "$ARM" in
-    base|hebbian) ;;
-    *) echo "ERROR: ARM must be 'base' or 'hebbian' (got '$ARM')" >&2; exit 1 ;;
+    base|hebbian|villager|hmas2) ;;
+    *) echo "ERROR: ARM must be 'base', 'hebbian', 'villager' or 'hmas2' (got '$ARM')" >&2; exit 1 ;;
 esac
 case "$COMM_BUDGET" in
     ''|*[!0-9]*) echo "ERROR: COMM_BUDGET must be a non-negative integer (got '$COMM_BUDGET')" >&2; exit 1 ;;
@@ -69,6 +69,7 @@ export WT_IMAGE LLM_VISION_MODE RUN_GROUP EPISODES MAX_STEPS WANDB_PROJECT NUM_A
 source "$WORKSPACE/WiredTogether/hpc/daic/experiments/_common.sh"
 
 SOCIAL_MODULE="${SOCIAL_MODULE:-prompt}"
+ORCH_ARGS=()
 
 if [ "$ARM" = "hebbian" ]; then
     EXP_NAME="budget_gemma_hebbian_n${NUM_AGENTS}_b${COMM_BUDGET}"
@@ -87,6 +88,29 @@ if [ "$ARM" = "hebbian" ]; then
         --hebbian-gamma 0.2
         --social-module "$SOCIAL_MODULE"
     )
+elif [ "$ARM" = "villager" ] || [ "$ARM" = "hmas2" ]; then
+    # Centralised orchestrator arms (no Hebbian, no social module):
+    #   villager  the SOFT orchestrator (VillagerAgent DAG allocation, peer
+    #             messaging metered by the same budget). At COMM_BUDGET=0 it
+    #             is villager-SILENT: central assignment, no communication.
+    #   hmas2     the HARD orchestrator (HMAS-2 adapted: per-step central
+    #             planning + per-agent checks, hub-and-spoke comms). Reports
+    #             are charged to the sender, the planner's messages to the
+    #             RECIPIENT and objections to the objector, so a team's total
+    #             communication stays <= N*B. At COMM_BUDGET=0 it reduces to
+    #             CMAS with history (central planning, no feedback).
+    EXP_NAME="budget_gemma_${ARM}_n${NUM_AGENTS}_b${COMM_BUDGET}"
+    ORCH_ARGS=(
+        --orchestrator
+        --orchestrator-variant "$ARM"
+        --orchestrator-mode advisory
+        --orchestrator-cadence "${ORCH_CADENCE:-8}"
+    )
+    if [ "$ARM" = "villager" ]; then
+        ORCH_ARGS+=(--orchestrator-node-timeout-steps "${ORCH_NODE_TIMEOUT:-60}")
+    fi
+    export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,no_hebbian,orchestrator,${ARM},comm_budget,b${COMM_BUDGET},n${NUM_AGENTS}}"
+    HEBBIAN_ARGS=()
 else
     EXP_NAME="budget_gemma_base_n${NUM_AGENTS}_b${COMM_BUDGET}"
     export WANDB_EXTRA_TAGS="${WANDB_EXTRA_TAGS:-llm,gemma4,vision,no_hebbian,comm_budget,b${COMM_BUDGET},n${NUM_AGENTS}}"
@@ -97,6 +121,7 @@ echo "── budget_gemma: NUM_AGENTS=$NUM_AGENTS COMM_BUDGET=$COMM_BUDGET ARM=$
 
 run_exp "$EXP_NAME" "$MODEL_LLM" \
     ${HEBBIAN_ARGS[@]+"${HEBBIAN_ARGS[@]}"} \
+    ${ORCH_ARGS[@]+"${ORCH_ARGS[@]}"} \
     --team-scaling \
     --ch4-mob-count "$CH4_MOBS" \
     --simultaneous \

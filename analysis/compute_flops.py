@@ -70,6 +70,12 @@ USAGE_LINE = re.compile(
 CALL_LINE = re.compile(
     r"call:\s+sys_chars=(\d+) user_chars=(\d+) frame=(True|False)"
 )
+# Orchestrator calls (any variant; hmas2's per-step plan/check calls included) log a
+# tagged line next to their [LocalModel usage] line. They are ALREADY inside
+# the run totals above — this only recovers the orchestrator's share.
+ORCH_USAGE_LINE = re.compile(
+    r"\[Orchestrator usage\] prompt_tokens=(\d+) completion_tokens=(\d+)"
+)
 # llm_logs line header: "2026-08-03 20:06:33 INFO <message>"
 LOG_HEADER = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} (?:INFO|ERROR|WARNING) ")
 RESPONSE_MARK = "Response: "
@@ -97,6 +103,19 @@ def parse_log_txt(path: Path):
                 prefill_total += int(m.group(1))
                 usage_calls += 1
     return decode_total, generate_calls, prefill_total, usage_calls
+
+
+def parse_orchestrator_usage(path: Path):
+    """(orchestrator_calls, orchestrator_tokens) from log.txt — the subset of
+    the run's tokens spent by the orchestrator (prefill + decode)."""
+    calls, tokens = 0, 0
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            m = ORCH_USAGE_LINE.search(line)
+            if m:
+                calls += 1
+                tokens += int(m.group(1)) + int(m.group(2))
+    return calls, tokens
 
 
 def parse_llm_log(path: Path):
@@ -173,6 +192,7 @@ def analyze_run(run_dir: Path, args):
         )
     total_tokens = prefill_tokens + decode_tokens
     flops = 2.0 * args.n_eff * total_tokens
+    orch_calls, orch_tokens = parse_orchestrator_usage(log_txt)
 
     return {
         "run": str(run_dir),
@@ -189,6 +209,10 @@ def analyze_run(run_dir: Path, args):
         "decode_tokens_exact": decode_tokens,
         "total_tokens": total_tokens,
         "flops": flops,
+        "orch_calls": orch_calls,
+        "orch_tokens": orch_tokens,
+        "orch_share": (round(orch_tokens / total_tokens, 4)
+                       if total_tokens else 0.0),
         "modules": modules,
     }
 
@@ -239,11 +263,13 @@ def main():
     for r in rows:
         mismatch = "" if abs(r["llm_calls"] - r["generate_calls"]) <= max(
             5, 0.02 * r["llm_calls"]) else f"  !! generate_calls={r['generate_calls']}"
+        orch = (f"  orchestrator {r['orch_share']:.1%} "
+                f"({r['orch_calls']} calls)" if r["orch_calls"] else "")
         print(f"{r['exp']:<28} {r['seed']:<10} {r['llm_calls']:>6} "
               f"{r['frames']:>6} {r['prefill_tokens']:>12,} "
               f"{r['prefill_source']:>10} "
               f"{r['decode_tokens_exact']:>13,} {r['total_tokens']:>10,} "
-              f"{fmt_flops(r['flops']):>9}{mismatch}")
+              f"{fmt_flops(r['flops']):>9}{mismatch}{orch}")
         if args.per_module:
             for name, m in sorted(r["modules"].items()):
                 print(f"    {name:<24} calls={m['calls']:>6} "

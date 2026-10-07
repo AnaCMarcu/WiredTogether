@@ -105,6 +105,15 @@ def _ch4_whitelist(num_agents: int) -> str:
     )
 
 
+#: Ch3 channel sentence, and its hub-topology wording (agents cannot
+#: message each other there; the orchestrator relays). Read at call time from
+#: WT_COMM_TOPOLOGY, set by the training loop under --orchestrator-variant
+#: hmas2, so the planner's chamber facts match the agents'.
+_CH3_PEER_CHANNEL = "Targeted communication is the only channel here."
+_CH3_HUB_CHANNEL = ("Messages to the orchestrator, which relays them to "
+                    "teammates, are the only channel here.")
+
+
 def _ch3_facts(num_agents: int) -> str:
     cells = ", ".join(
         f"agent_{i}=" + (f"Cell {_cell_letter(i)}" if i == 0 else _cell_letter(i))
@@ -115,7 +124,7 @@ def _ch3_facts(num_agents: int) -> str:
         + (" door" if i == 0 else "")
         for i in range(num_agents)
     )
-    return (
+    text = (
         f"Communication puzzle. You are teleported into a SEALED CELL by id ({cells}"
         ") and cannot see teammates. Each cell has ONE blue switch cube "
         "on the south wall (press by facing it and using Dig, bare hands work). Switches are "
@@ -125,6 +134,9 @@ def _ch3_facts(num_agents: int) -> str:
         "teammate's press worked; a \"[SYSTEM] Switch X was pressed.\" broadcast also "
         "fires); walk north when it reads OPEN."
     )
+    if os.environ.get("WT_COMM_TOPOLOGY") == "hub":
+        text = text.replace(_CH3_PEER_CHANNEL, _CH3_HUB_CHANNEL)
+    return text
 
 
 def _ch4_facts(num_agents: int) -> str:

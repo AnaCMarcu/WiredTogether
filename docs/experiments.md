@@ -12,7 +12,9 @@ question they answer and looked up by name — see [dataset.md](dataset.md).
 |---|---|---|
 | RQ1 — LLM baselines and RL arms | `exp01`–`exp08` (2B/9B, MAPPO, IPPO, ±Hebbian, ±social module) | `final` (synced as `medium_runs`) |
 | RQ1 — Gemma anchors | `new_exp_0_gemma` (base, +Hebbian, three-factor) | `new_exp_0_gemma` |
-| RQ1 — centralised orchestration | `new_exp_orchestrator` | `orchestrator` |
+| RQ1 — centralised orchestration (soft `villager`, hard `hmas2`) | `new_exp_orchestrator` via `submit_orchestrator.sh` (`VARIANTS="villager hmas2"`) | `orchestrator` |
+| Orchestrators vs team size | `scale_gemma_orch` via `submit_agent_scaling_orch.sh` | `agent_scaling_orch` |
+| Communication budget (base, Hebbian, villager, hmas2) | `budget_gemma` via `submit_comm_budget.sh` | `comm_budget` |
 | RQ2 — co-firing channels | `exp20`–`exp29` (`prc`, `pro`, `pri`, `prco`, `prcoi`, anchor, null) | `cofiring_final` |
 | RQ3 — imposed topology | `exp09`–`exp11` (allied-all, allied-pair, no-bonds) | `final` |
 | RQ3 — transplant | `expA_pair_bonding`, then `expB_merged_transplant` / `expB_merged_shuffled` | `pair_bonding` |
@@ -25,6 +27,13 @@ question they answer and looked up by name — see [dataset.md](dataset.md).
 
 `submit_*.sh` launches a whole family across seeds; a single arm is `sbatch <launcher>`. The `_3f`
 variants are the same arms under `--hebbian-mode three_factor`.
+
+Orchestrator arms: `villager` is the soft orchestrator (central assignment, peer messaging left
+on) and `hmas2` the hard one (the HMAS-2 protocol, hub-and-spoke communication; see
+[agents.md](agents.md#the-hard-orchestrator-hmas2)). In the comm-budget sweep, villager at b=0 is
+**villager-silent** (central assignment, no communication) and hmas2 at b=0 is CMAS with history.
+hmas2 adds a planner call and per-agent checks to every step, so the submit scripts budget 1.4× the
+wall time (long QoS) until a smoke measures it with `analysis/make_hmas2_load.py`.
 
 Two operational rules the suite depends on:
 
