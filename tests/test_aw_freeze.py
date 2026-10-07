@@ -1,9 +1,11 @@
 """The AgentWorld work must not change the WIRE stack (paper reproducibility).
 
-Fails if any WIRE-side file differs from the commit this branch forked from
-``world-scaling`` (the merge base, so new commits on world-scaling itself do
-not trip it). Skipped where that branch is not available (e.g. a cluster
-checkout that only has this branch).
+Fails if any commit since this branch forked from ``world-scaling`` (the merge
+base, so new commits on world-scaling itself do not trip it) touches a WIRE-side
+file, unless that commit is a WIRE change this branch carries on purpose
+(``WIRE_COMMITS``). Uncommitted or untracked edits inside WIRE paths fail too.
+Skipped where that branch is not available (e.g. a cluster checkout that only
+has this branch).
 """
 
 import subprocess
@@ -24,6 +26,14 @@ FROZEN = [
     "src/marl_craftium",
     "src/mindforge/prompts",
 ]
+# WIRE changes carried on purpose, matched by commit-subject prefix (subjects
+# survive cherry-picks and rebases, hashes do not). The HMAS-2 hard orchestrator
+# is opt-in (--orchestrator-variant hmas2) and is developed on
+# hard-orchestrator-snellius; its default paths are pinned byte-identical by
+# tests/test_orchestrator_hmas2.py and tests/test_hub_prompts.py.
+WIRE_COMMITS = (
+    "Add the HMAS-2 hard-orchestrator baseline",
+)
 
 
 def _git(*args):
@@ -36,8 +46,14 @@ def test_wire_stack_unchanged():
     fork = _git("merge-base", "HEAD", BASE).stdout.strip()
     if not fork:
         pytest.skip(f"no common history with {BASE}")
-    diff = _git("diff", "--stat", fork, "--", *FROZEN)
+    log = _git("log", "--format=%h %s", f"{fork}..HEAD", "--", *FROZEN)
+    assert log.returncode == 0, log.stderr
+    offending = [line for line in log.stdout.splitlines()
+                 if not line.split(" ", 1)[-1].startswith(WIRE_COMMITS)]
+    assert not offending, (f"commits since {BASE} fork {fork[:8]} change WIRE "
+                           "files:\n" + "\n".join(offending))
+    diff = _git("diff", "--stat", "HEAD", "--", *FROZEN)
     assert diff.returncode == 0, diff.stderr
-    assert diff.stdout.strip() == "", f"WIRE files changed vs {BASE} fork {fork[:8]}:\n{diff.stdout}"
+    assert diff.stdout.strip() == "", f"uncommitted WIRE edits:\n{diff.stdout}"
     untracked = _git("ls-files", "--others", "--exclude-standard", "--", *FROZEN)
     assert untracked.stdout.strip() == "", f"new files inside WIRE paths:\n{untracked.stdout}"
