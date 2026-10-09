@@ -13,7 +13,7 @@
 #
 # Overrides: SNELLIUS=user@host  DEST=<dataset root>  KEEP_TGZ=1
 set -euo pipefail
-SNELLIUS="${SNELLIUS:-amarcu@snellius.surf.nl}"
+SNELLIUS="${SNELLIUS:-amarcu1@snellius.surf.nl}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEST="${DEST:-$HERE/../WiredTogether/runs_from_daic}"
 DEST="$(cd "$DEST" && pwd)"
