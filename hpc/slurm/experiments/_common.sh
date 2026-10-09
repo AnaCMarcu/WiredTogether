@@ -481,6 +481,11 @@ run_exp() {
     #     (separately so they're easy to find / delete)
     #   - everything else (craftium debug.txt, wandb offline-runs, etc.)
     #     → $ARTIFACTS_DIR/work_artifacts/
+    #     EXCEPT each Luanti process's copy of the engine and game tree
+    #     (bin/, client/, games/ = ~6k files per agent) and the clients'
+    #     unused worlds/ copies: 100 archived seeds of those blew the
+    #     Snellius scratch inode quota (2026-10-09). Only the server's
+    #     worlds/ (map + event JSONL) is kept.
     # The runs/<exp>/seed_<N>/ tree stays small (just plots, episodes/,
     # gifs/ with FINAL per-episode gifs only, config.json, log.txt).
     if [ -d "$WORK_DIR/intermediate_gifs" ]; then
@@ -494,6 +499,8 @@ run_exp() {
     mkdir -p "$ARTIFACTS_DIR/work_artifacts"
     rsync -r --no-perms --no-owner --no-group --no-times \
         --exclude='intermediate_gifs/' \
+        --exclude='minetest-*/games/' --exclude='minetest-*/bin/' \
+        --exclude='minetest-*/client/' --exclude='minetest-agent*/worlds/' \
         "$WORK_DIR/" "$ARTIFACTS_DIR/work_artifacts/" 2>&1 | tail -5 || true
 
     # Auto-sync any offline-mode wandb runs to wandb.ai. Two cases this

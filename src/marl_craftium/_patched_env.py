@@ -22,6 +22,10 @@ Six concerns layered on top of upstream:
    end the run. The state and log tail of every MT process are printed to
    the run log, the client is restarted and soft-reset again, and the run
    continues. ``WT_MT_RECOVER=0`` restores the old fail-fast behaviour.
+8. **Shared game tree** — upstream copies ``games/`` (6k files) into every
+   server and client run dir; it is read-only at runtime, so each run dir
+   gets a symlink instead (see ``_game_tree``). ``WT_COPY_GAMES=1`` restores
+   the copy.
 
 All of these wrap upstream rather than fork it, so we stay forward-compatible
 with the upstream package.
@@ -40,6 +44,16 @@ from . import _bootstrap  # noqa: F401
 import numpy as np
 
 from craftium.multiagent_env import MarlCraftiumEnv, ACTION_ORDER
+
+from . import _game_tree
+
+try:
+    from craftium import minetest as _craftium_minetest
+except ImportError:  # pragma: no cover - test stand-ins have no minetest module
+    _craftium_minetest = None
+if _craftium_minetest is not None and _game_tree.install(_craftium_minetest):
+    print("* craftium: games/ is symlinked into each run dir, not copied "
+          "(WT_COPY_GAMES=1 to copy)", flush=True)
 
 
 class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
