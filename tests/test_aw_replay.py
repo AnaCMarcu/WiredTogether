@@ -117,3 +117,18 @@ def test_cli_writes_png(episode, tmp_path):
     from agentworld.replay.__main__ import main
     main([str(episode), "--team", "t00", "--png", "1", "--out", str(tmp_path / "f.png")])
     assert Image.open(tmp_path / "f.png").size == (1280, 720)
+
+
+def test_bond_graph_stays_on_screen_with_many_messages():
+    states = _synthetic_world(n=8, rounds=2)          # team t00 = agents 0-3
+    for s in states:  # a flood of long DMs inside the focus team
+        s["messages"] = [{"round": s["round"], "sender": k % 4, "receiver": (k + 1) % 4,
+                          "kind": "dm", "post_kind": "none", "msg_id": s["round"] * 100 + k,
+                          "text": "a fairly long message about logs, sticks and who goes where " * 2}
+                         for k in range(20)]
+        s["bonds_top"] = {str(i): [[(i + 1) % 4, 0.6]] for i in range(8)}
+    r = ReplayRenderer(states, PlainMap(), RenderOptions(team="t00"))
+    img = r.snapshot(2)
+    panel_bottom = (1280 - 420, 720 - 200, 1280, 720)
+    # the focus team's first agent colour (categorical slot 1) appears as a node
+    assert _has_color(img, _rgb("#2a78d6"), panel_bottom)

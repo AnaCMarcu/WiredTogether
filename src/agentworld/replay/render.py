@@ -453,12 +453,16 @@ class ReplayRenderer:
         y += 24
         y = self._panel_progress(d, state, x, y)
         y += 6
+        bonds = bool(self.o.show_bonds and state.get("bonds_top"))
+        # The bond graph keeps the bottom 200 px; text above it is cut to fit
+        # (newest messages win), so a busy round never pushes it off the frame.
+        bottom = self.o.height - (205 if bonds else 8)
         if self.o.reader_view and self.o.agent is not None:
-            y = self._panel_reader(d, state, x, y)
+            y = self._panel_reader(d, state, x, y, bottom)
         else:
-            y = self._panel_chat(d, state, x, y)
-        if self.o.show_bonds and state.get("bonds_top"):
-            self._panel_bonds(d, state, x0 + 16, max(y + 8, self.o.height - 200))
+            y = self._panel_chat(d, state, x, y, bottom)
+        if bonds:
+            self._panel_bonds(d, state, x0 + 16, self.o.height - 200)
 
     def _panel_progress(self, d, state, x, y) -> int:
         teams = state.get("teams", {})
@@ -486,16 +490,30 @@ class ReplayRenderer:
         focus = set(self._focus())
         return m["sender"] in focus or m.get("receiver") in focus
 
-    def _panel_chat(self, d, state, x, y) -> int:
+    def _panel_chat(self, d, state, x, y, bottom: int = 10 ** 6) -> int:
         d.text((x, y), "Direct messages", font=self.fb[13], fill=INK)
         y += 20
         history = [m for m in self.msgs.values()
                    if m["round"] <= state["round"] and m["kind"] == "dm" and self._relevant(m)]
+        posts = [m for m in self.msgs.values()
+                 if m["kind"] == "post" and state["round"] - 2 <= m["round"] <= state["round"]
+                 and (self.o.camera == "world" or m["sender"] in set(self._focus()))]
+        posts = sorted(posts, key=lambda m: m["msg_id"])[-4:]
+        # Height budget: the board keeps up to 2 posts, DMs take what is left
+        # (newest first), then the board gets any space still free.
+        board_min = 26 + 32 * min(2, len(posts))
+        room = bottom - y - 6 - board_min
         lines = []
-        for m in sorted(history, key=lambda m: m["msg_id"])[-9:]:
+        for m in sorted(history, key=lambda m: m["msg_id"])[-9:][::-1]:
             head = f"r{m['round']} {self.labels[m['sender']]} → " \
                    f"{self.labels[m['receiver']] if m.get('receiver') is not None else '?'}: "
-            lines.append((m, head, self._wrap(m["text"], 40, 2)))
+            body = self._wrap(m["text"], 40, 2)
+            need = 18 + 15 * len(body)
+            if need > room:
+                break
+            room -= need
+            lines.append((m, head, body))
+        lines.reverse()
         if not lines:
             d.text((x, y), "none yet", font=self.f[12], fill=INK_3)
             y += 18
@@ -510,12 +528,12 @@ class ReplayRenderer:
                 y += 15
             y += 3
         y += 6
+        if y + 20 > bottom:
+            return y
         d.text((x, y), "Board", font=self.fb[13], fill=INK)
         y += 20
-        posts = [m for m in self.msgs.values()
-                 if m["kind"] == "post" and state["round"] - 2 <= m["round"] <= state["round"]
-                 and (self.o.camera == "world" or m["sender"] in set(self._focus()))]
-        for m in sorted(posts, key=lambda m: m["msg_id"])[-4:]:
+        fit = max(0, (bottom - y) // 32)
+        for m in posts[len(posts) - min(len(posts), fit):]:
             d.text((x, y), clean(f"r{m['round']} {self.labels[m['sender']]} [{m.get('post_kind')}]"),
                    font=self.f[12], fill=INK_2)
             y += 15
@@ -523,7 +541,7 @@ class ReplayRenderer:
             y += 17
         return y
 
-    def _panel_reader(self, d, state, x, y) -> int:
+    def _panel_reader(self, d, state, x, y, bottom: int = 10 ** 6) -> int:
         i = self.o.agent
         reads = (state.get("reads") or {}).get(str(i)) or (state.get("reads") or {}).get(i)
         d.text((x, y), f"What {self.labels[i]} read this round", font=self.fb[13], fill=INK)
@@ -532,21 +550,29 @@ class ReplayRenderer:
             d.text((x, y), "busy or done — nothing read", font=self.f[12], fill=INK_3)
             return y + 18
         for label, ids in (("Inbox (DMs)", reads.get("dms", [])), ("Board", reads.get("board", []))):
+            if y + 16 > bottom:
+                return y
             d.text((x, y), f"{label}: {len(ids)}", font=self.fb[12], fill=INK_2)
             y += 16
             for mid in ids[:5]:
                 m = self.msgs.get(mid)
                 if not m:
                     continue
+                if y + 16 > bottom:
+                    return y
                 d.ellipse([x, y + 4, x + 7, y + 11], fill=self._agent_color(m["sender"]))
                 d.text((x + 12, y), clean(f"{self.labels[m['sender']]}: ")
                        + self._wrap(m["text"], 40, 1)[0], font=self.f[12], fill=INK)
                 y += 16
             y += 4
+        if y + 31 > bottom:
+            return y
         contacts = ", ".join(self.labels[j] for j in reads.get("contacts", []))
         d.text((x, y), "Contacts:", font=self.fb[12], fill=INK_2)
         y += 16
         for line in self._wrap(contacts, 48, 3):
+            if y + 15 > bottom:
+                break
             d.text((x, y), line, font=self.f[12], fill=INK_2)
             y += 15
         return y
@@ -564,7 +590,7 @@ class ReplayRenderer:
         top = state["bonds_top"]
         for i in focus:
             for j, w in top.get(str(i), top.get(i, [])):
-                if j in pts and w > 0.12:
+                if j in pts and w > 0.105:   # just above the 0.1 starting weight
                     d.line([pts[i], pts[j]], fill=INK_2, width=max(1, int(round(1 + 5 * w))))
         for i, (px, py) in pts.items():
             d.ellipse([px - 6, py - 6, px + 6, py + 6], fill=self._agent_color(i),

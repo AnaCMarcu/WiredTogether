@@ -207,3 +207,15 @@ def test_scheduler_refuses_mirroring_in_tool_mode(tmp_path):
                             comm_mode="tool", mirror_dms=True), mirror=lambda i, t: None)
     assert s2.mirror is None
     ex.shutdown()
+
+
+def test_min_round_seconds_paces_rounds(tmp_path):
+    sched, world, fake, ex = _build(tmp_path)
+    sched.cfg.max_rounds = 3
+    sched.cfg.early_stop = False
+    sched.cfg.min_round_s = 0.3
+    t0 = time.time()
+    summary = asyncio.run(sched.run_episode(1))
+    ex.shutdown()
+    assert summary["rounds"] == 3
+    assert time.time() - t0 >= 0.85     # each of the 3 rounds padded to >= 0.3 s

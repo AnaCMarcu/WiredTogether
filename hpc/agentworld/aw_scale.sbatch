@@ -10,7 +10,7 @@
 #SBATCH --error=slurm_logs/aw_scale_%A_%a.err
 # One scaling-sweep cell. Submit through submit_aw_scaling.sh (from the repo
 # root), which sets ARM, REPLICAS and TASK; the seed comes from the array index.
-# Optional: ROUNDS, EPISODES, TEAM_SPACING, VIDEO, MAX_IN_FLIGHT.
+# Optional: ROUNDS, EPISODES, TEAM_SPACING, VIDEO, MAX_IN_FLIGHT, MIN_ROUND_S.
 source "${WT_REPO:-$WORKSPACE/WiredTogether}/hpc/agentworld/aw_common.sh"
 : "${ARM:?}" "${REPLICAS:?}" "${TASK:?}"
 EXTRA=()
@@ -18,4 +18,5 @@ EXTRA=()
 run_aw "${ARM}_${TASK}_x${REPLICAS}" \
     --tasks "$TASK" --replicas "$REPLICAS" --team-spacing "${TEAM_SPACING:-20}" \
     --arm "$ARM" --episodes "${EPISODES:-3}" --video "${VIDEO:-team}" \
-    --max-in-flight "${MAX_IN_FLIGHT:-256}" ${EXTRA[@]+"${EXTRA[@]}"}
+    --max-in-flight "${MAX_IN_FLIGHT:-256}" --min-round-seconds "${MIN_ROUND_S:-20}" \
+    ${EXTRA[@]+"${EXTRA[@]}"}

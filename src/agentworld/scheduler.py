@@ -83,6 +83,11 @@ class SchedulerConfig:
     verify_start: int = 5               # AgentWorld early-stop schedule
     verify_every: int = 3
     early_stop: bool = True
+    # The game runs in real time (trees regrow, mobs respawn on timers) and our
+    # simultaneous rounds are fast (~6 s at N=3 on vLLM), so a round covers far
+    # less game time than in AgentWorld's serial runner, where every agent's
+    # turn waits for the previous one. A minimum round length restores that.
+    min_round_s: float = 0.0
 
 
 class RoundScheduler:
@@ -293,6 +298,9 @@ class RoundScheduler:
             if all(stopped.values()) or all(done[i] or stopped[self.world.global_team[i]]
                                             for i in range(n)):
                 break
+            spare = self.cfg.min_round_s - (time.time() - round_start)
+            if spare > 0:
+                await asyncio.sleep(spare)
 
         # Collect stragglers so their records land in the trajectory.
         tail = await self.ex.collect(deadline_s=0)

@@ -76,6 +76,10 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--explore-slots", type=int, default=2)
     g.add_argument("--obs-radius", type=int, default=24)
     g.add_argument("--deadline", type=float, default=30.0, help="per-round action deadline (s)")
+    g.add_argument("--min-round-seconds", type=float, default=0.0,
+                   help="pad each round to at least this long: the game runs in real time "
+                        "(trees regrow, mobs respawn), and simultaneous rounds cover far less "
+                        "game time than AgentWorld's serial runner")
     g.add_argument("--mirror-dms", action="store_true",
                    help="re-post DMs/board posts as local game chat (live video bubbles)")
 
@@ -191,7 +195,7 @@ async def run(args) -> List[dict]:
                           comm_mode=args.comm_mode,
                           bonds_in_prompt=args.arm != "base",
                           bond_source="graph" if args.arm == "prompt_only" else "policy",
-                          mirror_dms=args.mirror_dms)
+                          mirror_dms=args.mirror_dms, min_round_s=args.min_round_seconds)
     cognition = MindForgeCognition(
         world.global_names, ModelClients.from_env(),
         memory=SharedMemory(make_embedder(args.embedder)),

@@ -11,6 +11,10 @@ Game tools (write the call exactly like these, with keyword arguments):
 
 Rules:
 - Use exact instance ids and item keys from your observation and the task guide.
+- An instance id is valid ONLY if it appears in your CURRENT observation. A tree, rock or mob
+  that has been used up or killed disappears from the observation until it regrows or respawns,
+  and ids you remember or read in messages may be stale. If your target is not listed now, pick
+  another listed one, move to find one, or wait for it to come back.
 - transfer_items works at any distance; the receiver must be an exact player name.
 - craft_item needs the right skill (e.g. Fletching, Smithing, Crafting, Smelting, Cooking) and the materials in YOUR inventory.
 - Long actions (attack_entity, harvest_resource) may take several rounds; you will act again when they finish.

@@ -149,3 +149,10 @@ def test_on_reset_keeps_skills():
     agent.current_task = "x"
     cog.on_reset()
     assert agent.current_task is None and len(agent.skills) == 1
+
+
+def test_prompts_carry_the_instance_id_rules():
+    from agentworld.agent import CURRICULUM_SYSTEM, SYSTEM_PROMPT
+    assert "valid ONLY if it appears in your CURRENT observation" in SYSTEM_PROMPT
+    assert "never by instance id" in CURRICULUM_SYSTEM
+    assert "{" not in SYSTEM_PROMPT.split("Respond with ONE JSON object")[0]
