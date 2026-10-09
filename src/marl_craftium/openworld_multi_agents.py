@@ -133,6 +133,9 @@ class OpenWorldMultiAgentEnv(ParallelEnv):
             mt_server_conf={
                 "max_block_send_distance": 8,
                 "max_block_generate_distance": 8,
+                # Luanti refuses the 16th client by default (max_users = 15),
+                # so N >= 16 could never connect every agent.
+                "max_users": num_agents + 2,
             },
             mt_clients_conf={"hud_scaling": 0.5},
         )
