@@ -11,7 +11,13 @@
 # seed_123.failed_zmq, are listed but left out. Videos (gifs/, and the
 # run_artifacts/ tree) and per-call prompt logs (llm_logs/) stay on Snellius;
 # WITH_LLM_LOGS=1 includes llm_logs/. log.txt and vllm_server.log ARE included:
-# per-step timing and the FLOPs accounting read them.
+# per-step timing and the FLOPs accounting read them. LIGHT=1 leaves log.txt
+# out too (two thirds of a run's size; no figure script reads it), for a laptop
+# short on disk; the full log stays on Snellius for a later pull.
+#
+# A group may be a symlink into another workspace, e.g. to ship the
+# hard-orchestrator checkout's runs in the same tarball:
+#     ln -sfn ~/wt_orch/WiredTogether/runs/orchestrator runs/orchestrator_vllm
 set -euo pipefail
 : "${WT_WORKSPACE:?source hpc/snellius/env.sh first}"
 RUNS="$WT_WORKSPACE/WiredTogether/runs"
@@ -42,6 +48,7 @@ done
 [ -s "$LIST" ] || { echo "nothing to pack"; exit 1; }
 excl=(--exclude=gifs --exclude=checkpoints --exclude=work_artifacts --exclude=wandb)
 [ "${WITH_LLM_LOGS:-0}" = 1 ] || excl+=(--exclude=llm_logs)
+[ "${LIGHT:-0}" = 1 ] && excl+=(--exclude=log.txt)
 tar czf "$OUT" "${excl[@]}" -T "$LIST"
 
 echo

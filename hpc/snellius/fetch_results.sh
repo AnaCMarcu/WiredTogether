@@ -9,9 +9,11 @@
 #   comm_budget_vllm, and any other non-smoke group -> <dest>/compute/<group>
 #   smoke, smoke_vllm, pilot_* and *_smoke groups   -> <dest>/smoke/snellius_<group>
 #   bench/                                          -> <dest>/smoke/snellius_bench
-# A run already on the laptop is replaced, so the script can be re-run.
+# A FINISHED run already on the laptop (it has final_metrics.json) is kept and
+# the incoming copy dropped: a LIGHT=1 pack has no log.txt, and replacing would
+# delete the laptop's. KEEP_LOCAL=0 replaces instead. Re-running is safe.
 #
-# Overrides: SNELLIUS=user@host  DEST=<dataset root>  KEEP_TGZ=1
+# Overrides: SNELLIUS=user@host  DEST=<dataset root>  KEEP_TGZ=1  KEEP_LOCAL=0
 set -euo pipefail
 SNELLIUS="${SNELLIUS:-amarcu1@snellius.surf.nl}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -39,7 +41,7 @@ echo "Free space before extracting: $(df -h "$DEST" | awk 'NR==2 {print $4}')"
 
 tar xzf "$TGZ" -C "$STAGE"
 
-n=0
+n=0; kept=0
 for g in "$STAGE"/*/; do
     g="$(basename "$g")"
     case "$g" in
@@ -52,12 +54,16 @@ for g in "$STAGE"/*/; do
     for d in "$STAGE/$g"/*/seed_*; do
         [ -d "$d" ] || continue
         arm="$(basename "$(dirname "$d")")"; seed="$(basename "$d")"
+        if [ "${KEEP_LOCAL:-1}" = 1 ] && [ -f "$target/$arm/$seed/final_metrics.json" ]; then
+            kept=$((kept + 1)); continue
+        fi
         mkdir -p "$target/$arm"; rm -rf "$target/$arm/$seed"; mv "$d" "$target/$arm/$seed"
+        echo "    new  $g/$arm/$seed"
         n=$((n + 1))
     done
     echo "  $g -> ${target#$DEST/}"
 done
-echo "filed $n runs under $DEST"
+echo "filed $n runs under $DEST ($kept already on the laptop, kept as they were)"
 
 [ "${KEEP_TGZ:-0}" = 1 ] || { rm -f "$TGZ"; echo "removed the local tarball"; }
 echo "On Snellius, clean up with:  rm -f ~/wt_snellius_pull.tgz ~/wt_snellius_pull.list"
