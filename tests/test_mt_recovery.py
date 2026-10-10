@@ -197,3 +197,80 @@ def test_no_warmup_recovery_when_the_server_is_gone(tmp_path):
     with pytest.raises(ConnectionError, match="is MT down"):
         env.warmup_noop()
     assert env.mt_clients[0].starts == 0
+
+
+# ── craftium's C layer closes the socket itself on a hang-up (2026-10-10) ──
+# mt_server.server_recv() calls close(connfd) when the peer hangs up but leaves
+# MtChannel.connfd set; the next close_conn() (first line of every reconnect)
+# then raised EBADF and killed every warm-up recovery before its first restart.
+
+
+class CraftiumLikeChannel(FakeChannel):
+    """FakeChannel with craftium's real fd semantics."""
+
+    _next_fd = 100
+
+    def __init__(self, fail_receives=0):
+        super().__init__(fail_receives)
+        self.connfd = self._new_fd()
+        self.closed_by_c = set()
+
+    @classmethod
+    def _new_fd(cls):
+        cls._next_fd += 1
+        return cls._next_fd
+
+    def receive(self):
+        if self.fail_receives > 0:
+            self.closed_by_c.add(self.connfd)        # what server_recv does
+        return super().receive()
+
+    def close_conn(self):                            # MtChannel.close_conn
+        if self.connfd is not None:
+            if self.connfd in self.closed_by_c:
+                raise OSError(9, "Bad file descriptor")
+            self.connfd = None
+
+    def open_conn(self):                             # MtChannel.open_conn
+        self.close_conn()
+        super().open_conn()
+        self.connfd = self._new_fd()
+
+
+def test_warmup_recovery_survives_the_c_layer_closing_the_socket(tmp_path, capsys):
+    lost = CraftiumLikeChannel(fail_receives=1)
+    env = make_env(tmp_path, [CraftiumLikeChannel(), lost, CraftiumLikeChannel()])
+    env.mt_clients[1].proc = FakeProc(code=1)
+
+    observations = env.warmup_noop()
+
+    assert len(observations) == 3
+    assert env.mt_clients[1].starts == 1
+    assert lost.opened == 1 and lost.connfd is not None   # reconnected on a fresh fd
+    assert env.mt_recoveries == 1
+    assert "client 1 restarted and reset" in capsys.readouterr().out
+
+
+def test_reset_recovery_survives_the_c_layer_closing_the_socket(tmp_path):
+    lost = CraftiumLikeChannel(fail_receives=1)
+    env = make_env(tmp_path, [CraftiumLikeChannel(), lost])
+    env.mt_clients[1].proc = FakeProc(code=1)
+
+    observations, _ = env.reset()
+
+    assert observations.shape[0] == 2
+    assert env.mt_clients[1].starts == 1
+    assert env.mt_recoveries == 1
+
+
+def test_a_failed_restart_attempt_is_retried_not_fatal(tmp_path):
+    """An OSError inside an attempt (not only ConnectionError) moves on to
+    the next attempt instead of ending the run."""
+    lost = CraftiumLikeChannel(fail_receives=2)       # the warm-up NoOp and attempt 1
+    env = make_env(tmp_path, [lost])
+    env.mt_clients[0].proc = FakeProc(code=1)
+
+    env.warmup_noop()
+
+    assert env.mt_clients[0].starts == 2              # attempt 1 failed, attempt 2 held
+    assert env.mt_recoveries == 1

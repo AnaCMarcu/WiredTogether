@@ -376,6 +376,9 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         ``_MT_RECOVER_WAITS_S`` attempts. Only for episode boundaries, where
         every agent is placed back at its spawn anyway.
         """
+        # First, before anything else can open a file or socket and be handed
+        # the freed fd number: forget a connection the C layer already closed.
+        self._forget_closed_conn(self.mt_channs[i], exc)
         if os.environ.get("WT_MT_RECOVER", "1") == "0":
             raise exc
         self._report_mt_state(i, exc, where)
@@ -391,8 +394,9 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
             try:
                 self._restart_client(i)
                 observation = self._soft_reset_client(i)
-            except (ConnectionError, RuntimeError) as exc:
+            except (OSError, RuntimeError) as exc:   # OSError covers ConnectionError
                 last_exc = exc
+                self._forget_closed_conn(self.mt_channs[i], exc)
                 print(f"[MT-RECOVER] client {i}: attempt {attempt} failed: "
                       f"{str(exc)[:500]}", flush=True)
                 continue
@@ -404,6 +408,22 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
             f"MT client {i} could not be restarted after "
             f"{len(self._MT_RECOVER_WAITS_S)} attempts"
         ) from last_exc
+
+    @staticmethod
+    def _forget_closed_conn(chan, exc: BaseException) -> None:
+        """Drop ``chan.connfd`` without closing it when the C layer closed it.
+
+        craftium's ``mt_server.server_recv`` calls ``close(connfd)`` itself when
+        the client hangs up ("Connection closed by peer") but leaves
+        ``MtChannel.connfd`` set. Every reconnect path then starts with
+        ``close_conn()``, which closes that number again: EBADF in the usual
+        case (2026-10-10: all 8 warm-up recoveries died on ``OSError: [Errno 9]
+        Bad file descriptor`` before their first restart), or, if a new file or
+        socket has meanwhile been given the same number (the vLLM HTTP
+        connection, a log file), silently closes THAT one.
+        """
+        if "closed by peer" in str(exc) and getattr(chan, "connfd", None) is not None:
+            chan.connfd = None
 
     def _restart_client(self, i: int) -> None:
         """Kill what is left of client ``i`` and start it again on its channel.
@@ -420,7 +440,10 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
             except AttributeError:  # no process groups (not Linux)
                 client.proc.kill()
             client.proc.wait()
-        chan.close_conn()
+        try:
+            chan.close_conn()
+        except OSError:          # already closed underneath us: just forget it
+            chan.connfd = None
         client.close_pipes()
         saved_timeout = chan.listen_timeout
         chan.listen_timeout = self._MT_RECOVER_LISTEN_MS
