@@ -169,12 +169,21 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
 
         Used during the media-loading warm-up so TCP channels stay alive.
         Returns the per-agent observation list.
+
+        Warm-up runs right after every reset, so a client that dies just after
+        its own soft reset (resetting 15 clients one by one takes a while; the
+        2026-10-10 N=15 failures all ended this way, never inside the soft
+        reset) is restarted here exactly as in ``_soft_reset_with_recovery``.
+        No trajectory is lost: the new episode has not taken a step yet.
         """
         keys = [0] * 21
         observations = []
         for agent_id in range(self.num_agents):
-            self.mt_channs[agent_id].send(keys, 0, 0)
-            obs, *_ = self.mt_channs[agent_id].receive()
+            try:
+                self.mt_channs[agent_id].send(keys, 0, 0)
+                obs, *_ = self.mt_channs[agent_id].receive()
+            except ConnectionError as exc:
+                obs = self._recover_client(agent_id, exc, "during warm-up")
             observations.append(obs)
         return observations
 
@@ -357,12 +366,22 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         try:
             return self._soft_reset_client(i)
         except ConnectionError as exc:
-            if os.environ.get("WT_MT_RECOVER", "1") == "0":
-                raise
-            self._report_mt_state(i, exc)
-            server = self.mt_server.proc
-            if server is None or server.poll() is not None:
-                raise  # the server itself is gone: nothing to reconnect to
+            return self._recover_client(i, exc, "at episode reset")
+
+    def _recover_client(self, i: int, exc: ConnectionError, where: str):
+        """Restart client ``i`` after ``exc`` and soft-reset it; return its obs.
+
+        Re-raises ``exc`` when recovery is switched off (``WT_MT_RECOVER=0``)
+        or the server itself is gone, and gives up after
+        ``_MT_RECOVER_WAITS_S`` attempts. Only for episode boundaries, where
+        every agent is placed back at its spawn anyway.
+        """
+        if os.environ.get("WT_MT_RECOVER", "1") == "0":
+            raise exc
+        self._report_mt_state(i, exc, where)
+        server = self.mt_server.proc
+        if server is None or server.poll() is not None:
+            raise exc  # the server itself is gone: nothing to reconnect to
 
         last_exc = None
         for attempt, wait_s in enumerate(self._MT_RECOVER_WAITS_S, start=1):
@@ -410,11 +429,12 @@ class _PatchedMarlCraftiumEnv(MarlCraftiumEnv):
         finally:
             chan.listen_timeout = saved_timeout
 
-    def _report_mt_state(self, i: int, exc: BaseException) -> None:
+    def _report_mt_state(self, i: int, exc: BaseException,
+                         where: str = "at episode reset") -> None:
         """Print every MT process's state, and the log tails of the ones that
         matter, to the run log. craftium deletes the run dirs on close, so
         this is the only copy that survives the job."""
-        print(f"[MT-RECOVER] client {i} lost at episode reset: {exc}", flush=True)
+        print(f"[MT-RECOVER] client {i} lost {where}: {exc}", flush=True)
         procs = [("server", self.mt_server)] + [
             (f"client {k}", c) for k, c in enumerate(self.mt_clients)
         ]

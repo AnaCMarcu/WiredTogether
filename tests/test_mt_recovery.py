@@ -152,3 +152,48 @@ def test_client_that_cannot_come_back_ends_the_run(tmp_path):
     with pytest.raises(ConnectionError, match="could not be restarted"):
         env.reset()
     assert env.mt_clients[0].starts == attempts
+
+
+# ── Warm-up right after a reset (2026-10-10, N=15 on Snellius) ─────────────
+# Every failed N=15 run died with "is MT down?" after the episode ended but
+# with no [MT-RECOVER] line: the client survived its own soft reset and died
+# a moment later, so the first warm-up NoOp was the call that noticed.
+
+
+def test_client_lost_during_warmup_is_restarted(tmp_path, capsys):
+    lost = FakeChannel(fail_receives=1)
+    env = make_env(tmp_path, [FakeChannel(), lost, FakeChannel()])
+    env.mt_clients[1].proc = FakeProc(code=-11)
+
+    observations = env.warmup_noop()
+
+    assert len(observations) == 3
+    assert env.mt_clients[1].starts == 1              # only the lost client
+    assert [env.mt_clients[i].starts for i in (0, 2)] == [0, 0]
+    assert lost.soft_resets == 1                      # the clean reset after the restart
+    assert env.mt_recoveries == 1
+    out = capsys.readouterr().out
+    assert "client 1 lost during warm-up" in out
+    assert "client 1 restarted and reset" in out
+
+
+def test_healthy_warmup_restarts_nothing(tmp_path):
+    env = make_env(tmp_path, [FakeChannel(), FakeChannel()])
+    assert len(env.warmup_noop()) == 2
+    assert [c.starts for c in env.mt_clients] == [0, 0]
+    assert getattr(env, "mt_recoveries", 0) == 0
+
+
+def test_warmup_recovery_can_be_switched_off(tmp_path, monkeypatch):
+    monkeypatch.setenv("WT_MT_RECOVER", "0")
+    env = make_env(tmp_path, [FakeChannel(fail_receives=1)])
+    with pytest.raises(ConnectionError):
+        env.warmup_noop()
+    assert env.mt_clients[0].starts == 0
+
+
+def test_no_warmup_recovery_when_the_server_is_gone(tmp_path):
+    env = make_env(tmp_path, [FakeChannel(fail_receives=1)], server_code=1)
+    with pytest.raises(ConnectionError, match="is MT down"):
+        env.warmup_noop()
+    assert env.mt_clients[0].starts == 0
