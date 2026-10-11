@@ -124,14 +124,15 @@ def _ctrl(plans=(), checks=(), tmp_path=None, cfg=None, validator=None):
     )
 
 
-def _tick(ctrl, *, t=1, living=LIVING, state=None, comm_budget=None):
+def _tick(ctrl, *, t=1, living=LIVING, state=None, comm_budget=None,
+          agent_milestones=None):
     return asyncio.run(ctrl.tick(
         state=state or OrchestratorState(), living_agents=living,
         episode=1, t=t, local_state_fn=lambda a: dict(LOCAL[a]),
         comm_budget=comm_budget,
         env_state={"doors": {"door1": True}, "anvils": [],
                    "cell_doors_open": []},
-        agent_milestones={}))
+        agent_milestones=agent_milestones or {}))
 
 
 def plan(**entries):
@@ -247,7 +248,7 @@ def _in_order(text, parts):
 def test_prompts_keep_the_hmas2_sentences_in_order():
     ctrl = _ctrl()
     central = ctrl.build_central_prompt(
-        living=LIVING, local=LOCAL, env_state={}, completed=set(),
+        living=LIVING, local=LOCAL, env_state={}, mine={},
         budget_left=None)
     _in_order(central, CENTRAL_VERBATIM)
     local = ctrl.build_local_prompt("agent_0", LOCAL["agent_0"], "Dig A1")
@@ -437,6 +438,62 @@ def test_workers_see_only_their_own_information(stub_autogen):
     # The directive names the agent's own task only.
     directive = ctrl.directive_text("agent_0")
     assert "Dig anvil A1" in directive and "agent_1" not in directive
+
+
+CH1_TRACK = {"m1_move_5": "ch1_solo", "m2_dig_3_any": "ch1_solo",
+             "m_door1_open": "ch1_solo", "m_comm_ch1": "communication"}
+
+
+def _current_state(central: str) -> dict:
+    return json.loads(re.search(
+        r"the current state is (\{.*\}), with the possible actions",
+        central, re.DOTALL).group(1))
+
+
+def test_milestones_are_shown_per_agent(stub_autogen):
+    # Credit is per agent: agent_0 digging 3 blocks leaves the milestone open
+    # for agent_1 and agent_2; Door 1 (one unlocker) closes for the team.
+    ctrl = _ctrl(plans=[plan(**ALL)], checks=["I Agree"] * 3)
+    ctrl._milestone_track = CH1_TRACK
+    _tick(ctrl, agent_milestones={
+        "agent0": {"m1_move_5", "m2_dig_3_any", "m_door1_open", "m_comm_ch1"},
+        "agent_1": {"m1_move_5"}})
+    central = ctrl.planner_client.text(0, 1)
+    state = _current_state(central)
+    assert state["open_milestones"] == ["m1_move_5", "m2_dig_3_any"]
+    assert state["completed_milestones"] == {
+        "agent_0": ["m1_move_5", "m2_dig_3_any", "m_door1_open"],
+        "agent_1": ["m1_move_5"], "agent_2": []}
+    assert ("milestones this episode are [m1_move_5, m2_dig_3_any, "
+            "m_door1_open]") in central
+    assert "milestones this episode are [none yet]" in central
+    # A worker's check shows its own milestones only.
+    check_1 = ctrl.check_client.text(1, 1)
+    assert "milestones this episode are [m1_move_5]" in check_1
+    assert "m2_dig_3_any" not in check_1
+
+
+def test_a_milestone_closes_once_every_living_agent_has_it(stub_autogen):
+    two = dict(agent_0=ALL["agent_0"], agent_1=ALL["agent_1"])
+    ctrl = _ctrl(plans=[plan(**two)], checks=["I Agree"] * 2)
+    ctrl._milestone_track = CH1_TRACK
+    _tick(ctrl, living=["agent_0", "agent_1"], agent_milestones={
+        "agent_0": {"m1_move_5"}, "agent_1": {"m1_move_5"}})
+    state = _current_state(ctrl.planner_client.text(0, 1))
+    assert state["open_milestones"] == ["m2_dig_3_any", "m_door1_open"]
+    assert set(state["completed_milestones"]) == {"agent_0", "agent_1"}
+
+
+def test_the_planner_reads_the_current_episode_milestones():
+    metric = SimpleNamespace(
+        _agent_milestones={"agent_0": {"m1_move_5", "m8_anvil_A1"},
+                           "agent1": {"m1_move_5"}},             # whole run
+        _agent_milestones_episode={0: {"m8_anvil_A1"}, 1: set(), 2: set()})
+    assert oh.episode_milestones(metric) == {
+        "agent_0": {"m8_anvil_A1"}, "agent_1": set(), "agent_2": set()}
+    legacy = SimpleNamespace(_agent_milestones={"agent_0": {"m1_move_5"}})
+    assert oh.episode_milestones(legacy) == {"agent_0": {"m1_move_5"}}
+    assert oh.episode_milestones(None) == {}
 
 
 def test_budget_exhausted_agents_are_not_checked_and_objections_cost(

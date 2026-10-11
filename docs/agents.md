@@ -92,6 +92,7 @@ Documented adaptations (state them with the results):
 | Persistence | a new action every step | an assignment stays until the planner changes it; "has a task next" = a new task or a message |
 | Syntactic failure | ends the trial | keeps the valid entries and the previous assignments |
 | History budget | 3,000 tokens for the whole prompt | 3,000 tokens for the history alone (WIRE's base prompt is larger) |
+| Goal state | the boxes still off target | the milestones still open, **per agent**: WIRE credits a milestone to each agent separately, so it stays open while some living agent has not fired it this episode (Door 1, one unlocker, closes for the team); each agent's line lists its own completed milestones |
 
 The planner sees the whole team, as in HMAS-2. A worker gets teammate information only through
 the planner's message (delivered by replacing its inbox, header "Message from the orchestrator"),
@@ -116,7 +117,7 @@ re-prompt strings in `src/orchestrator/hmas2.py`; `tests/test_orchestrator_hmas2
 | "Actions are like: move(box_red, target_red)…" | "Actions are like: "Dig anvil A1 together with agent_1"…" |
 | "Your task is to instruct each agent to match all boxes to their color-coded targets. After each move, agents provide updates… optimally." | "…to complete the open milestones and progress through all five chambers." — rest verbatim |
 | "The previous state and action pairs at each step are:" + "Please learn from previous steps…" | verbatim |
-| "Hence, the current state is {state}, with the possible actions: {actions}" | verbatim; state = doors, anvils, cells, milestones; one "agent_k: I am in …, I can observe …, I can do …" line per agent |
+| "Hence, the current state is {state}, with the possible actions: {actions}" | verbatim; state = doors, anvils, cells, open milestones and each agent's completed milestones this episode; one "agent_k: I am in …, I can observe …, my completed milestones …, I can do …" line per agent |
 | — | **added:** the agents' latest reports; the budget left (budget runs) |
 | "Specify your action plan in this format: {…}. Include an agent only if it has a task next. Now, plan the next step:" | verbatim, format `{"agent_0":{"task":…,"message":…}}`; **added:** persistence rule and "tell that agent only what it needs to know about the other agents" |
 | Local: "You're a box-moving agent in a multi-agent system… A central planner coordinates all agents to achieve the goal: …" | "You're agent_k, an agent in a five-chamber cooperative dungeon, in a multi-agent system…" — rest verbatim |

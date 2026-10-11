@@ -98,6 +98,9 @@ PLAN_FORMAT_EXAMPLE = ('{"agent_0":{"task":"...","message":"..."}, '
 
 MAX_TASK_WORDS = 25
 _COORD_RE = re.compile(r"-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?")
+#: Milestones only one agent per episode can fire (Door 1 has one unlocker);
+#: every other milestone is credited to each agent separately.
+TEAM_ONCE_MILESTONES = frozenset({"m_door1_open"})
 _PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts")
 
 
@@ -126,6 +129,21 @@ def extract_plan(raw: str):
     except (ValueError, TypeError):
         parsed = parse_orchestrator_json(match.group())
     return parsed if isinstance(parsed, dict) and parsed else None
+
+
+def episode_milestones(metric) -> dict:
+    """Milestones each agent fired in the CURRENT episode, "agent_N" -> set.
+
+    The metric's per-episode sets are reset at every episode boundary and
+    keyed by agent index. ``metric._agent_milestones`` is not a substitute:
+    it accumulates over the whole run and keys an agent by whichever name
+    the event carried ("agent1" or "agent_1")."""
+    if metric is None:
+        return {}
+    per_episode = getattr(metric, "_agent_milestones_episode", None)
+    if isinstance(per_episode, dict):
+        return {f"agent_{int(i)}": set(ids) for i, ids in per_episode.items()}
+    return dict(getattr(metric, "_agent_milestones", {}) or {})
 
 
 def format_history(entries: list, count_tokens: Callable[[str], int],
@@ -401,19 +419,30 @@ class HMAS2Controller:
             f"{info.get('holding') or 'nothing'}, my health is "
             f"{info.get('health') or '?'}, my current task is "
             f"\"{info.get('task') or 'none'}\" (last check: "
-            f"{info.get('last_check') or 'not checked yet'}), I can do tasks "
-            f"that dig, attack, move to, face, place, collect or explore the "
-            f"things in my chamber")
+            f"{info.get('last_check') or 'not checked yet'}), my completed "
+            f"milestones this episode are "
+            f"[{', '.join(info.get('milestones') or []) or 'none yet'}], I can "
+            f"do tasks that dig, attack, move to, face, place, collect or "
+            f"explore the things in my chamber")
 
-    def _team_state(self, env_state: dict, completed: set) -> dict:
+    def _team_state(self, env_state: dict, mine: dict, living: list) -> dict:
+        """Global state. Milestones are credited per agent, so a milestone
+        stays open while some living agent has not fired it (except the
+        team-once ones), and completions are listed per agent."""
         known = known_milestone_ids(self._milestone_track)
+        fired = set().union(*mine.values()) if mine else set()
+        open_ms = sorted(
+            m for m in known
+            if not (m in TEAM_ONCE_MILESTONES and m in fired)
+            and any(m not in mine.get(a, set()) for a in living))
         state = {
             "doors_open": [d for d, v in (env_state.get("doors") or {}).items()
                            if v],
             "unbroken_anvils": env_state.get("anvils") or [],
             "cell_doors_open": env_state.get("cell_doors_open") or [],
-            "open_milestones": sorted(known - completed),
-            "completed_milestones": sorted(completed & known),
+            "open_milestones": open_ms,
+            "completed_milestones": {a: sorted(mine.get(a, set()) & known)
+                                     for a in living},
         }
         if self._events:
             state["events"] = list(self._events)
@@ -445,13 +474,13 @@ class HMAS2Controller:
                 f"cannot receive messages.\n")
 
     def build_central_prompt(self, *, living: list, local: dict,
-                             env_state: dict, completed: set,
+                             env_state: dict, mine: dict,
                              budget_left: Optional[dict]) -> str:
         return CENTRAL_TEMPLATE.format(
             chamber_facts=self._chamber_text(),
             state_action_prompt=format_history(
                 self.history, self._count, self.cfg.hmas2_history_tokens),
-            current_state=json.dumps(self._team_state(env_state, completed),
+            current_state=json.dumps(self._team_state(env_state, mine, living),
                                      separators=(",", ":")),
             possible_actions="\n".join(
                 self._local_line(a, local.get(a) or {}) for a in living),
@@ -502,15 +531,17 @@ class HMAS2Controller:
         if env_state is None:
             env_state = collect_env_state(environment, self.num_agents, t)
         if agent_milestones is None:
-            agent_milestones = (dict(getattr(metric, "_agent_milestones", {}))
-                                if metric is not None else {})
-        completed = set()
-        for ids in (agent_milestones or {}).values():
-            completed.update(ids)
+            agent_milestones = episode_milestones(metric)
+        mine: dict = {}
+        for name, ids in (agent_milestones or {}).items():
+            mine.setdefault(_normalize_agent(name) or str(name),
+                            set()).update(ids)
+        known = known_milestone_ids(self._milestone_track)
         local = {a: (local_state_fn(a) if local_state_fn else {}) or {}
                  for a in living}
         for a in living:
             local[a].setdefault("task", self.assignments.get(a))
+            local[a]["milestones"] = sorted(mine.get(a, set()) & known)
         chambers = {a: local[a].get("chamber") or "" for a in living}
 
         def _left(agent):
@@ -524,7 +555,7 @@ class HMAS2Controller:
         # 1-2. Plan + syntactic check.
         central = self.build_central_prompt(
             living=living, local=local, env_state=env_state,
-            completed=completed, budget_left=budget_left)
+            mine=mine, budget_left=budget_left)
         plan, ok, plan_json = await self._plan_checked(
             [central], [], living=living, chambers=chambers,
             call_type="plan", episode=episode, t=t)
@@ -606,7 +637,7 @@ class HMAS2Controller:
         latency = time.perf_counter() - started
         self.stats["latency_s"] += latency
 
-        team_state = json.dumps(self._team_state(env_state, completed),
+        team_state = json.dumps(self._team_state(env_state, mine, living),
                                 separators=(",", ":"))
         self.history.append((team_state, plan_json))
         for agent in living:
