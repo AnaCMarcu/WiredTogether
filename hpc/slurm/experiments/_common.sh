@@ -277,13 +277,24 @@ run_exp() {
     # Serves the same model from a vLLM server on the same GPU instead of
     # loading it into the python process; RemoteModelClient
     # (LLM_BACKEND=vllm) sends it the exact in-process requests. LLM-only
-    # arms only: --rl trains LoRA on the in-process weights.
-    local VLLM_ENV=() VLLM_ARGS=() VLLM_PID="" VLLM_TMP=""
+    # arms by default: --rl trains LoRA on the in-process weights.
+    #
+    # RL_WITH_VLLM=1 (opt-in) lets an --rl arm use the server for the agents'
+    # cognition only. That is safe because RLLayer loads its OWN copy of the
+    # model (rl_layer.RLLayer._shared_model) for action scoring and PPO, and
+    # never touches the cognition model. Lower VLLM_GPU_UTIL so that copy
+    # still fits next to the server.
+    local VLLM_ENV=() VLLM_ARGS=() VLLM_PID="" VLLM_TMP="" RL_ARM=0
     if [ "${LLM_SERVER:-}" = "vllm" ]; then
         case " $* " in
             *" --rl "*)
-                echo "!! LLM_SERVER=vllm cannot run an --rl arm (LoRA training needs the in-process model)" >&2
-                return 1 ;;
+                if [ "${RL_WITH_VLLM:-0}" != "1" ]; then
+                    echo "!! LLM_SERVER=vllm cannot run an --rl arm (LoRA training needs the in-process model);" >&2
+                    echo "   RL_WITH_VLLM=1 serves only the agents' cognition from vLLM" >&2
+                    return 1
+                fi
+                RL_ARM=1
+                echo "── RL_WITH_VLLM=1: cognition on vLLM, RL actor + PPO in-process ──" ;;
         esac
         local VLLM_IMG="${VLLM_IMAGE:-}"
         if [ -z "$VLLM_IMG" ]; then
@@ -343,8 +354,11 @@ run_exp() {
             --env LLM_SERVER_KEY="$VLLM_KEY"
         )
         # Concurrent agent calls are what the server batches. Pass the
-        # switch only where this checkout's CLI has it.
-        if grep -q -- '"--llm-batch"' "$REPO/src/mindforge/cli.py" 2>/dev/null; then
+        # switch only where this checkout's CLI has it. The CLI refuses it
+        # with --rl, so an RL arm keeps its calls sequential.
+        if [ "$RL_ARM" = "1" ]; then
+            echo "   (RL arm: agents' calls stay sequential; --llm-batch is refused with --rl)"
+        elif grep -q -- '"--llm-batch"' "$REPO/src/mindforge/cli.py" 2>/dev/null; then
             VLLM_ARGS=(--llm-batch)
         else
             echo "   (no --llm-batch in this checkout: agents' calls stay sequential)"
