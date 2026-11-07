@@ -746,6 +746,24 @@ async def run(args):
         environment.reset_anvil_coop_offset()
         environment.reset_death_offset()
 
+        # ── Contribution test (--disable-switch rotate): one Ch3 switch per
+        # episode ignores presses. The seat rotates with seed + episode, so
+        # across seeds every seat is the non-contributor equally often. ──
+        if args.disable_switch == "rotate":
+            _off = (int(args.seed or 0) + episode) % num_agents
+            _ok = environment.set_disabled_switch(_off)
+            _blocked = (_off + 1) % num_agents
+            print(f"[INTERVENTION] episode {episode + 1}: switch {_off} disabled "
+                  f"(agent_{_off} cannot free agent_{_blocked})"
+                  + ("" if _ok else " - FLAG WRITE FAILED"))
+            with open(run_paths.root / "interventions.jsonl", "a", encoding="utf-8") as _fh:
+                _fh.write(json.dumps({
+                    "episode": episode + 1, "disabled_switch": _off,
+                    "disabled_agent": f"agent_{_off}",
+                    "blocked_agent": f"agent_{_blocked}",
+                    "flag_written": bool(_ok),
+                }) + "\n")
+
         if episode > resume_episode:
             for _ag in agents:
                 await _ag.on_reset(CancellationToken())

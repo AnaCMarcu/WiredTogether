@@ -1025,6 +1025,35 @@ class CraftiumEnvironmentInterface(ChamberStateMixin, LuaEventsMixin):
             _log.warning("[WARMUP] signal_warmup_complete failed: %s", e)
             return False
 
+    def set_disabled_switch(self, index) -> bool:
+        """Disable one Chamber 3 switch for this episode (contribution test).
+
+        Writes ``{world_path}/disabled_switch.txt`` holding the switch index;
+        switches.lua ignores presses of that switch, so its agent cannot free
+        the next agent but still moves and talks. ``None`` removes the file.
+        Call after reset(). Returns False if the world path is not resolved
+        yet or the write fails.
+        """
+        try:
+            world_path = self._get_world_path()
+        except AttributeError:
+            return False
+        dst = os.path.join(world_path, "disabled_switch.txt")
+        try:
+            if index is None:
+                if os.path.exists(dst):
+                    os.remove(dst)
+                return True
+            tmp = dst + ".tmp"
+            with open(tmp, "w") as f:
+                f.write(str(int(index)))
+            os.replace(tmp, dst)
+            return True
+        except OSError as e:
+            import logging as _log
+            _log.warning("[INTERVENTION] set_disabled_switch failed: %s", e)
+            return False
+
     def force_ch1_teleport(self) -> bool:
         """Signal the Lua side to force-fire the Ch1→Ch2 teleport now.
 

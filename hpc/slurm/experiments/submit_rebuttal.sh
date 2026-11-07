@@ -22,13 +22,16 @@
 #     freq     full, no reward growth     (--hebbian-eta-plus 0)
 #
 #   t1_<variant>          zero-shot, N=3, Table 1 regime on vLLM: mandatory
-#                         messaging, message pay on, no budget.
+#                         messaging, message pay on, no budget. The rule is
+#                         the Methods rule, failure term (death LTD) included.
 #     base     no graph
-#     full     the Methods rule with the social module
+#     full     the Methods rule (the reference for the arms below)
 #     nofloor  no association floor       (--hebbian-eta-0 0)
 #     nopay    no message pay             (--comm-reward-scale 0)
 #     contrib  no floor and no message pay: bonds grow from milestones only
-#     freq     no reward growth           (--hebbian-eta-plus 0)
+#     freq     interaction only: no reward growth, no failure term
+#     noswitch full rule + one Ch3 switch disabled per episode (contribution
+#              test, --disable-switch rotate)
 #
 #   zs_<variant>          zero-shot, scaling regime on vLLM: NS × BUDGET, flags
 #                         of budget_gemma.sbatch (message pay already off, so
@@ -160,14 +163,18 @@ resolve_arm() {
             ;;
         t1_*)
             variant="${arm#t1_}"
+            # The Methods rule, failure term (death LTD) included. The paper's
+            # Gemma +plasticity row (DAIC) ran without it, so t1_full is rerun
+            # here as these arms' reference.
             rule="$HEB2 --hebbian-gamma 0.2 --hebbian-rho 0.0 --social-module prompt"
             case "$variant" in
-                base)    R_ARGS="--simultaneous" ;;
-                full)    R_ARGS="$rule --simultaneous" ;;
-                nofloor) R_ARGS="$rule --simultaneous --hebbian-eta-0 0" ;;
-                nopay)   R_ARGS="$rule --simultaneous --comm-reward-scale 0" ;;
-                contrib) R_ARGS="$rule --simultaneous --hebbian-eta-0 0 --comm-reward-scale 0" ;;
-                freq)    R_ARGS="$rule --simultaneous --hebbian-eta-plus 0" ;;
+                base)     R_ARGS="--simultaneous" ;;
+                full)     R_ARGS="$rule --simultaneous" ;;
+                nofloor)  R_ARGS="$rule --simultaneous --hebbian-eta-0 0" ;;
+                nopay)    R_ARGS="$rule --simultaneous --comm-reward-scale 0" ;;
+                contrib)  R_ARGS="$rule --simultaneous --hebbian-eta-0 0 --comm-reward-scale 0" ;;
+                freq)     R_ARGS="$rule --simultaneous --hebbian-eta-plus 0 --hebbian-death-ltd 0" ;;
+                noswitch) R_ARGS="$rule --simultaneous --disable-switch rotate" ;;
                 *) echo "ERROR: unknown t1 variant in '$arm'" >&2; return 1 ;;
             esac
             R_N=3

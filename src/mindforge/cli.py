@@ -285,6 +285,13 @@ def parse_args():
                              "remaining chambers split the episode evenly. "
                              "3 = start in the Ch3 cells. Default: normal "
                              "Ch1 start.")
+    parser.add_argument("--disable-switch", type=str, default="none",
+                        choices=["none", "rotate"],
+                        help="Contribution test: 'rotate' disables one Chamber 3 "
+                             "switch per episode, seat (seed + episode) mod N. "
+                             "Its agent still moves and talks but cannot free "
+                             "the next agent. Logged to interventions.jsonl. "
+                             "Default 'none'.")
     parser.add_argument("--hebbian-init-file", type=str, default=None,
                         help="JSON file holding a full N×N starting W matrix "
                              "(either {\"W\": [[...]]} or a raw nested list), "

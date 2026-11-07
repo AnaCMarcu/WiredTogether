@@ -10,13 +10,28 @@
 --   4. Fire M18 (door_opened) for the freed agent.
 --
 -- One-shot: switch_pressed[i] = true permanently after first press.
+--
+-- Contribution test (--disable-switch rotate): Python writes one switch
+-- index per episode to disabled_switch.txt in the world dir; presses of that
+-- switch are ignored, so its agent cannot free the next one but still moves
+-- and talks. No file = every switch works (the default).
 
 wire.switch_pressed = {}
+wire.switch_ignored_logged = {}
 
 function wire.init_switches()
     for i = 0, wire.NUM_AGENTS - 1 do
         wire.switch_pressed[i] = false
+        wire.switch_ignored_logged[i] = false
     end
+end
+
+local function switch_disabled(i)
+    local f = io.open((minetest.get_worldpath() or "") .. "/disabled_switch.txt", "r")
+    if not f then return false end
+    local v = tonumber(f:read("*l") or "")
+    f:close()
+    return v == i
 end
 
 -- Returns the cell index whose door is opened by switch i (rotational).
@@ -44,6 +59,15 @@ minetest.register_node("wire:switch", {
         local sw_i    = switch_index_at(pos)
         if sw_i < 0 then return end
         if wire.switch_pressed[sw_i] then return end  -- one-shot
+        if switch_disabled(sw_i) then
+            if not wire.switch_ignored_logged[sw_i] then
+                wire.switch_ignored_logged[sw_i] = true
+                minetest.log("action", "[wire] Switch " .. wire.cell_label(sw_i)
+                    .. " is disabled (contribution test): press by "
+                    .. presser .. " ignored.")
+            end
+            return
+        end
 
         wire.switch_pressed[sw_i] = true
 
