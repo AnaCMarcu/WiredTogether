@@ -6,7 +6,10 @@
 #
 #   rl_<algo>_<variant>   RL fine-tuning, N=3, IN-PROCESS: vLLM cannot train
 #                         LoRA. algo = ippo | mappo. Flags match exp03/exp04
-#                         (base) and exp36/exp37 (full). RL_VLLM=1 serves the
+#                         (base) and exp36/exp37 (full), except the actor
+#                         now sees its whole prompt (2,048-token cap, cut from
+#                         the left, packed scoring); RL_LEGACY_ACTOR=1 keeps
+#                         the paper's 512-token actor. RL_VLLM=1 serves the
 #                         agents' cognition from vLLM and keeps the RL actor
 #                         and PPO in-process (RL_WITH_VLLM in _common.sh);
 #                         those runs are named reb_<arm>_vllm.
@@ -119,6 +122,14 @@ resolve_arm() {
                 *) echo "ERROR: unknown RL algorithm in '$arm'" >&2; return 1 ;;
             esac
             local rl="--rl --rl-critic-mode $critic --rl-model-path $MODEL_LLM --rl-update-interval 64 --rl-lr 3e-4 --simultaneous"
+            # The paper's actor scored only the first 512 tokens of a ~1,100-1,400
+            # token prompt (right truncation), so it never saw "Thoughts: ...
+            # Action:". Here it sees the whole prompt (the longest logged one is
+            # ~8k chars), scored in one packed forward. RL_LEGACY_ACTOR=1 restores
+            # the paper's actor, in runs named reb_<arm>_legacy.
+            local actor="--rl-prompt-max-tokens 2048 --rl-truncation-side left --rl-shared-prefix"
+            [ "${RL_LEGACY_ACTOR:-0}" = "1" ] && actor=""
+            rl="$rl $actor"
             case "$variant" in
                 base)    R_ARGS="$rl" ;;
                 full)    R_ARGS="$rl $HEB2 --hebbian-gamma 0.2 --hebbian-rho 0.3" ;;
@@ -131,6 +142,7 @@ resolve_arm() {
             esac
             R_N=3
             R_EXP="reb_$arm"
+            [ "${RL_LEGACY_ACTOR:-0}" = "1" ] && R_EXP="reb_${arm}_legacy"
             R_SERVER=""
             R_STAGGER=1          # env-idle hang fix, every Gemma RL arm
             R_TIME=96:00:00      # worst seed on the other cluster: 74 h
@@ -140,7 +152,7 @@ resolve_arm() {
                 # The RL copy of Gemma (~15 GiB + scoring and PPO memory)
                 # shares the 40 GB A100 with the server: 0.46 leaves the
                 # server ~1.9 GiB of KV cache (~50k tokens, prompts <= 5.5k).
-                R_EXP="reb_${arm}_vllm"
+                R_EXP="${R_EXP}_vllm"
                 R_SERVER=vllm
                 R_RL_VLLM=1
                 R_VLLM_UTIL="${VLLM_GPU_UTIL:-0.46}"

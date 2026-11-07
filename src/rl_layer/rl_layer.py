@@ -29,6 +29,7 @@ import torch
 from rl_layer.config import RLConfig
 from rl_layer.heads import RunningMeanStd, ValueHead
 from rl_layer.peft_compat import resolve_lora_targets
+from rl_layer.shared_prefix import packing_support, score_candidates_packed
 from rl_layer.trajectory_buffer import RolloutBuffer
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,9 @@ class RLLayer:
     _shared_model = None
     _shared_tokenizer = None
     _shared_model_path: Optional[str] = None
+    # Whether the packed (shared-prefix) scorer is exact for the shared model;
+    # decided once per process by _packing_ok().
+    _packing_checked: Optional[bool] = None
     # Explicit module paths resolved from LORA_TARGET_MODULES for the loaded
     # checkpoint. Every agent's adapter reuses this exact list, so all
     # adapters cover the same parameter set.
@@ -461,6 +465,7 @@ class RLLayer:
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
         tokenizer.padding_side = "left"
+        tokenizer.truncation_side = config.truncation_side
 
         logger.info("RLLayer: loading shared base model from %s", config.model_path)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -615,6 +620,18 @@ class RLLayer:
         prompt_ids_real = prompt_ids[real_mask]                # (L,)
         prompt_len = int(prompt_ids_real.numel())
 
+        if self.config.shared_prefix_scoring and self._packing_ok():
+            cand_log_probs, pooled = score_candidates_packed(
+                self.model, prompt_ids_real, cand_ids_list, with_grad,
+            )
+            if getattr(self.config, "length_normalize_action_logp", False):
+                lengths = torch.tensor(
+                    [max(1, int(ids.numel())) for ids in cand_ids_list],
+                    dtype=torch.float32, device=self._device,
+                )
+                cand_log_probs = cand_log_probs / lengths
+            return cand_log_probs, pooled
+
         # Build right-padded batch [prompt + cand_i + pad] per row.
         C = len(cand_ids_list)
         seq_lens = [prompt_len + int(ids.numel()) for ids in cand_ids_list]
@@ -679,6 +696,18 @@ class RLLayer:
                 cand_log_probs = cand_log_probs / lengths
 
         return cand_log_probs, pooled
+
+    def _packing_ok(self) -> bool:
+        """Whether the packed scorer is exact for the shared model (checked once)."""
+        if RLLayer._packing_checked is None:
+            ok, why = packing_support(self.model)
+            if ok:
+                logger.info("RLLayer: shared-prefix scoring ON (one packed forward per prompt)")
+            else:
+                logger.warning("RLLayer: shared-prefix scoring unavailable (%s); "
+                               "scoring one prompt row per candidate", why)
+            RLLayer._packing_checked = ok
+        return RLLayer._packing_checked
 
     def _encode_prompt(self, prompt_text: str) -> torch.Tensor:
         """Tokenize prompt and return pooled last-token hidden state (1, H).

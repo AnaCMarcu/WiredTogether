@@ -448,6 +448,8 @@ async def run(args):
         lr=args.rl_lr,
         auto_token_opt=args.rl_auto_token_opt,
         rl_prompt_max_tokens=args.rl_prompt_max_tokens,
+        truncation_side=args.rl_truncation_side,
+        shared_prefix_scoring=args.rl_shared_prefix,
         lora_save_dir=rl_save_dir,
         critic_mode=args.rl_critic_mode,
     )

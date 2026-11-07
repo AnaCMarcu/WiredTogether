@@ -163,6 +163,18 @@ def parse_args():
                              "for VRAM: at model_max_length=32768 a mini-batch of 8 prompts "
                              "needs ~21 GB just for hidden states. 512 is sufficient for "
                              "discrete action policy learning.")
+    parser.add_argument("--rl-truncation-side", type=str, default="right",
+                        choices=["right", "left"],
+                        help="Which end of an RL scoring prompt longer than "
+                             "--rl-prompt-max-tokens is cut. 'right' (default, the "
+                             "tokenizer's own) drops the end, where the prompt keeps "
+                             "'Thoughts: ... Action:'; 'left' keeps that tail.")
+    parser.add_argument("--rl-shared-prefix", action="store_true",
+                        help="Score all candidate actions in one packed forward that "
+                             "reads the prompt once (rl_layer/shared_prefix.py): the "
+                             "same log-probs and gradients as one row per candidate, "
+                             "at a fraction of the compute. Attention-only models; "
+                             "others fall back to the batched path.")
     # ── Hebbian social plasticity ──
     parser.add_argument("--hebbian", action="store_true",
                         help="Enable Hebbian social plasticity graph")

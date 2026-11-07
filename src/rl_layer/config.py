@@ -33,6 +33,14 @@ class RLConfig:
     # ── Memory management ──
     rl_prompt_max_tokens: int = 256  # was 512 — halving sequence length reduces attention memory ~4×; 256 tokens is enough for task+status+beliefs
     gradient_checkpointing: bool = True  # re-enabled: serving model + RL model share the 80GB A100, leaving ~1.5GB free; checkpointing trades 35% compute for ~60% activation memory reduction
+    # Which end an RL prompt longer than rl_prompt_max_tokens loses. "right"
+    # (the tokenizer default) drops the end, which is where the scoring prompt
+    # keeps "Thoughts: ... Action:"; "left" keeps that tail.
+    truncation_side: str = "right"
+    # Score all candidates in one packed forward that reads the prompt once
+    # (rl_layer/shared_prefix.py) instead of one prompt row per candidate.
+    # Same log-probs and gradients; attention-only models, else batched.
+    shared_prefix_scoring: bool = False
 
     # ── PPO / MAPPO hyper-parameters ──
     gamma: float = 0.995  # was 0.99 — extends effective credit horizon from ~100 to ~200 steps; needed since tasks take 50-100 steps before a completion reward fires
