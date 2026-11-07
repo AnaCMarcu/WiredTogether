@@ -38,7 +38,7 @@
 #                         its reward growth is milestones only). The base and
 #                         full cells come from submit_comm_budget.sh.
 #     uniform   W frozen flat at the measured mean bond
-#     freq      no reward growth          (--hebbian-eta-plus 0)
+#     freq      interaction only: no reward growth, no failure term
 #     nofloor   no association floor      (--hebbian-eta-0 0)
 #     msgpay    message pay back on       (--comm-reward-scale 1)
 #     nospatial no proximity term         (--hebbian-radius 0)
@@ -188,7 +188,7 @@ resolve_arm() {
             local env_args="--team-scaling --ch4-mob-count $CH4_MOBS --simultaneous --comm-budget-tokens $BUDGET --comm-budget-msg-cap $COMM_MSG_CAP"
             case "$variant" in
                 uniform)   R_ARGS="$rule $env_args --comm-reward-scale 0 $(uniform_zs "$n")" ;;
-                freq)      R_ARGS="$rule $env_args --comm-reward-scale 0 --hebbian-eta-plus 0" ;;
+                freq)      R_ARGS="$rule $env_args --comm-reward-scale 0 --hebbian-eta-plus 0 --hebbian-death-ltd 0" ;;
                 nofloor)   R_ARGS="$rule $env_args --comm-reward-scale 0 --hebbian-eta-0 0" ;;
                 msgpay)    R_ARGS="$rule $env_args --comm-reward-scale 1" ;;
                 nospatial) R_ARGS="$rule $env_args --comm-reward-scale 0 --hebbian-radius 0" ;;
