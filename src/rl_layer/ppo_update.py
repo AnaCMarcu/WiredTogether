@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, Optional, TYPE_CHECKING
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -51,6 +52,8 @@ def run_ppo_update(
     )
 
     social_transitions = _collect_social_replay(rl, neighbour_buffers, hebbian_graph)
+    own_transitions = _collect_own_replay(rl)
+    extra_transitions = social_transitions + own_transitions
     entropy_coef = _anneal_entropy(rl)
 
     all_info: Dict = {}
@@ -59,7 +62,7 @@ def run_ppo_update(
     _first_batch_checked = False
     for epoch_i in range(rl.config.ppo_epochs):
         for batch in rl.buffer.sample_batches(
-            rl.config.mini_batch_size, extra_transitions=social_transitions,
+            rl.config.mini_batch_size, extra_transitions=extra_transitions,
         ):
             rl.optimizer.zero_grad()
             with torch.amp.autocast(rl._device.type, dtype=rl._dtype):
@@ -75,11 +78,11 @@ def run_ppo_update(
                     value_loss_enabled=not rl._use_centralized,
                     scaler=scaler,
                 )
-            # Ratio sanity check assumes on-policy data: with social replay
-            # mixed in, first-epoch ratios are legitimately π_i/π_j ≠ 1, so
+            # Ratio sanity check assumes on-policy data: with social or own
+            # replay mixed in, first-epoch ratios are legitimately ≠ 1, so
             # the check would cry "tokenization inconsistent" spuriously.
             if (epoch_i == 0 and not _first_batch_checked
-                    and not social_transitions and info.get("n_kept", 0) > 0):
+                    and not extra_transitions and info.get("n_kept", 0) > 0):
                 _first_batch_checked = True
                 r_mean = float(info.get("ratio_mean", 1.0))
                 if abs(r_mean - 1.0) > 0.05:
@@ -114,12 +117,18 @@ def run_ppo_update(
             all_info = info  # keep last batch info
 
     rl._update_count += 1
+    if rl.config.own_replay_rho > 0:
+        # This window becomes the next update's own-replay pool. Its
+        # transitions already carry their GAE advantages and are never
+        # touched again (clear() empties the buffer's list, not them).
+        rl._own_replay_pool = rl.buffer.get_all()
     rl.buffer.clear()
     all_info["entropy_coef"] = entropy_coef
     # How many bond-weighted neighbour transitions entered this update's
     # pool (0 when replay is off) — lands in record_rl_update/wandb so the
     # analysis can verify the mixture actually fired per update.
     all_info["social_replay_n"] = len(social_transitions)
+    all_info["own_replay_n"] = len(own_transitions)
 
     logger.info(
         "RLLayer agent %d update #%d: %s",
@@ -211,6 +220,34 @@ def _collect_social_replay(rl: "RLLayer", neighbour_buffers, hebbian_graph):
             hebbian_graph.config.social_replay_rho, len(rl.buffer),
         )
     return social_transitions
+
+
+def _collect_own_replay(rl: "RLLayer") -> list:
+    """Extra transitions from the agent's own previous update window.
+
+    The matched-samples control for social replay: the same count that
+    ``get_social_replay_indices`` adds from partners, m = round(n·ρ/(1−ρ))
+    with n = the current buffer size, drawn with replacement like the
+    partner samples. They come from the window before this one, so they are
+    off-policy by one update; their stored ``old_log_prob`` makes PPO's
+    clipped ratio the importance weight, as for partner data. The first
+    update has no previous window and adds nothing.
+    """
+    rho = rl.config.own_replay_rho
+    pool = getattr(rl, "_own_replay_pool", None) or []
+    if rho <= 0.0 or not pool:
+        return []
+    m = int(round(len(rl.buffer) * rho / (1.0 - rho)))
+    if m <= 0:
+        return []
+    picks = np.random.randint(0, len(pool), size=m)
+    own = [pool[int(i)] for i in picks]
+    logger.info(
+        "RLLayer agent %d: own replay — %d transitions from its previous "
+        "window of %d (rho=%.2f, own=%d)",
+        rl.agent_id, len(own), len(pool), rho, len(rl.buffer),
+    )
+    return own
 
 
 def _gae_on_copy(rl: "RLLayer", buf_j) -> list:

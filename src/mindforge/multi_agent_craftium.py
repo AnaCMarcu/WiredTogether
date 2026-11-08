@@ -450,6 +450,7 @@ async def run(args):
         rl_prompt_max_tokens=args.rl_prompt_max_tokens,
         truncation_side=args.rl_truncation_side,
         shared_prefix_scoring=args.rl_shared_prefix,
+        own_replay_rho=args.rl_own_replay_rho,
         lora_save_dir=rl_save_dir,
         critic_mode=args.rl_critic_mode,
     )

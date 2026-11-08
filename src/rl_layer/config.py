@@ -76,6 +76,14 @@ class RLConfig:
     # Qwen suites ran unstaggered and their gap-fill seeds must match.
     update_stagger: bool = False
 
+    # ── Matched-samples control for experience sharing ──
+    # Each PPO update also trains on round(n·ρ/(1−ρ)) transitions drawn (with
+    # replacement) from this agent's OWN previous update window: the number of
+    # transitions bond-weighted sharing (--hebbian-rho ρ) adds from partners,
+    # without any partner data. Off-policy like shared data; PPO's clipped ratio
+    # corrects for it. 0.0 = off.
+    own_replay_rho: float = 0.0
+
     # ── Token-level self-improvement ──
     auto_token_opt: bool = False  # let agent decide when to do token-level PPO
     token_opt_min_samples: int = 32

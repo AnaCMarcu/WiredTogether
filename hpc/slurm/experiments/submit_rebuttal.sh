@@ -19,7 +19,10 @@
 #     share    sharing + bond text        (--hebbian-gamma 0)
 #     text     bond text only             (both 0)
 #     uniform  full, W frozen flat at the measured mean bond
-#     freq     full, no reward growth     (--hebbian-eta-plus 0)
+#     freq     full, interaction only: no reward growth, no failure term
+#     matched  base + as many extra samples per update as sharing adds
+#              (rho 0.3), drawn from the agent's OWN previous update window
+#              (--rl-own-replay-rho 0.3): more data without partner data
 #
 #   t1_<variant>          zero-shot, N=3, Table 1 regime on vLLM: mandatory
 #                         messaging, message pay on, no budget. The rule is
@@ -116,6 +119,8 @@ resolve_arm() {
     R_STAGGER=0
     R_RL_VLLM=""
     R_VLLM_UTIL="${VLLM_GPU_UTIL:-}"
+    R_KEEPALIVE=""
+    R_REQ_TIMEOUT=""
     case "$arm" in
         rl_*)
             algo="${arm#rl_}"; variant="${algo#*_}"; algo="${algo%%_*}"
@@ -140,7 +145,8 @@ resolve_arm() {
                 share)   R_ARGS="$rl $HEB2 --hebbian-gamma 0 --hebbian-rho 0.3" ;;
                 text)    R_ARGS="$rl $HEB2 --hebbian-gamma 0 --hebbian-rho 0" ;;
                 uniform) R_ARGS="$rl $HEB2 --hebbian-gamma 0.2 --hebbian-rho 0.3 $(uniform_rl "$algo")" ;;
-                freq)    R_ARGS="$rl $HEB2 --hebbian-gamma 0.2 --hebbian-rho 0.3 --hebbian-eta-plus 0" ;;
+                freq)    R_ARGS="$rl $HEB2 --hebbian-gamma 0.2 --hebbian-rho 0.3 --hebbian-eta-plus 0 --hebbian-death-ltd 0" ;;
+                matched) R_ARGS="$rl --rl-own-replay-rho 0.3" ;;
                 *) echo "ERROR: unknown RL variant in '$arm'" >&2; return 1 ;;
             esac
             R_N=3
@@ -159,6 +165,13 @@ resolve_arm() {
                 R_SERVER=vllm
                 R_RL_VLLM=1
                 R_VLLM_UTIL="${VLLM_GPU_UTIL:-0.46}"
+                # The smoke lost 105 of 137 min to requests stuck on closed
+                # keep-alive connections (900 s timeout each): a fresh
+                # connection per request, and 120 s as a backstop.
+                R_KEEPALIVE=0
+                R_REQ_TIMEOUT=120
+                # Projected 11-16 h from the smoke's step and update times.
+                R_TIME=24:00:00
             fi
             ;;
         t1_*)
@@ -274,6 +287,7 @@ for arm in "${ARM_LIST[@]}"; do
             jobid=$(REB_ARM="$R_EXP" REB_ARGS="$R_ARGS" SEED="$seed" NUM_AGENTS="$R_N" \
                 MAX_STEPS="$steps" LLM_SERVER="$R_SERVER" RL_UPDATE_STAGGER="$R_STAGGER" \
                 RL_WITH_VLLM="$R_RL_VLLM" VLLM_GPU_UTIL="$R_VLLM_UTIL" \
+                LLM_HTTP_KEEPALIVE="$R_KEEPALIVE" LLM_REQUEST_TIMEOUT="$R_REQ_TIMEOUT" \
                 sbatch --parsable --job-name="$jobname" --mem="$R_MEM" --time="$R_TIME" \
                 rebuttal_arm.sbatch)
             if [ -z "$jobid" ]; then

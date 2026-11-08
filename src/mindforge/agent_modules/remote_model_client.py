@@ -151,6 +151,21 @@ class RemoteModelClient(ChatCompletionClient):
         self._top_p = top_p
         self._max_tokens = max_tokens
         self._total_usage = RequestUsage(prompt_tokens=0, completion_tokens=0)
+        # A request sent on a keep-alive connection the server has already
+        # closed can wait the whole timeout before the SDK retries. RL arms
+        # hit this: their synchronous GPU work leaves the connection idle long
+        # enough for the server to close it, and each stall cost 15 min.
+        # LLM_HTTP_KEEPALIVE=0 opens a fresh connection per request, and
+        # LLM_REQUEST_TIMEOUT bounds any remaining wait. Unset = as before.
+        timeout = float(os.environ.get("LLM_REQUEST_TIMEOUT") or timeout)
+        http_client = None
+        if os.environ.get("LLM_HTTP_KEEPALIVE") == "0":
+            import httpx
+            try:
+                from openai import DefaultAsyncHttpxClient as _HttpClient
+            except ImportError:  # older SDK
+                _HttpClient = httpx.AsyncClient
+            http_client = _HttpClient(limits=httpx.Limits(max_keepalive_connections=0))
         # The server is local to the job; its key (if any) only keeps other
         # users on a shared node out.
         self._client = AsyncOpenAI(
@@ -158,6 +173,7 @@ class RemoteModelClient(ChatCompletionClient):
             api_key=os.environ.get("LLM_SERVER_KEY", "none"),
             timeout=timeout,
             max_retries=3,
+            **({"http_client": http_client} if http_client is not None else {}),
         )
         _load_tokenizer_only(self._model_path)
 

@@ -175,6 +175,11 @@ def parse_args():
                              "same log-probs and gradients as one row per candidate, "
                              "at a fraction of the compute. Attention-only models; "
                              "others fall back to the batched path.")
+    parser.add_argument("--rl-own-replay-rho", type=float, default=0.0,
+                        help="Matched-samples control for --hebbian-rho: each PPO "
+                             "update adds round(n*rho/(1-rho)) transitions drawn from "
+                             "the agent's OWN previous update window, the count that "
+                             "experience sharing adds from partners. 0 = off.")
     # ── Hebbian social plasticity ──
     parser.add_argument("--hebbian", action="store_true",
                         help="Enable Hebbian social plasticity graph")
@@ -650,3 +655,7 @@ def validate_args(args) -> None:
         raise SystemExit("--llm-batch is not validated with --rl; drop one")
     if args.llm_batch_max <= 0:
         raise SystemExit("--llm-batch-max must be positive")
+    if not 0.0 <= args.rl_own_replay_rho < 0.9:
+        raise SystemExit("--rl-own-replay-rho must be in [0, 0.9)")
+    if args.rl_own_replay_rho > 0 and not args.rl:
+        raise SystemExit("--rl-own-replay-rho needs --rl (it adds samples to the PPO update)")
