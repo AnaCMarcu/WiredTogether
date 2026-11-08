@@ -33,6 +33,18 @@ TOOLS: Dict[str, Tuple[Tuple[str, ...], Tuple[str, ...]]] = {
 #: Parameters the game tools expect as strings (AgentWorld's schema types).
 STRING_ARGS = ("targetInstance", "targetPlayer", "itemKey", "skill", "message", "response")
 
+#: What each argument holds, shown as its placeholder in the prompt's tool list
+#: and in missing-argument errors.
+ARG_HINTS = {
+    "x": "<x>", "y": "<y>", "index": "<inventory slot number>",
+    "targetInstance": "<instance id from your observation>",
+    "targetPlayer": "<exact player name>", "itemKey": "<item key>",
+    "skill": "<skill, e.g. Fletching>", "count": "<number>", "seconds": "<number>",
+    "message": "<text>", "response": "<what your team finished>",
+}
+
+_INSTANCE_ID = re.compile(r"\s*(?:instance|id)?\s*[:#]?\s*(\d+)\s*", re.IGNORECASE)
+
 #: Tools that run game logic on the server (everything but the harness no-op).
 GAME_TOOLS = tuple(t for t in TOOLS if t != "wait")
 
@@ -129,17 +141,26 @@ def validate(call: ToolCall) -> ToolCall:
             value = int(value)
         if isinstance(value, int) and not isinstance(value, bool):
             call.args[key] = str(value)
+    # The observation prints ids as "[instance 645004284]", and the model
+    # sometimes copies the word too; AgentWorld's ids are bare digit strings.
+    target = call.args.get("targetInstance")
+    if isinstance(target, str):
+        m = _INSTANCE_ID.fullmatch(target)
+        if m:
+            call.args["targetInstance"] = m.group(1)
     return call
+
+
+def _arg_shape(arg: str) -> str:
+    hint = ARG_HINTS.get(arg, f"<{arg}>")
+    return f'{arg}="{hint}"' if arg in STRING_ARGS else f"{arg}={hint}"
 
 
 def call_shape(name: str) -> str:
     """A tool call with every required argument as a placeholder, e.g.
-    transfer_items(targetPlayer="<targetPlayer>", itemKey="<itemKey>", count=<count>)."""
+    transfer_items(targetPlayer="<exact player name>", itemKey="<item key>", count=<number>)."""
     required, _ = TOOLS.get(name, ((), ()))
-    parts = []
-    for arg in required:
-        parts.append(f'{arg}="<{arg}>"' if arg in STRING_ARGS else f"{arg}=<{arg}>")
-    return f"{name}({', '.join(parts)})"
+    return f"{name}({', '.join(_arg_shape(a) for a in required)})"
 
 
 def safe_text(text: Any, limit: Optional[int] = None) -> str:
@@ -156,9 +177,14 @@ def safe_text(text: Any, limit: Optional[int] = None) -> str:
 
 
 def tool_reference() -> str:
-    """One line per tool, for the system prompt."""
+    """One line per tool for the system prompt: the call written out in full,
+    string arguments quoted. The bare signature this replaced
+    ("transfer_items(targetPlayer, itemKey, count)") left the model writing a
+    bare "transfer_items" 6-43 times per task_01 run."""
     lines = []
-    for name, (req, opt) in TOOLS.items():
-        params = list(req) + [f"{o}?" for o in opt]
-        lines.append(f"- {name}({', '.join(params)})")
+    for name, (_, optional) in TOOLS.items():
+        line = f"- {call_shape(name)}"
+        if optional:
+            line += "   optional: " + ", ".join(_arg_shape(a) for a in optional)
+        lines.append(line)
     return "\n".join(lines)

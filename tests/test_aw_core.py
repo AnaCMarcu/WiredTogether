@@ -116,8 +116,39 @@ def test_missing_arguments_error_shows_the_call_shape():
     call = parse_action("transfer_items")
     assert not call.ok
     assert call.error.startswith("missing targetPlayer, itemKey, count")
-    assert 'transfer_items(targetPlayer="<targetPlayer>", itemKey="<itemKey>", count=<count>)' in call.error
+    assert ('transfer_items(targetPlayer="<exact player name>", itemKey="<item key>", count=<number>)'
+            in call.error)
     assert "{" not in call.error and "}" not in call.error  # safe in str.format prompts
+
+
+def test_tool_reference_writes_every_call_out():
+    from agentworld.actions import tool_reference
+    from agentworld.agent import SYSTEM_PROMPT
+    ref = tool_reference()
+    assert ('- transfer_items(targetPlayer="<exact player name>", itemKey="<item key>", count=<number>)'
+            in ref.splitlines())
+    assert '- harvest_resource(targetInstance="<instance id from your observation>")' in ref
+    assert '- craft_item(skill="<skill, e.g. Fletching>", itemKey="<item key>")   optional: count=<number>' in ref
+    assert len(ref.splitlines()) == len(TOOLS)
+    assert ref in SYSTEM_PROMPT and "{tool_reference}" not in SYSTEM_PROMPT
+    assert "A tool name on its own" in SYSTEM_PROMPT
+
+
+@pytest.mark.parametrize("text", [
+    'harvest_resource(targetInstance="instance 645004284")',
+    "harvest_resource(targetInstance='Instance: 645004284')",
+    "attack_entity(targetInstance='ID #645004284')",
+    "harvest_resource(targetInstance=' 645004284 ')",
+])
+def test_instance_word_is_dropped_from_ids(text):
+    call = parse_action(text)
+    assert call.ok and call.args["targetInstance"] == "645004284"
+
+
+def test_non_numeric_targets_are_left_alone():
+    # Names are the model's mistake; the tools report them as not found.
+    assert parse_action('harvest_resource(targetInstance="Oak2 Tree")').args == {
+        "targetInstance": "Oak2 Tree"}
 
 
 def test_parse_drops_unknown_kwargs_and_formats_like_runner():

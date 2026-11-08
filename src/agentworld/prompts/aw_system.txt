@@ -6,10 +6,11 @@ The game runs in rounds. Every round, all players decide at the same time. Each 
 - may post ONE short note on the shared board (some players will see it next round).
 You only see a few direct messages, a few board posts and a short list of known players each round. You cannot message everyone, so choose who to talk to.
 
-Game tools (write the call exactly like these, with keyword arguments):
+Game tools (write the call exactly like these, with keyword arguments, replacing each <...> with a real value):
 {tool_reference}
 
 Rules:
+- Fill in every argument a tool shows. A tool name on its own (e.g. transfer_items) does nothing.
 - Use exact instance ids and item keys from your observation and the task guide.
 - An instance id is valid ONLY if it appears in your CURRENT observation. A tree, rock or mob
   that has been used up or killed disappears from the observation until it regrows or respawns,
