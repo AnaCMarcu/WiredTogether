@@ -18,6 +18,11 @@ class RLConfig:
     lora_alpha: int = 16
     lora_dropout: float = 0.05
     lora_per_role: bool = True  # separate adapter per role (gatherer/hunter/defender)
+    # One adapter per AGENT, as the method describes. Before 2026-11-09 the
+    # adapter was named after the role only, so in homogeneous teams (every
+    # agent has role "agent") all agents trained one shared adapter, each with
+    # its own optimiser. False restores that naming (--rl-shared-adapter).
+    lora_per_agent: bool = True
     lora_save_dir: str = "rl_checkpoints"
     dtype: str = "float16"  # "float16", "bfloat16", "float32"
 

@@ -86,6 +86,19 @@ def _load_multimodal_base(config: RLConfig, device):
     ).to(device)
 
 
+def adapter_name_for(config: RLConfig, role: str, agent_id: int) -> str:
+    """Name of the LoRA adapter agent ``agent_id`` trains.
+
+    One adapter per agent by default. With ``lora_per_agent=False`` the name is
+    the role alone (or ``"shared"``), the naming of the runs before 2026-11-09:
+    agents with the same role, i.e. every agent of a homogeneous team, then
+    train one shared adapter.
+    """
+    if getattr(config, "lora_per_agent", False):
+        return f"{role}_{agent_id}"
+    return role if config.lora_per_role else "shared"
+
+
 class RLLayer:
     """Modular RL layer — drop-in alongside MindForge agents.
 
@@ -159,7 +172,7 @@ class RLLayer:
         self.model = RLLayer._shared_model
 
         # ── Register or look up this agent's LoRA adapter on the shared base ──
-        adapter_name = role if config.lora_per_role else "shared"
+        adapter_name = adapter_name_for(config, role, agent_id)
         self._adapter_name = adapter_name
         self._ensure_adapter(adapter_name, config)
         self.model.set_adapter(adapter_name)

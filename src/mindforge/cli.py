@@ -175,6 +175,10 @@ def parse_args():
                              "same log-probs and gradients as one row per candidate, "
                              "at a fraction of the compute. Attention-only models; "
                              "others fall back to the batched path.")
+    parser.add_argument("--rl-shared-adapter", action="store_true",
+                        help="Agents with the same role train ONE shared LoRA adapter, as in "
+                             "the runs before 2026-11-09 (homogeneous teams: all agents). "
+                             "Default: one adapter per agent.")
     parser.add_argument("--rl-own-replay-rho", type=float, default=0.0,
                         help="Matched-samples control for --hebbian-rho: each PPO "
                              "update adds round(n*rho/(1-rho)) transitions drawn from "

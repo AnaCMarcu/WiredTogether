@@ -451,6 +451,7 @@ async def run(args):
         truncation_side=args.rl_truncation_side,
         shared_prefix_scoring=args.rl_shared_prefix,
         own_replay_rho=args.rl_own_replay_rho,
+        lora_per_agent=not args.rl_shared_adapter,
         lora_save_dir=rl_save_dir,
         critic_mode=args.rl_critic_mode,
     )

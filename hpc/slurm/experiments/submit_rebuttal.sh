@@ -136,7 +136,9 @@ resolve_arm() {
             # ~8k chars), scored in one packed forward. RL_LEGACY_ACTOR=1 restores
             # the paper's actor, in runs named reb_<arm>_legacy.
             local actor="--rl-prompt-max-tokens 2048 --rl-truncation-side left --rl-shared-prefix"
-            [ "${RL_LEGACY_ACTOR:-0}" = "1" ] && actor=""
+            # The paper runs also trained one LoRA adapter shared by all agents
+            # (homogeneous role); new runs train one per agent (the default).
+            [ "${RL_LEGACY_ACTOR:-0}" = "1" ] && actor="--rl-shared-adapter"
             rl="$rl $actor"
             case "$variant" in
                 base)    R_ARGS="$rl" ;;
