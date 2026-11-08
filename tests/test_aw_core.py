@@ -90,6 +90,36 @@ def test_parse_action_rejects(text):
     assert not call.ok and call.name in TOOLS
 
 
+@pytest.mark.parametrize("text,key", [
+    ("harvest_resource(targetInstance=645004284)", "targetInstance"),
+    ("harvest_resource(645004284)", "targetInstance"),
+    ("attack_entity(targetInstance=3480841888)", "targetInstance"),
+    ({"name": "harvest_resource", "args": {"targetInstance": 645004284.0}}, "targetInstance"),
+])
+def test_bare_ids_are_sent_as_strings(text, key):
+    # Observations list ids as strings; an int never matches them in the tools.
+    call = parse_action(text)
+    assert call.ok and isinstance(call.args[key], str) and call.args[key].isdigit()
+    assert "=" + call.args[key] + ")" in call.traj_string()
+
+
+def test_quoted_ids_and_integer_args_are_unchanged():
+    assert parse_action('harvest_resource(targetInstance="645004284")').args == {
+        "targetInstance": "645004284"}
+    assert parse_action("transfer_items(targetPlayer='a', itemKey='logs', count=3)").args == {
+        "targetPlayer": "a", "itemKey": "logs", "count": 3}
+
+
+def test_missing_arguments_error_shows_the_call_shape():
+    # A bare "transfer_items" (the model's habit in the task_01 runs) is
+    # rejected with the full call written out, string args quoted.
+    call = parse_action("transfer_items")
+    assert not call.ok
+    assert call.error.startswith("missing targetPlayer, itemKey, count")
+    assert 'transfer_items(targetPlayer="<targetPlayer>", itemKey="<itemKey>", count=<count>)' in call.error
+    assert "{" not in call.error and "}" not in call.error  # safe in str.format prompts
+
+
 def test_parse_drops_unknown_kwargs_and_formats_like_runner():
     call = parse_action("craft_item(skill='Fletching', itemKey='stick', why='because')")
     assert call.ok and "why" not in call.args

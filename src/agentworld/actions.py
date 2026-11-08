@@ -30,6 +30,9 @@ TOOLS: Dict[str, Tuple[Tuple[str, ...], Tuple[str, ...]]] = {
     "wait": ((), ()),
 }
 
+#: Parameters the game tools expect as strings (AgentWorld's schema types).
+STRING_ARGS = ("targetInstance", "targetPlayer", "itemKey", "skill", "message", "response")
+
 #: Tools that run game logic on the server (everything but the harness no-op).
 GAME_TOOLS = tuple(t for t in TOOLS if t != "wait")
 
@@ -101,7 +104,11 @@ def validate(call: ToolCall) -> ToolCall:
     missing = [a for a in required if a not in call.args]
     extra = [a for a in call.args if a not in required and a not in optional]
     if missing:
-        return ToolCall(call.name, call.args, error=f"missing {', '.join(missing)}")
+        # Show the call's shape: in the 150-round task_01 runs the model wrote
+        # a bare "transfer_items" ~43 times per run after the plain "missing
+        # targetPlayer, itemKey, count" message, the team's handoff step.
+        return ToolCall(call.name, call.args,
+                        error=f"missing {', '.join(missing)}; write it as {call_shape(call.name)}")
     if extra:
         call = ToolCall(call.name, {k: v for k, v in call.args.items() if k not in extra})
     for coord in ("x", "y", "index", "count"):
@@ -110,7 +117,29 @@ def validate(call: ToolCall) -> ToolCall:
                 call.args[coord] = int(call.args[coord])
             except (TypeError, ValueError):
                 return ToolCall(call.name, call.args, error=f"{coord} must be an integer")
+    # String parameters go to the game tools as strings, as AgentWorld's
+    # function-calling schema delivers them. The model often writes ids bare
+    # (targetInstance=645004284); the literal parser turns that into an int,
+    # the tools compare it with the observation's string ids, and the call
+    # fails with "Resource with instance ... not found". In the 150-round
+    # task_01 runs, every harvest with a bare id failed.
+    for key in STRING_ARGS:
+        value = call.args.get(key)
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
+        if isinstance(value, int) and not isinstance(value, bool):
+            call.args[key] = str(value)
     return call
+
+
+def call_shape(name: str) -> str:
+    """A tool call with every required argument as a placeholder, e.g.
+    transfer_items(targetPlayer="<targetPlayer>", itemKey="<itemKey>", count=<count>)."""
+    required, _ = TOOLS.get(name, ((), ()))
+    parts = []
+    for arg in required:
+        parts.append(f'{arg}="<{arg}>"' if arg in STRING_ARGS else f"{arg}=<{arg}>")
+    return f"{name}({', '.join(parts)})"
 
 
 def safe_text(text: Any, limit: Optional[int] = None) -> str:
