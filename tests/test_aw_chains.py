@@ -24,7 +24,7 @@ from chain_spec import (ChainError, ChainStep, NamingError, assign_slots,  # noq
 from generate_tasks import rename_task_text, replacement_table, rewrite_text  # noqa: E402
 from wired_agent import WiredMixin  # noqa: E402
 from wired_state import (AgentSession, AgentStateStore, ChainRunError, StepContext,  # noqa: E402
-                         Teammate, TeamPlasticity, addressees, interactions_for_turn,
+                         Teammate, TeamPlasticity, interactions_for_turn,
                          parse_response)
 
 FIX = REPO / "tests" / "fixtures" / "agentworld" / "v1.3_benchmark"
@@ -157,10 +157,10 @@ def test_prompt_block_per_arm(tmp_path):
                           "success": True, "message": "Silver ring: True"}],
              "memory": [{"step": 1, "task": "task_03_silver_ring", "round": 4,
                          "kind": "xfer_received", "partner": "a2", "partner_role": "smelter",
-                         "own_role": "miner", "text": "2x Iron Bar", "broadcast": False},
+                         "own_role": "miner", "text": "2x Iron Bar"},
                         {"step": 2, "task": "task_06_heavy_sword", "round": 1,
                          "kind": "msg_received", "partner": "a3", "partner_role": "weapon_smith",
-                         "own_role": "miner", "text": "this step", "broadcast": True}]}
+                         "own_role": "miner", "text": "this step"}]}
     assert _session(tmp_path, "reference", state=json.loads(json.dumps(state))).prompt_block() == ""
     mem = _session(tmp_path, "memory", state=json.loads(json.dumps(state))).prompt_block()
     heb = _session(tmp_path, "hebbian", state=json.loads(json.dumps(state))).prompt_block()
@@ -204,14 +204,19 @@ def test_parse_transfer_and_partner_ids():
     assert turn.dms == []
 
 
-def test_chat_addressing():
-    assert addressees("a2_smelter, send bars please", 0, TEAM) == ([1], False)
-    assert addressees("the weapon smith needs logs", 0, TEAM) == ([2], False)
-    assert addressees("hello team", 0, TEAM) == ([1, 2], True)
-    resp = "[TOOL_CALL_INFO] chat(message=a3 come here)\n[TOOL_RESULT] Global chat message sent: a3 come here"
+def test_direct_message_is_one_pair():
+    resp = ("[TOOL_CALL_INFO] direct_chat(target=a3_weapon_smith, message=come here, now)\n"
+            "[TOOL_RESULT] Direct message sent to a3_weapon_smith: come here, now")
     call, result = parse_response(resp)
     turn = interactions_for_turn(0, call, result, TEAM, NAMES)
-    assert turn.dms == [(0, 2)] and turn.by_agent[2][0]["kind"] == "msg_received"
+    assert turn.dms == [(0, 2)]
+    assert turn.by_agent[0] == [{"kind": "msg_sent", "partner": "a3", "partner_role": "weapon_smith",
+                                 "text": "come here, now"}]
+    assert turn.by_agent[2][0]["kind"] == "msg_received" and 1 not in turn.by_agent
+    # a refused message (error result) is no interaction
+    call, result = parse_response("[TOOL_CALL_INFO] direct_chat(target=bob, message=hi)\n"
+                                  "[TOOL_RESULT] Error: 'bob' is not a teammate.")
+    assert interactions_for_turn(0, call, result, TEAM, NAMES).dms == []
 
 
 # ── plasticity and the step context ─────────────────────────────────────────
@@ -255,9 +260,23 @@ class _Tools:
 
 
 class _Base:
+    """Mirrors the BaseAgent parts the adapter touches (flags, tool list, dispatch)."""
+
     def __init__(self, username):
         self.username = username
+        self.allow_chat = True
+        self.allow_transfer = True
+        self.discussion_phase = False
+        self.tools = []
         self.conversation_history = [{"role": "system", "content": "SYS"}]
+
+    def _rebuild_tools(self):
+        names = ["sleep", "craft_item", "chat", "transfer_items"]
+        self.tools = [{"type": "function", "function": {"name": n}} for n in names
+                      if not (n == "chat" and not self.allow_chat)]
+
+    def _execute_tool_call(self, tool_call):
+        return f"executed {tool_call['name']}"
 
     def _update_system_prompt(self):
         self.conversation_history[0]["content"] = "SYS"
@@ -299,8 +318,9 @@ def _run_step(tmp_path, store, step_no, agents, arm="hebbian"):
     u = {a.slot: a.username for a in step.assignments}
     traj = {"rounds": []}
     for rnd in (1, 2):
-        ctx.on_action(rnd, "agent_1", f"[TOOL_CALL_INFO] chat(message=hi)\n[TOOL_RESULT] "
-                      f"Global chat message sent: {u['agent_2']} I have logs", _obs(388, 3), traj)
+        ctx.on_action(rnd, "agent_1", f"[TOOL_CALL_INFO] direct_chat(target={u['agent_2']}, "
+                      f"message=I have logs)\n[TOOL_RESULT] Direct message sent to {u['agent_2']}: "
+                      "I have logs", _obs(388, 3), traj)
         ctx.on_action(rnd, "agent_2", "[TOOL_CALL_INFO] transfer_items(targetPlayer="
                       f"{u['agent_3']}, itemKey=stick, count=2)\n[TOOL_RESULT] Transfer completed: "
                       f"2x Stick transferred from {u['agent_2']} to {u['agent_3']} (method: api)",
@@ -558,8 +578,9 @@ def test_skill_log_credits_own_work_only(tmp_path):
                   "from a3_fletcher to a1_lumberjack (method: api)", _obs(0, 0, {"flask": 1}), t)
     t["rounds"].append({})
     # round 2: a1 now holds 3 logs (2 handed over + 1 harvested); a2's craft works
-    ctx.on_action(2, "agent_1", "[TOOL_CALL_INFO] chat(message=thanks)\n[TOOL_RESULT] Global chat "
-                  "message sent: thanks", _obs(0, 0, {"flask": 1, "logs": 3}), t)
+    ctx.on_action(2, "agent_1", "[TOOL_CALL_INFO] direct_chat(target=a3_fletcher, message=thanks)\n"
+                  "[TOOL_RESULT] Direct message sent to a3_fletcher: thanks",
+                  _obs(0, 0, {"flask": 1, "logs": 3}), t)
     ctx.on_action(2, "agent_2", "[TOOL_CALL_INFO] craft_item(skill=Fletching, itemKey=stick)\n"
                   "[TOOL_RESULT] Successfully crafted 4x Stick!", _obs(0, 0, {"flask": 1, "stick": 4}), t)
     ctx.flush(t)
@@ -601,3 +622,62 @@ def test_skill_lines_put_this_tasks_items_first(tmp_path):
     lines = s._skill_lines()
     assert len(lines) == 2 and "Smelting, itemKey=ironbar): failed 2x" in lines[0]
     assert "peach" in lines[1]
+
+
+# ── direct messages ──────────────────────────────────────────────────────────
+def _tool_names(agent):
+    return [tl["function"]["name"] for tl in agent.tools]
+
+
+def test_direct_chat_replaces_global_chat(tmp_path):
+    store = AgentStateStore(tmp_path / "agent_state")
+    ctx, states = _skill_step(tmp_path, store, 1, {s: {"flask": 1} for s in
+                                                   ("agent_1", "agent_2", "agent_3")}, arm="reference")
+    a1, a2, a3 = (states[s].console.agent for s in ("agent_1", "agent_2", "agent_3"))
+    assert "direct_chat" in _tool_names(a1) and "chat" not in _tool_names(a1)
+    assert a1.allow_chat is False                   # AgentWorld's random agent cannot broadcast
+    assert a1._execute_tool_call({"name": "chat", "arguments": {"message": "hi all"}}).startswith("Error")
+    out = a1._execute_tool_call({"name": "direct_chat",
+                                 "arguments": {"target": "A2_Hunter", "message": "need feathers"}})
+    assert out == "Direct message sent to a2_hunter: need feathers"
+    for bad in ({"target": "a1_lumberjack", "message": "me"}, {"target": "bob", "message": "x"},
+                {"target": "a2_hunter", "message": " "}):
+        assert a1._execute_tool_call({"name": "direct_chat", "arguments": bad}).startswith("Error")
+    assert a1._execute_tool_call({"name": "sleep", "arguments": {}}) == "executed sleep"
+    # only the receiver sees it, also in the reference arm
+    for agent in (a1, a2, a3):
+        agent._update_system_prompt()
+    assert "from a1_lumberjack: need feathers" in a2.conversation_history[0]["content"]
+    assert "need feathers" not in a3.conversation_history[0]["content"]
+    assert "TEAM HISTORY" not in a2.conversation_history[0]["content"]       # reference arm
+    # the experiment's communication switch still governs the tool
+    a1.allow_chat = False
+    a1._rebuild_tools()
+    assert "direct_chat" not in _tool_names(a1) and "chat" not in _tool_names(a1)
+    assert a1._execute_tool_call({"name": "direct_chat", "arguments": {
+        "target": "a2_hunter", "message": "x"}}) == "Error: communication is disabled in this run."
+
+
+@needs_aw
+def test_real_adapter_offers_only_direct_chat(aw_root):
+    from agent_factory import AgentFactory
+    from experiment import ExperimentConfig, RandomAgentPolicy
+
+    def make():
+        return AgentFactory.create_agent(
+            provider="custom", api_key="x", model="m", username="a1_miner", password="p",
+            base_url="http://127.0.0.1:9", llm_params={"agent_class": "wired_agent:WiredOpenAIAgent",
+                                                       "base_url": "http://127.0.0.1:9/v1"})
+    agent = make()
+    exp = ExperimentConfig()
+    exp.apply_agent_restrictions(agent, **exp.steady_state_restrictions())
+    names = _tool_names(agent)
+    assert "direct_chat" in names and "chat" not in names and "transfer_items" in names
+    assert ExperimentConfig._base(agent).allow_chat is False
+    cut = ExperimentConfig(no_communication=True)
+    agent2 = make()
+    cut.apply_agent_restrictions(agent2, **cut.steady_state_restrictions())
+    assert "direct_chat" not in _tool_names(agent2) and "transfer_items" not in _tool_names(agent2)
+    # the random baseline builds no chat candidate
+    cands = RandomAgentPolicy(exp)._build_candidates({"location": {"x": 1, "y": 1}}, agent)
+    assert all(name != "chat" for name, _, _ in cands)

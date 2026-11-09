@@ -1,22 +1,28 @@
 """Wired Together adapters for AgentWorld's reference runner (``agent.provider: custom``).
 
 Each class subclasses one of AgentWorld's own provider agents, so the policy,
-tool definitions, one-action-per-turn ``execute_single_tool_call`` and the
+the game tools, one-action-per-turn ``execute_single_tool_call`` and the
 ``[TOOL_CALL_INFO]`` / ``[TOOL_RESULT]`` records that ``agents/run.py`` reads
-are inherited unchanged. What the adapter adds:
+are inherited. What the adapter changes:
 
 * identity — ``agent_id`` and ``role`` parsed from the username
   (``a3_weapon_smith`` -> ``a3``, ``weapon_smith``); any other username fails;
+* communication — AgentWorld's global ``chat`` is replaced by
+  ``direct_chat(target, message)``: one teammate per message, seen only by
+  that teammate (in its system prompt, every arm). Global chat history is
+  hidden. The name keeps AgentWorld's runner treating it as a chat (counted in
+  the chats metric, not against the action cap); the experiment's
+  communication switches (``--no-communication``, discussion rounds) still
+  decide whether the tool is offered;
 * hooks — ``on_task_start(agent_id, role, teammates)``,
   ``on_turn(round_num, interactions)``, ``on_skill(round_num, outcome)`` and
-  ``on_task_end(agent_id, outcome)``,
-  which read and write the agent's persistent state through the
-  :class:`wired_state.AgentSession` that ``chains/run_chain.py`` attaches;
+  ``on_task_end(agent_id, outcome)``, which read and write the agent's
+  persistent state through the :class:`wired_state.AgentSession` that
+  ``chains/run_chain.py`` attaches;
 * prompt — the session's team-history block (earlier outcomes, past
-  interactions per teammate, and in the ``hebbian`` arm the bond line) is
-  appended to the system prompt, which the base class rebuilds on every call.
-  Adding it to the user message instead would append a fresh copy of the
-  whole task prompt to the conversation every time a bond moved.
+  interactions, skill log and, in the ``hebbian`` arm, the bond line) and the
+  direct messages are appended to the system prompt, which the base class
+  rebuilds on every call.
 
 Pick the class that matches the provider your config used before::
 
@@ -35,15 +41,38 @@ import inspect
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from chain_spec import parse_username
-from wired_state import AgentSession, ChainRunError, Teammate
+from wired_state import DM_SENT, AgentSession, ChainRunError, Teammate
+
+DIRECT_CHAT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "direct_chat",
+        "description": ("Send a private message to ONE teammate. Only that teammate sees it; "
+                        "there is no group chat. To tell several teammates, message each one."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target": {"type": "string",
+                           "description": "The teammate's username, e.g. a2_smelter."},
+                "message": {"type": "string", "description": "What to tell them."},
+            },
+            "required": ["target", "message"],
+        },
+    },
+}
+
+
+def _tool_name(tool: Dict[str, Any]) -> str:
+    return tool.get("function", {}).get("name", tool.get("name", ""))
 
 
 class WiredMixin:
-    """Persistent-identity hooks for a ``BaseAgent`` subclass (list it first)."""
+    """Persistent identity, direct messages and hooks for a ``BaseAgent`` subclass."""
 
     wired: Optional[AgentSession] = None
     agent_id: str = ""
     role: str = ""
+    _comm_allowed: bool = True
 
     def _wired_setup(self, base: type, kwargs: Dict[str, Any]) -> None:
         username = kwargs.get("username") or ""
@@ -51,6 +80,54 @@ class WiredMixin:
         self.wired = None
         accepted = inspect.signature(base.__init__).parameters
         base.__init__(self, **{k: v for k, v in kwargs.items() if k in accepted})
+        self._rebuild_tools()
+
+    # ── communication: direct messages only ───────────────────────────────
+    # AgentWorld reads ``allow_chat`` to offer its global chat (tool list,
+    # random-agent baseline). It is always False here; the value the experiment
+    # sets is kept and decides whether direct_chat is offered instead.
+    @property
+    def allow_chat(self) -> bool:
+        return False
+
+    @allow_chat.setter
+    def allow_chat(self, value: bool) -> None:
+        self._comm_allowed = bool(value)
+
+    def _rebuild_tools(self) -> None:
+        super()._rebuild_tools()          # honours transfer and discussion-phase switches
+        tools = [t for t in self.tools if _tool_name(t) != "chat"]
+        if self._comm_allowed or getattr(self, "discussion_phase", False):
+            tools.append(DIRECT_CHAT_TOOL)
+        self.tools = tools
+
+    def _get_current_chat_messages(self) -> str:
+        return ""                          # no global chat; direct messages are in the prompt
+
+    def _execute_tool_call(self, tool_call: Dict[str, Any]) -> str:
+        name = tool_call.get("name", "")
+        if name == "direct_chat":
+            return self._direct_chat(tool_call.get("arguments") or {})
+        if name == "chat":
+            return ("Error: there is no group chat. Use direct_chat(target, message) "
+                    "to message one teammate.")
+        return super()._execute_tool_call(tool_call)
+
+    def _direct_chat(self, args: Dict[str, Any]) -> str:
+        if not (self._comm_allowed or getattr(self, "discussion_phase", False)):
+            return "Error: communication is disabled in this run."
+        if self.wired is None or self.wired.mailbox is None:
+            return "Error: direct_chat needs a chain run (chains/run_chain.py)."
+        target = str(args.get("target") or "").strip().lstrip("@")
+        message = str(args.get("message") or "").strip()
+        if not message:
+            return "Error: message is empty."
+        mate = self.wired.resolve(target)
+        if mate is None:
+            names = ", ".join(t.username for t in self.wired.teammates)
+            return f"Error: {target!r} is not a teammate. Teammates: {names}."
+        self.wired.mailbox.post(self.wired.agent_id, self.wired.username, mate.agent_id, message)
+        return f"{DM_SENT} {mate.username}: {message}"
 
     # ── hooks ──────────────────────────────────────────────────────────────
     def attach_chain(self, session: AgentSession) -> None:
@@ -92,10 +169,11 @@ class WiredMixin:
     # ── prompt ─────────────────────────────────────────────────────────────
     def _update_system_prompt(self):
         super()._update_system_prompt()
-        block = self.wired.prompt_block() if self.wired is not None else ""
+        s = self.wired
+        extra = (s.prompt_block() + s.inbox_block()) if s is not None else ""
         history = getattr(self, "conversation_history", None)
-        if block and history and history[0].get("role") == "system":
-            history[0]["content"] = history[0]["content"] + block
+        if extra and history and history[0].get("role") == "system":
+            history[0]["content"] = history[0]["content"] + extra
 
 
 def _wired(name: str, base: type, doc: str) -> type:

@@ -150,7 +150,7 @@ back on.
 
 | `--arm` | Added to the system prompt |
 |---|---|
-| `reference` | nothing (AgentWorld's reference agent) |
+| `reference` | only the direct messages it received (every arm gets these) |
 | `memory` | earlier task outcomes, the last 4 interactions with each teammate from earlier tasks, and up to 6 skill-log lessons (this task's items first) |
 | `hebbian` | as `memory`, plus `Your strongest bonds (higher = you worked well together recently): ...` |
 
@@ -177,8 +177,8 @@ saved when it ends. It holds:
   reaches the next task.
 
 The hooks are methods on the adapter. The runner calls them, because only the
-runner knows the teammates, who received a chat or transfer, and the verified
-outcome. `--random-agent` also skips the agent's own code.
+runner knows the teammates, who received a message or transfer, and the
+verified outcome. `--random-agent` also skips the agent's own code.
 
 - `on_task_start(agent_id, role, teammates)` runs after login. `teammates`
   holds `(agent_id, role, username)` for the others.
@@ -199,10 +199,31 @@ graph from the saved bonds and updates it once per round. The inputs are those
 - `ProgressTracker`'s dense third factor, from verifier progress.
 
 Only W carries over between tasks; the eligibility and salience traces start
-fresh. AgentWorld's chat is global, so a chat counts as communication with the
-teammates its text names (username, id or role), or with everyone if it names
-nobody. Each round's events, third factor and W are logged to
+fresh. Each round's events, third factor and W are logged to
 `step_NN_task_MM/wired_rounds.jsonl`.
+
+## Communication: direct messages only
+
+AgentWorld's own `chat` tool broadcasts to everyone, and every agent's prompt
+shows the whole chat history. Chains replace it with
+`direct_chat(target, message)`:
+
+- A message goes to one teammate and appears only in that teammate's system
+  prompt, under "DIRECT MESSAGES TO YOU", in every arm.
+- There is no broadcast. AgentWorld's chat tool is not offered, a `chat` call
+  returns an error, the global chat history is hidden, and AgentWorld's random
+  agent cannot broadcast either.
+- Telling several teammates takes one message, and so one turn, each.
+
+Directed messages give the bonds something to act on: each message is a
+choice of whom to tell or ask, and the bond line ranks exactly those choices.
+They also give the rule exact sender→receiver pairs, as in WIRE.
+
+AgentWorld's runner still counts `direct_chat` as a chat: it does not count
+against the action cap and is included in the chats metric. The experiment's
+communication switches still apply, so `--no-communication` removes the tool.
+This is a change to AgentWorld's protocol, so report it as a harness change
+when comparing with their published numbers.
 
 ## Outputs and metrics
 

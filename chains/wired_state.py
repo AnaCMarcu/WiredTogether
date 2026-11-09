@@ -9,7 +9,7 @@ relational state lives on disk, one file per agent id::
       "bonds":   {"a2": 0.31, "a3": 0.12},      # W[a1 -> partner], keyed by agent id
       "memory":  [{"step": 1, "task": "task_03_silver_ring", "round": 4,
                    "kind": "xfer_received", "partner": "a2", "partner_role": "smelter",
-                   "own_role": "miner", "text": "2x Iron Bar", "broadcast": false}, ...],
+                   "own_role": "miner", "text": "2x Iron Bar"}, ...],
       "history": [{"step": 1, "task": ..., "role": "miner", "success": true, ...}],
       "skills":  [{"key": "craft_item(skill=Smelting, itemKey=ironbar)", "ok": true,
                    "by_step": {"3": 3}, "gained": {"ironbar": 3}, "uses": [...]}, ...],
@@ -34,9 +34,10 @@ deaths), communication pairs, positions, and the dense third factor from
 ``ProgressTracker`` plus the task verifier. The rule's short-term traces
 (eligibility, salience) start fresh with each task; only W carries over.
 
-AgentWorld's chat is global: a chat counts as communication from the sender
-to the teammates its text names (username, agent id or role), or to every
-teammate when it names none.
+Communication is direct only: ``direct_chat(target, message)`` (see
+wired_agent.py) replaces AgentWorld's global chat, so every message has one
+sender and one receiver. That pair is the communication event the rule sees,
+and the message reaches only the receiver's prompt (:class:`Mailbox`).
 """
 
 from __future__ import annotations
@@ -69,7 +70,8 @@ PROMPT_MEMORY_PER_PARTNER = 4
 PROMPT_HISTORY = 5
 PROMPT_SKILLS = 6
 ARMS = ("reference", "memory", "hebbian")
-CHAT_SENT = "Global chat message sent:"
+DM_SENT = "Direct message sent to"       # direct_chat's result: "<DM_SENT> a2_smelter: <text>"
+PROMPT_INBOX = 8                          # direct messages shown per agent
 
 # Flags of agentworld/cli.py whose defaults are the calibrated rule.
 HEBBIAN_FLAGS = ("hebbian_eta_0", "hebbian_eta_plus", "hebbian_decay",
@@ -87,6 +89,21 @@ class Teammate:
     agent_id: str
     role: str
     username: str
+
+
+class Mailbox:
+    """One task's direct messages; each is visible only to its receiver."""
+
+    def __init__(self) -> None:
+        self.messages: List[Dict[str, Any]] = []
+
+    def post(self, sender: str, sender_name: str, target: str, text: str) -> None:
+        self.messages.append({"seq": len(self.messages) + 1, "sender": sender,
+                              "sender_name": sender_name, "target": target,
+                              "text": str(text)[:TEXT_LIMIT * 2]})
+
+    def to(self, agent_id: str) -> List[Dict[str, Any]]:
+        return [m for m in self.messages if m["target"] == agent_id]
 
 
 def _now() -> str:
@@ -159,10 +176,25 @@ class AgentSession:
     loaded_from_step: Optional[int] = None
     turns: int = 0
     task_text: str = ""                                        # lower-cased task YAML text
+    mailbox: Optional[Mailbox] = None
 
     def start(self, teammates: List[Teammate]) -> None:
         self.teammates = list(teammates)
         self.bonds_start = dict(self.bonds)
+
+    def resolve(self, target: str) -> Optional[Teammate]:
+        """A teammate by username or agent id (case-insensitive); never this agent."""
+        t = str(target or "").strip().lstrip("@").lower()
+        return next((m for m in self.teammates if t in (m.username.lower(), m.agent_id)), None)
+
+    def inbox_block(self) -> str:
+        """Direct messages this agent received in the current task (every arm)."""
+        if self.mailbox is None:
+            return ""
+        mine = self.mailbox.to(self.agent_id)[-PROMPT_INBOX:]
+        body = "\n".join(f"- from {m['sender_name']}: {m['text']}" for m in mine) or "(none yet)"
+        return ("\n\n=== DIRECT MESSAGES TO YOU (only you see these; reply with direct_chat) ===\n"
+                f"{body}\n=== END DIRECT MESSAGES ===")
 
     def learn(self, round_num: int, item: Dict[str, Any]) -> None:
         """Add one craft/harvest outcome to the agent's skill memory (aggregated by action)."""
@@ -212,8 +244,7 @@ class AgentSession:
         entry = {"step": self.step, "task": self.task_key, "round": round_num,
                  "kind": item["kind"], "partner": item["partner"],
                  "partner_role": item["partner_role"], "own_role": self.role,
-                 "text": str(item.get("text", ""))[:TEXT_LIMIT],
-                 "broadcast": bool(item.get("broadcast", False))}
+                 "text": str(item.get("text", ""))[:TEXT_LIMIT]}
         mem = self.state.setdefault("memory", [])
         mem.append(entry)
         if len(mem) > MEMORY_CAP:
@@ -282,9 +313,8 @@ class AgentSession:
 def describe(m: Dict[str, Any]) -> str:
     text = m.get("text", "")
     return {
-        "msg_sent": (f'you told the team: "{text}"' if m.get("broadcast")
-                     else f'you told them: "{text}"'),
-        "msg_received": f'they said: "{text}"',
+        "msg_sent": f'you told them: "{text}"',
+        "msg_received": f'they told you: "{text}"',
         "xfer_given": f"you gave them {text}",
         "xfer_received": f"they gave you {text}",
     }.get(m.get("kind"), f"{m.get('kind')}: {text}")
@@ -314,19 +344,7 @@ def parse_response(response: str):
     return ToolCall(name, args), (parts[1].strip() if len(parts) > 1 else "")
 
 
-def _mention_patterns(t: Teammate) -> List[re.Pattern]:
-    forms = {t.username, t.agent_id, t.role, t.role.replace("_", " ")}
-    return [re.compile(rf"(?<![a-z0-9_]){re.escape(f.lower())}(?![a-z0-9_])") for f in forms if f]
-
-
-def addressees(message: str, sender: int, team: List[Teammate]) -> Tuple[List[int], bool]:
-    """Teammates a global chat message names; everyone else when it names nobody."""
-    low = (message or "").lower()
-    named = [j for j, t in enumerate(team) if j != sender
-             and any(p.search(low) for p in _mention_patterns(t))]
-    if named:
-        return named, False
-    return [j for j in range(len(team)) if j != sender], True
+_DM = re.compile(rf"^{re.escape(DM_SENT)} (\S+): (.*)$", re.S)
 
 
 @dataclass
@@ -346,16 +364,17 @@ def interactions_for_turn(actor: int, call, result: str, team: List[Teammate],
     if call is None:
         return out
     me = team[actor]
-    if call.name == "chat" and result.startswith(CHAT_SENT):
-        message = result[len(CHAT_SENT):].strip()
-        targets, broadcast = addressees(message, actor, team)
-        for j in targets:
-            out.dms.append((actor, j))
+    m = _DM.match(result.strip()) if call.name == "direct_chat" else None
+    if m:
+        j = names_index.get(m.group(1))
+        if j is not None and j != actor:
+            message = m.group(2).strip()
             other = team[j]
+            out.dms.append((actor, j))
             out.add(actor, {"kind": "msg_sent", "partner": other.agent_id,
-                            "partner_role": other.role, "text": message, "broadcast": broadcast})
+                            "partner_role": other.role, "text": message})
             out.add(j, {"kind": "msg_received", "partner": me.agent_id,
-                        "partner_role": me.role, "text": message, "broadcast": broadcast})
+                        "partner_role": me.role, "text": message})
     elif call.name == "transfer_items":
         res = ActionResult(agent=actor, call=call, text=result, observation=None, status="",
                            started=0.0, ended=0.0, round_issued=0)
@@ -548,6 +567,7 @@ class StepContext:
         self.team = team
         self.index = {slot: i for i, slot in enumerate(self.slot_order)}
         self.names_index = {t.username: i for i, t in enumerate(team)}
+        self.mailbox = Mailbox()
 
         states = {t.agent_id: self.store.load(t.agent_id) for t in team}
         for t in team:
@@ -567,7 +587,8 @@ class StepContext:
                                    step=self.step, task_key=self.task_key, arm=self.arm,
                                    store=self.store, state=states[t.agent_id],
                                    loaded_from_step=states[t.agent_id].get("saved_after_step"),
-                                   bonds=self.plasticity.bonds_of(i), task_text=self.task_text)
+                                   bonds=self.plasticity.bonds_of(i), task_text=self.task_text,
+                                   mailbox=self.mailbox)
             self.sessions[slot] = session
             agent = self.adapters[slot]
             agent.attach_chain(session)
