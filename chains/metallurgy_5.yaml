@@ -1,0 +1,18 @@
+# Metallurgy curriculum for five agents, from AgentWorld's own 5-agent tasks.
+# Every inventory starts empty: suppliers mine, hand ore/coal to the smelter,
+# bars go to the crafter. Each step adds products to the same pipeline.
+#   1 task_49 jewelry workshop  2 gold rings + 2 silver rings: nuggets, iron ore, coal; no logs
+#   2 task_46 mining expedition pickaxe + axe + heavy sword: ~10 bars + logs (lumberjack far west)
+#   3 task_52 smithy operation  heavy sword + pickaxe + 2 silver rings: 11 ore + 11 coal + logs
+# a1, a2 = miners, a3 = third supplier (coal miner, then lumberjack), a4 = smelter,
+# a5 = crafter (jeweler, then smith) in every step. Verifiers report counts
+# ("Gold Rings: 1/2, ...") so PSR gives partial credit.
+chain: metallurgy_5
+description: Jewelry workshop, mining expedition, smithy operation; five agents, same division of labour.
+steps:
+  - task: data_v0.1_multi/v1.3_benchmark/task_49_jewelry_workshop.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3, agent_4: a4, agent_5: a5}
+  - task: data_v0.1_multi/v1.3_benchmark/task_46_mining_expedition.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3, agent_4: a4, agent_5: a5}
+  - task: data_v0.1_multi/v1.3_benchmark/task_52_smithy_operation.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3, agent_4: a4, agent_5: a5}

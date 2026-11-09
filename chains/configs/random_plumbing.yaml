@@ -1,0 +1,12 @@
+# For --random-agent plumbing runs: no model is called, so the model fields are
+# placeholders. Only the game server address is read.
+agent:
+  name: RandomPlumbing
+  provider: custom
+  llm:
+    agent_class: wired_agent:WiredOpenAIAgent
+    model: none
+    api_key: none
+    base_url: http://127.0.0.1:9/v1
+  game:
+    host: ${AGENTWORLD_BASE_URL}

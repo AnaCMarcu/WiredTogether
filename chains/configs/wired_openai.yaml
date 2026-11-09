@@ -1,0 +1,15 @@
+# AgentWorld's OpenAI-compatible agent (vLLM or any gateway) with the chain hooks.
+# Same variables as agents/configs/openai-compatible.example.yaml; only the
+# provider/agent_class lines differ. Copy any system_prompt / user_prompt_template
+# from your current config here unchanged.
+agent:
+  name: WiredOpenAI
+  provider: custom
+  llm:
+    agent_class: wired_agent:WiredOpenAIAgent
+    model: ${MODEL_NAME}
+    api_key: ${MODEL_API_KEY}
+    base_url: ${MODEL_BASE_URL}
+    auth_header: Authorization
+  game:
+    host: ${AGENTWORLD_BASE_URL}

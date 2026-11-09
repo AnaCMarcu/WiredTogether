@@ -1,0 +1,14 @@
+# The same three tasks with roles rotating: each agent keeps its id, bonds and
+# memory, but plays a different slot (and so a different role and name) each step.
+#   step 1: a1_miner,   a2_smelter, a3_smith
+#   step 2: a2_miner,   a3_smelter, a1_weapon_smith
+#   step 3: a3_miner,   a1_smelter, a2_tool_smith
+chain: smithing_3_rotate
+description: Silver ring, heavy sword, pickaxe; roles rotate one slot per step.
+steps:
+  - task: data_v0.1_multi/v1.3_benchmark/task_03_silver_ring.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_06_heavy_sword.yaml
+    agents: {agent_1: a2, agent_2: a3, agent_3: a1}
+  - task: data_v0.1_multi/v1.3_benchmark/task_07_pickaxe_crafting.yaml
+    agents: {agent_1: a3, agent_2: a1, agent_3: a2}

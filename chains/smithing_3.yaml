@@ -1,0 +1,12 @@
+# Three smithing tasks played by one team in fixed slots:
+# a1 = miner, a2 = smelter, a3 = smith (silver ring, heavy sword, pickaxe).
+# Task paths are relative to the AgentWorld checkout ($AGENTWORLD_ROOT).
+chain: smithing_3
+description: Silver ring, heavy sword, pickaxe; same team, same slots every step.
+steps:
+  - task: data_v0.1_multi/v1.3_benchmark/task_03_silver_ring.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_06_heavy_sword.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_07_pickaxe_crafting.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}

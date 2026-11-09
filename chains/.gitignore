@@ -1,0 +1,3 @@
+# Renamed copies of AgentWorld's MPL-2.0 task files and verifiers; regenerate
+# with chains/generate_tasks.py (every run also keeps its own copy in tasks/).
+generated/

@@ -1,0 +1,18 @@
+# Metallurgy curriculum: every step makes the supplier(s) hand raw materials to
+# the smith, and each step adds one stage to the same pipeline.
+#   1 task_08 bronze bar  a1 holds copper+tin ore -> gives both to a3 -> a3 smelts      (1 recipe)
+#   2 task_12 gold ring   a1 mines gold ore, a2 coal -> a3 smelts 2 bars, smiths ring (2 recipes)
+#   3 task_04 axe         a1 + a2 pool 3 ore/3 coal/1 log at a3 -> 3 bars + axe       (2 recipes)
+#   4 task_07 pickaxe     a1 + a2 supply 5 ore/5 coal + logs -> 5 bars + pickaxe      (2 recipes, most handoffs)
+# a1 = supplier, a2 = second supplier / processor, a3 = smith in every step.
+chain: metallurgy_4
+description: Bronze bar, gold ring, axe, pickaxe; same division of labour, growing pipeline.
+steps:
+  - task: data_v0.1_multi/v1.3_benchmark/task_08_bronze_alloy.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_12_gold_ring.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_04_axe_crafting.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_07_pickaxe_crafting.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}

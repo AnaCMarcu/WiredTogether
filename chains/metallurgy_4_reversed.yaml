@@ -1,0 +1,12 @@
+# Order control for metallurgy_4: the same four tasks and team, hardest first.
+chain: metallurgy_4_reversed
+description: Pickaxe, axe, gold ring, bronze bar (metallurgy_4 in reverse).
+steps:
+  - task: data_v0.1_multi/v1.3_benchmark/task_07_pickaxe_crafting.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_04_axe_crafting.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_12_gold_ring.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_08_bronze_alloy.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}

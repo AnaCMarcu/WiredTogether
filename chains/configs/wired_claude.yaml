@@ -1,0 +1,10 @@
+# AgentWorld's Claude agent with the chain hooks (was provider: claude).
+agent:
+  name: WiredClaude
+  provider: custom
+  llm:
+    agent_class: wired_agent:WiredClaudeAgent
+    model: ${MODEL_NAME}
+    api_key: ${ANTHROPIC_API_KEY}
+  game:
+    host: ${AGENTWORLD_BASE_URL}
