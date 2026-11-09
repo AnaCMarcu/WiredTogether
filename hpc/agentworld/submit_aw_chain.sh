@@ -3,7 +3,7 @@
 # Submit chained AgentWorld runs. Run from the repository root on the login node
 # after `source hpc/snellius/env.sh` (puts the sbatch shim on PATH):
 #
-#   bash hpc/agentworld/submit_aw_chain.sh plumbing  # random agent, all steps, 12 rounds, no model
+#   bash hpc/agentworld/submit_aw_chain.sh plumbing  # random agent, all steps, 4 rounds, no model
 #   bash hpc/agentworld/submit_aw_chain.sh check     # step 1 with the model (hebbian arm)
 #   bash hpc/agentworld/submit_aw_chain.sh pilot     # every arm, seed 42, full chain
 #
@@ -33,7 +33,7 @@ submit() {   # <time> <exports>
     sbatch --time="$1" --array="$ARRAY" --export="ALL,$2" "$JOB"
 }
 case "$MODE" in
-    plumbing) submit "${TIME:-$ONE}" "CHAIN=$CHAIN,ARM=hebbian,RANDOM_AGENT=1,MAX_ROUNDS=12,RUN_GROUP=${RUN_GROUP:-chains_plumbing}" ;;
+    plumbing) submit "${TIME:-$ONE}" "CHAIN=$CHAIN,ARM=hebbian,RANDOM_AGENT=1,MAX_ROUNDS=4,RUN_GROUP=${RUN_GROUP:-chains_plumbing}" ;;
     check)    submit "${TIME:-$ONE}" "CHAIN=$CHAIN,ARM=hebbian,STEPS=1,RUN_GROUP=${RUN_GROUP:-chains_check}" ;;
     pilot)    for arm in $ARMS; do
                   submit "${TIME:-$FULL}" "CHAIN=$CHAIN,ARM=$arm,RUN_GROUP=${RUN_GROUP:-chains_pilot}"

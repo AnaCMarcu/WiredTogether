@@ -242,7 +242,7 @@ from the repository root after `source hpc/snellius/env.sh`:
 
 ```bash
 bash hpc/agentworld/setup_aw.sh fetch                  # AgentWorld at the pinned 23a07d52
-bash hpc/agentworld/submit_aw_chain.sh plumbing        # random agent, no model, 12 rounds/step
+bash hpc/agentworld/submit_aw_chain.sh plumbing        # random agent, no model, 4 rounds/step (~80 s each)
 bash hpc/agentworld/submit_aw_chain.sh check           # step 1 with Gemma (hebbian arm)
 bash hpc/agentworld/submit_aw_chain.sh pilot           # 3 arms x seed 42, metallurgy_4
 CHAIN=chains/metallurgy_5.yaml bash hpc/agentworld/submit_aw_chain.sh pilot
