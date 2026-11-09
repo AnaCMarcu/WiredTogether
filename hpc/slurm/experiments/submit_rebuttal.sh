@@ -33,6 +33,7 @@
 #     nopay    no message pay             (--comm-reward-scale 0)
 #     contrib  no floor and no message pay: bonds grow from milestones only
 #     freq     interaction only: no reward growth, no failure term
+#     nospatial full rule, no proximity term: only messages co-fire (--hebbian-radius 0)
 #     noswitch full rule + one Ch3 switch disabled per episode (contribution
 #              test, --disable-switch rotate)
 #
@@ -189,6 +190,7 @@ resolve_arm() {
                 nopay)    R_ARGS="$rule --simultaneous --comm-reward-scale 0" ;;
                 contrib)  R_ARGS="$rule --simultaneous --hebbian-eta-0 0 --comm-reward-scale 0" ;;
                 freq)     R_ARGS="$rule --simultaneous --hebbian-eta-plus 0 --hebbian-death-ltd 0" ;;
+                nospatial) R_ARGS="$rule --simultaneous --hebbian-radius 0" ;;
                 noswitch) R_ARGS="$rule --simultaneous --disable-switch rotate" ;;
                 *) echo "ERROR: unknown t1 variant in '$arm'" >&2; return 1 ;;
             esac
