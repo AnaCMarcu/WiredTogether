@@ -1,0 +1,16 @@
+# wired_openai.yaml with the model call replaced: the model writes ONE JSON reply
+# ({"thoughts", "action"} with the call as text) instead of a native tool call,
+# which Gemma 4 on our vLLM left empty on ~48% of turns (chains/json_actions.py).
+# Use for every arm of a comparison:
+#   AGENT_CONFIG=chains/configs/wired_json.yaml bash hpc/agentworld/submit_aw_chain.sh check
+agent:
+  name: WiredJSON
+  provider: custom
+  llm:
+    agent_class: wired_agent:WiredJSONAgent
+    model: ${MODEL_NAME}
+    api_key: ${MODEL_API_KEY}
+    base_url: ${MODEL_BASE_URL}
+    auth_header: Authorization
+  game:
+    host: ${AGENTWORLD_BASE_URL}

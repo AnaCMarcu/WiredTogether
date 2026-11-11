@@ -32,6 +32,10 @@ Pick the class that matches the provider your config used before::
         agent_class: wired_agent:WiredOpenAIAgent   # was provider: openai
         model: ...                                  # everything else unchanged
 
+``WiredJSONAgent`` is ``WiredOpenAIAgent`` with the model call replaced: the
+model writes one JSON reply with the call as text instead of a native tool
+call (see ``json_actions.py``; chains/configs/wired_json.yaml).
+
 ``chains/run_chain.py`` puts this directory on ``sys.path``.
 """
 
@@ -191,17 +195,26 @@ def _wired(name: str, base: type, doc: str) -> type:
 _PROVIDERS = {
     "WiredOpenAIAgent": ("openai_agent", "OpenAIAgent",
                          "AgentWorld's OpenAI-compatible agent (vLLM, gateways) + hooks."),
+    "WiredJSONAgent": ("openai_agent", "OpenAIAgent",
+                       "AgentWorld's OpenAI-compatible agent asking for one JSON reply instead of "
+                       "native tool calls (json_actions.py; vLLM) + hooks."),
     "WiredClaudeAgent": ("claude_agent", "ClaudeAgent", "AgentWorld's Claude agent + hooks."),
     "WiredGeminiAgent": ("gemini_agent", "GeminiAgent", "AgentWorld's Gemini agent + hooks."),
     "WiredDeepSeekAgent": ("deepseek_agent", "DeepSeekAgent", "AgentWorld's DeepSeek agent + hooks."),
 }
+#: Classes whose model call is replaced by json_actions.JSONActionMixin.
+_JSON_ACTIONS = {"WiredJSONAgent"}
 
 
 def __getattr__(name: str):
     if name in _PROVIDERS:
         import importlib
         module, cls, doc = _PROVIDERS[name]
-        klass = _wired(name, getattr(importlib.import_module(module), cls), doc)
+        base = getattr(importlib.import_module(module), cls)
+        if name in _JSON_ACTIONS:
+            from json_actions import JSONActionMixin
+            base = type(f"JSON{cls}", (JSONActionMixin, base), {"__module__": __name__})
+        klass = _wired(name, base, doc)
         globals()[name] = klass
         return klass
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

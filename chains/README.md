@@ -17,8 +17,9 @@ AgentWorld's provider agents plus the hooks in `wired_agent.py`.
 | `run_chain.py` | runs a chain; writes the summary, state files and per-round learning log |
 | `check_chain_run.py` | checks a finished run (names, reset, state files, verifiers) |
 | `wired_agent.py` | `agent.provider: custom` adapters with the hooks |
+| `json_actions.py` | `WiredJSONAgent`'s model call: one JSON reply instead of a native tool call |
 | `wired_state.py` | state store, memory, the link to the Hebbian rule |
-| `configs/` | agent configs: OpenAI-compatible, Claude, random plumbing |
+| `configs/` | agent configs: OpenAI-compatible (tool calls or JSON), Claude, random plumbing |
 
 You need an AgentWorld checkout at `hpc/agentworld/AGENTWORLD_COMMIT`
 (23a07d52 or later, for `scripts/score_psr.py`), set as `$AGENTWORLD_ROOT`.
@@ -231,6 +232,36 @@ communication switches still apply, so `--no-communication` removes the tool.
 This is a change to AgentWorld's protocol, so report it as a harness change
 when comparing with their published numbers.
 
+## Model replies: JSON instead of native tool calls
+
+AgentWorld's OpenAI agent sends the tools through the API's function calling
+with `tool_choice="required"`. With Gemma 4 on our vLLM (0.30, `gemma4`
+parser) that lost about half the turns: in the metallurgy_4 pilot, 0 of 108
+first turns but ~48% of later turns came back with no tool call and no text
+at all, and AgentWorld counts such a turn as "thinking".
+
+`wired_agent:WiredJSONAgent` (`configs/wired_json.yaml`) is the same agent
+with only the model call replaced (`json_actions.py`), the way our own
+AgentWorld harness asks the model:
+
+- no `tools` in the request: the tools offered this turn, with their full
+  descriptions, are written into the system prompt as calls with
+  placeholders, and the model answers `{"thoughts": ..., "action": ...}`;
+- AgentWorld's history goes as plain text: a past call as the JSON reply that
+  made it, a tool result as a user message;
+- the action is parsed against the tools' schemas (bare ids become strings)
+  and handed back as an ordinary tool call, so AgentWorld's runner, history
+  and trajectory records are unchanged;
+- an unusable reply is retried once in the same turn with the error shown;
+  if that fails too the turn has no action, and the reason stays in the
+  history;
+- sampling as in our harness: temperature 0.7, top_p 0.9, max_tokens 1024,
+  Gemma thinking off.
+
+Use one config for every arm of a comparison, and report it as a harness
+change next to the direct-message one. `[JSON] unusable reply` lines in
+`run.log` count the replies that could not be used.
+
 ## Outputs and metrics
 
 `chain_summary.json` records the following for each step:
@@ -273,6 +304,8 @@ bash hpc/agentworld/submit_aw_chain.sh plumbing        # random agent, no model,
 bash hpc/agentworld/submit_aw_chain.sh check           # step 1 with Gemma (hebbian arm)
 bash hpc/agentworld/submit_aw_chain.sh pilot           # 3 arms x seed 42, metallurgy_4
 CHAIN=chains/metallurgy_5.yaml bash hpc/agentworld/submit_aw_chain.sh pilot
+# JSON replies instead of native tool calls (Gemma on vLLM), for every arm:
+AGENT_CONFIG=chains/configs/wired_json.yaml bash hpc/agentworld/submit_aw_chain.sh check
 ```
 
 Output goes to `runs_aw/<group>/<chain>/<arm>_s<seed>_j<job>/`, with
