@@ -90,6 +90,12 @@ def test_tool_reference_writes_calls_out_with_quoted_strings():
     ('{"action": "direct_chat(target=\'a2_smelter\', message=\'I\'m at (200, 280)\')"}',
      "direct_chat", {"target": "a2_smelter", "message": "I'm at (200, 280)"}),     # apostrophe
     ('{"action": "move_character(x=1, y=2)."}', "move_character", {"x": 1, "y": 2}),  # trailing dot
+    # broken JSON around a readable action (pendant_staff_4 run, memory arm):
+    ('{"thoughts": "Following up.", "action": "direct_chat(target=\\"a1_lumberjack\\", '
+     'message=\\"Just following up on the oak logs!\\"}', "direct_chat",
+     {"target": "a1_lumberjack", "message": "Just following up on the oak logs!"}),   # call never closed
+    ('{"thoughts": "I\\\'m here", "action": "move_character(x=1, y=2)"}', "move_character",
+     {"x": 1, "y": 2}),                                                               # invalid \' escape
 ])
 def test_parse_reply(reply, name, args):
     call, _, err = parse_reply(reply, TOOLS)
@@ -114,10 +120,18 @@ def test_parse_reply(reply, name, args):
     # the lenient reading needs a keyword layout from the first argument on
     ('{"action": "direct_chat(hello there, message=\\"x\\")"}', "could not read the arguments of direct_chat"),
     ('{"action": "direct_chat(target=\\"a2_smelter\\""}', "direct_chat is missing message"),
+    ('{"thoughts": "x", "action": "move_char', "not a tool call"),       # salvaged but cut off
 ])
 def test_parse_reply_errors(reply, fragment):
     call, _, err = parse_reply(reply, TOOLS)
     assert call is None and fragment in err
+
+
+def test_salvage_keeps_the_thoughts():
+    from json_actions import salvage_action
+    assert salvage_action('{"thoughts": "a \\"b\\" c", "action": "sleep(seconds=2)"') == ('a "b" c',
+                                                                                           "sleep(seconds=2)")
+    assert salvage_action("no json here") is None
 
 
 # ── history -> text ─────────────────────────────────────────────────────────

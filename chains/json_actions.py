@@ -266,15 +266,44 @@ def parse_call(action: Any, tools: Sequence[Dict[str, Any]]) -> Tuple[Optional[D
     return {"name": name, "arguments": clean}, None
 
 
+_ACTION_FIELD = re.compile(r'"action"\s*:\s*"', re.DOTALL)
+_THOUGHTS_FIELD = re.compile(r'"thoughts"\s*:\s*"(.*?)(?<!\\)"\s*,\s*"action"', re.DOTALL)
+
+
+def salvage_action(text: str) -> Optional[Tuple[str, str]]:
+    """``(thoughts, action)`` from a reply whose JSON does not parse, or None.
+
+    The usual break: the model closes the message but not the call, so the reply ends
+    ``...message=\\"text\\"}`` and the action string is never closed (30 of the memory
+    arm's 52 unusable replies in the first pendant_staff_4 run); also invalid escapes such
+    as ``\\'``. The action is everything after ``"action": "`` minus a closing brace and an
+    unescaped closing quote, with ``\\"`` unescaped; :func:`parse_call` (with its lenient
+    reading) does the rest."""
+    m = _ACTION_FIELD.search(text)
+    if not m:
+        return None
+    rest = re.sub(r"\s*\}\s*$", "", text[m.end():].rstrip())
+    rest = re.sub(r'(?<!\\)"\s*$', "", rest)
+    action = rest.replace('\\"', '"').replace("\\'", "'").replace("\\n", " ").strip()
+    t = _THOUGHTS_FIELD.search(text)
+    thoughts = t.group(1).replace('\\"', '"').replace("\\'", "'") if t else ""
+    return thoughts, action
+
+
 def parse_reply(text: str, tools: Sequence[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], str, Optional[str]]:
     """``(call or None, thoughts, error or None)`` for one model reply."""
     obj = extract_json(text)
     if obj is None:
-        bare, _ = parse_call(_THINK.sub("", text or "").strip(), tools)   # a bare call is fine too
+        clean = _THINK.sub("", text or "").strip()
+        bare, _ = parse_call(clean, tools)                    # a bare call is fine too
         if bare is not None:
             return bare, "", None
-        return None, "", ("the reply was empty" if not (text or "").strip()
-                          else "the reply was not one JSON object")
+        salvaged = salvage_action(clean)                      # broken JSON around a readable action
+        if salvaged is not None:
+            thoughts, action = salvaged
+            call, err = parse_call(action, tools)
+            return call, thoughts, err
+        return None, "", ("the reply was empty" if not clean else "the reply was not one JSON object")
     thoughts = str(obj.get("thoughts") or "")
     if "action" not in obj:
         return None, thoughts, 'the JSON has no "action" field'
