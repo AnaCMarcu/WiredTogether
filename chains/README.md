@@ -95,6 +95,10 @@ python chains/generate_tasks.py chains/smithing_3.yaml
   and the mentions in the text (`t03_smith_agent` and the bare `smith_agent`).
   The script checks that nothing else changed: same keys, same values, same
   line endings. It fails if a task does not set `new_character: true`.
+- **Chat wording.** Chains have no group chat (see *Communication* below), so
+  every "global chat" in the task text becomes "direct messages (direct_chat,
+  one teammate per message)", e.g. "Use global chat to coordinate" in tasks
+  03/04/06/07/08/12. This is the only other change the check allows.
 - **Verifiers.** Each task's verifier is copied byte for byte. AgentWorld's
   `agents/verification.py` picks it up next to the YAML. Its `verifier_utils`
   import resolves because that loader preloads `verifier_utils`, and
@@ -214,6 +218,8 @@ shows the whole chat history. Chains replace it with
   returns an error, the global chat history is hidden, and AgentWorld's random
   agent cannot broadcast either.
 - Telling several teammates takes one message, and so one turn, each.
+- The task text says so too: `generate_tasks.py` rewrites the tasks' "Use
+  global chat ..." lines to point at direct messages.
 
 Directed messages give the bonds something to act on: each message is a
 choice of whom to tell or ask, and the bond line ranks exactly those choices.

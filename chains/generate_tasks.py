@@ -7,8 +7,11 @@ For every step this writes ``chains/generated/<chain>/step_NN_task_MM/``:
 * ``<original stem>.yaml`` — the source task with every old username replaced
   by ``<agent_id>_<role>``: the ``username`` fields and every mention in the
   text (both ``t06_smelter_agent`` and the unprefixed ``smelter_agent`` the
-  task prose uses). Nothing else changes: the replacement runs on the raw
-  text, and the result is checked to differ from the source only in those
+  task prose uses). The one other change: chains have no group chat (only
+  ``direct_chat``, see ``wired_agent.py``), so every "global chat" in the
+  task prose becomes "direct messages (direct_chat, one teammate per
+  message)". Nothing else changes: both replacements run on the raw text,
+  and the result is checked to differ from the source only in those
   strings. ``new_character: true`` must already be set (fail otherwise), so
   every task starts from a clean character.
 * ``<original stem>_success_criteria.py`` — the source task's verifier,
@@ -44,6 +47,9 @@ from chain_spec import (TASK_PREFIX, Chain, ChainError, ChainStep, load_chain,  
 
 GENERATED = HERE / "generated"
 _WORD = r"A-Za-z0-9_"
+# Chains offer direct_chat only; the source tasks tell agents to "Use global chat ...".
+GLOBAL_CHAT = re.compile(r"(?<![A-Za-z0-9_])global chat(?![A-Za-z0-9_])", re.IGNORECASE)
+DIRECT_MESSAGES = "direct messages (direct_chat, one teammate per message)"
 
 
 @dataclass
@@ -98,6 +104,16 @@ def rewrite_text(text: str, table: Dict[str, str]) -> str:
     return _pattern(table).sub(lambda m: table[m.group(0).lower()], text)
 
 
+def rewrite_chat(text: str) -> str:
+    """Every "global chat" -> the direct-message wording (chains have no group chat)."""
+    return GLOBAL_CHAT.sub(DIRECT_MESSAGES, text)
+
+
+def rewrite_task(text: str, table: Dict[str, str]) -> str:
+    """Both replacements: usernames, then the chat wording."""
+    return rewrite_chat(rewrite_text(text, table))
+
+
 def _same_shape(orig: Any, new: Any, table: Dict[str, str], path: str = "") -> None:
     """``new`` must equal ``orig`` with the replacements applied inside strings only."""
     if isinstance(orig, dict):
@@ -111,8 +127,8 @@ def _same_shape(orig: Any, new: Any, table: Dict[str, str], path: str = "") -> N
         for i, (a, b) in enumerate(zip(orig, new)):
             _same_shape(a, b, table, f"{path}[{i}]")
     elif isinstance(orig, str):
-        if new != rewrite_text(orig, table):
-            raise ChainError(f"renaming changed {path} beyond the username replacements")
+        if new != rewrite_task(orig, table):
+            raise ChainError(f"renaming changed {path} beyond the username and chat replacements")
     elif orig != new or type(orig) is not type(new):
         raise ChainError(f"renaming changed a non-text value at {path}: {orig!r} -> {new!r}")
 
@@ -120,7 +136,7 @@ def _same_shape(orig: Any, new: Any, table: Dict[str, str], path: str = "") -> N
 def rename_task_text(raw: str, step: ChainStep) -> str:
     """The renamed YAML text, checked; raises ChainError on anything unexpected."""
     table = replacement_table(step)
-    new_raw = rewrite_text(raw, table)
+    new_raw = rewrite_task(raw, table)
     orig = yaml.safe_load(raw)
     new = yaml.safe_load(new_raw)
     _same_shape(orig, new, table)
@@ -136,6 +152,8 @@ def rename_task_text(raw: str, step: ChainStep) -> str:
     leftover = _pattern(table).search(new_raw)
     if leftover:
         raise ChainError(f"step {step.index}: old username {leftover.group(0)!r} still present")
+    if GLOBAL_CHAT.search(new_raw):
+        raise ChainError(f"step {step.index}: 'global chat' still present in {step.source.name}")
     if slot_order(new) != [a.slot for a in step.assignments]:
         raise ChainError(f"step {step.index}: slots changed while renaming")
     return new_raw

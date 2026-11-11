@@ -21,7 +21,8 @@ sys.path.insert(0, str(CHAINS))
 
 from chain_spec import (ChainError, ChainStep, NamingError, assign_slots,  # noqa: E402
                         make_username, parse_username, role_from_username)
-from generate_tasks import rename_task_text, replacement_table, rewrite_text  # noqa: E402
+from generate_tasks import (DIRECT_MESSAGES, rename_task_text, replacement_table,  # noqa: E402
+                            rewrite_chat, rewrite_text)
 from wired_agent import WiredMixin  # noqa: E402
 from wired_state import (AgentSession, AgentStateStore, ChainRunError, StepContext,  # noqa: E402
                          Teammate, TeamPlasticity, interactions_for_turn,
@@ -106,14 +107,24 @@ def test_rename_task02_changes_only_names(tmp_path):
     changed = [(a, b) for a, b in zip(orig_lines, new_lines) if a != b]
     assert changed
     for a, b in changed:
-        assert any(o in a for o in replacement_table(step)) or any(
-            o in a.lower() for o in replacement_table(step))
+        assert any(o in a.lower() for o in replacement_table(step)) or "global chat" in a.lower()
+    assert "global chat" not in new.lower()
+    assert new.count(DIRECT_MESSAGES) == raw.lower().count("global chat") == 2
     data = yaml.safe_load(new)
     assert [data[a.slot]["username"] for a in step.assignments] == \
         [a.username for a in step.assignments]
     # CRLF files keep their line endings
     crlf = rename_task_text(raw.replace("\r\n", "\n").replace("\n", "\r\n"), step)
     assert crlf.count("\r\n") == raw.replace("\r\n", "\n").count("\n")
+
+
+def test_rewrite_chat_points_agents_at_direct_messages():
+    assert rewrite_chat("- Use global chat to coordinate\n- Use Global Chat to share") == (
+        f"- Use {DIRECT_MESSAGES} to coordinate\n- Use {DIRECT_MESSAGES} to share")
+    assert rewrite_chat("through global chat.") == f"through {DIRECT_MESSAGES}."
+    # only the phrase itself: no other chat wording, no partial words
+    assert rewrite_chat("chat with a2; global chatter; xglobal chat") == \
+        "chat with a2; global chatter; xglobal chat"
 
 
 def test_rename_refuses_tasks_without_new_character(tmp_path):
@@ -410,6 +421,7 @@ def test_generate_smithing_3(aw_root, tmp_path):
         assert g.verifier.read_bytes() == g.source_verifier.read_bytes()
         assert g.task_yaml.name == g.step.source.name
         assert "_agent" not in yaml.safe_load(g.task_yaml.read_text(encoding="utf-8"))["agent_3"]["username"]
+        assert "global chat" not in g.task_yaml.read_text(encoding="utf-8").lower()
     rot = load_chain(CHAINS / "smithing_3_rotate.yaml", aw_root)
     assert [a.username for a in rot.steps[2].assignments] == ["a3_miner", "a1_smelter", "a2_tool_smith"]
 
