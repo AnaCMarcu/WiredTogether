@@ -1,0 +1,22 @@
+# Two short hand-off tasks, each played twice, by one team in fixed slots.
+# Both need agent 3 to assemble from what agents 1 and 2 bring, and both were
+# solved by Gemma-4 E4B in our own AgentWorld harness (05: 6/6 in rounds 7-31;
+# 01: 5/6 in rounds 29-68), unlike the metallurgy tasks (0/36 steps in both
+# metallurgy_4 pilots). The repeats show whether team history and bonds carried
+# from the first attempt make the second one faster.
+#   1, 3 task_05 beryl pendant  a1 forages flowers, a2 holds the beryl -> a3 crafts
+#                               string, then the pendant (1 pendant)
+#   2, 4 task_01 magic staff    a1 chops logs -> a2 fletches sticks -> a3 crafts the
+#                               staff with its bead (1 staff)
+# a1 = gatherer, a2 = second supplier / processor, a3 = assembler in every step.
+chain: pendant_staff_4
+description: Beryl pendant, magic staff, then both again; same division of labour.
+steps:
+  - task: data_v0.1_multi/v1.3_benchmark/task_05_beryl_pendant.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_01_magic_staff.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_05_beryl_pendant.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}
+  - task: data_v0.1_multi/v1.3_benchmark/task_01_magic_staff.yaml
+    agents: {agent_1: a1, agent_2: a2, agent_3: a3}

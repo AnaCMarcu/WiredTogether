@@ -427,6 +427,20 @@ def test_generate_smithing_3(aw_root, tmp_path):
 
 
 @needs_aw
+def test_generate_pendant_staff_4(aw_root, tmp_path):
+    from chain_spec import load_chain
+    from generate_tasks import generate_chain
+    gen = generate_chain(load_chain(CHAINS / "pendant_staff_4.yaml", aw_root), aw_root, tmp_path / "ps4")
+    pendant, staff = ["a1_forager", "a2_gem_miner", "a3_jeweler"], ["a1_lumberjack", "a2_woodworker", "a3_wizard"]
+    assert [[a.username for a in g.step.assignments] for g in gen] == [pendant, staff, pendant, staff]
+    assert [g.directory.name for g in gen] == ["step_01_task_05", "step_02_task_01",
+                                               "step_03_task_05", "step_04_task_01"]
+    for g in gen:
+        text = g.task_yaml.read_text(encoding="utf-8")
+        assert "global chat" not in text.lower() and "_agent" not in text
+
+
+@needs_aw
 def test_generated_verifier_resolves_in_a_fresh_process(aw_root, tmp_path):
     from chain_spec import load_chain
     from generate_tasks import generate_chain

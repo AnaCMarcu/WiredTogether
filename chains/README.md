@@ -11,6 +11,7 @@ AgentWorld's provider agents plus the hooks in `wired_agent.py`.
 | `metallurgy_4.yaml` | main 3-agent chain: tasks 08 → 12 → 04 → 07 |
 | `metallurgy_4_reversed.yaml` | order control: the same tasks hardest first |
 | `metallurgy_5.yaml` | 5-agent chain: tasks 49 → 46 → 52 |
+| `pendant_staff_4.yaml` | short hand-off tasks E4B can solve: 05 → 01 → 05 → 01 |
 | `smithing_3.yaml` | first chain: tasks 03 → 06 → 07, a1/a2/a3 in fixed slots |
 | `smithing_3_rotate.yaml` | the same tasks with roles rotating one slot per step |
 | `generate_tasks.py` | writes the renamed task YAML + verifier for each step |
@@ -249,9 +250,11 @@ AgentWorld harness asks the model:
   placeholders, and the model answers `{"thoughts": ..., "action": ...}`;
 - AgentWorld's history goes as plain text: a past call as the JSON reply that
   made it, a tool result as a user message;
-- the action is parsed against the tools' schemas (bare ids become strings)
-  and handed back as an ordinary tool call, so AgentWorld's runner, history
-  and trajectory records are unchanged;
+- the action is parsed against the tools' schemas (bare ids and usernames
+  become strings) and handed back as an ordinary tool call, so AgentWorld's
+  runner, history and trajectory records are unchanged. A call the literal
+  parser rejects (quotes or apostrophes inside a message, a missing closing
+  bracket) is read by the tool's own parameter names instead;
 - an unusable reply is retried once in the same turn with the error shown;
   if that fails too the turn has no action, and the reason stays in the
   history;
@@ -306,7 +309,15 @@ bash hpc/agentworld/submit_aw_chain.sh pilot           # 3 arms x seed 42, metal
 CHAIN=chains/metallurgy_5.yaml bash hpc/agentworld/submit_aw_chain.sh pilot
 # JSON replies instead of native tool calls (Gemma on vLLM), for every arm:
 AGENT_CONFIG=chains/configs/wired_json.yaml bash hpc/agentworld/submit_aw_chain.sh check
+# pendant_staff_4 with slower bond decay (CHAIN_ARGS = extra run_chain.py flags):
+CHAIN=chains/pendant_staff_4.yaml AGENT_CONFIG=chains/configs/wired_json.yaml \
+  CHAIN_ARGS="--hebbian-decay 0.005" TIME=03:00:00 bash hpc/agentworld/submit_aw_chain.sh pilot
 ```
+
+Both metallurgy_4 pilots (native tool calls, then JSON replies) ended at 0 of
+36 steps in every arm: the smith never crafted and died in half the steps, and
+materials never reached a living crafter. `pendant_staff_4` uses two hand-off
+tasks with one-item targets that E4B solved in our own harness.
 
 Output goes to `runs_aw/<group>/<chain>/<arm>_s<seed>_j<job>/`, with
 `vllm_server.log`, `server.log` and `run.log` next to the run. `--time` is

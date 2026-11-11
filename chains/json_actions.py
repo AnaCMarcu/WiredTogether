@@ -23,8 +23,13 @@ into the call (``src/agentworld/actions.py``).
   assistant turns are dropped and same-role neighbours are merged so roles
   alternate;
 * the reply is parsed against the offered tools' schemas (types coerced:
-  ids written bare become strings, as AgentWorld's tools compare them with the
-  observation's string ids) and returned in the OpenAI response shape, so
+  ids and usernames written bare become strings, as AgentWorld's tools compare
+  them with the observation's string ids); a call the literal parser rejects
+  (quotes or apostrophes inside a message, a missing closing bracket, trailing
+  punctuation) is read by the tool's own parameter names (:func:`lenient_args`).
+  Of the 125 unusable replies in the metallurgy_4 JSON pilot, 40 were bare
+  usernames and 71 calls the literal parser could not match, nearly all
+  direct_chat; 8 named tools that do not exist. The call is returned in the OpenAI response shape, so
   AgentWorld's ``_extract_tool_calls``, history and ``[TOOL_CALL_INFO]``
   records work unchanged;
 * an unusable reply is retried once in the same turn with the error shown;
@@ -60,6 +65,7 @@ ARG_HINTS = {
 }
 
 _CALL = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)\s*$", re.DOTALL)
+_HEAD = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 _INSTANCE_ID = re.compile(r"\s*(?:instance|id)?\s*[:#]?\s*(\d+)\s*", re.IGNORECASE)
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
 _CONTEXT_ERROR = re.compile(r"maximum context length|max_tokens|max_completion_tokens", re.IGNORECASE)
@@ -139,10 +145,39 @@ def extract_json(text: str) -> Optional[Dict[str, Any]]:
 
 
 def _literal(node: ast.AST) -> Any:
+    if isinstance(node, ast.Name):          # a bare word: target=a1_gold_miner
+        return node.id
     value = ast.literal_eval(node)
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     raise ValueError("only plain values are allowed as arguments")
+
+
+def lenient_args(rest: str, spec: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """Keyword arguments read by the tool's own parameter names, for calls the literal
+    parser rejects. ``rest`` is everything after ``name(``. Each value runs to the next
+    ``, <param>=`` (or the end); one pair of surrounding quotes is removed. Values stay
+    strings (coerced to the schema type later). None if the text has no keyword layout."""
+    params = list(spec["properties"])
+    s = re.sub(r"[\s;.,]+$", "", rest)
+    if s.endswith(")"):
+        s = s[:-1]
+    if not params:
+        return {} if not s.strip() else None
+    pat = re.compile(r"(?:^|,)\s*(" + "|".join(map(re.escape, params)) + r")\s*=\s*")
+    hits = list(pat.finditer(s))
+    if not hits or s[:hits[0].start()].strip():
+        return None
+    out: Dict[str, str] = {}
+    for i, h in enumerate(hits):
+        value = s[h.end(): hits[i + 1].start() if i + 1 < len(hits) else len(s)].strip()
+        if value[:1] in ("'", '"'):
+            q, value = value[0], value[1:]
+            if value.endswith(q):
+                value = value[:-1]
+            value = value.replace("\\" + q, q)
+        out[h.group(1)] = value
+    return out
 
 
 def _coerce(name: str, value: Any, prop: Dict[str, Any]) -> Any:
@@ -187,25 +222,36 @@ def parse_call(action: Any, tools: Sequence[Dict[str, Any]]) -> Tuple[Optional[D
             return None, "the action is empty"
         if raw in specs:
             raw += "()"
-        m = _CALL.match(raw.splitlines()[0]) or _CALL.match(raw)
-        if not m:
+        head = _HEAD.match(raw)
+        if not head:
             return None, f"the action is not a tool call: {raw[:80]!r}"
-        name = m.group(1)
+        name = head.group(1)
         if name not in specs:
             return None, f"unknown tool {name!r}; available: {', '.join(specs)}"
-        try:
-            call = ast.parse(f"_f({m.group(2)})", mode="eval").body
-            assert isinstance(call, ast.Call)
-            params = list(specs[name]["properties"])
-            if len(call.args) > len(params):
-                raise ValueError("too many arguments")
-            args = {p: _literal(node) for p, node in zip(params, call.args)}
-            for kw in call.keywords:
-                if kw.arg is None:
-                    raise ValueError("**kwargs are not allowed")
-                args[kw.arg] = _literal(kw.value)
-        except (SyntaxError, ValueError, AssertionError) as exc:
-            return None, f"could not read the arguments of {name}: {exc}"
+        args, err = None, None
+        m = _CALL.match(raw.splitlines()[0]) or _CALL.match(raw)
+        if m:
+            try:
+                call = ast.parse(f"_f({m.group(2)})", mode="eval").body
+                assert isinstance(call, ast.Call)
+                params = list(specs[name]["properties"])
+                if len(call.args) > len(params):
+                    raise ValueError("too many arguments")
+                args = {p: _literal(node) for p, node in zip(params, call.args)}
+                for kw in call.keywords:
+                    if kw.arg is None:
+                        raise ValueError("**kwargs are not allowed")
+                    args[kw.arg] = _literal(kw.value)
+            except (SyntaxError, ValueError, AssertionError) as exc:
+                args, err = None, f"could not read the arguments of {name}: {exc}"
+        else:
+            err = f"the action is not a tool call: {raw[:80]!r}"
+        if args is None:
+            # Free text in a message breaks the literal parser: quotes or apostrophes
+            # inside it, a missing closing bracket, trailing punctuation.
+            args = lenient_args(raw[head.end():], specs[name])
+            if args is None:
+                return None, err
     if name not in specs:
         return None, f"unknown tool {name!r}; available: {', '.join(specs)}"
     spec = specs[name]

@@ -13,7 +13,9 @@
 # sets --time per chain; the header's 2 h fits metallurgy_4.
 #
 # Environment: CHAIN (default chains/metallurgy_4.yaml), ARM, SEED / array index,
-# RUN_GROUP, STEPS, MAX_ROUNDS, RANDOM_AGENT=1, plus chain_common.sh's settings.
+# RUN_GROUP, STEPS, MAX_ROUNDS, RANDOM_AGENT=1, CHAIN_ARGS (more run_chain.py
+# flags, split on spaces, e.g. CHAIN_ARGS="--hebbian-decay 0.005"), plus
+# chain_common.sh's settings.
 # Passed if the log ends with "python exit: 0"; the run's chain_summary.json
 # then holds every step's verifier result and the four checks.
 # ────────────────────────────────────────────────────────────────────────────
@@ -21,6 +23,7 @@ source "${WT_REPO:-${WT_WORKSPACE:-$WORKSPACE}/WiredTogether}/hpc/agentworld/cha
 EXTRA=()
 [ -n "${STEPS:-}" ] && EXTRA+=(--steps "$STEPS")
 [ -n "${MAX_ROUNDS:-}" ] && EXTRA+=(--max-rounds "$MAX_ROUNDS")
+[ -n "${CHAIN_ARGS:-}" ] && read -r -a _chain_args <<<"$CHAIN_ARGS" && EXTRA+=("${_chain_args[@]}")
 if [ -n "${RANDOM_AGENT:-}" ]; then
     EXTRA+=(--random-agent)
     export LLM_SERVER=none AGENT_CONFIG="${AGENT_CONFIG:-chains/configs/random_plumbing.yaml}"

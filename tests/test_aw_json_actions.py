@@ -80,6 +80,16 @@ def test_tool_reference_writes_calls_out_with_quoted_strings():
     ("move_character(x=1, y=2)", "move_character", {"x": 1, "y": 2}),   # a bare call is fine
     ('{"action": "craft_item(skill=\\"Smithing\\", itemKey=\\"axe\\", colour=\\"red\\")"}',
      "craft_item", {"skill": "Smithing", "itemKey": "axe"}),            # unknown args dropped
+    # failures seen in the metallurgy_4 JSON pilot, now read:
+    ('{"action": "direct_chat(target=a1_gold_miner, message=\\"hi\\")"}', "direct_chat",
+     {"target": "a1_gold_miner", "message": "hi"}),                     # bare username
+    ('{"action": "direct_chat(target=\\"a1_miner\\", message=\\"I have logs (5) ready\\""}',
+     "direct_chat", {"target": "a1_miner", "message": "I have logs (5) ready"}),   # no closing bracket
+    ('{"action": "direct_chat(target=\\"a2_smelter\\", message=\\"say \\"go\\" now\\")"}',
+     "direct_chat", {"target": "a2_smelter", "message": 'say "go" now'}),          # quotes inside
+    ('{"action": "direct_chat(target=\'a2_smelter\', message=\'I\'m at (200, 280)\')"}',
+     "direct_chat", {"target": "a2_smelter", "message": "I'm at (200, 280)"}),     # apostrophe
+    ('{"action": "move_character(x=1, y=2)."}', "move_character", {"x": 1, "y": 2}),  # trailing dot
 ])
 def test_parse_reply(reply, name, args):
     call, _, err = parse_reply(reply, TOOLS)
@@ -101,6 +111,9 @@ def test_parse_reply(reply, name, args):
      'count=<number>)'),
     ('{"action": "move_character(x=\\"north\\", y=2)"}', "x must be a whole number"),
     ('{"action": "move_character(1, 2, 3)"}', "too many arguments"),
+    # the lenient reading needs a keyword layout from the first argument on
+    ('{"action": "direct_chat(hello there, message=\\"x\\")"}', "could not read the arguments of direct_chat"),
+    ('{"action": "direct_chat(target=\\"a2_smelter\\""}', "direct_chat is missing message"),
 ])
 def test_parse_reply_errors(reply, fragment):
     call, _, err = parse_reply(reply, TOOLS)
