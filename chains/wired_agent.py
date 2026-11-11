@@ -14,6 +14,9 @@ are inherited. What the adapter changes:
   the chats metric, not against the action cap); the experiment's
   communication switches (``--no-communication``, discussion rounds) still
   decide whether the tool is offered;
+* completion (``--hold-complete`` only) — ``complete()`` is passed to the game
+  only once the step's verifier passes; before that the agent is told the
+  objective is not met yet and stays in the task;
 * hooks — ``on_task_start(agent_id, role, teammates)``,
   ``on_turn(round_num, interactions)``, ``on_skill(round_num, outcome)`` and
   ``on_task_end(agent_id, outcome)``, which read and write the agent's
@@ -115,6 +118,15 @@ class WiredMixin:
         if name == "chat":
             return ("Error: there is no group chat. Use direct_chat(target, message) "
                     "to message one teammate.")
+        if name == "complete" and self.wired is not None and self.wired.check_done is not None:
+            ok, msg = self.wired.check_done()
+            if not ok:
+                # No "TASK_COMPLETE:" (the runner's completion signal) and no "complete("
+                # in this text, so the agent stays in the task and the turn counts as an action.
+                print(f"[HOLD] {self.username}: completion held, objective not verified ({msg})",
+                      flush=True)
+                return (f"Not done yet: the team's objective is not met ({msg}). Keep working on "
+                        "it; the task ends only once the objective is verified.")
         return super()._execute_tool_call(tool_call)
 
     def _direct_chat(self, args: Dict[str, Any]) -> str:

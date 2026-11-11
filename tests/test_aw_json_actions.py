@@ -250,6 +250,39 @@ def test_http_failure_returns_agentworlds_error_shape():
 
 # ── the real agent ───────────────────────────────────────────────────────────
 @needs_aw
+def test_real_agent_held_complete_is_not_a_completion(tmp_path):
+    from run_chain import bootstrap, chain_runner_class
+    bootstrap(Path(AW).resolve())
+    import run as aw_run
+    from agent_factory import AgentFactory
+    from wired_state import AgentSession, AgentStateStore
+    agent = AgentFactory.create_agent(
+        provider="custom", api_key="x", model="wt", username="a1_copper_miner", password="p",
+        base_url="http://127.0.0.1:9",
+        llm_params={"agent_class": "wired_agent:WiredJSONAgent", "base_url": "http://127.0.0.1:9/v1"})
+    store = AgentStateStore(tmp_path / "s")
+    session = AgentSession(agent_id="a1", role="copper_miner", username="a1_copper_miner", step=1,
+                           task_key="task_08_bronze_alloy", arm="reference", store=store,
+                           state=store.load("a1"))
+    session.check_done = lambda: (False, "Bronze bar: False")
+    agent.attach_chain(session)
+    agent._get_current_environment_observation = lambda: "OBS"
+    agent.session = _Session([_reply('{"thoughts": "done", "action": "complete(response=\\"finished\\")"}')])
+    out = agent.execute_single_tool_call("TASK")
+    assert "Not done yet" in out and "Bronze bar: False" in out and "TASK_COMPLETE" not in out
+
+    runner = chain_runner_class(aw_run.TaskRunner).__new__(chain_runner_class(aw_run.TaskRunner))
+
+    class _Ctx:
+        hold_complete = True
+        current_traj = None
+    runner.step_ctx = _Ctx()
+    assert runner._is_complete_action(out) is False                    # held: the agent keeps acting
+    assert aw_run.TaskRunner._is_complete_action(runner, out) is True  # AgentWorld alone would stop it
+
+
+
+@needs_aw
 def test_real_json_agent_runs_one_agentworld_turn():
     from run_chain import bootstrap
     bootstrap(Path(AW).resolve())

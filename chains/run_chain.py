@@ -93,6 +93,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="AgentWorld's curses display (off by default for chains)")
     ap.add_argument("--dump-prompts", action="store_true")
     ap.add_argument("--no-check", action="store_true", help="skip the end-of-run checks")
+    ap.add_argument("--hold-complete", action="store_true",
+                    help="complete() ends an agent only once the step's verifier passes; until then "
+                         "the agent is told the objective is not met and keeps acting (harness change)")
 
     exp = ap.add_argument_group("AgentWorld experiment flags (passed to every step)")
     exp.add_argument("--single-agent-upper-bound", action="store_true", help="not supported in chains")
@@ -173,6 +176,16 @@ def chain_runner_class(TaskRunner):
         def __init__(self, *args, step_ctx=None, **kwargs):
             self.step_ctx = step_ctx
             super().__init__(*args, **kwargs)
+            if step_ctx is not None:     # lets --hold-complete verify the trajectory so far
+                step_ctx.current_traj = lambda: getattr(self, "trajectory_data", None)
+
+        def _is_complete_action(self, response):
+            if not getattr(self.step_ctx, "hold_complete", False):
+                return super()._is_complete_action(response)
+            # AgentWorld matches any "complete(" in the response (thoughts and messages
+            # included). With --hold-complete only a completion the wrapper let through ends
+            # the agent; a held complete() is an ordinary (failed) action.
+            return "[TOOL_RESULT] TASK_COMPLETE:" in (response or "")
 
         def _initialize_agents(self, task_config):
             states = super()._initialize_agents(task_config)
@@ -235,7 +248,8 @@ def run_step(gen, run_dir: Path, args, experiment, store, verification, score_ps
                       slots={a.slot: {"agent_id": a.agent_id, "role": a.role,
                                       "username": a.username} for a in step.assignments},
                       store=store, arm=args.arm, verify=verify, hebbian=hebbian,
-                      log_path=step_dir / "wired_rounds.jsonl")
+                      log_path=step_dir / "wired_rounds.jsonl",
+                      hold_complete=getattr(args, "hold_complete", False))
     reset_runner_logger()
     runner = runner_cls(args.agent, str(step_dir), args.split_screen, args.dump_prompts,
                         experiment, step_ctx=ctx)
@@ -257,6 +271,7 @@ def run_step(gen, run_dir: Path, args, experiment, store, verification, score_ps
         "source": str(step.source), "task_yaml": str(task_yaml), "verifier": str(gen.verifier),
         "slots": [a.to_dict() for a in step.assignments],
         "success": bool(ok), "verifier_message": msg,
+        "held_completes": ctx.held_completes,
         "runner_verified": metrics.get("task_verified_success"),
         "runner_message": metrics.get("task_verification_message"),
         "psr": psr, "rounds": metrics.get("total_rounds"), "max_rounds": metrics.get("max_rounds"),
@@ -345,7 +360,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     summary = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.is_file() else {}
     summary.update({
         "chain": chain.name, "run_id": run_id, "chain_file": str(chain.path),
-        "description": chain.description, "arm": args.arm, "agent_config": str(Path(args.agent).resolve()),
+        "description": chain.description, "arm": args.arm, "hold_complete": bool(args.hold_complete),
+        "agent_config": str(Path(args.agent).resolve()),
         "agent_class": target, "agentworld_root": str(root), "agentworld_commit": git_commit(root),
         "flags": {k: getattr(args, k) for k in (
             "discussion_rounds", "no_communication", "shared_plan_only", "random_agent",

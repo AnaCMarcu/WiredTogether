@@ -265,6 +265,29 @@ Use one config for every arm of a comparison, and report it as a harness
 change next to the direct-message one. `[JSON] unusable reply` lines in
 `run.log` count the replies that could not be used.
 
+## Holding complete() until the objective is met (`--hold-complete`)
+
+In the first pendant_staff_4 run, 30 of 36 agent stops were agents calling
+`complete()` before the objective was met (first call at rounds 11-26), although
+every task says not to, so most failed steps ended at round 16-43 of 55. With
+`--hold-complete` (off by default):
+
+- the wrapper runs the step's own verifier (AgentWorld's `verify_trajectory` on
+  the rounds recorded so far, the check AgentWorld also uses for early
+  stopping) when an agent calls `complete()`; if it fails, the agent gets
+  "Not done yet: the team's objective is not met (Beryl pendant: False) ...",
+  stays in the task, and the turn counts as an action;
+- `ChainTaskRunner._is_complete_action` ends an agent only on a completion the
+  wrapper let through (`[TOOL_RESULT] TASK_COMPLETE:`). AgentWorld's own rule
+  matches any "complete(" in the response, so a thought or message that
+  mentions it would also end the agent.
+
+The verdict lags by up to one round (the current round is recorded at its
+end); AgentWorld's early stop (every 3 rounds) still ends a solved step. Each
+step's `held_completes` and the run's `hold_complete` flag are saved in
+`chain_summary.json`; `[HOLD]` lines in `run.log` list every held call. Use the
+same setting for every arm and report it as a harness change.
+
 ## Outputs and metrics
 
 `chain_summary.json` records the following for each step:
@@ -312,6 +335,9 @@ AGENT_CONFIG=chains/configs/wired_json.yaml bash hpc/agentworld/submit_aw_chain.
 # pendant_staff_4 with slower bond decay (CHAIN_ARGS = extra run_chain.py flags):
 CHAIN=chains/pendant_staff_4.yaml AGENT_CONFIG=chains/configs/wired_json.yaml \
   CHAIN_ARGS="--hebbian-decay 0.005" TIME=03:00:00 bash hpc/agentworld/submit_aw_chain.sh pilot
+# ... and with complete() held until the objective is verified, 3 seeds:
+CHAIN=chains/pendant_staff_4.yaml AGENT_CONFIG=chains/configs/wired_json.yaml ARRAY=0-2 \
+  CHAIN_ARGS="--hebbian-decay 0.005 --hold-complete" TIME=03:00:00 bash hpc/agentworld/submit_aw_chain.sh pilot
 ```
 
 Both metallurgy_4 pilots (native tool calls, then JSON replies) ended at 0 of

@@ -655,6 +655,71 @@ def _tool_names(agent):
     return [tl["function"]["name"] for tl in agent.tools]
 
 
+# ── --hold-complete ──────────────────────────────────────────────────────────
+def test_step_context_check_done_reads_the_trajectory_so_far(tmp_path):
+    y = tmp_path / "task.yaml"
+    y.write_text("task: x\n", encoding="utf-8")
+    ctx = StepContext(step=1, task_key="task_05_beryl_pendant", task_yaml=y, verifier=tmp_path / "v.py",
+                      slots={"agent_1": {"agent_id": "a1", "role": "forager", "username": "a1_forager"}},
+                      store=AgentStateStore(tmp_path / "s"), arm="reference",
+                      verify=lambda t: (len(t["rounds"]) >= 2, f"rounds {len(t['rounds'])}"),
+                      hold_complete=True)
+    assert ctx.check_done() == (False, "nothing has been verified yet")
+    traj = {"rounds": [1]}
+    ctx.current_traj = lambda: traj
+    assert ctx.check_done() == (False, "rounds 1")
+    traj["rounds"].append(2)
+    assert ctx.check_done() == (True, "rounds 2")
+    assert ctx.held_completes == 2
+
+    def broken(_):
+        raise RuntimeError("no inventory")
+    ctx.verify = broken
+    assert ctx.check_done() == (False, "verification error: no inventory")
+
+
+def test_hold_complete_withholds_completion_until_verified(tmp_path):
+    a = _Agent("a1_miner", {})
+    s = _session(tmp_path)
+    a.attach_chain(s)
+    call = {"name": "complete", "arguments": {"response": "done"}}
+    assert a._execute_tool_call(call) == "executed complete"          # no hook: AgentWorld's complete()
+    s.check_done = lambda: (False, "Beryl pendant: False")
+    out = a._execute_tool_call(call)
+    assert out.startswith("Not done yet") and "Beryl pendant: False" in out
+    assert "TASK_COMPLETE" not in out and "complete(" not in out        # the runner's two signals
+    s.check_done = lambda: (True, "Beryl pendant: True")
+    assert a._execute_tool_call(call) == "executed complete"
+    assert a._execute_tool_call({"name": "sleep", "arguments": {}}) == "executed sleep"
+
+
+def test_runner_ends_an_agent_only_on_a_released_completion():
+    from run_chain import chain_runner_class
+
+    class _Runner:                       # AgentWorld's TaskRunner rule: any "complete(" in the text
+        def __init__(self, *a, **k):
+            self.trajectory_data = {"rounds": [1]}
+
+        def _is_complete_action(self, response):
+            return "complete(" in response
+
+    class _Ctx:
+        hold_complete = True
+        current_traj = None
+
+    ctx = _Ctx()
+    runner = chain_runner_class(_Runner)(step_ctx=ctx)
+    assert ctx.current_traj() == {"rounds": [1]}
+    held = "thinking\n[TOOL_CALL_INFO] complete(response=done)\n[TOOL_RESULT] Not done yet: x"
+    released = "thinking\n[TOOL_CALL_INFO] complete(response=done)\n[TOOL_RESULT] TASK_COMPLETE: done"
+    chat = 'I will complete( it soon\n[TOOL_CALL_INFO] direct_chat(target=a2)\n[TOOL_RESULT] Sent'
+    assert runner._is_complete_action(held) is False
+    assert runner._is_complete_action(released) is True
+    assert runner._is_complete_action(chat) is False
+    ctx.hold_complete = False                                          # flag off: AgentWorld's rule
+    assert runner._is_complete_action(held) is True and runner._is_complete_action(chat) is True
+
+
 def test_direct_chat_replaces_global_chat(tmp_path):
     store = AgentStateStore(tmp_path / "agent_state")
     ctx, states = _skill_step(tmp_path, store, 1, {s: {"flask": 1} for s in

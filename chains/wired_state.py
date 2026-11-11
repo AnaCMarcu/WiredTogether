@@ -177,6 +177,8 @@ class AgentSession:
     turns: int = 0
     task_text: str = ""                                        # lower-cased task YAML text
     mailbox: Optional[Mailbox] = None
+    # --hold-complete: () -> (verified, verifier message); None = AgentWorld's complete()
+    check_done: Optional[Callable[[], Tuple[bool, str]]] = None
 
     def start(self, teammates: List[Teammate]) -> None:
         self.teammates = list(teammates)
@@ -508,10 +510,16 @@ class StepContext:
     def __init__(self, *, step: int, task_key: str, task_yaml: Path, verifier: Path,
                  slots: Dict[str, Dict[str, str]], store: AgentStateStore, arm: str,
                  verify: Callable[[Dict[str, Any]], Tuple[bool, str]],
-                 hebbian: Optional[Dict[str, Any]] = None, log_path: Optional[Path] = None):
+                 hebbian: Optional[Dict[str, Any]] = None, log_path: Optional[Path] = None,
+                 hold_complete: bool = False):
         if arm not in ARMS:
             raise ValueError(f"arm must be one of {ARMS}, got {arm!r}")
         self.step, self.task_key, self.arm = step, task_key, arm
+        # --hold-complete: complete() ends an agent only once the step's verifier passes;
+        # the runner sets current_traj so the verifier can read the trajectory so far.
+        self.hold_complete = bool(hold_complete)
+        self.current_traj: Optional[Callable[[], Optional[Dict[str, Any]]]] = None
+        self.held_completes = 0
         self.task_yaml, self.verifier = Path(task_yaml), Path(verifier)
         self.slots = slots                      # slot -> {"agent_id", "role", "username"}
         self.slot_order = list(slots)
@@ -530,6 +538,20 @@ class StepContext:
         self.inv: Dict[int, Optional[Counter]] = {}          # inventory after the agent's last turn
         self.received: Dict[int, Counter] = {}               # handed to it since then
         self.harvesting: Dict[int, bool] = {}                # last turn was a harvest without a gain
+
+    def check_done(self) -> Tuple[bool, str]:
+        """The step's verifier on the trajectory so far (rounds already recorded)."""
+        traj = self.current_traj() if self.current_traj else None
+        if not traj or not traj.get("rounds"):
+            ok, msg = False, "nothing has been verified yet"
+        else:
+            try:
+                ok, msg = self.verify(traj)
+            except Exception as exc:                  # never let a check end the run
+                ok, msg = False, f"verification error: {exc}"
+        if not ok:
+            self.held_completes += 1
+        return bool(ok), str(msg)
 
     # ── start ──────────────────────────────────────────────────────────────
     def on_agents_ready(self, agent_states: Dict[str, Any]) -> None:
@@ -588,7 +610,8 @@ class StepContext:
                                    store=self.store, state=states[t.agent_id],
                                    loaded_from_step=states[t.agent_id].get("saved_after_step"),
                                    bonds=self.plasticity.bonds_of(i), task_text=self.task_text,
-                                   mailbox=self.mailbox)
+                                   mailbox=self.mailbox,
+                                   check_done=self.check_done if self.hold_complete else None)
             self.sessions[slot] = session
             agent = self.adapters[slot]
             agent.attach_chain(session)
