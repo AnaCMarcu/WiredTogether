@@ -20,6 +20,7 @@ AgentWorld's provider agents plus the hooks in `wired_agent.py`.
 | `wired_agent.py` | `agent.provider: custom` adapters with the hooks |
 | `json_actions.py` | `WiredJSONAgent`'s model call: one JSON reply instead of a native tool call |
 | `wired_state.py` | state store, memory, the link to the Hebbian rule |
+| `run_mf_chain.py`, `mf_chain.py` | the same chains with **MindForge** agents on our own harness (see the end) |
 | `configs/` | agent configs: OpenAI-compatible (tool calls or JSON), Claude, random plumbing |
 
 You need an AgentWorld checkout at `hpc/agentworld/AGENTWORLD_COMMIT`
@@ -364,3 +365,43 @@ and `run_chain.py` runs them at the end of every run:
 - **state:** files are written after step 1, each later step loads the file
   from the agent's previous step, and the histories are complete;
 - **verifiers:** every step has a verifier message without errors.
+
+## MindForge agents on the same chains (`run_mf_chain.py`)
+
+Everything above plays a chain with AgentWorld's own runner and LLM agent.
+`run_mf_chain.py` plays the same chain YAML with the MindForge cognitive stack
+of `src/agentworld/agent.py` (action selection, perception/partner/interaction
+beliefs, critic, curriculum, skill and episode memory) through the round loop of
+`src/agentworld/scheduler.py`. Task generation, verifiers and the Hebbian rule are
+the ones above.
+
+| `--arm` | |
+|---|---|
+| `base` | MindForge; bonds computed (observer only), not shown; messages read by recency |
+| `hebbian` | MindForge + social plasticity: bond line in the prompt, messages and contacts ranked by bond |
+
+Carried between steps, per agent id: the MindForge agent with its skill and
+episode memory (working memory, beliefs and sub-task reset at every step, as
+between MindForge episodes), and W (the rule restarts from it; traces start
+fresh). One process plays the whole chain.
+
+Protocol, matched to the chain runs above where the harness allows:
+direct messages only (no board, no chat tool; the task text points at the
+reply's `dm_target`/`dm_text`), `--hold-complete`, and a cap of the task's
+`max_action_steps` (25) game actions per agent (`wait()` and refused calls do
+not count). Still this harness's own: agents act simultaneously each round,
+rounds are padded to >= 20 s (`aw_mf_chain.sbatch`), a message travels with an
+action instead of taking a turn, and the game server restarts before each step.
+Report the harness when comparing with the rows from `run_chain.py`.
+
+```bash
+bash hpc/agentworld/submit_aw_mf_chain.sh plumbing      # no model, 4 rounds per step
+ARRAY=0-2 REPEAT=2 MF_ARGS="--hebbian-decay 0.005 --hold-complete" \
+  RUN_GROUP=mf_chains_ps4 bash hpc/agentworld/submit_aw_mf_chain.sh pilot
+```
+
+Output: `runs_aw/<group>/<chain>/mf_<arm>_s<seed>_j<job>/` with
+`chain_summary.json` (per step: success, verifier message, rounds, actions,
+held completes, caps, messages, bonds before/after), `step_NN_task_MM/episode_1/`
+(trajectories, replay state, messages, `chain_events.jsonl`), `hebbian_W.npy` and
+`memory.json` per step. Tests: `tests/test_aw_mf_chain.py`.
