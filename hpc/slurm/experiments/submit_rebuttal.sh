@@ -97,12 +97,11 @@ HEB2="--hebbian --hebbian-mode three_factor --hebbian-eta-0 0.001 --hebbian-rewa
 
 # Mean off-diagonal W measured on the finished runs, so a frozen flat graph
 # reads like the learned one in the prompt: exp37 0.38, exp36 0.33, budget
-# b600 cells 0.13 at N=3 and 0.10 at N=7 and N=15.
+# b600 cells 0.13 at N=3 and 0.10 at N=7 and N=15. MAPPO uses the IPPO value
+# too, so the two RL uniform controls differ only in the critic (the per-agent
+# adapter reruns of the full arm end at mean W 0.41 IPPO, 0.43 MAPPO).
 uniform_rl() {
-    case "$1" in
-        ippo) echo "--hebbian-freeze --hebbian-preset uniform --hebbian-bond-strong 0.38" ;;
-        *)    echo "--hebbian-freeze --hebbian-preset uniform --hebbian-bond-strong 0.33" ;;
-    esac
+    echo "--hebbian-freeze --hebbian-preset uniform --hebbian-bond-strong 0.38"
 }
 uniform_zs() {
     if [ "$1" -le 3 ]; then
