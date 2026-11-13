@@ -5,7 +5,8 @@
 #
 #   bash hpc/agentworld/submit_aw_mf_chain.sh plumbing  # no model, every step, 4 rounds each
 #   bash hpc/agentworld/submit_aw_mf_chain.sh check     # hebbian arm, seed 42, whole chain
-#   bash hpc/agentworld/submit_aw_mf_chain.sh pilot     # every arm (base, hebbian) per array index
+#   bash hpc/agentworld/submit_aw_mf_chain.sh pilot     # every arm in ARMS (default: base hebbian) per array index
+#   ARMS="uniform freq" ...                               # the bond controls (see chains/run_mf_chain.py)
 #
 #   ARRAY=0-2 REPEAT=2 MF_ARGS="--hebbian-decay 0.005 --hold-complete" \
 #       RUN_GROUP=mf_chains_ps4 bash hpc/agentworld/submit_aw_mf_chain.sh pilot

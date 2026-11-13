@@ -14,6 +14,11 @@ agents' skill and episode memory carry over in memory.
 Arms (``--arm``):
     base      MindForge; bonds are computed (observer only) but not shown, reading by recency
     hebbian   MindForge + social plasticity: bonds in the prompt and bond-ranked reading
+    uniform   as hebbian, but W frozen flat at --uniform-weight (0.74 = the hebbian runs'
+              mean bond over the pendant_staff_4 chain, 2026-11-13): same prompt and
+              read-out, no information about who helped whom
+    freq      as hebbian, but the rule has no reward terms (eta+ 0, death LTD 0): bonds
+              grow from interaction (messages, transfers, proximity) only
 
 ``--plumbing`` replaces the model with a fixed script (no LLM, no MindForge
 imports) to test the server, task generation, verifiers and outputs.
@@ -67,7 +72,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("chain", type=Path, help="chain YAML, e.g. chains/pendant_staff_4.yaml")
-    ap.add_argument("--arm", choices=("base", "hebbian"), default="hebbian")
+    ap.add_argument("--arm", choices=("base", "hebbian", "uniform", "freq"), default="hebbian")
+    ap.add_argument("--uniform-weight", type=float, default=0.74,
+                    help="the frozen bond of the uniform arm (default: the hebbian runs' mean)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--output", type=Path, default=Path("runs_mf"),
                     help="parent output folder; the run goes in <output>/<chain>/<run_id>")
@@ -192,9 +199,11 @@ async def run(args) -> int:
                                 max_in_flight=args.max_in_flight)
         cognition = ChainCognition(dict(zip(agent_ids, mf.agents)), ledger=mf.ledger)
 
-    hebbian = {k: getattr(args, k) for k in HEBBIAN_KEYS}
+    from mf_chain import arm_rule
+    hebbian = arm_rule(args.arm, {k: getattr(args, k) for k in HEBBIAN_KEYS})
     n = len(agent_ids)
-    W = np.full((n, n), float(args.hebbian_init_weight), dtype=np.float32)
+    w0 = args.uniform_weight if args.arm == "uniform" else args.hebbian_init_weight
+    W = np.full((n, n), float(w0), dtype=np.float32)
     np.fill_diagonal(W, 0.0)
     summary: Dict[str, Any] = {
         "chain": chain.name, "run_id": run_id, "chain_file": str(Path(args.chain).resolve()),
@@ -208,6 +217,7 @@ async def run(args) -> int:
         "cognition": {"belief_interval": args.belief_interval, "critic_interval": args.critic_interval,
                       "partner_updates": args.partner_updates, "embedder": args.embedder},
         "hebbian": hebbian, "agent_ids": agent_ids, "agentworld_root": str(root),
+        "W_frozen_at": float(args.uniform_weight) if args.arm == "uniform" else None,
         "server_restart_per_step": server is not None, "steps": [],
     }
     summary_path = run_dir / "chain_summary.json"

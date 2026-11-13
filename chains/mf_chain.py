@@ -64,7 +64,21 @@ from agentworld.trajectory import RunLog, TeamTrajectory  # noqa: E402
 from agentworld.trajectory import status_line  # noqa: E402
 from agentworld.verify import progress_from_msg  # noqa: E402
 
-ARMS = ("base", "hebbian")
+ARMS = ("base", "hebbian", "uniform", "freq")
+# Arms whose agents see bonds: the bond line in the prompt, bond-ranked reading
+# and bond-ordered contacts. They differ only in how W is made:
+#   hebbian  the learned rule
+#   uniform  W frozen flat (run_mf_chain.py --uniform-weight): the same prompt
+#            format and read-out with no information about who helped whom
+#   freq     the rule without its reward terms (no reward growth, no failure
+#            term): bonds grow from interaction only, as WIRE's freq arms
+BONDED_ARMS = ("hebbian", "uniform", "freq")
+FREQ_OVERRIDES = {"hebbian_eta_plus": 0.0, "hebbian_death_ltd": 0.0}
+
+
+def arm_rule(arm: str, hebbian: Dict[str, Any]) -> Dict[str, Any]:
+    """The Hebbian settings an arm actually runs with (freq drops the reward terms)."""
+    return {**hebbian, **FREQ_OVERRIDES} if arm == "freq" else dict(hebbian)
 # generate_tasks.DIRECT_MESSAGES names AgentWorld's direct_chat tool, which this
 # harness does not have: here a message is two fields of the agent's reply.
 DM_WORDING = "direct messages (dm_target and dm_text in your reply, one teammate per message)"
@@ -473,7 +487,10 @@ async def play_step(step: StepSpec, *, agent_ids: Sequence[str], W: np.ndarray,
     ids, perm = slot_permutation(world, step, agent_ids)
     init = np.asarray(W, dtype=np.float32)[np.ix_(perm, perm)].copy()
     np.fill_diagonal(init, 0.0)
-    graph = MultiChannelHebbianGraph(graph_config(n, init, hebbian))
+    cfg = graph_config(n, init, arm_rule(arm, hebbian))
+    if arm == "uniform":
+        cfg.freeze_weights = True          # events are still logged; W never moves
+    graph = MultiChannelHebbianGraph(cfg)
 
     gate = asyncio.Semaphore(max(1, setup_concurrency))
 
@@ -490,7 +507,7 @@ async def play_step(step: StepSpec, *, agent_ids: Sequence[str], W: np.ndarray,
 
     handles = list(await asyncio.gather(*(setup(i, nm) for i, nm in enumerate(world.global_names))))
     executor = Executor(handles, deadline_s=deadline_s)
-    policy = make_policy("hebbian" if arm == "hebbian" else "recency", seed=seed + step.index)
+    policy = make_policy("hebbian" if arm in BONDED_ARMS else "recency", seed=seed + step.index)
     router = CommRouter(n, policy, board_budget=board_budget if board else 0,
                         inbox_budget=inbox_budget, contacts_budget=contacts_budget,
                         explore_slots=explore_slots if board else 0, seed=seed + step.index)
@@ -503,7 +520,7 @@ async def play_step(step: StepSpec, *, agent_ids: Sequence[str], W: np.ndarray,
         ProgressTracker(world, {team: extract_targets(step.verifier)}), {team: verifier}, out_dir,
         graph=graph,
         config=SchedulerConfig(max_rounds=rounds, obs_radius=obs_radius, comm_mode="side",
-                               bonds_in_prompt=(arm == "hebbian"), bond_source="policy",
+                               bonds_in_prompt=(arm in BONDED_ARMS), bond_source="policy",
                                min_round_s=min_round_s),
         hold_complete=hold_complete, max_actions=cap, board=board)
     try:

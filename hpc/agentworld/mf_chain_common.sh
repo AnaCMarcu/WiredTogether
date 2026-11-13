@@ -12,7 +12,7 @@
 # command and the output folder differ from run_aw.
 #
 # Environment:
-#   ARM        base | hebbian (default hebbian)
+#   ARM        base | hebbian | uniform | freq (default hebbian)
 #   SEED       default from the array index (42 123 456), as aw_common.sh
 #   RUN_GROUP  output: $REPO/runs_aw/$RUN_GROUP/<chain>/mf_<arm>_s<seed>_j<job> (default mf_chains)
 #   LLM_SERVER vllm (default) | none (with --plumbing)

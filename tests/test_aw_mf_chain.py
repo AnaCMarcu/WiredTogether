@@ -231,3 +231,65 @@ def test_cli_defaults_match_the_chain_protocol():
     assert args.max_actions == -1 and args.board is False and args.hold_complete
     assert args.hebbian_decay == 0.005 and args.arm == "hebbian"
     assert args.min_round_seconds == 0.0
+
+
+def _one_step(tmp_path, arm, W0, monkeypatch=None):
+    import wired_state
+    hebbian = {**wired_state.hebbian_defaults(), "hebbian_decay": 0.005}
+    team = ArrowTeam()
+    agents = {a: Member(team) for a in ("a1", "a2", "a3")}
+    ids = ["a1", "a2", "a3"]
+    return asyncio.run(play_step(_step(1, ids), W=W0, out_dir=tmp_path / arm, agent_ids=ids,
+                                 cognition=ChainCognition(agents),
+                                 make_tools=lambda: FakeGameTools(FakeWorld()),
+                                 master_password="pw", arm=arm, seed=1, hebbian=hebbian,
+                                 rounds=12, max_actions=None, hold_complete=True,
+                                 setup_sleep_scale=0.0))
+
+
+def test_uniform_arm_keeps_w_frozen(tmp_path):
+    W0 = np.full((3, 3), 0.74, dtype=np.float32)
+    np.fill_diagonal(W0, 0.0)
+    _, W1, _ = _one_step(tmp_path, "uniform", W0)
+    assert np.array_equal(W1, W0)
+    # The same step under the learned rule does move W (so the step has interactions).
+    _, Wh, _ = _one_step(tmp_path, "hebbian", W0)
+    assert not np.allclose(Wh, W0)
+
+
+def test_freq_arm_drops_reward_terms_and_still_learns(tmp_path):
+    import wired_state
+    h = wired_state.hebbian_defaults()
+    r = mf_chain.arm_rule("freq", h)
+    assert r["hebbian_eta_plus"] == 0.0 and r["hebbian_death_ltd"] == 0.0
+    assert {k: v for k, v in r.items() if k not in mf_chain.FREQ_OVERRIDES} == \
+        {k: v for k, v in h.items() if k not in mf_chain.FREQ_OVERRIDES}
+    for arm in ("base", "hebbian", "uniform"):
+        assert mf_chain.arm_rule(arm, h) == h
+    W0 = np.full((3, 3), 0.1, dtype=np.float32)
+    np.fill_diagonal(W0, 0.0)
+    _, W1, _ = _one_step(tmp_path, "freq", W0)
+    assert not np.allclose(W1, W0)
+
+
+def test_bonded_arms_show_bonds_and_rank_messages(tmp_path, monkeypatch):
+    import agentworld.comms as comms
+    seen = []
+    real = comms.make_policy
+    monkeypatch.setattr(comms, "make_policy", lambda name, **kw: seen.append(name) or real(name, **kw))
+    W0 = np.full((3, 3), 0.1, dtype=np.float32)
+    np.fill_diagonal(W0, 0.0)
+    for arm in mf_chain.ARMS:
+        _one_step(tmp_path, arm, W0)
+    assert seen == ["recency", "hebbian", "hebbian", "hebbian"]
+    assert mf_chain.BONDED_ARMS == ("hebbian", "uniform", "freq")
+
+
+def test_cli_uniform_and_freq_arms():
+    import run_mf_chain
+    p = run_mf_chain.build_parser()
+    a = p.parse_args(["chains/pendant_staff_4.yaml", "--server-url", "http://x", "--arm", "uniform"])
+    assert a.arm == "uniform" and a.uniform_weight == 0.74
+    a = p.parse_args(["chains/pendant_staff_4.yaml", "--server-url", "http://x", "--arm", "freq",
+                      "--uniform-weight", "0.5"])
+    assert a.arm == "freq" and a.uniform_weight == 0.5

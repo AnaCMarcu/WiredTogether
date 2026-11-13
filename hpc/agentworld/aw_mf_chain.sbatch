@@ -12,7 +12,7 @@
 # Submit through submit_aw_mf_chain.sh from the repository root (slurm_logs/ is
 # relative), which always sets --time.
 #
-# Environment: CHAIN (default chains/pendant_staff_4.yaml), ARM (base | hebbian),
+# Environment: CHAIN (default chains/pendant_staff_4.yaml), ARM (base | hebbian | uniform | freq),
 # SEED / array index, RUN_GROUP, MF_ARGS (more run_mf_chain.py flags, split on
 # spaces, e.g. MF_ARGS="--hebbian-decay 0.005 --hold-complete"), PLUMBING=1 (no
 # model, 4 rounds per step), plus mf_chain_common.sh's settings.
