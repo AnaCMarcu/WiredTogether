@@ -666,20 +666,37 @@ class RLLayer:
             batch_ids[ci, :L_row] = row
             batch_attn[ci, :L_row] = 1
 
+        # Only positions prompt_len-1 .. prompt_len+K_max-2 predict candidate
+        # tokens. Rows are right-padded to max_len = prompt_len + K_max, so the
+        # last K_max+1 positions cover them (the extra one is the final token,
+        # which predicts nothing). Computing logits at every position is
+        # C x L x V: with Qwen3.5's 248k vocab and the 2,048-token actor that
+        # is ~10-13 GB in bf16, twice that with its gradient at update time.
+        # Same values either way; models without logits_to_keep get them all.
+        K_max = max((int(ids.numel()) for ids in cand_ids_list), default=1)
+        window_start = prompt_len - 1
+        window_end = window_start + K_max
+        n_keep = K_max + 1
+
         ctx = torch.enable_grad() if with_grad else torch.no_grad()
         with ctx:
-            out = self.model(
+            fwd = dict(
                 input_ids=batch_ids,
                 attention_mask=batch_attn,
                 output_hidden_states=True,
                 use_cache=False,
             )
+            try:
+                out = self.model(**fwd, logits_to_keep=n_keep)
+            except TypeError:                      # no logits_to_keep support
+                out = self.model(**fwd)
 
             # ── Slice + gather + logsumexp (avoid materializing softmax) ──
-            K_max = max((int(ids.numel()) for ids in cand_ids_list), default=1)
-            window_start = prompt_len - 1
-            window_end = window_start + K_max
-            window_logits = out.logits[:, window_start:window_end, :]  # (C, K_max, V) — model dtype
+            if out.logits.shape[1] == max_len:     # all positions came back
+                window_logits = out.logits[:, window_start:window_end, :]
+            else:                                  # the last n_keep positions
+                window_logits = out.logits[:, :K_max, :]
+            # (C, K_max, V) — model dtype
 
             target_ids = torch.zeros((C, K_max), dtype=torch.long, device=self._device)
             mask = torch.zeros((C, K_max), dtype=torch.bool, device=self._device)
