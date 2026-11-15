@@ -53,8 +53,10 @@ python -m venv .venv && source .venv/bin/activate
 Python packages:
 
 ```bash
-# Route B with your own agent: harness, template agent, replay videos, tests
-pip install numpy httpx pyyaml requests jinja2 openai pillow matplotlib imageio-ffmpeg pytest
+# Route B with your own agent: harness, template agent, replay videos
+pip install numpy httpx pyyaml requests jinja2 openai pillow matplotlib imageio-ffmpeg
+# the offline tests also need pytest and torch (the CPU build is enough)
+pip install pytest torch --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
 
 # Only if you also want the MindForge agent (python -m mindforge.multi_agent_agentworld,
 # chains/run_mf_chain.py): the full project environment, which includes torch, autogen and chromadb
@@ -92,8 +94,10 @@ ports only from `.env` files (see section 7).
 ## 3. Check the setup without a model
 
 ```bash
-# 1. Unit tests against an in-memory fake game server (no server, no model)
-python -m pytest tests -k aw_ -q
+# 1. Unit tests against an in-memory fake game server (no server, no model):
+#    expect about 176 passed, 12 skipped. Name the files: the rest of tests/ needs the
+#    full environment.
+python -m pytest tests/test_aw_*.py -q
 
 # 2. Route B with a scripted agent against the real server: logins, moves, messages,
 #    trajectory, verifier, video
